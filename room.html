@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudyBoard</title>
+  <script src="js/version.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="room-nav">
+    <a href="dashboard.html" class="btn btn-ghost" style="padding:6px 10px;gap:4px;font-size:0.82rem;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      Zpět
+    </a>
+    <span class="room-title" id="roomTitle">Načítám...</span>
+    <div class="room-nav-right">
+      <button id="shareBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        </svg>
+        Sdílet
+      </button>
+      <a id="flashcardsBtn" href="#" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        Flash Cards
+      </a>
+      <button id="connectBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Propojit poznámky">
+        🔗 Propojit
+      </button>
+      <button id="membersBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        Členové <span id="memberCount" style="background:var(--bg-3);padding:1px 6px;border-radius:10px;font-size:0.72rem;margin-left:2px;"></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- CONNECT MODE HINT -->
+  <div id="connectHint" class="connect-hint">
+    <span id="connectHintText">Klikni na první poznámku…</span>
+    <label class="connect-color-wrap" title="Barva šňůrky">
+      <span style="font-size:0.75rem;color:var(--text-muted);">Barva:</span>
+      <input type="color" id="connectColorPicker" value="#c0392b" style="width:28px;height:22px;padding:1px;border-radius:4px;border:1px solid var(--border);cursor:pointer;">
+    </label>
+    <button id="connectCancel" class="btn btn-ghost" style="padding:3px 10px;font-size:0.75rem;">Zrušit (Esc)</button>
+  </div>
+
+  <!-- BOARD -->
+  <div class="board-wrap" id="boardWrap">
+    <div class="board" id="board">
+      <!-- Notes injected by JS -->
+    </div>
+  </div>
+
+  <!-- FAB -->
+  <button class="fab" id="addBtn" title="Přidat poznámku">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  </button>
+
+  <!-- MODAL: Přidat poznámku -->
+  <div class="modal-overlay" id="addModal" data-persist>
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>Nová poznámka</h3>
+        <button class="modal-close" data-close="addModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Obsah</label>
+        <div class="rich-editor-wrap">
+          <div class="rich-toolbar" id="addToolbar">
+            <button type="button" class="rt-btn" data-cmd="bold"      title="Tučné (Ctrl+B)"><b>B</b></button>
+            <button type="button" class="rt-btn" data-cmd="italic"    title="Kurzíva (Ctrl+I)"><i>I</i></button>
+            <button type="button" class="rt-btn" data-cmd="underline" title="Podtržení (Ctrl+U)"><u>U</u></button>
+            <div class="rt-sep"></div>
+            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="2" title="Malý">S</button>
+            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="3" title="Normální">M</button>
+            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="5" title="Velký">L</button>
+            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="7" title="Velmi velký">XL</button>
+            <div class="rt-sep"></div>
+            <label class="rt-color-wrap" title="Barva textu">
+              <span class="rt-color-a" id="addColorA">A</span>
+              <input type="color" id="addTextColor" value="#1a1a1a">
+            </label>
+            <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" style="font-size:0.72rem;opacity:.7;">✕fmt</button>
+            <div class="rt-sep"></div>
+            <button type="button" class="rt-btn rt-table-btn" title="Vložit tabulku" style="font-size:0.85rem;">⊞</button>
+            <div class="rt-sep"></div>
+            <label class="rt-btn rt-img-label" title="Vložit obrázek" style="cursor:pointer;">
+              🖼
+              <input type="file" class="rt-img-input" accept="image/*" style="display:none;">
+            </label>
+          </div>
+          <div class="rich-editor" id="noteEditor" contenteditable="true" data-placeholder="Co chceš sdílet se spolužáky?"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="label">Barva lístečku</label>
+        <div class="color-picker" id="noteColorPicker">
+          <div class="color-swatch selected" data-color="#fef9c3" style="background:#fef9c3;"></div>
+          <div class="color-swatch" data-color="#fce7f3" style="background:#fce7f3;"></div>
+          <div class="color-swatch" data-color="#dbeafe" style="background:#dbeafe;"></div>
+          <div class="color-swatch" data-color="#dcfce7" style="background:#dcfce7;"></div>
+          <div class="color-swatch" data-color="#f3e8ff" style="background:#f3e8ff;"></div>
+          <div class="color-swatch" data-color="#ffedd5" style="background:#ffedd5;"></div>
+          <div class="color-swatch" data-color="#e0f2fe" style="background:#e0f2fe;"></div>
+          <div class="color-swatch" data-color="#fee2e2" style="background:#fee2e2;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="addModal">Zrušit</button>
+        <button id="addSubmit" class="btn btn-primary">Přidat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Upravit poznámku -->
+  <div class="modal-overlay" id="editModal" data-persist>
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>Upravit poznámku</h3>
+        <button class="modal-close" data-close="editModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Obsah</label>
+        <div class="rich-editor-wrap">
+          <div class="rich-toolbar" id="editToolbar">
+            <button type="button" class="rt-btn" data-cmd="bold"      title="Tučné"><b>B</b></button>
+            <button type="button" class="rt-btn" data-cmd="italic"    title="Kurzíva"><i>I</i></button>
+            <button type="button" class="rt-btn" data-cmd="underline" title="Podtržení"><u>U</u></button>
+            <div class="rt-sep"></div>
+            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="2" title="Malý">S</button>
+            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="3" title="Normální">M</button>
+            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="5" title="Velký">L</button>
+            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="7" title="Velmi velký">XL</button>
+            <div class="rt-sep"></div>
+            <label class="rt-color-wrap" title="Barva textu">
+              <span class="rt-color-a" id="editColorA">A</span>
+              <input type="color" id="editTextColor" value="#1a1a1a">
+            </label>
+            <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" style="font-size:0.72rem;opacity:.7;">✕fmt</button>
+            <div class="rt-sep"></div>
+            <button type="button" class="rt-btn rt-table-btn" title="Vložit tabulku" style="font-size:0.85rem;">⊞</button>
+            <div class="rt-sep"></div>
+            <label class="rt-btn rt-img-label" title="Vložit obrázek" style="cursor:pointer;">
+              🖼
+              <input type="file" class="rt-img-input" accept="image/*" style="display:none;">
+            </label>
+          </div>
+          <div class="rich-editor" id="noteEditorEdit" contenteditable="true" data-placeholder="Uprav text..."></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="label">Barva</label>
+        <div class="color-picker" id="editColorPicker">
+          <div class="color-swatch selected" data-color="#fef9c3" style="background:#fef9c3;"></div>
+          <div class="color-swatch" data-color="#fce7f3" style="background:#fce7f3;"></div>
+          <div class="color-swatch" data-color="#dbeafe" style="background:#dbeafe;"></div>
+          <div class="color-swatch" data-color="#dcfce7" style="background:#dcfce7;"></div>
+          <div class="color-swatch" data-color="#f3e8ff" style="background:#f3e8ff;"></div>
+          <div class="color-swatch" data-color="#ffedd5" style="background:#ffedd5;"></div>
+          <div class="color-swatch" data-color="#e0f2fe" style="background:#e0f2fe;"></div>
+          <div class="color-swatch" data-color="#fee2e2" style="background:#fee2e2;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="editModal">Zrušit</button>
+        <button id="editSubmit" class="btn btn-primary">Uložit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Sdílet -->
+  <div class="modal-overlay" id="shareModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Sdílet místnost</h3>
+        <button class="modal-close" data-close="shareModal">✕</button>
+      </div>
+      <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:16px;">
+        Pošli tento kód spolužákovi. Připojí se jako <strong style="color:var(--text);">prohlížeč</strong> – oprávnění lze změnit v sekci Členové.
+      </p>
+      <div class="invite-box">
+        <div class="invite-code" id="inviteCode">------</div>
+        <button id="copyBtn" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Kopírovat</button>
+      </div>
+      <p class="hint" style="text-align:center;">Kód je platný do smazání místnosti.</p>
+    </div>
+  </div>
+
+  <!-- PANEL: Členové -->
+  <div class="panel-backdrop" id="panelBack">
+    <div class="side-panel">
+      <div class="panel-hd">
+        <h3>Členové místnosti</h3>
+        <button class="modal-close" id="closePanel">✕</button>
+      </div>
+      <div class="panel-body" id="membersList">
+        <div style="text-align:center;padding:32px 0;color:var(--text-muted);">Načítám...</div>
+      </div>
+      <div style="padding:14px 18px;border-top:1px solid var(--border);" id="deleteRoomWrap" style="display:none;">
+        <button id="deleteRoomBtn" class="btn btn-danger" style="width:100%;justify-content:center;">
+          Smazat místnost
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DETAIL poznámky -->
+  <div class="modal-overlay" id="noteDetailModal">
+    <div class="modal modal-detail" id="noteDetailBox">
+      <div class="modal-header">
+        <span id="detailAuthor" style="font-weight:600;font-size:1rem;"></span>
+        <button class="modal-close" data-close="noteDetailModal">✕</button>
+      </div>
+      <div id="detailContent" class="note-detail-content"></div>
+      <div id="detailTime" class="note-detail-time"></div>
+    </div>
+  </div>
+
+  <!-- LIGHTBOX -->
+  <div id="lightbox">
+    <button id="lightboxClose" title="Zavřít">✕</button>
+    <img id="lightboxImg" src="" alt="">
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>(function(){var s=document.createElement('script');s.src='js/room.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>

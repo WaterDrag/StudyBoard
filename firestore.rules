@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() { return request.auth != null; }
+
+    function isMember(roomId) {
+      return isAuth() &&
+        request.auth.uid in
+          get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds;
+    }
+
+    function roomRole(roomId) {
+      return get(/databases/$(database)/documents/rooms/$(roomId)).data.roles[request.auth.uid];
+    }
+
+    function isRoomOwner(roomId) { return roomRole(roomId) == 'owner'; }
+    function canEditRoom(roomId) {
+      return roomRole(roomId) == 'owner' || roomRole(roomId) == 'editor';
+    }
+
+    // ── Místnosti ──────────────────────────────────────────────
+    match /rooms/{roomId} {
+      allow read:   if isAuth();
+      allow create: if isAuth() && request.auth.uid in request.resource.data.memberIds;
+      allow update: if isAuth() && (
+        isRoomOwner(roomId) ||
+        request.auth.uid in request.resource.data.memberIds
+      );
+      allow delete: if isAuth() && isRoomOwner(roomId);
+
+      match /connections/{connId} {
+        allow read:   if isMember(roomId);
+        allow create: if isAuth() && canEditRoom(roomId) &&
+                         request.resource.data.authorId == request.auth.uid;
+        allow delete: if isAuth() && (isRoomOwner(roomId) ||
+                         resource.data.authorId == request.auth.uid);
+      }
+
+      match /notes/{noteId} {
+        allow read:   if isMember(roomId);
+        allow create: if isAuth() && canEditRoom(roomId) &&
+                         request.resource.data.authorId == request.auth.uid;
+        allow update: if isAuth() && (
+          isRoomOwner(roomId) ||
+          (roomRole(roomId) == 'editor' && resource.data.authorId == request.auth.uid)
+        );
+        allow delete: if isAuth() && (
+          isRoomOwner(roomId) ||
+          (roomRole(roomId) == 'editor' && resource.data.authorId == request.auth.uid)
+        );
+      }
+    }
+
+    // ── Uživatelské profily ────────────────────────────────────
+    match /users/{uid} {
+      allow read:  if isAuth();
+      allow write: if isAuth() && request.auth.uid == uid;
+    }
+
+    // ── Žádosti o přátelství ───────────────────────────────────
+    match /friendRequests/{reqId} {
+      allow read: if isAuth() && (
+        request.auth.uid == resource.data.fromUid ||
+        request.auth.uid == resource.data.toUid
+      );
+      allow create: if isAuth() && request.resource.data.fromUid == request.auth.uid;
+      allow update: if isAuth() && (
+        request.auth.uid == resource.data.toUid ||
+        request.auth.uid == resource.data.fromUid
+      );
+      allow delete: if isAuth() && (
+        request.auth.uid == resource.data.fromUid ||
+        request.auth.uid == resource.data.toUid
+      );
+    }
+
+    // ── Flash Card balíčky ─────────────────────────────────────
+    match /decks/{deckId} {
+      // resource.data místo get() – čistší a bez zbytečných reads
+      allow read: if isAuth() && (
+        resource.data.ownerUid == request.auth.uid ||
+        (resource.data.roomId != null && isMember(resource.data.roomId))
+      );
+      allow create: if isAuth() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isAuth() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isAuth() && resource.data.ownerUid == request.auth.uid;
+
+      match /cards/{cardId} {
+        allow read: if isAuth() && (
+          get(/databases/$(database)/documents/decks/$(deckId)).data.ownerUid == request.auth.uid ||
+          (get(/databases/$(database)/documents/decks/$(deckId)).data.roomId != null &&
+           isMember(get(/databases/$(database)/documents/decks/$(deckId)).data.roomId))
+        );
+        allow write: if isAuth() &&
+          get(/databases/$(database)/documents/decks/$(deckId)).data.ownerUid == request.auth.uid;
+      }
+    }
+  }
+}

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flash Cards – StudyBoard</title>
+  <script src="js/version.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="fc-nav">
+    <a id="backBtn" href="dashboard.html" class="btn btn-ghost" style="padding:6px 10px;gap:4px;font-size:0.82rem;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Zpět
+    </a>
+    <span class="fc-nav-title" id="navTitle">Flash Cards</span>
+    <div style="display:flex;gap:8px;" id="navActions"></div>
+  </nav>
+
+  <!-- CONTENT -->
+  <div class="fc-main">
+
+    <!-- VIEW: Seznam balíčků -->
+    <div id="viewDecks">
+      <div class="dashboard-header" style="margin-bottom:22px;">
+        <div>
+          <h2 id="deckListTitle">Flash Cards</h2>
+          <p id="deckListSub">Tvoje balíčky karet</p>
+        </div>
+        <div id="deckListActions"></div>
+      </div>
+      <div id="decksGrid" class="decks-grid">
+        <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:40px;color:var(--text-muted);">
+          <div class="spinner"></div> Načítám...
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: Karty v balíčku -->
+    <div id="viewCards" style="display:none;">
+      <div class="dashboard-header" style="margin-bottom:22px;">
+        <div>
+          <h2 id="deckTitle">Balíček</h2>
+          <p id="deckCardCount" style="color:var(--text-muted);font-size:0.875rem;margin-top:3px;"></p>
+        </div>
+        <div style="display:flex;gap:9px;" id="deckActions"></div>
+      </div>
+
+      <!-- Add card form (owner only) -->
+      <div id="addCardForm" style="display:none;margin-bottom:22px;">
+        <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;">
+          <div class="friends-card-title" style="margin-bottom:14px;">Přidat kartu</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px;">
+            <div>
+              <label class="label">Přední strana (otázka)</label>
+              <textarea id="cardFront" class="input" placeholder="Otázka nebo pojem..." style="min-height:80px;"></textarea>
+            </div>
+            <div>
+              <label class="label">Zadní strana (odpověď)</label>
+              <textarea id="cardBack" class="input" placeholder="Odpověď nebo definice..." style="min-height:80px;"></textarea>
+            </div>
+          </div>
+          <button id="addCardSubmit" class="btn btn-primary">Přidat kartu</button>
+        </div>
+      </div>
+
+      <div id="cardsList" class="cards-list">
+        <div style="text-align:center;padding:40px;color:var(--text-muted);">Žádné karty. Přidej první!</div>
+      </div>
+    </div>
+
+    <!-- VIEW: Studium -->
+    <div id="viewStudy" style="display:none;">
+      <div class="study-wrap">
+        <div class="study-meta">
+          Karta <strong id="studyIdx">1</strong> z <strong id="studyTotal">0</strong>
+          <div class="fc-prog-bar" style="margin:8px auto 0;">
+            <div class="fc-prog-fill" id="studyProgFill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <div class="flashcard-wrap" id="flashcardWrap">
+          <div class="flashcard-inner" id="flashcardInner">
+            <div class="fc-face fc-front">
+              <div class="fc-face-lbl">Otázka</div>
+              <div class="fc-face-txt" id="studyFront"></div>
+              <div class="fc-face-hint">Klikni pro zobrazení odpovědi</div>
+            </div>
+            <div class="fc-face fc-back">
+              <div class="fc-face-lbl">Odpověď</div>
+              <div class="fc-face-txt" id="studyBack"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="study-hint" id="studyHint">Klikni na kartu pro zobrazení odpovědi</div>
+
+        <div class="study-btns" id="studyBtns" style="display:none;">
+          <button class="btn-dontknow" id="dontKnowBtn">✗ Neznám</button>
+          <button class="btn-know"     id="knowBtn">✓ Znám</button>
+        </div>
+
+        <button class="btn btn-ghost" id="skipBtn" style="font-size:0.8rem;padding:6px 14px;">Přeskočit →</button>
+      </div>
+    </div>
+
+    <!-- VIEW: Výsledky -->
+    <div id="viewResults" style="display:none;">
+      <div class="results-wrap">
+        <div class="results-ring">
+          <div class="results-pct" id="resPct">0%</div>
+          <div class="results-sub">znáš</div>
+        </div>
+        <div class="results-h" id="resTitle">Hotovo!</div>
+        <div class="results-desc" id="resDesc"></div>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <button class="btn btn-primary"   id="restartBtn">Opakovat znova</button>
+          <button class="btn btn-secondary" id="onlyWrongBtn">Opakovat neznámé</button>
+          <button class="btn btn-ghost"     id="backToCardsBtn">Zpět na balíček</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL: Nový balíček (pro room context) -->
+  <div class="modal-overlay" id="newDeckModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Nový balíček</h3>
+        <button class="modal-close" data-close="newDeckModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Název balíčku</label>
+        <input id="newDeckName" type="text" class="input" placeholder="např. Vzorce z fyziky" maxlength="60">
+      </div>
+      <div class="form-group">
+        <label class="label">Popis <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">(nepovinný)</span></label>
+        <textarea id="newDeckDesc" class="input" placeholder="Co budeš studovat..." maxlength="140" style="min-height:58px;resize:vertical;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="label">Barva</label>
+        <div class="color-input-wrap">
+          <label class="color-input-swatch" id="newDeckColorSwatch" style="background:#6366f1;">
+            <input type="color" id="newDeckColorInput" value="#6366f1">
+          </label>
+          <div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:3px;">Klikni pro výběr barvy (RGB)</div>
+            <code id="newDeckColorHex" style="font-size:0.85rem;font-weight:600;color:var(--accent);">#6366f1</code>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="newDeckModal">Zrušit</button>
+        <button id="newDeckSubmit" class="btn btn-primary">Vytvořit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Smazat balíček (3 fáze) -->
+  <div class="modal-overlay" id="deleteDeckModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="delModalTitle">Smazat balíček?</h3>
+        <button class="modal-close" data-close="deleteDeckModal">✕</button>
+      </div>
+      <!-- Fáze 1 -->
+      <div id="delPhase1">
+        <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:6px;">Tato akce je <strong style="color:#fca5a5;">nevratná</strong>. Smaže balíček i všechny karty.</p>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-close="deleteDeckModal">Zrušit</button>
+          <button class="btn btn-danger" id="delNext1">Pokračovat →</button>
+        </div>
+      </div>
+      <!-- Fáze 2 -->
+      <div id="delPhase2" style="display:none;">
+        <p style="color:#fca5a5;font-size:0.9rem;margin-bottom:6px;">⚠️ Opravdu? Všechny karty budou <strong>navždy smazány</strong> a nelze je obnovit.</p>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="delBack2">← Zpět</button>
+          <button class="btn btn-danger" id="delNext2">Ano, smazat →</button>
+        </div>
+      </div>
+      <!-- Fáze 3 -->
+      <div id="delPhase3" style="display:none;">
+        <p style="font-size:0.88rem;margin-bottom:8px;">Pro potvrzení napiš název balíčku: <strong id="delDeckNameHint" style="color:var(--accent);"></strong></p>
+        <input id="delConfirmInput" class="input" type="text" placeholder="Název balíčku…" style="margin-bottom:4px;">
+        <p id="delConfirmErr" style="color:#fca5a5;font-size:0.8rem;min-height:18px;"></p>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="delBack3">← Zpět</button>
+          <button class="btn btn-danger" id="confirmDeleteDeck">🗑 Smazat navždy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Upravit kartu -->
+  <div class="modal-overlay" id="editCardModal">
+    <div class="modal" style="max-width:540px;">
+      <div class="modal-header">
+        <h3>Upravit kartu</h3>
+        <button class="modal-close" data-close="editCardModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Přední strana (otázka)</label>
+        <textarea id="editCardFront" class="input" style="min-height:70px;resize:vertical;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="label">Zadní strana (odpověď)</label>
+        <textarea id="editCardBack" class="input" style="min-height:70px;resize:vertical;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="label">Počet odpovědí v kvízu</label>
+        <select id="editAnswerCount" class="input" style="max-width:160px;">
+          <option value="2">2 (1 špatná)</option>
+          <option value="3">3 (2 špatné)</option>
+          <option value="4" selected>4 (3 špatné)</option>
+          <option value="5">5 (4 špatné)</option>
+        </select>
+      </div>
+      <!-- Špatné odpovědi -->
+      <div class="form-group">
+        <label class="label">Špatné odpovědi pro kvíz</label>
+        <div id="editDistractorsList" style="display:flex;flex-wrap:wrap;gap:5px;min-height:24px;margin-bottom:6px;"></div>
+        <div style="display:flex;gap:6px;">
+          <input id="editDistractorInput" class="input" type="text" placeholder="Špatná odpověď…" style="flex:1;padding:6px 10px;font-size:0.85rem;" maxlength="120">
+          <button class="btn btn-secondary" id="editDistractorAdd" style="padding:6px 12px;">+</button>
+          <button class="btn btn-ghost" id="editDistractorAI" style="padding:6px 10px;font-size:0.8rem;" title="Navrhnout pomocí AI">🤖</button>
+        </div>
+        <div id="editAISuggestions" style="display:none;margin-top:8px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="editCardModal">Zrušit</button>
+        <button class="btn btn-primary" id="saveEditCardBtn">Uložit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>(function(){var s=document.createElement('script');s.src='js/flashcards.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zombie Survival – StudyBoard</title>
+  <script src="js/version.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body>
+
+  <nav class="fc-nav">
+    <a id="backBtn" href="flashcards.html" class="btn btn-ghost" style="padding:6px 10px;gap:4px;font-size:0.82rem;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Zpět
+    </a>
+    <span class="fc-nav-title" id="navTitle">🧟 Zombie Survival</span>
+    <div class="ghud">
+      <span id="hudHp">❤️ 100</span>
+      <span id="hudCoins">🪙 0</span>
+      <span id="hudWave" style="color:var(--accent);">Vlna 1</span>
+    </div>
+  </nav>
+
+  <div id="gameArea" class="game-area">
+
+    <!-- Základna -->
+    <div class="game-base" id="gameBase">
+      <div class="game-base-icon">🏚️</div>
+      <div class="game-hp-wrap"><div class="game-hp-fill" id="gameHpFill"></div></div>
+    </div>
+
+    <!-- STARTOVNÍ OBRAZOVKA -->
+    <div class="goverlay" id="startScreen" style="display:none;">
+      <div class="goverlay-card" style="text-align:center;">
+        <div class="goverlay-emoji">🧟‍♂️</div>
+        <h2>Zombie Survival</h2>
+        <p id="startDeckName" style="color:var(--accent);font-weight:600;margin:4px 0 10px;"></p>
+        <p style="color:var(--text-muted);font-size:0.83rem;line-height:1.7;max-width:330px;margin:0 auto 26px;">
+          Klikej na zombíky, abys je zastřelil. Mezi vlnami odpovídej na flash cards
+          a vydělávej <strong style="color:#fbbf24;">🪙 mince</strong> na upgrady.
+        </p>
+        <button class="btn btn-primary" style="font-size:1rem;padding:12px 36px;" id="startBtn">⚔️ Spustit hru</button>
+      </div>
+    </div>
+
+    <!-- OTÁZKA -->
+    <div class="goverlay" id="questionScreen" style="display:none;">
+      <div class="goverlay-card goverlay-question">
+        <div class="goverlay-badge" id="qBadge">⭐ Správně = +50 🪙 &nbsp;|&nbsp; Špatně = −10 ❤️</div>
+        <div class="game-q-text" id="gameQText"></div>
+        <div id="gameGenLoading" style="display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text-muted);font-size:0.82rem;padding:18px;">
+          <div class="spinner" style="width:16px;height:16px;border-width:2px;"></div>
+          Generuji možnosti pomocí AI…
+        </div>
+        <div class="quiz-answers" id="gameAnswers" style="display:none;"></div>
+        <div id="qFeedback" class="q-feedback" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- OBCHOD -->
+    <div class="goverlay" id="shopScreen" style="display:none;">
+      <div class="goverlay-card shop-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div>
+            <h3 style="margin:0;">🛒 Obchod</h3>
+            <div style="color:var(--text-muted);font-size:0.82rem;margin-top:2px;">
+              Máš <strong id="shopCoins" style="color:#fbbf24;">🪙 0</strong>
+            </div>
+          </div>
+        </div>
+        <div class="shop-grid" id="shopGrid"></div>
+        <button class="btn btn-primary" id="nextWaveBtn"
+                style="width:100%;justify-content:center;margin-top:14px;font-size:0.92rem;padding:10px;">
+          ⚔️ Další vlna!
+        </button>
+      </div>
+    </div>
+
+    <!-- GAME OVER -->
+    <div class="goverlay" id="gameoverScreen" style="display:none;">
+      <div class="goverlay-card" style="text-align:center;">
+        <div class="goverlay-emoji">💀</div>
+        <h2>Game Over</h2>
+        <p style="color:var(--text-muted);margin-bottom:6px;">
+          Přežil jsi <strong id="goWave" style="color:var(--text);">0</strong> vln
+        </p>
+        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:28px;">
+          Skóre: <strong id="goScore" style="color:var(--accent);">0</strong>
+        </p>
+        <button class="btn btn-primary" id="restartBtn" style="margin:0 6px 8px;">🔄 Zkusit znovu</button>
+        <a id="goBackLink" href="#" class="btn btn-ghost">← Zpět na karty</a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>(function(){var s=document.createElement('script');s.src='js/game.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudyBoard</title>
+  <script src="js/version.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="dashboard-nav">
+    <div class="nav-brand">
+      <div class="logo-icon-sm">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+      </div>
+      StudyBoard
+    </div>
+    <div class="user-info">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <span class="user-name" id="userName"></span>
+      <button id="settingsBtn" class="btn btn-ghost" style="padding:6px 10px;font-size:0.9rem;" title="Nastavení">⚙️</button>
+      <button id="logoutBtn" class="btn btn-ghost" style="padding:6px 13px;font-size:0.82rem;">Odhlásit</button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="dashboard-main">
+
+    <!-- TABS -->
+    <div class="dash-tabs">
+      <button class="tab-btn active" data-tab="rooms">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Místnosti
+      </button>
+      <button class="tab-btn" data-tab="flash">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        Flash Cards
+      </button>
+      <button class="tab-btn" data-tab="friends">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Přátelé <span class="tab-badge" id="reqBadge"></span>
+      </button>
+    </div>
+
+    <!-- TAB: Místnosti -->
+    <div class="tab-panel active" id="tab-rooms">
+      <div class="dashboard-header">
+        <div>
+          <h2>Moje místnosti</h2>
+          <p>Vytvoř nebo se připoj k sdílené nástěnce</p>
+        </div>
+        <div class="dashboard-actions">
+          <button id="joinBtn" class="btn btn-secondary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+              <polyline points="10 17 15 12 10 7"/>
+              <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            Připojit se
+          </button>
+          <button id="createBtn" class="btn btn-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Nová místnost
+          </button>
+        </div>
+      </div>
+      <div id="roomsGrid" class="rooms-grid">
+        <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:12px;padding:60px;color:var(--text-muted);">
+          <div class="spinner"></div> Načítám...
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Flash Cards -->
+    <div class="tab-panel" id="tab-flash">
+      <div class="dashboard-header">
+        <div>
+          <h2>Flash Cards</h2>
+          <p>Osobní balíčky karet pro učení</p>
+        </div>
+        <div class="dashboard-actions">
+          <button id="newDeckBtn" class="btn btn-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Nový balíček
+          </button>
+        </div>
+      </div>
+      <div id="decksGrid" class="decks-grid">
+        <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:12px;padding:60px;color:var(--text-muted);">
+          <div class="spinner"></div> Načítám...
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Přátelé -->
+    <div class="tab-panel" id="tab-friends">
+      <div class="dashboard-header" style="margin-bottom:22px;">
+        <div><h2>Přátelé</h2><p>Sdílej poznámky se spolužáky</p></div>
+      </div>
+      <div class="friends-grid">
+        <!-- Left: friends list -->
+        <div class="friends-card" id="friendsCard">
+          <div class="friends-card-title">Moji přátelé</div>
+          <div id="friendsList">
+            <div style="color:var(--text-muted);font-size:0.875rem;padding:12px 0;">Žádní přátelé zatím.</div>
+          </div>
+        </div>
+        <!-- Right: own code + requests + add -->
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="friends-card">
+            <div class="friends-card-title">Tvůj kód přátel</div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+              <div id="myFriendCode" style="font-family:'Courier New',monospace;font-size:1.6rem;font-weight:700;letter-spacing:6px;color:var(--accent);">------</div>
+              <button id="copyFriendCode" class="btn btn-secondary" style="padding:6px 12px;font-size:0.78rem;">Kopírovat</button>
+            </div>
+            <p style="font-size:0.75rem;color:var(--text-muted);">Sdílej tento kód – spolužák ho zadá níže</p>
+          </div>
+          <div class="friends-card" id="requestsCard">
+            <div class="friends-card-title">Žádosti o přátelství</div>
+            <div id="requestsList">
+              <div style="color:var(--text-muted);font-size:0.875rem;padding:4px 0;">Žádné nové žádosti.</div>
+            </div>
+          </div>
+          <div class="friends-card">
+            <div class="friends-card-title">Přidat přítele</div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <input id="friendCodeInput" type="text" class="input" placeholder="ABC123"
+                maxlength="6" style="text-transform:uppercase;letter-spacing:5px;font-size:1.1rem;text-align:center;">
+            </div>
+            <div id="addFriendError" style="color:#fca5a5;font-size:0.82rem;margin-bottom:8px;display:none;"></div>
+            <button id="sendReqBtn" class="btn btn-primary" style="width:100%;justify-content:center;">Odeslat žádost</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL: Vytvořit místnost -->
+  <div class="modal-overlay" id="createModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Vytvořit místnost</h3>
+        <button class="modal-close" data-close="createModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Název místnosti</label>
+        <input id="roomName" type="text" class="input" placeholder="např. Matematika – maturita 2025" maxlength="60">
+      </div>
+      <div class="form-group">
+        <label class="label">Popis <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">(nepovinný)</span></label>
+        <textarea id="roomDesc" class="input" placeholder="O čem místnost je..." maxlength="140" style="min-height:58px;resize:vertical;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="label">Barva</label>
+        <div class="color-input-wrap">
+          <label class="color-input-swatch" id="roomColorSwatch" style="background:#6366f1;">
+            <input type="color" id="roomColorInput" value="#6366f1">
+          </label>
+          <div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:3px;">Klikni pro výběr barvy (RGB)</div>
+            <code id="roomColorHex" style="font-size:0.85rem;font-weight:600;color:var(--accent);">#6366f1</code>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="createModal">Zrušit</button>
+        <button id="createSubmit" class="btn btn-primary">Vytvořit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Připojit se -->
+  <div class="modal-overlay" id="joinModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Připojit se k místnosti</h3>
+        <button class="modal-close" data-close="joinModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Kód místnosti (6 znaků)</label>
+        <input id="joinCode" type="text" class="input" placeholder="ABCDEF"
+          maxlength="6" style="text-transform:uppercase;letter-spacing:5px;font-size:1.1rem;text-align:center;">
+      </div>
+      <div id="joinError" style="color:#fca5a5;font-size:0.82rem;margin-top:-6px;display:none;"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="joinModal">Zrušit</button>
+        <button id="joinSubmit" class="btn btn-primary">Připojit se</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Nový balíček -->
+  <div class="modal-overlay" id="newDeckModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Nový balíček karet</h3>
+        <button class="modal-close" data-close="newDeckModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Název balíčku</label>
+        <input id="deckName" type="text" class="input" placeholder="např. Anglická slovíčka" maxlength="60">
+      </div>
+      <div class="form-group">
+        <label class="label">Popis <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">(nepovinný)</span></label>
+        <textarea id="deckDesc" class="input" placeholder="Co budeš studovat..." maxlength="140" style="min-height:58px;resize:vertical;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="label">Barva</label>
+        <div class="color-input-wrap">
+          <label class="color-input-swatch" id="deckColorSwatch" style="background:#6366f1;">
+            <input type="color" id="deckColorInput" value="#6366f1">
+          </label>
+          <div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:3px;">Klikni pro výběr barvy (RGB)</div>
+            <code id="deckColorHex" style="font-size:0.85rem;font-weight:600;color:var(--accent);">#6366f1</code>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="newDeckModal">Zrušit</button>
+        <button id="deckSubmit" class="btn btn-primary">Vytvořit balíček</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Nastavení -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header">
+        <h3>⚙️ Nastavení</h3>
+        <button class="modal-close" data-close="settingsModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Gemini API klíč <span id="geminiKeyStatus" style="font-size:0.75rem;margin-left:6px;"></span></label>
+        <input id="settingsGeminiKey" type="password" class="input" placeholder="AQ.Ab8R…" autocomplete="off">
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">
+          Zdarma na <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a> — používá se pro AI návrhy špatných odpovědí v kartičkách.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="settingsModal">Zrušit</button>
+        <button id="settingsSave" class="btn btn-primary">Uložit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>(function(){var s=document.createElement('script');s.src='js/dashboard.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>

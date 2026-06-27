@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kvíz – StudyBoard</title>
+  <script src="js/version.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body>
+
+  <nav class="fc-nav">
+    <a id="backBtn" href="flashcards.html" class="btn btn-ghost" style="padding:6px 10px;gap:4px;font-size:0.82rem;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Zpět
+    </a>
+    <span class="fc-nav-title" id="navTitle">Kvíz</span>
+    <span id="quizScoreNav" style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;padding-right:4px;"></span>
+  </nav>
+
+  <div class="quiz-wrap">
+
+    <!-- NAČÍTÁNÍ -->
+    <div id="quizLoading" class="quiz-loading">
+      <div class="spinner" style="width:40px;height:40px;border-width:3px;"></div>
+      <p>Načítám karty…</p>
+    </div>
+
+    <!-- OTÁZKA -->
+    <div id="quizQuestion" style="display:none;">
+
+      <div class="quiz-progress-wrap">
+        <div class="quiz-progress-track">
+          <div class="quiz-progress-bar" id="quizProgressBar"></div>
+        </div>
+        <span class="quiz-progress-txt" id="quizProgressTxt">1 / 10</span>
+      </div>
+
+      <div class="quiz-streak" id="quizStreak" style="display:none;">
+        🔥 <span id="quizStreakNum">2</span> v řadě!
+      </div>
+
+      <div class="quiz-card" id="quizCard">
+        <div class="quiz-card-inner">
+          <div class="quiz-q-label">Otázka</div>
+          <div class="quiz-q-text" id="quizQText"></div>
+        </div>
+      </div>
+
+      <div class="quiz-gen-loading" id="quizGenLoading" style="display:none;">
+        <div class="spinner" style="width:18px;height:18px;border-width:2px;"></div>
+        <span>Generuji možnosti pomocí AI…</span>
+      </div>
+
+      <div class="quiz-answers" id="quizAnswers" style="display:none;"></div>
+
+    </div>
+
+    <!-- VÝSLEDKY -->
+    <div id="quizResults" style="display:none;" class="quiz-results">
+      <div class="quiz-results-stars" id="quizStars"></div>
+      <h2 id="quizResultTitle"></h2>
+      <p id="quizResultSub"></p>
+      <div class="quiz-result-bar-wrap">
+        <div class="quiz-result-bar" id="quizResultBar"></div>
+      </div>
+      <p class="quiz-result-pct" id="quizResultPct"></p>
+      <div class="quiz-results-btns">
+        <button class="btn btn-primary" id="quizRetryBtn">🔄 Zkusit znovu</button>
+        <button class="btn btn-secondary" id="quizRetryWrongBtn">🎯 Jen špatné</button>
+        <a id="quizBackLink" href="#" class="btn btn-ghost">← Zpět na karty</a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>(function(){var s=document.createElement('script');s.src='js/quiz.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>
