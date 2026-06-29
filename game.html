@@ -6,104 +6,440 @@
   <title>Zombie Survival – StudyBoard</title>
   <script src="js/version.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+  <style>
+/* ── Reset ────────────────────────────── */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+
+/* ── Variables ───────────────────────── */
+:root{
+  --bg0:#04040e;--bg1:#0a0a18;--bg2:#111120;--bg3:#181830;
+  --brd:rgba(99,102,241,.15);--brd2:rgba(99,102,241,.32);--brd3:rgba(255,255,255,.07);
+  --acc:#6366f1;--acc2:#818cf8;--acc-glow:rgba(99,102,241,.22);
+  --tx:#e2e8f0;--muted:#64748b;--muted2:#4a5568;
+  --hp:#ef4444;--xp:#7c3aed;--gold:#f59e0b;--base-c:#2563eb;
+  --r:10px;--r-sm:7px;--r-lg:14px;
+  --glass:rgba(6,6,20,.84);
+  --blur:blur(18px) saturate(1.5);
+}
+
+/* ── Base ────────────────────────────── */
+body{background:var(--bg0);color:var(--tx);font-family:'Inter',sans-serif;overflow:hidden;user-select:none;}
+canvas{display:block;cursor:crosshair;}
+
+/* ── Screens ─────────────────────────── */
+.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;overflow-y:auto;padding:20px;}
+.screen.hidden{display:none!important;}
+.panel{background:var(--bg1);border:1px solid var(--brd);border-radius:var(--r-lg);padding:24px;max-height:92vh;overflow-y:auto;}
+
+/* ── Kit select ──────────────────────── */
+.kit-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:880px;}
+.kit-card{
+  background:var(--bg2);border:1.5px solid var(--brd);border-radius:12px;
+  padding:16px 12px 12px;cursor:pointer;text-align:center;transition:all .18s;
+  position:relative;overflow:hidden;
+}
+.kit-card::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% -10%,color-mix(in srgb,var(--kc,#6366f1) 18%,transparent),transparent 65%);
+  opacity:0;transition:opacity .2s;pointer-events:none;
+}
+.kit-card:hover{border-color:var(--acc2);transform:translateY(-2px);}
+.kit-card:hover::after{opacity:1;}
+.kit-card.selected{border-color:var(--kc,#6366f1);background:var(--bg3);}
+.kit-card.selected::after{opacity:1;}
+.kit-emoji{font-size:2rem;margin-bottom:6px;line-height:1;}
+.kit-name{font-weight:700;font-size:.86rem;letter-spacing:.01em;}
+.kit-desc{font-size:.63rem;color:var(--muted);margin-top:4px;line-height:1.35;}
+
+/* ── Stat allocation ─────────────────── */
+.stat-row{display:flex;align-items:center;gap:8px;padding:5px 0;}
+.stat-label{width:80px;font-size:.78rem;color:#aaa;}
+.stat-val-wrap{display:flex;align-items:center;gap:4px;}
+.stat-dot{width:10px;height:10px;border-radius:50%;background:var(--bg2);border:1px solid var(--brd2);transition:background .12s;}
+.stat-dot.filled{background:var(--acc);border-color:var(--acc2);}
+.stat-btn{width:24px;height:24px;border:1px solid var(--brd2);background:var(--bg2);color:var(--tx);border-radius:6px;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:all .12s;}
+.stat-btn:hover:not(:disabled){background:var(--bg3);border-color:var(--acc);}
+.stat-btn:disabled{opacity:.28;cursor:not-allowed;}
+
+/* ── HUD ─────────────────────────────── */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:20;}
+#hudTop{display:grid;grid-template-columns:auto 1fr auto;align-items:start;padding:10px 14px;gap:10px;}
+
+/* Left panel */
+#hudLeft{
+  background:var(--glass);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--brd);border-radius:12px;padding:10px 14px;min-width:216px;
+}
+.hud-bar-wrap{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+.hud-bar-wrap:last-of-type{margin-bottom:0;}
+.hud-bar{flex:1;height:7px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;min-width:110px;}
+.hud-bar-fill{height:100%;border-radius:4px;transition:width .3s ease;}
+#playerHpFill{background:linear-gradient(90deg,var(--hp),#f87171);}
+#baseHpFill  {background:linear-gradient(90deg,var(--base-c),#60a5fa);}
+#xpFill      {background:linear-gradient(90deg,var(--xp),#c084fc);}
+.hud-lbl{font-size:.64rem;color:var(--muted);width:52px;flex-shrink:0;letter-spacing:.01em;}
+.hud-v  {font-size:.64rem;min-width:52px;text-align:right;color:var(--tx);font-variant-numeric:tabular-nums;}
+
+#hudStrip{
+  display:flex;align-items:center;gap:8px;margin-top:7px;padding-top:7px;
+  border-top:1px solid var(--brd);font-size:.68rem;
+}
+#lvlBox{color:var(--acc2);font-weight:700;}
+#kitLbl{color:var(--muted);flex:1;text-align:center;font-size:.65rem;}
+#spWrap{color:var(--muted);white-space:nowrap;}
+#spVal{color:var(--acc2);font-weight:700;}
+
+/* Center: wave pill */
+#hudCenter{display:flex;justify-content:center;padding-top:2px;}
+#waveBox{
+  background:var(--glass);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--brd);border-radius:30px;padding:6px 20px;
+  font-size:.8rem;font-weight:700;white-space:nowrap;letter-spacing:.02em;
+}
+
+/* Right panel */
+#hudRight{
+  background:var(--glass);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--brd);border-radius:12px;padding:10px 14px;min-width:196px;
+}
+#coinsBox{color:var(--gold);font-size:.88rem;font-weight:700;margin-top:6px;letter-spacing:.01em;}
+
+/* ── Ability + Build bars ────────────── */
+#abilityBar{
+  position:fixed;bottom:82px;left:50%;transform:translateX(-50%);
+  display:flex;gap:6px;z-index:20;pointer-events:auto;
+  background:var(--glass);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--brd);border-radius:16px;padding:8px 10px;
+}
+#buildBar{
+  position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
+  display:flex;gap:6px;z-index:20;pointer-events:auto;
+  background:var(--glass);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--brd);border-radius:16px;padding:7px 10px;
+}
+.ab-btn,.bb-btn{
+  background:var(--bg2);border:1.5px solid var(--brd3);border-radius:10px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;position:relative;transition:border-color .14s,background .14s;
+}
+.ab-btn{width:60px;height:60px;font-size:1.45rem;}
+.bb-btn{width:52px;height:52px;font-size:1.2rem;padding:4px;}
+.ab-btn:hover,.bb-btn:hover{border-color:var(--acc);background:var(--bg3);}
+.bb-btn.active{border-color:var(--gold);background:rgba(245,158,11,.07);}
+.ab-btn:hover .ab-tooltip{display:block;}
+.ab-tooltip{
+  display:none;position:absolute;bottom:calc(100% + 9px);left:50%;transform:translateX(-50%);
+  background:rgba(4,4,18,.97);border:1px solid var(--brd2);border-radius:10px;
+  padding:9px 12px;width:192px;font-size:.71rem;line-height:1.5;color:var(--tx);
+  pointer-events:none;z-index:100;white-space:normal;text-align:left;
+  box-shadow:0 10px 40px rgba(0,0,0,.75);
+}
+.ab-tooltip strong{display:block;color:var(--acc2);margin-bottom:4px;font-size:.74rem;}
+.ab-tooltip .ab-tip-cd{color:var(--muted);font-size:.63rem;margin-top:5px;padding-top:5px;border-top:1px solid var(--brd);}
+.ab-key,.bb-key{position:absolute;bottom:3px;right:5px;font-size:.55rem;color:var(--muted2);}
+.bb-cnt{font-size:.58rem;color:var(--gold);line-height:1;}
+.cd-mask{
+  position:absolute;inset:0;background:rgba(0,0,0,.72);border-radius:9px;
+  display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;color:var(--acc2);
+}
+
+/* ── Minimap ──────────────────────────── */
+#mmCanvas{
+  position:fixed;bottom:12px;right:14px;border-radius:10px;
+  border:1px solid var(--brd);z-index:20;pointer-events:none;
+  box-shadow:0 4px 24px rgba(0,0,0,.65);
+}
+
+/* ── Info bar ─────────────────────────── */
+#placInfo{
+  position:fixed;bottom:84px;left:50%;transform:translateX(-50%);
+  background:rgba(4,4,18,.9);border:1px solid var(--brd2);border-radius:8px;
+  padding:5px 16px;font-size:.76rem;pointer-events:none;z-index:20;display:none;
+}
+
+/* ── Player list ──────────────────────── */
+#plList{
+  position:fixed;top:114px;right:14px;
+  background:var(--glass);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--brd);border-radius:10px;padding:8px 12px;
+  font-size:.72rem;pointer-events:none;z-index:20;min-width:140px;display:none;
+}
+.pl-row{display:flex;align-items:center;gap:6px;padding:2px 0;}
+
+/* ── Passive hint ─────────────────────── */
+#passiveHint{
+  position:fixed;bottom:148px;left:50%;transform:translateX(-50%);
+  font-size:.64rem;color:var(--muted);pointer-events:none;z-index:20;white-space:nowrap;
+}
+
+/* ── Hotkeys hint ─────────────────────── */
+#hotkeysHint{
+  position:fixed;bottom:84px;right:14px;
+  color:var(--muted2);font-size:.65rem;pointer-events:none;z-index:20;
+  text-align:right;line-height:1.7;
+}
+
+/* ── Toasts ───────────────────────────── */
+#gToasts{position:fixed;top:58px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:5px;z-index:100;pointer-events:none;align-items:center;}
+.g-toast{
+  background:rgba(4,4,18,.93);border:1px solid var(--brd2);border-radius:8px;
+  padding:6px 16px;font-size:.79rem;animation:gToast 2.8s forwards;
+  backdrop-filter:blur(8px);
+}
+@keyframes gToast{0%{opacity:0;transform:translateY(-8px) scale(.96)}8%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+
+/* ── Overlays ─────────────────────────── */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:60;}
+.ov.hidden{display:none!important;}
+.ov-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--brd);}
+.ov-head h2{font-size:1.1rem;font-weight:700;}
+
+/* ── Shop ─────────────────────────────── */
+.shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.si{background:var(--bg2);border:1px solid var(--brd);border-radius:10px;padding:12px 10px;cursor:pointer;text-align:center;transition:all .14s;}
+.si:hover:not(.sd){border-color:var(--acc);background:var(--bg3);transform:translateY(-1px);}
+.si.sd{opacity:.32;cursor:not-allowed;}
+.si-e{font-size:1.5rem;}
+.si-n{font-size:.72rem;font-weight:600;margin-top:4px;}
+.si-c{font-size:.66rem;color:var(--gold);margin-top:2px;}
+
+/* ── Stat rows (level-up / kit select) ── */
+.sr{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--brd);}
+.sr:last-child{border-bottom:none;}
+.sr-lbl{flex:1;font-size:.78rem;}
+.sr-desc{font-size:.62rem;color:var(--muted);flex:2;}
+.sr-ctl{display:flex;align-items:center;gap:6px;}
+.sr-v{min-width:24px;text-align:center;font-weight:700;color:var(--acc2);}
+
+/* ── Map picker ───────────────────────── */
+.map-card{background:var(--bg2);border:1.5px solid var(--brd);border-radius:10px;padding:10px 20px;cursor:pointer;text-align:center;transition:all .14s;font-size:.82rem;font-weight:600;}
+.map-card:hover{border-color:var(--acc2);}
+.map-card.selected{border-color:var(--acc);background:var(--bg3);}
+
+/* ── Lobby ────────────────────────────── */
+.lobby-row{display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--brd);border-radius:8px;padding:8px 14px;margin-bottom:6px;}
+
+/* ── Buttons ──────────────────────────── */
+.btn-p{background:var(--acc);color:#fff;border:none;border-radius:9px;padding:10px 24px;font-size:.88rem;font-weight:600;cursor:pointer;transition:opacity .14s,transform .1s;}
+.btn-p:hover{opacity:.88;transform:translateY(-1px);}
+.btn-p:active{transform:translateY(0);}
+.btn-p:disabled{opacity:.35;cursor:not-allowed;transform:none;}
+.btn-s{background:var(--bg2);color:var(--tx);border:1px solid var(--brd);border-radius:8px;padding:8px 16px;font-size:.82rem;cursor:pointer;transition:border-color .14s,background .14s;}
+.btn-s:hover{border-color:var(--acc2);background:var(--bg3);}
+.btn-d{background:#7f1d1d;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:.82rem;cursor:pointer;}
+.btn-d:hover{background:#991b1b;}
+
+/* ── Skill Tree ───────────────────────── */
+.sk-branch{background:var(--bg0);border:1px solid var(--brd);border-radius:12px;padding:14px;}
+.sk-branch-title{font-size:.8rem;font-weight:700;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--brd);color:var(--acc2);letter-spacing:.02em;}
+.sk-cell{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;border-radius:9px;margin-bottom:5px;border:1.5px solid var(--brd);cursor:pointer;transition:all .14s;}
+.sk-cell:hover:not(.sk-locked):not(.sk-owned){border-color:var(--acc2);background:var(--bg2);}
+.sk-cell.sk-owned{border-color:var(--xp);background:rgba(124,58,237,.08);}
+.sk-cell.sk-locked{opacity:.32;cursor:not-allowed;}
+.sk-tier{font-size:.56rem;color:var(--muted2);min-width:24px;margin-top:2px;}
+.sk-emoji{font-size:1.2rem;min-width:28px;text-align:center;line-height:1;}
+.sk-info{flex:1;}
+.sk-name{font-size:.76rem;font-weight:700;}
+.sk-desc{font-size:.62rem;color:var(--muted);margin-top:2px;line-height:1.35;}
+.sk-cost{font-size:.62rem;color:var(--acc2);margin-top:3px;}
+  </style>
 </head>
 <body>
 
-  <nav class="fc-nav">
-    <a id="backBtn" href="flashcards.html" class="btn btn-ghost" style="padding:6px 10px;gap:4px;font-size:0.82rem;">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-      Zpět
-    </a>
-    <span class="fc-nav-title" id="navTitle">🧟 Zombie Survival</span>
-    <div class="ghud">
-      <span id="hudHp">❤️ 100</span>
-      <span id="hudCoins">🪙 0</span>
-      <span id="hudWave" style="color:var(--accent);">Vlna 1</span>
-    </div>
-  </nav>
-
-  <div id="gameArea" class="game-area">
-
-    <!-- Základna -->
-    <div class="game-base" id="gameBase">
-      <div class="game-base-icon">🏚️</div>
-      <div class="game-hp-wrap"><div class="game-hp-fill" id="gameHpFill"></div></div>
-    </div>
-
-    <!-- STARTOVNÍ OBRAZOVKA -->
-    <div class="goverlay" id="startScreen" style="display:none;">
-      <div class="goverlay-card" style="text-align:center;">
-        <div class="goverlay-emoji">🧟‍♂️</div>
-        <h2>Zombie Survival</h2>
-        <p id="startDeckName" style="color:var(--accent);font-weight:600;margin:4px 0 10px;"></p>
-        <p style="color:var(--text-muted);font-size:0.83rem;line-height:1.7;max-width:330px;margin:0 auto 26px;">
-          Klikej na zombíky, abys je zastřelil. Mezi vlnami odpovídej na flash cards
-          a vydělávej <strong style="color:#fbbf24;">🪙 mince</strong> na upgrady.
-        </p>
-        <button class="btn btn-primary" style="font-size:1rem;padding:12px 36px;" id="startBtn">⚔️ Spustit hru</button>
-      </div>
-    </div>
-
-    <!-- OTÁZKA -->
-    <div class="goverlay" id="questionScreen" style="display:none;">
-      <div class="goverlay-card goverlay-question">
-        <div class="goverlay-badge" id="qBadge">⭐ Správně = +50 🪙 &nbsp;|&nbsp; Špatně = −10 ❤️</div>
-        <div class="game-q-text" id="gameQText"></div>
-        <div id="gameGenLoading" style="display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text-muted);font-size:0.82rem;padding:18px;">
-          <div class="spinner" style="width:16px;height:16px;border-width:2px;"></div>
-          Generuji možnosti pomocí AI…
-        </div>
-        <div class="quiz-answers" id="gameAnswers" style="display:none;"></div>
-        <div id="qFeedback" class="q-feedback" style="display:none;"></div>
-      </div>
-    </div>
-
-    <!-- OBCHOD -->
-    <div class="goverlay" id="shopScreen" style="display:none;">
-      <div class="goverlay-card shop-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-          <div>
-            <h3 style="margin:0;">🛒 Obchod</h3>
-            <div style="color:var(--text-muted);font-size:0.82rem;margin-top:2px;">
-              Máš <strong id="shopCoins" style="color:#fbbf24;">🪙 0</strong>
-            </div>
-          </div>
-        </div>
-        <div class="shop-grid" id="shopGrid"></div>
-        <button class="btn btn-primary" id="nextWaveBtn"
-                style="width:100%;justify-content:center;margin-top:14px;font-size:0.92rem;padding:10px;">
-          ⚔️ Další vlna!
-        </button>
-      </div>
-    </div>
-
-    <!-- GAME OVER -->
-    <div class="goverlay" id="gameoverScreen" style="display:none;">
-      <div class="goverlay-card" style="text-align:center;">
-        <div class="goverlay-emoji">💀</div>
-        <h2>Game Over</h2>
-        <p style="color:var(--text-muted);margin-bottom:6px;">
-          Přežil jsi <strong id="goWave" style="color:var(--text);">0</strong> vln
-        </p>
-        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:28px;">
-          Skóre: <strong id="goScore" style="color:var(--accent);">0</strong>
-        </p>
-        <button class="btn btn-primary" id="restartBtn" style="margin:0 6px 8px;">🔄 Zkusit znovu</button>
-        <a id="goBackLink" href="#" class="btn btn-ghost">← Zpět na karty</a>
-      </div>
-    </div>
-
+<!-- ═══════════ SCREEN: Kit + Map selection ═══════════ -->
+<div class="screen" id="screenKit">
+  <div style="text-align:center;margin-bottom:2px;">
+    <div style="font-size:2.4rem;margin-bottom:6px;">🧟</div>
+    <h1 style="font-size:1.55rem;font-weight:800;letter-spacing:-.01em;">Zombie Survival</h1>
+    <p style="color:var(--muted);font-size:.78rem;margin-top:4px;">Vyber mapu, kit a rozděl bonusové body</p>
   </div>
 
-  <div class="toast-wrap" id="toastWrap"></div>
+  <div style="display:flex;gap:10px;" id="mapPicker"></div>
 
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="js/config.js"></script>
-  <script>(function(){var s=document.createElement('script');s.src='js/game.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+  <div class="kit-grid" id="kitGrid"></div>
+
+  <div class="panel" style="width:460px;padding:16px 20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-weight:700;font-size:.88rem;">Bonusové body: <span id="freePoints" style="color:var(--acc2);font-size:1rem;">5</span></span>
+      <button class="btn-s" id="resetStats" style="padding:3px 10px;font-size:.72rem;">Reset</button>
+    </div>
+    <div id="statRows"></div>
+  </div>
+
+  <button class="btn-p" id="startBtn" style="font-size:.95rem;padding:12px 48px;">▶ Hrát</button>
+</div>
+
+<!-- ═══════════ SCREEN: Lobby ═══════════ -->
+<div class="screen hidden" id="screenLobby">
+  <div class="panel" style="width:420px;">
+    <div class="ov-head">
+      <h2>👥 Čekání na hráče</h2>
+    </div>
+    <p style="color:var(--muted);font-size:.78rem;margin-bottom:14px;">Kód lobby: <span id="lobbyCode" style="color:var(--acc2);font-weight:700;letter-spacing:5px;font-size:.9rem;"></span></p>
+    <div id="lobbyPlayers" style="margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-p" id="lobbyReadyBtn">✓ Připraven</button>
+      <button class="btn-s" id="lobbyStartBtn" style="display:none;">▶ Spustit hru</button>
+      <button class="btn-s" id="lobbyLeaveBtn">Odejít</button>
+    </div>
+    <p style="color:var(--muted2);font-size:.72rem;margin-top:10px;" id="lobbyStatus">Čekám na ostatní hráče…</p>
+  </div>
+</div>
+
+<!-- ═══════════ SCREEN: Game ═══════════ -->
+<div class="screen hidden" id="screenGame" style="padding:0;justify-content:flex-start;">
+  <canvas id="gc"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="hudTop">
+
+      <!-- Left: Player stats -->
+      <div id="hudLeft">
+        <div class="hud-bar-wrap">
+          <span class="hud-lbl">❤️ HP</span>
+          <div class="hud-bar"><div class="hud-bar-fill" id="playerHpFill" style="width:100%"></div></div>
+          <span class="hud-v" id="playerHpVal">80/80</span>
+        </div>
+        <div class="hud-bar-wrap">
+          <span class="hud-lbl">⭐ XP</span>
+          <div class="hud-bar"><div class="hud-bar-fill" id="xpFill" style="width:0%"></div></div>
+          <span class="hud-v" id="xpVal">0/100</span>
+        </div>
+        <div class="hud-bar-wrap">
+          <span class="hud-lbl">🍖 Hlad</span>
+          <div class="hud-bar"><div class="hud-bar-fill" id="hungerFill" style="width:100%;background:#f59e0b;"></div></div>
+          <span class="hud-v" id="hungerVal">100</span>
+        </div>
+        <div class="hud-bar-wrap">
+          <span class="hud-lbl">💧 Voda</span>
+          <div class="hud-bar"><div class="hud-bar-fill" id="thirstFill" style="width:100%;background:#06b6d4;"></div></div>
+          <span class="hud-v" id="thirstVal">100</span>
+        </div>
+        <div id="hudStrip">
+          <span id="lvlBox">Lv.<span id="levelVal">1</span></span>
+          <span id="kitLbl"></span>
+          <span id="spWrap">SP:<span id="spVal">0</span></span>
+        </div>
+      </div>
+
+      <!-- Center: Wave pill -->
+      <div id="hudCenter">
+        <div id="waveBox">Vlna <span id="waveNum">0</span> · <span id="phaseLabel" style="color:#fbbf24;">Příprava</span></div>
+      </div>
+
+      <!-- Right: Base + Coins -->
+      <div id="hudRight">
+        <div class="hud-bar-wrap">
+          <span class="hud-lbl">🏠 Base</span>
+          <div class="hud-bar"><div class="hud-bar-fill" id="baseHpFill" style="width:100%"></div></div>
+          <span class="hud-v" id="baseHpVal">500/500</span>
+        </div>
+        <div id="coinsBox">💰 <span id="coinsVal">0</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <canvas id="mmCanvas" width="140" height="140"></canvas>
+  <div id="plList"></div>
+  <div id="buildBar"></div>
+  <div id="abilityBar"></div>
+  <div id="passiveHint"></div>
+  <div id="placInfo"></div>
+  <div id="gToasts"></div>
+  <div id="hotkeysHint">B = Obchod · T = Dovednosti · G = Farma/Studna<br>R = Otočit · Esc = Zrušit</div>
+</div>
+
+<!-- ═══════════ OVERLAY: Shop ═══════════ -->
+<div class="ov hidden" id="shopOv">
+  <div class="panel" style="width:520px;">
+    <div class="ov-head">
+      <h2>🏪 Obchod · 💰 <span id="shopCoins">0</span></h2>
+      <button class="btn-s" id="shopClose" style="padding:3px 12px;">✕</button>
+    </div>
+    <div class="shop-grid" id="shopGrid"></div>
+    <div id="sendCoinsWrap" style="margin-top:14px;display:none;">
+      <p style="font-size:.75rem;color:var(--muted);margin-bottom:6px;">Poslat mince hráči:</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;" id="sendCoinsRow"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Level Up ═══════════ -->
+<div class="ov hidden" id="levelUpOv">
+  <div class="panel" style="width:380px;">
+    <div class="ov-head">
+      <h2>⭐ Level Up! Úroveň <span id="luLevel"></span></h2>
+    </div>
+    <p style="color:var(--muted);font-size:.78rem;margin-bottom:14px;">Rozděl <span id="luPoints" style="color:var(--acc2);font-weight:700;"></span> bonusové body</p>
+    <div id="luRows"></div>
+    <button class="btn-p" id="luConfirm" style="width:100%;margin-top:16px;" disabled>Potvrdit</button>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Death ═══════════ -->
+<div class="ov hidden" id="deathOv">
+  <div class="panel" style="text-align:center;width:360px;">
+    <div style="font-size:3.2rem;margin-bottom:10px;">💀</div>
+    <h2 style="color:#ef4444;margin-bottom:8px;font-size:1.3rem;">Zemřel jsi</h2>
+    <p style="color:var(--muted);font-size:.8rem;margin-bottom:18px;">Ostatní hráči pokračují…</p>
+    <button class="btn-p" id="respawnBtn" style="width:100%;padding:11px 0;">🪙 Oživit za <span id="respawnCost">50</span> coinů</button>
+    <p id="respawnErr" style="color:#ef4444;font-size:.75rem;margin-top:8px;min-height:16px;"></p>
+  </div>
+</div>
+
+<!-- ═══════════ SCREEN: Game Over ═══════════ -->
+<div class="screen hidden" id="screenOver">
+  <div class="panel" style="text-align:center;width:420px;">
+    <div style="font-size:3.5rem;margin-bottom:10px;" id="overEmoji">💀</div>
+    <h2 style="font-size:1.4rem;font-weight:800;" id="overTitle">Game Over</h2>
+    <p style="color:var(--muted);margin:8px 0 16px;" id="overSub"></p>
+    <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:18px;font-size:.82rem;text-align:left;" id="overStats"></div>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button class="btn-p" id="overReplay">▶ Znovu</button>
+      <button class="btn-s" id="overExit">← Zpět</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Kvíz ═══════════ -->
+<div class="ov hidden" id="quizOv">
+  <div class="panel" style="width:440px;">
+    <div class="ov-head">
+      <div>
+        <div style="font-size:.62rem;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:4px;">📚 Kvízová otázka</div>
+        <div id="quizOvQ" style="font-size:1rem;font-weight:700;line-height:1.5;"></div>
+      </div>
+    </div>
+    <div id="quizOvA" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+    <div id="quizOvMsg" style="margin-top:12px;min-height:18px;font-size:.82rem;text-align:center;"></div>
+    <div style="margin-top:12px;text-align:right;">
+      <button class="btn-s" onclick="closeOv('quizOv');_afterQuiz();" style="font-size:.72rem;padding:4px 12px;">Přeskočit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Skill Tree ═══════════ -->
+<div class="ov hidden" id="skillTreeOv">
+  <div class="panel" style="width:920px;max-height:88vh;overflow-y:auto;">
+    <div class="ov-head">
+      <div>
+        <h2>🌳 Strom dovedností</h2>
+        <p style="font-size:.74rem;color:var(--muted);margin-top:3px;">Dostupné SP: <span id="stSP" style="color:var(--acc2);font-weight:700;font-size:.9rem;">0</span> · T1 = lvl 3 · T2 = lvl 6 · T3 = lvl 9 · T4 = lvl 12</p>
+      </div>
+      <button class="btn-s" id="stClose" style="padding:3px 14px;">✕</button>
+    </div>
+    <div id="stBranches" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="js/config.js"></script>
+<script>(function(){var s=document.createElement('script');s.src='js/game.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>
 </html>

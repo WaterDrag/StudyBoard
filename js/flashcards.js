@@ -82,6 +82,7 @@ async function loadDeckList() {
 
   setupNewDeckModal();
   setupModalClose();
+  loadSurvivalLobbies();
 }
 
 function renderDeckGrid(docs) {
@@ -598,6 +599,67 @@ function showResults() {
   const wrongCount = STUDY_QUEUE.filter(c => !c._known).length;
   document.getElementById('onlyWrongBtn').disabled = wrongCount === 0;
   document.getElementById('onlyWrongBtn').textContent = `Opakovat neznámé (${wrongCount})`;
+}
+
+// ── Survival lobbies ───────────────────────────────────────────
+function loadSurvivalLobbies() {
+  const section  = document.getElementById('survivalSection');
+  const lobbyDiv = document.getElementById('survivalLobbies');
+  const createBtn = document.getElementById('createLobbyBtn');
+  if (!section) return;
+
+  // Listen for open lobbies
+  db.collection('survival_lobbies')
+    .where('status', '==', 'waiting')
+    .limit(8)
+    .onSnapshot(snap => {
+      section.style.display = 'block';
+      lobbyDiv.innerHTML = '';
+
+      if (snap.empty) {
+        lobbyDiv.innerHTML = '<span style="color:var(--text-muted);font-size:.8rem;">Žádné aktivní hry — vytvoř novou!</span>';
+      } else {
+        snap.forEach(doc => {
+          const d = doc.data();
+          const playerCount = Object.keys(d.players || {}).length;
+          const card = document.createElement('div');
+          card.style.cssText = 'background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:180px;max-width:220px;';
+          card.innerHTML = `
+            <div style="font-weight:700;font-size:.85rem;margin-bottom:4px;">🧟 Vlna ${d.wave || 0}</div>
+            <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:4px;">Hostitel: ${esc(d.hostName || 'Hráč')}</div>
+            <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;">👥 ${playerCount}/4 hráčů</div>
+            <button class="btn btn-primary" style="font-size:.75rem;padding:5px 12px;width:100%;" data-lid="${doc.id}">Připojit se</button>`;
+          card.querySelector('button').addEventListener('click', () => joinSurvivalLobby(doc.id));
+          lobbyDiv.appendChild(card);
+        });
+      }
+    }, () => { section.style.display = 'none'; });
+
+  createBtn.addEventListener('click', createSurvivalLobby);
+}
+
+async function createSurvivalLobby() {
+  const btn = document.getElementById('createLobbyBtn');
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    const ref = await db.collection('survival_lobbies').add({
+      hostId:   ME.uid,
+      hostName: ME.displayName || ME.email?.split('@')[0] || 'Hráč',
+      status:   'waiting',
+      wave:     0,
+      mapId:    0,
+      players:  { [ME.uid]: { uid: ME.uid, name: ME.displayName || 'Hráč', ready: false } },
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    window.location.href = `game.html?lobby=${ref.id}`;
+  } catch (e) {
+    toast('Chyba: ' + e.message);
+    btn.disabled = false; btn.textContent = '+ Nová hra';
+  }
+}
+
+function joinSurvivalLobby(lobbyId) {
+  window.location.href = `game.html?lobby=${lobbyId}`;
 }
 
 // ── Modal helpers ──────────────────────────────────────────────

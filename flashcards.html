@@ -34,6 +34,15 @@
         </div>
         <div id="deckListActions"></div>
       </div>
+      <!-- Survival lobbies section -->
+      <div id="survivalSection" style="margin-bottom:22px;display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <h3 style="font-size:.95rem;font-weight:700;">🧟 Aktivní Survival hry</h3>
+          <button class="btn btn-secondary" id="createLobbyBtn" style="font-size:.78rem;padding:6px 12px;">+ Nová hra</button>
+        </div>
+        <div id="survivalLobbies" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+      </div>
+
       <div id="decksGrid" class="decks-grid">
         <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:40px;color:var(--text-muted);">
           <div class="spinner"></div> Načítám...
