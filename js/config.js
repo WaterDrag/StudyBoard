@@ -13,6 +13,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyBn1YyZf4Oia_QZw96wrynNwSe7VNgLBhA",
   authDomain: "studypage-1f2f8.firebaseapp.com",
   projectId: "studypage-1f2f8",
+  databaseURL: "https://studypage-1f2f8-default-rtdb.europe-west1.firebasedatabase.app",
   storageBucket: "studypage-1f2f8.firebasestorage.app",
   messagingSenderId: "250590961493",
   appId: "1:250590961493:web:addcdd6a045035678699dc",

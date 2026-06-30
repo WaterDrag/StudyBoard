@@ -63,6 +63,56 @@ canvas{display:block;cursor:crosshair;}
 .stat-btn:hover:not(:disabled){background:var(--bg3);border-color:var(--acc);}
 .stat-btn:disabled{opacity:.28;cursor:not-allowed;}
 
+/* ── Kit abilities preview ───────────── */
+.abil-row{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:9px;background:var(--bg2);border:1px solid var(--brd);margin-bottom:7px;transition:border-color .15s,transform .15s;}
+.abil-row:hover{border-color:var(--brd2);transform:translateX(2px);}
+.abil-icon{font-size:1.35rem;line-height:1;flex-shrink:0;width:30px;text-align:center;}
+.abil-key{flex-shrink:0;width:22px;height:22px;border-radius:6px;background:var(--bg3);border:1px solid var(--brd2);color:var(--acc2);font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.abil-meta{flex:1;min-width:0;}
+.abil-name{font-weight:700;font-size:.8rem;}
+.abil-cd{font-size:.62rem;color:var(--muted2);font-weight:600;}
+.abil-desc{font-size:.68rem;color:var(--muted);line-height:1.4;margin-top:2px;}
+.passive-pill{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:9px;background:linear-gradient(135deg,rgba(99,102,241,.12),transparent);border:1px solid var(--brd2);font-size:.7rem;color:#cbd5e1;line-height:1.4;}
+
+/* ── Deck picker ─────────────────────── */
+.deck-picker{display:flex;flex-wrap:wrap;gap:8px;}
+.deck-chip{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:9px;background:var(--bg2);border:1.5px solid var(--brd);color:var(--tx);font-size:.8rem;cursor:pointer;transition:all .14s;text-align:left;}
+.deck-chip:hover{border-color:var(--acc2);}
+.deck-chip.selected{border-color:var(--dc,#6366f1);background:color-mix(in srgb,var(--dc,#6366f1) 14%,var(--bg2));}
+.deck-chip-dot{width:11px;height:11px;border-radius:50%;background:var(--dc,#6366f1);flex-shrink:0;box-shadow:0 0 0 2px rgba(255,255,255,.06);}
+.deck-chip.selected .deck-chip-dot{box-shadow:0 0 0 2px var(--dc,#6366f1);}
+.deck-chip-name{display:flex;flex-direction:column;line-height:1.2;}
+.deck-chip-room{font-size:.6rem;color:var(--muted);font-weight:500;margin-top:1px;}
+.deck-chip-n{font-size:.68rem;color:var(--muted);background:var(--bg0);border-radius:5px;padding:1px 6px;}
+
+/* ── Garden overlay ──────────────────── */
+.grd-buy{text-align:center;padding:18px 10px;}
+.grd-act{cursor:pointer;}
+.grd-act:disabled{opacity:.35;cursor:not-allowed;}
+.grd-section{background:var(--bg2);border:1px solid var(--brd);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+.grd-row{display:flex;align-items:center;gap:8px;font-size:.86rem;margin-bottom:4px;}
+.grd-meter{display:grid;grid-template-columns:74px 1fr 30px;align-items:center;gap:8px;font-size:.72rem;color:var(--muted);margin:5px 0;}
+.grd-num{text-align:right;color:var(--tx);font-weight:600;}
+.grd-btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.grd-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+.grd-plot{background:var(--bg2);border:1px solid var(--brd);border-radius:10px;padding:12px;text-align:center;}
+.grd-plot.ready{border-color:var(--gold);}
+.grd-plot.withered{border-color:rgba(239,68,68,.4);}
+.grd-plot-head{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;margin-bottom:8px;}
+.grd-tag{font-size:.64rem;padding:2px 7px;border-radius:5px;}
+.tag-irr{background:rgba(56,189,248,.16);color:#7dd3fc;}
+.grd-crop{font-size:2rem;line-height:1;margin:4px 0;}
+.crop-list{display:flex;flex-direction:column;gap:5px;margin-bottom:8px;}
+.crop-btn{display:flex;align-items:center;gap:6px;justify-content:space-between;padding:6px 9px;border-radius:7px;background:var(--bg3);border:1px solid var(--brd);color:var(--tx);font-size:.74rem;cursor:pointer;transition:border-color .12s;}
+.crop-btn:hover:not(:disabled){border-color:var(--acc);}
+.crop-btn:disabled{opacity:.35;cursor:not-allowed;}
+.crop-cost{color:var(--gold);font-weight:600;font-size:.72rem;}
+.grd-chan{width:100%;font-size:.72rem;padding:6px;border:1px dashed var(--brd2);border-radius:7px;background:transparent;color:#7dd3fc;cursor:pointer;}
+.grd-chan:hover{background:rgba(56,189,248,.08);}
+.grd-chan:disabled{opacity:.35;cursor:not-allowed;}
+.grd-note{font-size:.7rem;color:var(--muted);background:rgba(255,255,255,.03);border:1px solid var(--brd);border-radius:8px;padding:7px 10px;margin-bottom:12px;text-align:center;line-height:1.4;}
+.grd-tending{background:rgba(132,204,22,.1);border:1px solid rgba(132,204,22,.35);border-radius:10px;padding:10px 12px;margin-bottom:14px;}
+
 /* ── HUD ─────────────────────────────── */
 #hud{position:fixed;inset:0;pointer-events:none;z-index:20;}
 #hudTop{display:grid;grid-template-columns:auto 1fr auto;align-items:start;padding:10px 14px;gap:10px;}
@@ -204,6 +254,11 @@ canvas{display:block;cursor:crosshair;}
 .si-e{font-size:1.5rem;}
 .si-n{font-size:.72rem;font-weight:600;margin-top:4px;}
 .si-c{font-size:.66rem;color:var(--gold);margin-top:2px;}
+.si-infra{border-color:rgba(56,189,248,.3);}
+.si-infra:hover:not(.sd){border-color:#38bdf8;}
+.si-own{font-size:.6rem;color:var(--muted);margin-top:1px;}
+.bb-btn.bb-infra{border-color:rgba(56,189,248,.3);}
+.bb-btn.bb-infra.active{border-color:#38bdf8;}
 
 /* ── Stat rows (level-up / kit select) ── */
 .sr{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--brd);}
@@ -260,12 +315,33 @@ canvas{display:block;cursor:crosshair;}
 
   <div class="kit-grid" id="kitGrid"></div>
 
-  <div class="panel" style="width:460px;padding:16px 20px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <span style="font-weight:700;font-size:.88rem;">Bonusové body: <span id="freePoints" style="color:var(--acc2);font-size:1rem;">5</span></span>
-      <button class="btn-s" id="resetStats" style="padding:3px 10px;font-size:.72rem;">Reset</button>
+  <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;justify-content:center;">
+    <!-- Abilities of selected kit -->
+    <div class="panel" style="width:460px;padding:16px 20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-weight:700;font-size:.88rem;">Schopnosti kitu <span id="kitAbilName" style="color:var(--acc2);"></span></span>
+      </div>
+      <div id="kitPassiveRow" style="margin-bottom:10px;"></div>
+      <div id="kitAbilRows"></div>
     </div>
-    <div id="statRows"></div>
+
+    <!-- Bonus stats -->
+    <div class="panel" style="width:460px;padding:16px 20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-weight:700;font-size:.88rem;">Bonusové body: <span id="freePoints" style="color:var(--acc2);font-size:1rem;">5</span></span>
+        <button class="btn-s" id="resetStats" style="padding:3px 10px;font-size:.72rem;">Reset</button>
+      </div>
+      <div id="statRows"></div>
+    </div>
+  </div>
+
+  <!-- Question deck picker -->
+  <div class="panel" style="width:600px;max-width:94vw;padding:16px 20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="font-weight:700;font-size:.88rem;">📚 Balíčky otázek</span>
+    </div>
+    <p style="color:var(--muted);font-size:.74rem;margin-bottom:10px;line-height:1.4;">Vyber, ze kterých balíčků se budou losovat otázky mezi vlnami (můžeš víc). Zahrnuje i 👥 sdílené balíčky z tvých místností.</p>
+    <div id="deckPicker" class="deck-picker"></div>
   </div>
 
   <button class="btn-p" id="startBtn" style="font-size:.95rem;padding:12px 48px;">▶ Hrát</button>
@@ -350,7 +426,7 @@ canvas{display:block;cursor:crosshair;}
   <div id="passiveHint"></div>
   <div id="placInfo"></div>
   <div id="gToasts"></div>
-  <div id="hotkeysHint">B = Obchod · T = Dovednosti · G = Farma/Studna<br>R = Otočit · Esc = Zrušit</div>
+  <div id="hotkeysHint">B = Obchod · T = Dovednosti · G = Zahrada · 6-9 = Infrastruktura<br>R = Otočit · Esc = Zrušit</div>
 </div>
 
 <!-- ═══════════ OVERLAY: Shop ═══════════ -->
@@ -365,6 +441,17 @@ canvas{display:block;cursor:crosshair;}
       <p style="font-size:.75rem;color:var(--muted);margin-bottom:6px;">Poslat mince hráči:</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;" id="sendCoinsRow"></div>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Garden ═══════════ -->
+<div class="ov hidden" id="gardenOv">
+  <div class="panel" style="width:600px;max-width:94vw;">
+    <div class="ov-head">
+      <h2>🌱 Zahrada · 💰 <span id="gardenCoins">0</span></h2>
+      <button class="btn-s" id="gardenClose" style="padding:3px 12px;">✕</button>
+    </div>
+    <div id="gardenBody"></div>
   </div>
 </div>
 
@@ -439,6 +526,7 @@ canvas{display:block;cursor:crosshair;}
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="js/config.js"></script>
 <script>(function(){var s=document.createElement('script');s.src='js/game.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>

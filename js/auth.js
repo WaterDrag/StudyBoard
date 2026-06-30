@@ -36,6 +36,24 @@ googleBtn.addEventListener('click', async () => {
   }
 });
 
+// Host režim — anonymní přihlášení (zapnout v Console → Authentication → Anonymous)
+const guestBtn = document.getElementById('guestBtn');
+if (guestBtn) guestBtn.addEventListener('click', async () => {
+  hideError();
+  guestBtn.disabled = true;
+  guestBtn.textContent = 'Spouštím…';
+  try {
+    await auth.signInAnonymously(); // onAuthStateChanged výše přesměruje dál
+  } catch (e) {
+    const hint = e.code === 'auth/operation-not-allowed'
+      ? 'Zapni Anonymous přihlášení: Firebase Console → Authentication → Sign-in method → Anonymous → Enable.'
+      : e.message;
+    showError('Host režim selhal: ' + hint);
+    guestBtn.disabled = false;
+    guestBtn.textContent = '🎮 Hrát jako host (bez účtu)';
+  }
+});
+
 authForm.addEventListener('submit', async e => {
   e.preventDefault();
   hideError();

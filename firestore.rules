@@ -96,5 +96,18 @@ service cloud.firestore {
           get(/databases/$(database)/documents/decks/$(deckId)).data.ownerUid == request.auth.uid;
       }
     }
+
+    // ── Survival co-op lobby (jen metadata; živý stav je v RTDB) ──
+    match /survival_lobbies/{lobbyId} {
+      allow read:   if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
+      allow delete: if isAuth() && resource.data.hostId == request.auth.uid;
+
+      // player_states (legacy) + coin_transfers
+      match /{document=**} {
+        allow read, write: if isAuth();
+      }
+    }
   }
 }

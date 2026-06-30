@@ -18,7 +18,7 @@ const MAPS=[
     {x:1800,y:1820,w:280,h:40},{x:2050,y:1720,w:40,h:280},
     {x:2100,y:2100,w:200,h:40},{x:2100,y:2140,w:40,h:200},
     {x:1650,y:2420,w:160,h:160},{x:2200,y:1460,w:160,h:160},
-  ]},
+  ],river:{x:1110,y:900,w:90,h:2200}},
   {id:1,name:'🏘️ Předměstí',bg:'#080d08',floor:'#0e170e',walls:[
     {x:1560,y:1560,w:240,h:180},{x:1680,y:1740,w:40,h:200},
     {x:2200,y:1600,w:200,h:180},{x:2280,y:1780,w:40,h:160},
@@ -26,7 +26,7 @@ const MAPS=[
     {x:2240,y:2180,w:220,h:200},{x:2320,y:2380,w:40,h:140},
     {x:1850,y:1760,w:300,h:28},{x:1850,y:2200,w:28,h:220},
     {x:1878,y:2400,w:272,h:28},
-  ]},
+  ],river:{x:1110,y:900,w:90,h:2200}},
   {id:2,name:'⛪ Hřbitov',bg:'#060610',floor:'#0e0e1c',walls:[
     // Kaple (otevřená na east)
     {x:1620,y:1640,w:180,h:20},{x:1620,y:1640,w:20,h:200},{x:1620,y:1820,w:200,h:20},
@@ -41,7 +41,7 @@ const MAPS=[
     // Krátké ploty (s mezerami pro průchod)
     {x:1540,y:1960,w:150,h:16},{x:1540,y:2080,w:150,h:16},
     {x:2310,y:1960,w:150,h:16},{x:2310,y:2080,w:150,h:16},
-  ]},
+  ],river:{x:1110,y:900,w:90,h:2200}},
 ];
 
 /* ── Kits ────────────────────────────────────────────────── */
@@ -128,6 +128,42 @@ const STRUCT_DEFS={
   spikes:   {emoji:'🗡️',name:'Hroty',    cost:30,hp:60, w:48,h:48,blocks:false,blocksBullets:false,spikes:18,plat:false},
   turret:   {emoji:'🔫',name:'Věž',      cost:80,hp:80, w:40,h:40,blocks:false,blocksBullets:false,spikes:0, plat:false,turret:true},
   platform: {emoji:'🟫',name:'Plošina',  cost:20,hp:160,w:72,h:72,blocks:false,blocksBullets:false,spikes:0, plat:true},
+};
+
+/* ── Garden / Farming ─────────────────────────────────────────
+   premium:true plodiny chtějí hodně vody — nejlépe automatický
+   postřikovač (💦). Běžné plodiny zvládneš zalévat i ručně ze studny.
+*/
+const CROPS={
+  carrot: {name:'Mrkev',  emoji:'🥕', seed:18, grow:1, food:24, premium:false},
+  wheat:  {name:'Pšenice',emoji:'🌾', seed:30, grow:2, food:42, premium:false},
+  tomato: {name:'Rajče',  emoji:'🍅', seed:48, grow:2, food:60, premium:false},
+  pumpkin:{name:'Dýně',   emoji:'🎃', seed:80, grow:3, food:95, premium:true},
+  melon:  {name:'Meloun', emoji:'🍈', seed:115,grow:3, food:125,premium:true},
+};
+const CLEAN_COST=25;     // vyčistit studnu (obnoví čerstvost)
+const WATER_PER_USE=20;  // spotřeba vody ze studny na 1 úkon
+const MOIST_PER_WATER=55;// kolik vláhy přidá ruční zálivka
+
+/* ── Infrastructure (placeable, grid-snapped) ────────────────
+   Dvě sítě řešené flood-fillem:
+     • VODA:   řeka → kanály(🚿) → studny(🪣)/postřikovače(💦); čistička(💧)
+               udělá síť „čerstvou", jinak je voda „surová" (kazí se).
+     • PROUD:  vodní kolo(⚙️ u řeky) → kabely(🔌) → spotřebiče
+               (věže, el. plot ⚡, postřikovač 💦). Bez proudu nefungují.
+   Kabel/kanál se musí ručně dovést až k cíli (sousední dlaždice).
+*/
+const IT=50;             // velikost dlaždice infrastruktury
+const POWER_REACH=58;    // dosah, na který kabel napájí volně-položený spotřebič
+const INFRA_DEFS={
+  channel:  {emoji:'🚿', name:'Kanál',       cost:12, kind:'water', key:'6'},
+  well:     {emoji:'🪣', name:'Studna',      cost:65, kind:'water', store:120, key:'7'},
+  purifier: {emoji:'💧', name:'Čistička',    cost:95, kind:'water', key:'8'},
+  plot:     {emoji:'🟫', name:'Záhon',       cost:40, kind:'farm',  key:'9'},
+  wheel:    {emoji:'⚙️', name:'Vodní kolo',  cost:120,kind:'gen',   gen:4},
+  wire:     {emoji:'🔌', name:'Kabel',       cost:7,  kind:'wire'},
+  sprinkler:{emoji:'💦', name:'Postřikovač', cost:55, kind:'dev', powerUse:1},
+  fence:    {emoji:'⚡', name:'El. plot',    cost:30, kind:'dev', powerUse:1, hp:140, zap:14},
 };
 
 /* ── Per-kit shops ───────────────────────────────────────── */
@@ -444,7 +480,7 @@ function useAbility(aId,player){
     case 'slash':    meleeAOE(player,110,2.2,1.5); break;
     case 'rage':     {const rd=hasSkill('war_a2')?8000:5000;player.eff.rage={end:now+rd};gToast(`😡 Vztek! +${hasSkill('war_a2')?70:50}% DMG na ${rd/1000}s`,'#ef4444');} break;
     case 'multishot':shootMulti(player,3,0.18); break;
-    case 'dodge':    {const ddist=hasSkill('arc_b3')?300:200;const ddur=hasSkill('arc_b3')?1100:800;player.eff.dodge={end:now+ddur,dx:player.aimDx*ddist,dy:player.aimDy*ddist};} break;
+    case 'dodge':    {const fast=hasSkill('arc_b3');const ddist=fast?340:240;const dashMs=fast?230:190;const iframeMs=dashMs+(fast?500:350);player.eff.dodge={end:now+iframeMs,moveEnd:now+dashMs,speed:ddist/(dashMs/1000)};if(player.uid===me.uid){spawnRing(player.x,player.y,46,'#84cc16',{dur:0.3,lineW:3});gToast('💨 Úskok!','#84cc16');}} break;
     case 'fireball': spawnProjectile(player,player.aimDx,player.aimDy,'fireball'); break;
     case 'blink':    blinkToMouse(player); break;
     case 'nova':     novaAOE(player,160,getStatMult(player,'int')*60); break;
@@ -452,7 +488,7 @@ function useAbility(aId,player){
     case 'suppression':suppressAOE(player,hasSkill('mil_b1')?300:250,hasSkill('mil_b1')?5000:3000); break;
     case 'taunt':    tauntAOE(player,350); break;
     case 'fortify':  player.eff.fortify={end:now+4000};if(hasSkill('war_b2')&&player.uid===me.uid)player.eff.postFortify={end:now+7000};if(hasSkill('tan_b3')&&player.uid===me.uid){player.hp=Math.min(player.maxHp,player.hp+30);gToast('📣 Fortify! +30 HP','#64748b');}else{gToast('🛡️ Opevnění! −50% dmg na 4s','#64748b');} break;
-    case 'stealth':  player.eff.stealth={end:now+4000};player.eff.postStealthCrit=false;gToast('👻 Neviditelnost 4s — první útok = krit!','#a855f7'); break;
+    case 'stealth':  player.eff.stealth={end:now+4000};player.eff.postStealthCrit=false;if(player.uid===me.uid)spawnRing(player.x,player.y,55,'#a855f7',{dur:0.45,lineW:3,fill:true});gToast('👻 Neviditelnost 4s — první útok = krit!','#a855f7'); break;
     case 'backstab': player.eff.backstab={hits:1};gToast('🗡️ Příští útok = 3× dmg!','#a855f7'); break;
     case 'deploy':   deployTurret(player); break;
     case 'repair':   repairNearby(player,120,hasSkill('eng_b1')?80:40); break;
@@ -464,16 +500,16 @@ function useAbility(aId,player){
     case 'ult_arc_a': shootMulti(player,6,0.28); gToast('🏹 Salva smrti!','#84cc16'); break;
     case 'ult_arc_b': blinkToMouse(player); shootMulti(player,4,0.2); gToast('🌀 Stínový skok!','#22d3ee'); break;
     case 'ult_mag_a': for(let _i=0;_i<3;_i++){const _a=player.angle+(_i-1)*0.4;spawnProjectile(player,Math.cos(_a),Math.sin(_a),'fireball');} gToast('☄️ Apokalyptický oheň!','#f97316'); break;
-    case 'ult_mag_b': gs.zombies.forEach(z=>{z.suppressed=now+4000;});gToast('⏳ Čas se zastavil! 4s','#818cf8'); break;
+    case 'ult_mag_b': gs.zombies.forEach(z=>{z.suppressed=now+4000;});spawnRing(player.x,player.y,720,'#818cf8',{dur:0.7,lineW:6});spawnRing(player.x,player.y,520,'#c7d2fe',{dur:0.6,lineW:4});gToast('⏳ Čas se zastavil! 4s','#818cf8'); break;
     case 'ult_mil_a': {const _gDmg=hasSkill('mil_a2')?120:80;const _gR=hasSkill('mil_a3')?320:280;const _aoe=hasSkill('mil_a3')?96:80;for(let _i=0;_i<3;_i++){const _a=player.angle+(_i-1)*0.32;gs.bullets.push({x:player.x,y:player.y,dx:Math.cos(_a),dy:Math.sin(_a),spd:7,dmg:_gDmg,range:_gR,dist:0,col:'#f97316',r:6,owner:player.uid,type:'grenade',onHit:(bx,by)=>explosionAOE(bx,by,hasSkill('mil_a3')?140:100,_aoe)});}} gToast('🚀 Raketomet!','#f59e0b'); break;
     case 'ult_mil_b': for(let _i=0;_i<5;_i++) setTimeout(()=>explosionAOE(mouse.wx+(Math.random()*100-50),mouse.wy+(Math.random()*100-50),100,60),_i*180); gToast('✈️ Letecký úder!','#f59e0b'); break;
     case 'ult_tan_a': player.eff.immune={end:now+5000};tauntAOE(player,800);gToast('🗡️ Nezranitelný! 5s imunita','#64748b'); break;
     case 'ult_tan_b': explosionAOE(player.x,player.y,220,100);gs.zombies.forEach(z=>{if(Math.hypot(z.x-player.x,z.y-player.y)<220)z.stunEnd=now+3000;});gToast('⚡ Šok!','#dc2626'); break;
     case 'ult_rog_a': player.eff.stealth={end:now+5000};player.eff.backstab={hits:5};gToast('🌑 Legie stínů! ×5 backstab','#a855f7'); break;
-    case 'ult_rog_b': gs.zombies.forEach(z=>{if(Math.hypot(z.x-player.x,z.y-player.y)<200){z.poison={dmg:hasSkill('rog_b2')?7.5:5,end:now+6000,tick:0};}});gToast('🌫️ Jedová mlha!','#16a34a'); break;
+    case 'ult_rog_b': gs.zombies.forEach(z=>{if(Math.hypot(z.x-player.x,z.y-player.y)<200){z.poison={dmg:hasSkill('rog_b2')?7.5:5,end:now+6000,tick:0};}});spawnRing(player.x,player.y,200,'#16a34a',{dur:0.6,lineW:5,fill:true});gToast('🌫️ Jedová mlha!','#16a34a'); break;
     case 'ult_eng_a': {const _tHp=Math.round(STRUCT_DEFS.turret.hp*(hasSkill('eng_a2')?2:1));for(let _i=0;_i<2;_i++){const _sx=me.x+(Math.random()*140-70),_sy=me.y+(Math.random()*140-70);gs.structs.push({id:eid(),type:'turret',def:STRUCT_DEFS.turret,x:_sx-20,y:_sy-20,w:40,h:40,hp:_tHp,maxHp:_tHp,rot:0,lastShot:0,zombieHits:{},owner:me.uid});}updateInvDisplay();gToast('🤖 Automatická obrana!','#0ea5e9');} break;
     case 'ult_eng_b': me.inv.turret=(me.inv.turret||0)+2;me.inv.wall=(me.inv.wall||0)+5;me.inv.barricade=(me.inv.barricade||0)+3;updateInvDisplay();gToast('📫 Zásoby dopadly! +věže +zdi +barikády','#0ea5e9'); break;
-    case 'ult_pri_a': gs.zombies.forEach((z,id)=>{dealDmg(id,z,80,player);z.stunEnd=now+2500;});gToast('⚡ Boží hněv!','#fde68a'); break;
+    case 'ult_pri_a': gs.zombies.forEach((z,id)=>{dealDmg(id,z,80,player);z.stunEnd=now+2500;});spawnRing(player.x,player.y,760,'#fde68a',{dur:0.7,lineW:6,fill:true});gToast('⚡ Boží hněv!','#fde68a'); break;
     case 'ult_pri_b': {const _bd=hasSkill('pri_b1')?11000:8000;player.eff.bless={end:now+_bd};player.eff.ultBlessing={end:now+8000};gToast('🌈 Žehnající aura! 8s','#fbbf24');} break;
     // ── Branch C ────────────────────────────────────────────
     // Warrior C
@@ -569,7 +605,8 @@ let placing={active:false,type:'wall',rot:0};
 let _eid=1; const eid=()=>(_eid++).toString(36);
 
 /* ── Kit select state ────────────────────────────────────── */
-let kitSel={kit:'warrior',mapId:0,bonusStats:{str:0,int:0,agi:0,vit:0,cha:0,luk:0,dex:0,res:0,per:0},free:5};
+let kitSel={kit:'warrior',mapId:0,bonusStats:{str:0,int:0,agi:0,vit:0,cha:0,luk:0,dex:0,res:0,per:0},free:5,deckIds:[]};
+let ALL_DECKS=[];
 
 /* ── RAF ─────────────────────────────────────────────────── */
 let running=false,lastTs=0;
@@ -585,7 +622,7 @@ function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Mat
 auth.onAuthStateChanged(user=>{
   if(!user){window.location.href='index.html';return;}
   me.uid=user.uid;
-  me.name=user.displayName||user.email?.split('@')[0]||'Hráč';
+  me.name=user.isAnonymous?'Host':(user.displayName||user.email?.split('@')[0]||'Hráč');
 
   canvas=document.getElementById('gc');
   ctx=canvas.getContext('2d');
@@ -595,22 +632,25 @@ auth.onAuthStateChanged(user=>{
   resizeCanvas();
   window.addEventListener('resize',resizeCanvas);
   buildKitScreen();
-  loadDeckCards();
+  loadDeckPicker();
 
   const params=new URLSearchParams(location.search);
   const lobbyId=params.get('lobby');
   if(lobbyId){
-    gs.sessionId=lobbyId;
-    showScreen('lobby');
-    joinLobby(lobbyId);
+    // Co-op: pick kit/points first, THEN enter the lobby
+    gs._pendingLobby=lobbyId;
+    showScreen('kit');
+    const sb=document.getElementById('startBtn');
+    sb.textContent='✓ Pokračovat do čekárny';
+    sb.onclick=enterLobbyFromKit;
   } else {
     showScreen('kit');
+    document.getElementById('startBtn').onclick=startSolo;
   }
-
-  document.getElementById('startBtn').onclick=startSolo;
   document.getElementById('overReplay').onclick=()=>location.reload();
   document.getElementById('overExit').onclick=()=>location.href='flashcards.html';
   document.getElementById('shopClose').onclick=()=>closeOv('shopOv');
+  document.getElementById('gardenClose').onclick=()=>closeOv('gardenOv');
   document.getElementById('stClose').onclick=()=>closeOv('skillTreeOv');
   document.getElementById('respawnBtn').onclick=doRespawn;
   document.getElementById('luConfirm').onclick=confirmLevelUp;
@@ -630,7 +670,7 @@ function showScreen(name){
   ['screenKit','screenLobby','screenGame','screenOver'].forEach(id=>{
     document.getElementById(id).classList.toggle('hidden',id!=='screen'+cap(name));
   });
-  ['shopOv','levelUpOv','deathOv','quizOv'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  ['shopOv','levelUpOv','deathOv','quizOv','gardenOv'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.add('hidden');});
 }
 const cap=s=>s[0].toUpperCase()+s.slice(1);
 function openOv(id){document.getElementById(id).classList.remove('hidden');}
@@ -666,16 +706,46 @@ function buildKitScreen(){
       kg.querySelectorAll('.kit-card').forEach(x=>x.classList.remove('selected'));
       c.classList.add('selected');
       refreshStatRows();
+      refreshKitAbilities();
     };
     kg.appendChild(c);
   });
 
   refreshStatRows();
+  refreshKitAbilities();
   document.getElementById('resetStats').onclick=()=>{
     kitSel.bonusStats={str:0,int:0,agi:0,vit:0,cha:0,luk:0,dex:0,res:0,per:0};
     kitSel.free=5;
     refreshStatRows();
   };
+}
+
+function refreshKitAbilities(){
+  const kit=KITS[kitSel.kit];
+  const nameEl=document.getElementById('kitAbilName');
+  if(nameEl)nameEl.textContent=kit.emoji+' '+kit.name;
+  // Passive
+  const pr=document.getElementById('kitPassiveRow');
+  if(pr)pr.innerHTML=`<div class="passive-pill"><span style="font-size:1.05rem;line-height:1;">✨</span><span><b style="color:#a5b4fc;">Pasivní:</b> ${kit.passive||'—'}</span></div>`;
+  // Active abilities
+  const rows=document.getElementById('kitAbilRows');
+  if(!rows)return;
+  rows.innerHTML=kit.abil.map(aId=>{
+    const a=ABIL[aId];
+    if(!a)return '';
+    const cd=a.cd?`CD ${(a.cd/1000).toFixed(a.cd%1000?1:0)}s`:'';
+    return `<div class="abil-row">
+      <span class="abil-icon">${a.emoji}</span>
+      <span class="abil-key">${a.key||'?'}</span>
+      <div class="abil-meta">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
+          <span class="abil-name">${a.name}</span><span class="abil-cd">${cd}</span>
+        </div>
+        <div class="abil-desc">${a.desc||''}</div>
+      </div>
+    </div>`;
+  }).join('')+
+  `<div style="font-size:.66rem;color:var(--muted2);margin-top:8px;line-height:1.4;text-align:center;">💀 Ultimátní schopnost (R) se odemyká ve stromu dovedností [T] během hry.</div>`;
 }
 
 function refreshStatRows(){
@@ -717,12 +787,23 @@ function refreshStatRows(){
 // ══════════════════════════════════════════════════════════
 function startSolo(){
   applyKitSelection();
+  loadSelectedDecks(); // ensure latest deck choice is loaded (ready before wave 1 ends)
   initGame();
   showScreen('game');
   buildBuildBar();
   buildAbilBar();
   running=true;
   requestAnimationFrame(loop);
+}
+
+// Co-op: after choosing kit/points on the kit screen, join the lobby (waiting room)
+function enterLobbyFromKit(){
+  const lobbyId=gs._pendingLobby;
+  if(!lobbyId)return;
+  applyKitSelection();      // lock in chosen kit/stats (host's map choice applies too)
+  gs.sessionId=lobbyId;
+  showScreen('lobby');
+  joinLobby(lobbyId);
 }
 
 function applyKitSelection(){
@@ -750,17 +831,29 @@ function initGame(){
   gs.structs=[];
   gs.summons=[];
   gs.floats=[];
+  gs.fx=[];
   gs.wave=0; gs.phase='build'; gs.buildTimer=BUILD_DUR;
   gs.baseHp=500; gs.baseMaxHp=500;
   gs.spawnedCount=0; gs.waveTotal=0;
   gs.wrongAnswers=0; gs.pendingLevelUp=false;
-  gs.farmPlots=[
-    {x:CX-170,y:CY-170,state:'empty',growPhases:0},
-    {x:CX+110,y:CY-170,state:'empty',growPhases:0},
-    {x:CX-170,y:CY+110,state:'empty',growPhases:0},
-    {x:CX+110,y:CY+110,state:'empty',growPhases:0},
-  ];
-  gs.well={x:CX+420,y:CY,charges:3,maxCharges:3};
+  gs.infra=new Map();   // key "gx,gy" → infra piece
+  gs.infraTask=null;    // active timed tending action
+  // Co-op netcode state
+  gs._rewards={};       // host: uid → cumulative {c,x} owed to co-op players
+  gs._hitSeen={};       // host: uid → last processed hit-batch id
+  gs._builtIds=new Set(); // host: structure ids already created from client requests
+  gs._builtInfraKeys=new Set(); // host: infra keys already created from client requests
+  gs._treqSeen={};      // host: uid → last processed tend-request batch
+  gs._structDirty=false;
+  me._pendingHits=[];   // client: hits to forward to host
+  me._hitBatch=0;       // client: hit-batch counter
+  me._rewardApplied={c:0,x:0}; // client: last reward totals applied
+  me._pendingBuild=[];  // client: structures placed, awaiting host confirmation
+  me._buildDirty=false;
+  me._pendingInfra=[];  // client: infra placed, awaiting host confirmation
+  me._infraDirty=false;
+  me._infraReqs=[];     // client: queued tend requests
+  me._infraReqDirty=false;
   gs.startTime=performance.now();
   // Difficulty multiplier based on player count
   const pCount=Object.keys(gs.players).length+1;
@@ -780,9 +873,19 @@ function buildBuildBar(){
     btn.onclick=()=>togglePlacing(type);
     bar.appendChild(btn);
   });
+  // Infrastructure (bought in shop, placed on a grid)
+  Object.entries(INFRA_DEFS).forEach(([type,def])=>{
+    const btn=document.createElement('div');
+    btn.className='bb-btn bb-infra';
+    btn.dataset.type=type;
+    btn.innerHTML=`<span>${def.emoji}</span><span class="bb-cnt" id="inv_${type}">${me.inv[type]||0}</span>${def.key?`<span class="bb-key">${def.key}</span>`:''}`;
+    btn.title=`${def.name} (${def.cost}💰)${def.key?' — klávesa '+def.key:''}`;
+    btn.onclick=()=>togglePlacing(type);
+    bar.appendChild(btn);
+  });
 }
 function updateInvDisplay(){
-  Object.keys(STRUCT_DEFS).forEach(type=>{
+  [...Object.keys(STRUCT_DEFS),...Object.keys(INFRA_DEFS)].forEach(type=>{
     const el=document.getElementById('inv_'+type);
     if(el)el.textContent=me.inv[type]||0;
   });
@@ -818,9 +921,10 @@ function togglePlacing(type){
     placing.type=type;
     placing.rot=0;
     document.querySelectorAll('.bb-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));
-    const d=STRUCT_DEFS[type];
+    const d=STRUCT_DEFS[type]||INFRA_DEFS[type];
+    const hint=INFRA_DEFS[type]?'klik = položit (mřížka) · Esc = zrušit':'R = otoč · klik = položit · Esc = zrušit';
     document.getElementById('placInfo').style.display='block';
-    document.getElementById('placInfo').textContent=`Kladeš: ${d.emoji} ${d.name} · R = otoč · klik = položit · Esc = zrušit`;
+    document.getElementById('placInfo').textContent=`Kladeš: ${d.emoji} ${d.name} · ${hint}`;
   }
 }
 
@@ -834,21 +938,25 @@ function setupInput(){
     if(e.code==='KeyB'){toggleShop();}
     if(e.code==='KeyT'){toggleSkillTree();}
     if(e.code==='KeyF'){detonateC4();}
-    if(e.code==='KeyG'){interactFarm();}
+    if(e.code==='KeyG'){toggleGarden();}
     if(e.code==='Escape'){
       if(placing.active){placing.active=false;document.getElementById('placInfo').style.display='none';document.querySelectorAll('.bb-btn').forEach(b=>b.classList.remove('active'));}
       else if(!document.getElementById('quizOv').classList.contains('hidden'))closeOv('quizOv');
       else if(!document.getElementById('skillTreeOv').classList.contains('hidden'))closeOv('skillTreeOv');
+      else if(!document.getElementById('gardenOv').classList.contains('hidden'))closeOv('gardenOv');
       else closeOv('shopOv');
     }
     if(e.code==='KeyR'&&placing.active){
       placing.rot=(placing.rot+90)%360;
     }
-    // Build shortcuts 1-5
+    // Build shortcuts: 1-5 structures, 6-9 infrastructure
     const idx=parseInt(e.key)-1;
     if(idx>=0&&idx<5){
       const type=Object.keys(STRUCT_DEFS)[idx];
       if(type)togglePlacing(type);
+    } else if('6789'.includes(e.key)){
+      const it=Object.keys(INFRA_DEFS).find(t=>INFRA_DEFS[t].key===e.key);
+      if(it)togglePlacing(it);
     }
     // Abilities
     const kit=KITS[me.kit];
@@ -890,19 +998,24 @@ function loop(ts){
 //  UPDATE
 // ══════════════════════════════════════════════════════════
 function update(dt,ts){
+  const authority=isAuthority();
   if(gs.phase==='build'){
-    gs.buildTimer-=dt;
-    if(gs.buildTimer<=0)startWave();
-  } else {
+    if(authority){ gs.buildTimer-=dt; if(gs.buildTimer<=0)startWave(); }
+  } else if(authority){
     updateZombies(dt,ts);
     if(gs.spawnedCount<gs.waveTotal) spawnTick(ts);
     if(gs.zombies.size===0&&gs.spawnedCount>=gs.waveTotal)endWave();
     checkBaseHit(ts);
+  } else {
+    interpolateZombies(dt); // client: zombie positions come from host
   }
+  if(gs.sessionId) updateRemotePlayers(dt); // smooth other players
   updatePlayer(dt,ts);
   updateBullets(dt);
   updateStructures(ts);
   updateFloats(dt);
+  updateFx(dt);
+  updateInfra(dt,ts);
   updateAbilityCooldowns(ts);
   updateEffects(dt,ts);
   updateSummons(dt,ts);
@@ -931,8 +1044,8 @@ function updatePlayer(dt,ts){
   me.hunger=Math.max(0,me.hunger-hungerRate*dt);
   me.thirst=Math.max(0,me.thirst-thirstRate*dt);
   // Low warnings (throttled)
-  if(me.hunger<25&&ts-me._lastHungerWarn>14000){me._lastHungerWarn=ts;gToast('🍖 Hlad! Sklidni políčko [G] nebo kup jídlo [B]','#f59e0b');}
-  if(me.thirst<25&&ts-me._lastThirstWarn>10000){me._lastThirstWarn=ts;gToast('💧 Žízeň! Naber ze studny [G] nebo kup vodu [B]','#06b6d4');}
+  if(me.hunger<25&&ts-me._lastHungerWarn>14000){me._lastHungerWarn=ts;gToast('🍖 Máš hlad! Sklízej plodiny v zahradě [G]','#f59e0b');}
+  if(me.thirst<25&&ts-me._lastThirstWarn>10000){me._lastThirstWarn=ts;gToast('💧 Máš žízeň! Napij se ze studny v zahradě [G]','#06b6d4');}
   // Speed penalties
   if(me.hunger<25)spd*=(1-(25-me.hunger)/25*0.18);
   if(me.thirst<25)spd*=(1-(25-me.thirst)/25*0.20);
@@ -949,11 +1062,14 @@ function updatePlayer(dt,ts){
     gs.baseHp=Math.min(gs.baseMaxHp,gs.baseHp+0.3);
   }
 
-  // Dodge dash
-  if(me.eff.dodge&&ts<me.eff.dodge.end){
-    me.x+=me.eff.dodge.dx*dt;
-    me.y+=me.eff.dodge.dy*dt;
+  // Dodge dash — fast, steerable toward the cursor; i-frames last a touch longer
+  if(me.eff.dodge&&ts<me.eff.dodge.moveEnd){
+    const dirx=Math.cos(me.angle),diry=Math.sin(me.angle); // follows cursor each frame
+    me.x+=dirx*me.eff.dodge.speed*dt;
+    me.y+=diry*me.eff.dodge.speed*dt;
     clampToBounds();
+    wallCollide(me,PLAYER_R);
+    spawnTrail(me.x,me.y,KITS[me.kit].col); // afterimage trail
     return;
   }
 
@@ -1178,6 +1294,7 @@ function doMelee(p){
     if(hasSkill('rog_a3')&&p.uid===me.uid) p.eff.shadowDance={end:performance.now()+2000};
   }
   meleeHit(p.x,p.y,p.angle,w.range,w.arc,Math.round(dmg),p);
+  spawnSwing(p.x,p.y,p.angle,w.range,w.arc,w.col);
   if(p.weapon==='wrench') repairNearby(p,w.range,hasSkill('eng_b1')?80:20);
 }
 
@@ -1216,6 +1333,7 @@ function meleeAOE(p,range,arc,mult){
   const w=WEAPONS[p.weapon];
   const dmg=Math.round(w.dmg*(1+p.stats.str*0.05)*mult);
   meleeHit(p.x,p.y,p.angle,range,arc,dmg,p);
+  spawnSwing(p.x,p.y,p.angle,range,arc,w.col);
 }
 
 /* ── Bullets ─────────────────────────────────────────────── */
@@ -1250,6 +1368,13 @@ function updateBullets(dt){
 
 /* ── Damage ──────────────────────────────────────────────── */
 function dealDmg(zid,z,dmg,attacker){
+  // Non-authority clients don't kill locally — they forward the hit to the host,
+  // who is the single source of truth (prevents "respawning" + double rewards).
+  if(!isAuthority()){
+    if(!me._pendingHits)me._pendingHits=[];
+    me._pendingHits.push({z:zid,d:Math.round(dmg)});
+    return;
+  }
   if(z._cursed)dmg=Math.round(dmg*1.25);
   z.hp-=dmg;
   if(z.hp<=0){
@@ -1285,6 +1410,13 @@ function killZombie(zid,z,attacker){
     if(hasSkill('mag_c1')&&z._killedBySpell){const heal=Math.round(z.def.hp*0.10);me.hp=Math.min(me.maxHp,me.hp+heal);}
     // Mage passive: Mana splurge — kill by spell reduces fireball cooldown by 1s
     if(me.kit==='mage'&&z._killedBySpell&&me.abilCds['fireball']){me.abilCds['fireball']-=1000;}
+  } else if(gs.isHost&&attacker&&attacker.uid&&attacker.uid!==me.uid){
+    // Host credits a co-op player for a kill they dealt (paid out via world snapshot)
+    const wrongPenalty=Math.max(0.30,1-gs.wrongAnswers*0.10);
+    if(!gs._rewards)gs._rewards={};
+    const r=gs._rewards[attacker.uid]||(gs._rewards[attacker.uid]={c:0,x:0});
+    r.c+=Math.round(z.def.coins*wrongPenalty);
+    r.x+=Math.round(z.def.xp*wrongPenalty);
   }
   if(z.def.explodes){
     explosionAOE(z.x,z.y,90,40);
@@ -1320,14 +1452,26 @@ function endWave(){
   document.getElementById('phaseLabel').textContent='Příprava';
   document.getElementById('phaseLabel').style.color='#fbbf24';
   gToast(`✅ Vlna ${gs.wave} přežita! Čas na budování…`,'#84cc16');
-  // Advance farm plots
-  let readyCount=0;
-  gs.farmPlots.forEach(p=>{
-    if(p.state==='growing'){p.growPhases++;if(p.growPhases>=2){p.state='ready';readyCount++;}}
-  });
-  if(readyCount>0)setTimeout(()=>gToast(`🌾 ${readyCount} políček připraveno ke sklizni! [G]`,'#84cc16'),800);
-  // Refill well
-  gs.well.charges=gs.well.maxCharges;
+  // Advance infrastructure: crops grow if they had moisture; rain refills wells
+  if(gs.infra){
+    let readyCount=0,witherCount=0;
+    gs.infra.forEach(p=>{
+      if(p.type==='plot'&&p.state==='growing'){
+        if(p.moisture>5){
+          p.growPhases++;
+          const c=CROPS[p.crop];
+          if(c&&p.growPhases>=c.grow){p.state='ready';readyCount++;}
+        } else { p.state='withered'; witherCount++; }
+      }
+      // Rain top-ups every well a little + freshens
+      if(p.type==='well'){
+        p.water=Math.min(INFRA_DEFS.well.store,p.water+35);
+        p.freshness=Math.min(100,p.freshness+10);
+      }
+    });
+    if(readyCount>0)setTimeout(()=>gToast(`🌾 ${readyCount} plodin připraveno ke sklizni! [G]`,'#84cc16'),800);
+    if(witherCount>0)setTimeout(()=>gToast(`🥀 ${witherCount} plodin uschlo — chyběla voda!`,'#ef4444'),900);
+  }
   setTimeout(()=>showGameQuiz(),600);
   if(gs.bossCount>0){
     gToast('👹 Boss zabity! +300💰','#fbbf24');
@@ -1703,14 +1847,71 @@ function buySkill(sk){
 }
 
 /* ── Deck / Quiz ─────────────────────────────────────────── */
-async function loadDeckCards(){
-  const params=new URLSearchParams(location.search);
-  const deckId=params.get('deck');
-  if(!deckId)return;
+// Load decks for the pre-game picker: own decks + decks shared via rooms
+// the player is a member of (i.e. other players' decks).
+async function loadDeckPicker(){
+  const byId=new Map();
+  // 1) Personal decks
   try{
-    const snap=await db.collection('decks').doc(deckId).collection('cards').get();
-    DECK_CARDS=snap.docs.map(d=>({id:d.id,...d.data()}));
-  }catch(e){console.warn('[quiz] loadDeckCards:',e);}
+    const snap=await db.collection('decks').where('ownerUid','==',me.uid).get();
+    snap.docs.forEach(d=>byId.set(d.id,{id:d.id,...d.data(),_mine:true}));
+  }catch(e){console.warn('[deckPicker] personal:',e);}
+  // 2) Decks from rooms the player belongs to (may be owned by others)
+  try{
+    const roomsSnap=await db.collection('rooms').where('memberIds','array-contains',me.uid).get();
+    const roomMap={}; roomsSnap.docs.forEach(d=>roomMap[d.id]=d.data());
+    const roomIds=Object.keys(roomMap);
+    const snaps=await Promise.all(roomIds.map(rid=>db.collection('decks').where('roomId','==',rid).get().catch(()=>null)));
+    snaps.forEach((snap,idx)=>{
+      if(!snap)return;
+      const rid=roomIds[idx];
+      snap.docs.forEach(d=>{
+        if(byId.has(d.id))return; // already added as personal
+        const data=d.data();
+        byId.set(d.id,{id:d.id,...data,_mine:data.ownerUid===me.uid,_roomName:roomMap[rid]?.name||'Místnost'});
+      });
+    });
+  }catch(e){console.warn('[deckPicker] rooms:',e);}
+  ALL_DECKS=[...byId.values()].sort((a,b)=>{
+    if(!!a._mine!==!!b._mine)return a._mine?-1:1;            // own decks first
+    return (b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0);
+  });
+  // Preselect a deck passed via URL (?deck=…) — loads even if not in the list
+  const urlDeck=new URLSearchParams(location.search).get('deck');
+  if(urlDeck&&!kitSel.deckIds.includes(urlDeck))kitSel.deckIds.push(urlDeck);
+  renderDeckPicker();
+  loadSelectedDecks();
+}
+function renderDeckPicker(){
+  const el=document.getElementById('deckPicker');
+  if(!el)return;
+  if(!ALL_DECKS.length){el.innerHTML='<div style="color:var(--muted);font-size:.76rem;">Žádné balíčky karet. Otázky se ve hře nebudou zobrazovat.</div>';return;}
+  el.innerHTML=ALL_DECKS.map(d=>{
+    const sel=kitSel.deckIds.includes(d.id);
+    const name=(d.name||'Balíček').replace(/</g,'&lt;');
+    const sub=d._mine?'':`<span class="deck-chip-room">👥 ${(d._roomName||'sdílené').replace(/</g,'&lt;')}</span>`;
+    return `<button class="deck-chip${sel?' selected':''}" style="--dc:${d.color||'#6366f1'}" onclick="toggleDeck('${d.id}')">
+      <span class="deck-chip-dot"></span><span class="deck-chip-name">${name}${sub}</span><span class="deck-chip-n">${d.cardCount??'?'}</span></button>`;
+  }).join('');
+}
+function toggleDeck(id){
+  const i=kitSel.deckIds.indexOf(id);
+  if(i>=0)kitSel.deckIds.splice(i,1);else kitSel.deckIds.push(id);
+  renderDeckPicker();
+  loadSelectedDecks();
+}
+// Merge cards from all selected decks into DECK_CARDS (ids namespaced per deck)
+async function loadSelectedDecks(){
+  const ids=[...kitSel.deckIds];
+  const out=[];
+  for(const id of ids){
+    try{
+      const snap=await db.collection('decks').doc(id).collection('cards').get();
+      snap.docs.forEach(d=>out.push({...d.data(),id:id+'_'+d.id}));
+    }catch(e){console.warn('[deck load]',id,e);}
+  }
+  DECK_CARDS=out;
+  QUIZ_USED.clear();
 }
 
 function getGameDistractors(card){
@@ -1803,17 +2004,14 @@ function buildShop(){
   grid.innerHTML='';
   const disc=me.stats.cha*0.03+(hasSkill('eng_a1')?0.20:0);
   const items=KIT_SHOP[me.kit]||KIT_SHOP.warrior;
-  const SURVIVAL_ITEMS=[
-    {id:'food1', emoji:'🍖',name:'Konzerva +35',   cost:20,type:'food',  hunger:35},
-    {id:'water1',emoji:'💧',name:'Lahev vody +35', cost:20,type:'water', thirst:35},
-    {id:'ration',emoji:'🥫',name:'Zásoby +50/+40', cost:50,type:'food',  hunger:50,thirst:40},
-    {id:'energy',emoji:'🧃',name:'Energetický nápoj',cost:35,type:'water',thirst:50,hunger:10},
-  ];
-  [...items,...SURVIVAL_ITEMS].forEach(item=>{
+  // Infrastructure items (place them in the world afterwards) — food/water comes from the garden.
+  const infraItems=Object.entries(INFRA_DEFS).map(([id,d])=>({id,emoji:d.emoji,name:d.name,cost:d.cost,type:'infra'}));
+  [...items,...infraItems].forEach(item=>{
     const cost=Math.max(1,Math.round(item.cost*(1-disc)));
     const el=document.createElement('div');
-    el.className='si'+(me.coins<cost?' sd':'');
-    el.innerHTML=`<div class="si-e">${item.emoji}</div><div class="si-n">${item.name}</div><div class="si-c">${cost}💰</div>`;
+    el.className='si'+(me.coins<cost?' sd':'')+(item.type==='infra'?' si-infra':'');
+    const owned=item.type==='infra'?`<div class="si-own">×${me.inv[item.id]||0}</div>`:'';
+    el.innerHTML=`<div class="si-e">${item.emoji}</div><div class="si-n">${item.name}</div><div class="si-c">${cost}💰</div>${owned}`;
     el.onclick=()=>{if(me.coins<cost)return;buyItem(item,cost);buildShop();};
     grid.appendChild(el);
   });
@@ -1844,12 +2042,11 @@ function buyItem(item,cost){
   } else if(item.type==='stat'){
     me.stats[item.stat]=(me.stats[item.stat]||0)+item.val;
     if(item.stat==='vit'){me.maxHp+=item.val*20;me.hp=Math.min(me.hp+item.val*20,me.maxHp);}
-  } else if(item.type==='food'){
-    if(item.hunger)me.hunger=Math.min(100,me.hunger+item.hunger);
-    if(item.thirst)me.thirst=Math.min(100,me.thirst+item.thirst);
-  } else if(item.type==='water'){
-    if(item.thirst)me.thirst=Math.min(100,me.thirst+item.thirst);
-    if(item.hunger)me.hunger=Math.min(100,me.hunger+item.hunger);
+  } else if(item.type==='infra'){
+    me.inv[item.id]=(me.inv[item.id]||0)+1;
+    updateInvDisplay();
+    gToast(`Koupeno: ${item.name} — postav klávesou/build barem`,'#84cc16');
+    return;
   }
   gToast(`Koupeno: ${item.name}`,'#84cc16');
 }
@@ -1858,6 +2055,7 @@ function buyItem(item,cost){
 function placeStructure(){
   if(!placing.active)return;
   const type=placing.type;
+  if(INFRA_DEFS[type]){placeInfra();return;}
   if((me.inv[type]||0)<=0){gToast('Nemáš žádné '+STRUCT_DEFS[type].name,'#ef4444');return;}
   const def=STRUCT_DEFS[type];
   const rot=placing.rot;
@@ -1866,14 +2064,21 @@ function placeStructure(){
   const sx=mouse.wx-w/2, sy=mouse.wy-h/2;
   // Don't place on top of base
   if(Math.hypot(mouse.wx-CX,mouse.wy-CY)<BASE_R+30){gToast('Příliš blízko základny','#f59e0b');return;}
-  const id=eid();
+  const id=(gs.sessionId?(me.uid||'x').slice(0,5)+'-':'')+eid(); // unique across co-op clients
   let sHp=def.hp;
   if(type==='turret'&&hasSkill('eng_a2')) sHp*=2;
   if(hasSkill('tan_a2')) sHp=Math.round(sHp*1.5);
   gs.structs.push({id,type,def,x:sx,y:sy,w,h,hp:sHp,maxHp:sHp,rot,lastShot:0,zombieHits:{},owner:me.uid});
   me.inv[type]--;
   updateInvDisplay();
-  syncStructures();
+  // Co-op: non-host forwards placement to the host (declarative pending set)
+  if(!isAuthority()){
+    if(!me._pendingBuild)me._pendingBuild=[];
+    me._pendingBuild.push({id,type,x:sx,y:sy,w,h,rot});
+    me._buildDirty=true;
+  } else {
+    gs._structDirty=true;
+  }
 }
 
 /* ── Structures update (turrets) ─────────────────────────── */
@@ -1882,6 +2087,8 @@ function updateStructures(ts){
     if(s.hp<=0)continue;
     const def=STRUCT_DEFS[s.type];
     if(!def.turret)continue;
+    if(gs.sessionId&&s.owner!==me.uid)continue; // in co-op, each player fires only their own turrets (damage is forwarded)
+    if(!s._pow)continue; // turret needs electricity (cable from a water-wheel generator)
     // Find nearest zombie in range
     let nearest=null,nearDist=250;
     gs.zombies.forEach(z=>{
@@ -1905,6 +2112,58 @@ function updateFloats(dt){
   gs.floats=gs.floats.filter(f=>{f.y+=f.dy*dt;f.life-=dt;return f.life>0;});
 }
 
+/* ── Visual FX (shockwaves, swing arcs, dash trails) ─────── */
+function spawnRing(x,y,rEnd,col,opts={}){
+  if(!gs.fx)gs.fx=[];
+  gs.fx.push({type:'ring',x,y,r0:opts.r0||0,rEnd,t:0,
+    dur:opts.dur||0.5,col,lineW:opts.lineW||4,fill:opts.fill||false});
+}
+function spawnSwing(x,y,ang,range,arc,col){
+  if(!gs.fx)gs.fx=[];
+  gs.fx.push({type:'swing',x,y,ang,range,arc:arc||1.0,col:col||'#fff',t:0,dur:0.16});
+}
+function spawnTrail(x,y,col){
+  if(!gs.fx)gs.fx=[];
+  gs.fx.push({type:'dot',x,y,r:PLAYER_R*0.9,col:col||'#84cc16',t:0,dur:0.3});
+}
+function updateFx(dt){
+  if(!gs.fx)return;
+  gs.fx=gs.fx.filter(f=>{f.t+=dt;return f.t<f.dur;});
+}
+function drawFx(){
+  if(!gs.fx||!gs.fx.length)return;
+  gs.fx.forEach(f=>{
+    const p=f.t/f.dur, alpha=1-p;
+    ctx.save();
+    if(f.type==='swing'){
+      // arc sweeps from one edge to the other as it fades
+      const start=f.ang-f.arc/2, end=f.ang+f.arc/2;
+      const cur=start+(end-start)*Math.min(1,p*1.35);
+      const g=ctx.createRadialGradient(f.x,f.y,4,f.x,f.y,f.range);
+      g.addColorStop(0,f.col);g.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.globalAlpha=alpha*0.5;ctx.fillStyle=g;
+      ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.arc(f.x,f.y,f.range,start,cur);ctx.closePath();ctx.fill();
+      ctx.globalAlpha=alpha;ctx.strokeStyle=f.col;ctx.lineWidth=2.5;
+      ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x+Math.cos(cur)*f.range,f.y+Math.sin(cur)*f.range);ctx.stroke();
+    } else if(f.type==='dot'){
+      ctx.globalAlpha=alpha*0.4;ctx.fillStyle=f.col;
+      ctx.beginPath();ctx.arc(f.x,f.y,f.r*(1-p*0.4),0,Math.PI*2);ctx.fill();
+    } else { // ring
+      const ease=1-(1-p)*(1-p);
+      const r=f.r0+(f.rEnd-f.r0)*ease;
+      if(f.fill){
+        const g=ctx.createRadialGradient(f.x,f.y,r*0.3,f.x,f.y,r);
+        g.addColorStop(0,f.col);g.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.globalAlpha=alpha*0.45;ctx.fillStyle=g;
+        ctx.beginPath();ctx.arc(f.x,f.y,r,0,Math.PI*2);ctx.fill();
+      }
+      ctx.globalAlpha=alpha;ctx.lineWidth=f.lineW*(1-p*0.5);ctx.strokeStyle=f.col;
+      ctx.beginPath();ctx.arc(f.x,f.y,r,0,Math.PI*2);ctx.stroke();
+    }
+    ctx.restore();
+  });
+}
+
 /* ── Ability helpers ─────────────────────────────────────── */
 function getStatMult(p,stat){return 1+(p.stats[stat]||0)*0.08;}
 
@@ -1925,9 +2184,12 @@ function spawnProjectile(p,dx,dy,type){
 }
 
 function blinkToMouse(p){
+  const ox=p.x,oy=p.y;
   // Check walls don't block destination
   p.x=Math.max(BARRIER.x+20,Math.min(BARRIER.x+BARRIER.w-20,mouse.wx));
   p.y=Math.max(BARRIER.y+20,Math.min(BARRIER.y+BARRIER.h-20,mouse.wy));
+  spawnRing(ox,oy,42,'#818cf8',{dur:0.4,lineW:3,fill:true});   // depart puff
+  spawnRing(p.x,p.y,46,'#c7d2fe',{dur:0.45,lineW:4,fill:true}); // arrive puff
   gs.floats.push({x:p.x,y:p.y-30,txt:'✨',col:'#818cf8',life:0.8,dy:-30});
 }
 
@@ -1940,13 +2202,17 @@ function novaAOE(p,range,dmg){
       z.suppressed=(performance.now()+2000);
     }
   });
-  gs.floats.push({x:p.x,y:p.y-30,txt:'Nova!',col:'#818cf8',life:1.5,dy:-50});
+  // Visible magic shockwave matching the hit radius
+  spawnRing(p.x,p.y,range,'#818cf8',{dur:0.5,lineW:6,fill:true});
+  spawnRing(p.x,p.y,range*0.92,'#c7d2fe',{dur:0.42,lineW:3,r0:range*0.2});
+  gs.floats.push({x:p.x,y:p.y-30,txt:'💫 Nova!',col:'#818cf8',life:1.2,dy:-50});
 }
 
 function explosionAOE(x,y,range,dmg){
   gs.zombies.forEach((z,id)=>{
     if(Math.hypot(z.x-x,z.y-y)<range) dealDmg(id,z,dmg,me);
   });
+  spawnRing(x,y,range,'#f97316',{dur:0.4,lineW:5,fill:true});
   gs.floats.push({x,y:y-20,txt:'💥 Boom!',col:'#f97316',life:1.2,dy:-40});
 }
 
@@ -1955,6 +2221,7 @@ function suppressAOE(p,range,dur){
   gs.zombies.forEach(z=>{
     if(Math.hypot(z.x-p.x,z.y-p.y)<range) z.suppressed=now+dur;
   });
+  spawnRing(p.x,p.y,range,'#f59e0b',{dur:0.55,lineW:4,fill:true});
   gToast('🎯 Potlačení aktivováno!','#f59e0b');
 }
 
@@ -1966,6 +2233,7 @@ function tauntAOE(p,range){
       if(hasSkill('tan_b2')) z.taunted={spd:0.6,end:now+3000};
     }
   });
+  spawnRing(p.x,p.y,range,'#a855f7',{dur:0.55,lineW:4});
   gToast('😤 Zombies se soustředí na tebe!','#64748b');
 }
 
@@ -1983,11 +2251,13 @@ function repairNearby(p,range,amount=40){
       s.hp=Math.min(s.maxHp,s.hp+amount);
     }
   }
+  spawnRing(p.x,p.y,range,'#0ea5e9',{dur:0.5,lineW:3});
   gToast('🔧 Opravuji struktury!','#0ea5e9');
 }
 
 function healNearby(p,range,amount,healOthers=false){
   me.hp=Math.min(me.maxHp,me.hp+amount);
+  spawnRing(p.x,p.y,range,'#4ade80',{dur:0.55,lineW:4,fill:true});
   gToast(`💚 Uzdravení +${amount} HP!`,'#fde68a');
   if(healOthers) Object.values(gs.players).forEach(op=>{if(op.alive)op.hp=Math.min(op.maxHp,op.hp+amount);});
 }
@@ -1996,6 +2266,7 @@ function blessNearby(p,range,dur=14000,allPlayers=false){
   const now=performance.now();
   me.eff.bless={end:now+dur};
   if(allPlayers) Object.values(gs.players).forEach(op=>{if(op.alive)op.eff={...(op.eff||{}),bless:{end:now+dur}};});
+  spawnRing(p.x,p.y,allPlayers?range:70,'#fbbf24',{dur:0.55,lineW:4});
   gToast(`✨ Požehnání! +20% DMG na ${dur/1000}s`,'#fde68a');
 }
 
@@ -2025,42 +2296,376 @@ function detonateC4(){
   gs.summons.splice(idx,1);
 }
 
-/* ── Farm / Well interaction ─────────────────────────────── */
-function interactFarm(){
-  if(gs.screen!=='game'||gs.phase!=='build')return;
-  const REACH=70;
-  for(const p of gs.farmPlots){
-    if(Math.hypot(me.x-p.x,me.y-p.y)>REACH)continue;
-    if(p.state==='empty'){
-      p.state='growing';p.growPhases=0;
-      gToast('🌱 Zasazeno! Sklizeň za 2 kola.','#84cc16');
-      return;
-    }
-    if(p.state==='ready'){
-      p.state='empty';
-      me.hunger=Math.min(100,me.hunger+38);
-      gs.floats.push({x:p.x,y:p.y-30,txt:'+38🍖',col:'#f59e0b',life:1.4,dy:-50});
-      gToast('🌾 Sklizeno! +38 hlad','#f59e0b');
-      return;
-    }
-    if(p.state==='growing'){
-      gToast(`🌿 Ještě roste… (${p.growPhases}/2 kola)`,'#6ee7b7');
-      return;
-    }
+/* ── Farm / Well placement (wall-aware) ──────────────────── */
+function rectOverlapsWall(cx,cy,size,margin){
+  const half=size/2+margin;
+  const rx=cx-half, ry=cy-half, rw=half*2, rh=half*2;
+  for(const wl of MAPS[gs.mapId].walls){
+    if(rx<wl.x+wl.w && rx+rw>wl.x && ry<wl.y+wl.h && ry+rh>wl.y) return true;
   }
-  const w=gs.well;
-  if(Math.hypot(me.x-w.x,me.y-w.y)<=REACH){
-    if(w.charges>0){
-      w.charges--;
-      me.thirst=Math.min(100,me.thirst+22);
-      gs.floats.push({x:w.x,y:w.y-30,txt:'+22💧',col:'#38bdf8',life:1.4,dy:-50});
-      gToast('💧 +22 hydratace','#38bdf8');
-    } else {
-      gToast('🪣 Studna je prázdná — doplní se po vlně.','#64748b');
+  return false;
+}
+/* ── Infrastructure: grid helpers ────────────────────────── */
+const N4=[[1,0],[-1,0],[0,1],[0,-1]];
+function gKey(gx,gy){return gx+','+gy;}
+function gridOf(wx,wy){return [Math.floor(wx/IT),Math.floor(wy/IT)];}
+function gCenter(gx,gy){return [gx*IT+IT/2,gy*IT+IT/2];}
+function infraAt(gx,gy){return gs.infra&&gs.infra.get(gKey(gx,gy));}
+function tileTouchesRiver(gx,gy){
+  const r=MAPS[gs.mapId].river; if(!r)return false;
+  const x0=gx*IT,y0=gy*IT,m=8;
+  return x0<r.x+r.w+m && x0+IT>r.x-m && y0<r.y+r.h+m && y0+IT>r.y-m;
+}
+// Shared base: list every plot/well, not just mine
+function gardenPieces(){const a=[];if(gs.infra)gs.infra.forEach(p=>{if(p.type==='plot'||p.type==='well')a.push(p);});return a;}
+function nearestWell(cx,cy,needWater){
+  let best=null,bd=190;
+  if(gs.infra)gs.infra.forEach(p=>{
+    if(p.type!=='well')return;
+    if(needWater&&p.water<WATER_PER_USE)return;
+    const[wx,wy]=gCenter(p.gx,p.gy);const d=Math.hypot(wx-cx,wy-cy);
+    if(d<bd){bd=d;best=p;}
+  });
+  return best;
+}
+
+/* ── Infrastructure: placement (grid-snapped) ────────────── */
+function placeInfra(){
+  const type=placing.type,def=INFRA_DEFS[type];
+  if(!def)return;
+  if((me.inv[type]||0)<=0){gToast('Nemáš žádné '+def.name,'#ef4444');return;}
+  const [gx,gy]=gridOf(mouse.wx,mouse.wy);
+  const [cx,cy]=gCenter(gx,gy);
+  if(cx<BARRIER.x+20||cx>BARRIER.x+BARRIER.w-20||cy<BARRIER.y+20||cy>BARRIER.y+BARRIER.h-20){gToast('Mimo arénu','#f59e0b');return;}
+  if(Math.hypot(cx-CX,cy-CY)<BASE_R+24){gToast('Příliš blízko základny','#f59e0b');return;}
+  if(infraAt(gx,gy)){gToast('Tady už něco stojí','#f59e0b');return;}
+  if(rectOverlapsWall(cx,cy,IT-10,0)){gToast('Na zdi to nejde','#f59e0b');return;}
+  if(type==='wheel'&&!tileTouchesRiver(gx,gy)){gToast('⚙️ Vodní kolo musí stát u řeky','#38bdf8');return;}
+  const piece={key:gKey(gx,gy),gx,gy,type,owner:me.uid};
+  if(type==='well'){piece.water=0;piece.freshness=100;piece._ripple=0;}
+  if(type==='plot'){piece.state='empty';piece.crop=null;piece.growPhases=0;piece.moisture=0;piece._ripple=0;}
+  gs.infra.set(piece.key,piece);
+  me.inv[type]--;updateInvDisplay();
+  // Co-op: non-host forwards the placement to the host (declarative pending set)
+  if(!isAuthority()){
+    if(!me._pendingInfra)me._pendingInfra=[];
+    me._pendingInfra.push({key:piece.key,gx,gy,type});
+    me._infraDirty=true;
+  }
+  gToast(def.emoji+' '+def.name+' postaveno','#84cc16');
+}
+
+/* ── Infrastructure: water + power networks (flood-fill) ──── */
+function recomputeInfraNetworks(){
+  if(!gs.infra)return;
+  const pieces=[...gs.infra.values()];
+  pieces.forEach(p=>{p._fed=false;p._fresh=false;p._pow=false;});
+  gs.structs.forEach(s=>{s._pow=false;});
+
+  // WATER: conductors = channel / well / purifier
+  const wc=new Map();
+  pieces.forEach(p=>{if(p.type==='channel'||p.type==='well'||p.type==='purifier')wc.set(p.key,p);});
+  const seenW=new Set();
+  wc.forEach(start=>{
+    if(seenW.has(start.key))return;
+    const comp=[],q=[start];seenW.add(start.key);
+    while(q.length){const p=q.pop();comp.push(p);
+      for(const[dx,dy]of N4){const nk=gKey(p.gx+dx,p.gy+dy);const np=wc.get(nk);if(np&&!seenW.has(nk)){seenW.add(nk);q.push(np);}}}
+    const fed=comp.some(p=>tileTouchesRiver(p.gx,p.gy));
+    const fresh=fed&&comp.some(p=>p.type==='purifier');
+    comp.forEach(p=>{p._fed=fed;p._fresh=fresh;});
+  });
+
+  // POWER: conductors = wheel / wire
+  const pc=new Map();
+  pieces.forEach(p=>{if(p.type==='wheel'||p.type==='wire')pc.set(p.key,p);});
+  const seenP=new Set(),comps=[];
+  pc.forEach(start=>{
+    if(seenP.has(start.key))return;
+    const comp=[],q=[start];seenP.add(start.key);
+    while(q.length){const p=q.pop();comp.push(p);
+      for(const[dx,dy]of N4){const nk=gKey(p.gx+dx,p.gy+dy);const np=pc.get(nk);if(np&&!seenP.has(nk)){seenP.add(nk);q.push(np);}}}
+    let gen=0;comp.forEach(p=>{if(p.type==='wheel'&&tileTouchesRiver(p.gx,p.gy))gen+=INFRA_DEFS.wheel.gen;});
+    if(gen>0)comp.forEach(p=>{p._pow=true;}); // wires/wheels energized
+    comps.push({comp,budget:gen});
+  });
+  // energized tiles belong to components with budget>0
+  const energ=[];
+  comps.forEach((c,ci)=>{if(c.budget>0)c.comp.forEach(p=>{const[ex,ey]=gCenter(p.gx,p.gy);energ.push({ex,ey,ci});});});
+  // devices: fence + sprinkler infra, plus turret structs
+  const devs=[];
+  pieces.forEach(p=>{if(p.type==='fence'||p.type==='sprinkler'){const[cx,cy]=gCenter(p.gx,p.gy);devs.push({obj:p,cx,cy,use:INFRA_DEFS[p.type].powerUse});}});
+  gs.structs.forEach(s=>{if(s.hp>0&&STRUCT_DEFS[s.type]&&STRUCT_DEFS[s.type].turret){devs.push({obj:s,cx:s.x+s.w/2,cy:s.y+s.h/2,use:1});}});
+  devs.forEach(d=>{let best=-1,bd=POWER_REACH;for(const e of energ){const dist=Math.hypot(d.cx-e.ex,d.cy-e.ey);if(dist<bd){bd=dist;best=e.ci;}}d.ci=best;});
+  devs.forEach(d=>{if(d.ci<0)return;const c=comps[d.ci];if(c.budget>=d.use){c.budget-=d.use;d.obj._pow=true;}});
+}
+
+/* ── Infrastructure: per-frame simulation ────────────────── */
+function updateInfra(dt,ts){
+  if(!gs.infra)return;
+
+  // Tending UI (proximity + progress) runs for everyone
+  const ov=document.getElementById('gardenOv');
+  const ovOpen=ov&&!ov.classList.contains('hidden');
+  if(ovOpen&&!nearInfra()){closeOv('gardenOv');if(gs.infraTask){gs.infraTask=null;gToast('🚶 Odešel jsi od zahrady — práce přerušena','#f59e0b');}}
+  else if(gs.infraTask&&!ovOpen){gs.infraTask=null;}
+  else if(gs.infraTask){const now=performance.now();if(now>=gs.infraTask.end)completeTend();else{const el=document.getElementById('tendProg');if(el)el.style.width=Math.min(100,(now-gs.infraTask.start)/(gs.infraTask.end-gs.infraTask.start)*100)+'%';}}
+
+  // Simulation (networks, wells, plots, sprinklers, fences) only on the authority
+  if(!isAuthority())return;
+  recomputeInfraNetworks();
+
+  gs.infra.forEach(p=>{
+    // Wells: connected wells fill from the network; quality depends on purifier
+    if(p.type==='well'){
+      if(p._fed){p.water=Math.min(INFRA_DEFS.well.store,p.water+9*dt);
+        if(p._fresh)p.freshness=Math.min(100,p.freshness+6*dt);
+        else p.freshness=Math.max(0,p.freshness-2.2*dt);}
+      else p.freshness=Math.max(0,p.freshness-0.5*dt);
     }
+    // Plots dry out and wither
+    if(p.type==='plot'&&(p.state==='growing'||p.state==='ready')){
+      p.moisture=Math.max(0,p.moisture-0.85*dt);
+      if(p.moisture<=0)p.state='withered';
+    }
+  });
+
+  // Powered sprinklers (next to fed water) auto-water nearby plots
+  gs.infra.forEach(p=>{
+    if(p.type!=='sprinkler'||!p._pow)return;
+    let hasWater=false;
+    for(const[dx,dy]of N4){const np=infraAt(p.gx+dx,p.gy+dy);if(np&&(np.type==='channel'||np.type==='well'||np.type==='purifier')&&np._fed){hasWater=true;break;}}
+    if(!hasWater)return;
+    const[sx,sy]=gCenter(p.gx,p.gy);
+    gs.infra.forEach(q=>{if(q.type==='plot'&&(q.state==='growing'||q.state==='ready')){const[qx,qy]=gCenter(q.gx,q.gy);if(Math.hypot(qx-sx,qy-sy)<IT*1.7)q.moisture=Math.min(100,q.moisture+15*dt);}});
+  });
+
+  // Powered electric fences zap nearby zombies (throttled)
+  gs.infra.forEach(p=>{
+    if(p.type!=='fence'||!p._pow)return;
+    if(ts-(p._lastZap||0)<300)return;
+    p._lastZap=ts;
+    const[fx,fy]=gCenter(p.gx,p.gy);
+    gs.zombies.forEach((z,id)=>{if(Math.hypot(z.x-fx,z.y-fy)<IT*0.95){dealDmg(id,z,INFRA_DEFS.fence.zap,me);z.suppressed=performance.now()+250;}});
+  });
+}
+
+/* ── Garden: proximity & tending time ────────────────────── */
+const GARDEN_REACH=140;
+function gardenPlayerCount(){return Object.keys(gs.players).length+1;}
+// Tending takes longer the more players are in the game.
+function tendDuration(){return 1000*(1+(gardenPlayerCount()-1)*0.8);} // solo 1.0s, +0.8s/hráč
+function nearInfra(){
+  if(!gs.infra)return false;
+  for(const p of gs.infra.values()){
+    if(p.type!=='plot'&&p.type!=='well')continue; // shared base — any plot/well counts
+    const[cx,cy]=gCenter(p.gx,p.gy);
+    if(Math.hypot(me.x-cx,me.y-cy)<GARDEN_REACH)return true;
+  }
+  return false;
+}
+
+/* ── Garden: overlay UI ──────────────────────────────────── */
+function toggleGarden(){
+  if(gs.screen!=='game')return;
+  const ov=document.getElementById('gardenOv');
+  if(!ov.classList.contains('hidden')){closeOv('gardenOv');gs.infraTask=null;return;}
+  if(!nearInfra()){
+    const has=gardenPieces().length>0;
+    gToast(has?'🚶 Musíš stát u záhonu nebo studny':'🛒 Kup záhon/studnu v obchodu [B] a postav je (6-9)','#f59e0b');
     return;
   }
-  gToast('Nejsi u políčka ani studny.','#64748b');
+  buildGarden();
+  openOv('gardenOv');
+}
+
+/* ── Garden: timed tending tasks ─────────────────────────── */
+function startTend(type,key){
+  if(gs.infraTask)return;
+  const now=performance.now();
+  gs.infraTask={type,key,start:now,end:now+tendDuration()};
+  buildGarden();
+}
+function completeTend(){
+  const t=gs.infraTask;
+  if(!t)return;
+  gs.infraTask=null;
+  if(t.type==='water')applyWater(t.key);
+  else if(t.type==='clean')applyClean(t.key);
+  else if(t.type==='harvest')applyHarvest(t.key);
+  buildGarden();
+}
+
+function gBar(pct,col,bg='#1e293b'){
+  return `<div style="height:7px;border-radius:4px;background:${bg};overflow:hidden;"><div style="height:100%;width:${Math.max(0,Math.min(100,pct))}%;background:${col};transition:width .2s;"></div></div>`;
+}
+
+function buildGarden(){
+  document.getElementById('gardenCoins').textContent=me.coins;
+  const body=document.getElementById('gardenBody');
+  if(!gs.infra){body.innerHTML='';return;}
+  const all=gardenPieces();
+  const wells=all.filter(p=>p.type==='well');
+  const plots=all.filter(p=>p.type==='plot');
+  const busy=!!gs.infraTask;
+  const tendS=(tendDuration()/1000).toFixed(1);
+
+  let html=`<div class="grd-note">🚶 Musíš stát u zahrady · ⏱ obstarávání trvá <b>${tendS}s</b> (víc hráčů = déle)</div>`;
+  if(busy){
+    const lbl=gs.infraTask.type==='water'?'💧 Zalévám…':gs.infraTask.type==='clean'?'🧹 Čistím studnu…':'🌾 Sklízím…';
+    html+=`<div class="grd-tending">
+      <div class="grd-row" style="justify-content:space-between;"><b>${lbl}</b>
+        <button class="btn-s grd-act" onclick="(function(){gs.infraTask=null;buildGarden();})()">✖ Přerušit</button></div>
+      <div style="height:10px;border-radius:6px;background:#1e293b;overflow:hidden;margin-top:6px;"><div id="tendProg" style="height:100%;width:0%;background:linear-gradient(90deg,#84cc16,#22c55e);"></div></div>
+    </div>`;
+  }
+
+  if(!plots.length&&!wells.length){
+    html+=`<div class="grd-buy"><div style="font-size:2.2rem;">🌱</div>
+      <p style="color:var(--muted);font-size:.82rem;max-width:430px;margin:8px auto;line-height:1.5;">
+      Zatím nemáš žádný <b>záhon</b> ani <b>studnu</b>. Kup je v <b>obchodu [B]</b> a postav do světa (build bar / klávesy). Vodu dovedeš kanály 🚿 od <b>řeky</b>, čistotu zajistí čistička 💧, a elektřinu vyrobí vodní kolo ⚙️ (vede se kabely 🔌).</p></div>`;
+  } else {
+    wells.forEach(w=>{ html+=renderWellCard(w,busy); });
+    if(plots.length) html+=`<div class="grd-grid">`+plots.map(p=>renderPlotCard(p,busy)).join('')+`</div>`;
+  }
+  body.innerHTML=html;
+}
+
+function renderWellCard(w,busy){
+  const spoiled=w.freshness<25;
+  const status=w._fed?(w._fresh?'<span style="color:#22c55e;font-size:.7rem;">čerstvá (čistička)</span>':'<span style="color:#f59e0b;font-size:.7rem;">surová — kazí se</span>')
+                     :'<span style="color:#94a3b8;font-size:.7rem;">nenapojená na řeku</span>';
+  return `<div class="grd-section">
+    <div class="grd-row"><b>🪣 Studna</b> ${status} ${spoiled?'<span style="color:#ef4444;font-size:.7rem;">⚠ zkažená</span>':''}</div>
+    <div class="grd-meter"><span>💧 Voda</span>${gBar(w.water/INFRA_DEFS.well.store*100,'#38bdf8')}<span class="grd-num">${Math.round(w.water)}</span></div>
+    <div class="grd-meter"><span>🧪 Čerstvost</span>${gBar(w.freshness,spoiled?'#ef4444':'#22c55e')}<span class="grd-num">${Math.round(w.freshness)}</span></div>
+    <div class="grd-btns">
+      <button class="btn-s grd-act" ${(busy||w.water<WATER_PER_USE)?'disabled':''} onclick="drinkWell('${w.key}')">💧 Napít se</button>
+      <button class="btn-s grd-act" ${(busy||me.coins<CLEAN_COST||w.freshness>=100)?'disabled':''} onclick="cleanWell('${w.key}')">🧹 Vyčistit · ${CLEAN_COST}💰</button>
+    </div></div>`;
+}
+
+function renderPlotCard(p,busy){
+  let inner='<div class="grd-plot-head"><b>🟫 Záhon</b></div>';
+  if(p.state==='empty'){
+    const seeds=Object.entries(CROPS).map(([id,c])=>{
+      const dis=(busy||me.coins<c.seed)?'disabled':'';
+      const note=c.premium?'<span class="grd-tag tag-irr">💦</span>':'';
+      return `<button class="crop-btn" ${dis} title="${c.premium?'Náročná na vodu — ideálně postřikovač':''}" onclick="plantCrop('${p.key}','${id}')">${c.emoji} ${c.name} ${note}<span class="crop-cost">${c.seed}💰</span></button>`;
+    }).join('');
+    inner+=`<div style="font-size:.7rem;color:var(--muted);margin:6px 0 4px;">Zasadit:</div><div class="crop-list">${seeds}</div>`;
+  } else if(p.state==='withered'){
+    inner+=`<div class="grd-crop">🥀</div><div style="color:#ef4444;font-size:.74rem;margin-bottom:6px;">Uschlo</div>
+      <button class="btn-s grd-act" ${busy?'disabled':''} onclick="clearWithered('${p.key}')">🗑 Vyklidit</button>`;
+  } else {
+    const c=CROPS[p.crop];
+    const moistCol=p.moisture<25?'#ef4444':p.moisture<55?'#f59e0b':'#38bdf8';
+    inner+=`<div class="grd-crop">${c.emoji}</div><div class="grd-meter"><span>💧</span>${gBar(p.moisture,moistCol)}</div>`;
+    if(p.state==='ready'){
+      inner+=`<button class="btn-p grd-act" ${busy?'disabled':''} onclick="harvestPlot('${p.key}')">🌾 Sklidit · +${c.food}🍖</button>`;
+    } else {
+      inner+=`<div style="font-size:.7rem;color:var(--muted);margin:4px 0;">Roste ${p.growPhases}/${c.grow} · po vlně</div>
+        <button class="btn-s grd-act" ${busy?'disabled':''} onclick="waterPlot('${p.key}')">💧 Zalít (ze studny)</button>`;
+    }
+  }
+  return `<div class="grd-plot ${p.state}">${inner}</div>`;
+}
+
+/* ── Garden: actions (shared base; clients send requests to host) ── */
+// World mutations (plot/well state) go to the host; personal effects (hunger/
+// thirst/hp/coins) apply on the acting client. On host/solo they apply directly.
+function sendInfraReq(a,k,crop){
+  if(!me._infraReqs)me._infraReqs=[];
+  me._infraReqs.push(crop?{a,k,c:crop}:{a,k});
+  me._infraReqDirty=true;
+}
+function cleanWell(key){
+  const w=gs.infra.get(key);
+  if(gs.infraTask||!w||w.type!=='well'||me.coins<CLEAN_COST||w.freshness>=100)return;
+  startTend('clean',key);
+}
+function applyClean(key){
+  const w=gs.infra.get(key);
+  if(!w||w.type!=='well'||me.coins<CLEAN_COST)return;
+  me.coins-=CLEAN_COST;                         // personal cost
+  if(isAuthority()){ w.freshness=100; w._ripple=performance.now(); }
+  else sendInfraReq('clean',key);
+  gToast('🧹 Studna vyčištěna!','#22c55e');
+}
+function drinkWell(key){
+  const w=gs.infra.get(key);
+  if(gs.infraTask||!w||w.type!=='well'||w.water<WATER_PER_USE)return;
+  if(w.freshness<25){me.thirst=Math.min(100,me.thirst+10);me.hp=Math.max(1,me.hp-8);gToast('🤢 Zkažená voda! +10 žízeň, −8 HP','#ef4444');}
+  else {me.thirst=Math.min(100,me.thirst+30);gToast('💧 +30 hydratace','#38bdf8');}
+  if(isAuthority()){ w.water-=WATER_PER_USE; w._ripple=performance.now(); }
+  else sendInfraReq('drink',key);
+  buildGarden();
+}
+function plantCrop(key,cropId){
+  const p=gs.infra.get(key),c=CROPS[cropId];
+  if(gs.infraTask||!p||p.type!=='plot'||p.state!=='empty'||!c)return;
+  if(me.coins<c.seed){gToast('Nedostatek mincí na sazenici','#ef4444');return;}
+  me.coins-=c.seed;                             // personal cost
+  p.state='growing'; p.crop=cropId; p.growPhases=0; p.moisture=70; // optimistic
+  if(!isAuthority()) sendInfraReq('plant',key,cropId);
+  const[cx,cy]=gCenter(p.gx,p.gy);
+  for(let k=0;k<5;k++)gs.floats.push({x:cx+(Math.random()*40-20),y:cy,txt:'·',col:'#84cc16',life:0.5+Math.random()*0.3,dy:-30-Math.random()*30});
+  gToast(`🌱 ${c.name} zasazena!`,'#84cc16');
+  buildGarden();
+}
+function waterPlot(key){
+  const p=gs.infra.get(key);
+  if(gs.infraTask||!p||p.type!=='plot'||(p.state!=='growing'&&p.state!=='ready'))return;
+  const[cx,cy]=gCenter(p.gx,p.gy);
+  if(!nearestWell(cx,cy,true)){gToast('Poblíž není studna s vodou','#94a3b8');return;}
+  startTend('water',key);
+}
+function applyWater(key){
+  const p=gs.infra.get(key);
+  if(!p||p.type!=='plot')return;
+  if(isAuthority()){
+    const[cx,cy]=gCenter(p.gx,p.gy);
+    const w=nearestWell(cx,cy,true);
+    if(!w){gToast('Studna mezitím vyschla','#94a3b8');return;}
+    w.water-=WATER_PER_USE; w._ripple=performance.now(); p._ripple=performance.now();
+    const spoiled=w.freshness<25;
+    p.moisture=Math.min(100,p.moisture+(spoiled?MOIST_PER_WATER*0.5:MOIST_PER_WATER));
+  } else { p._ripple=performance.now(); sendInfraReq('water',key); }
+  gToast('💧 Zalito','#38bdf8');
+}
+function harvestPlot(key){
+  const p=gs.infra.get(key);
+  if(gs.infraTask||!p||p.type!=='plot'||p.state!=='ready')return;
+  startTend('harvest',key);
+}
+function applyHarvest(key){
+  const p=gs.infra.get(key),c=CROPS[p&&p.crop];
+  if(!p||p.state!=='ready'||!c)return;
+  me.hunger=Math.min(100,me.hunger+c.food);     // personal benefit
+  const[cx,cy]=gCenter(p.gx,p.gy);
+  gs.floats.push({x:cx,y:cy-30,txt:`+${c.food}🍖`,col:'#f59e0b',life:1.4,dy:-50});
+  for(let k=0;k<7;k++)gs.floats.push({x:cx+(Math.random()*46-23),y:cy-10,txt:c.emoji,col:'#f59e0b',life:0.7+Math.random()*0.5,dy:-40-Math.random()*55});
+  gToast(`🌾 Sklizeno: ${c.name}! +${c.food} hlad`,'#f59e0b');
+  if(isAuthority()){ p.state='empty'; p.crop=null; p.growPhases=0; p.moisture=0; }
+  else sendInfraReq('harvest',key);
+}
+function clearWithered(key){
+  const p=gs.infra.get(key);
+  if(!p||p.type!=='plot'||p.state!=='withered')return;
+  if(isAuthority()){ p.state='empty'; p.crop=null; p.growPhases=0; p.moisture=0; }
+  else { p.state='empty'; sendInfraReq('clear',key); } // optimistic
+  buildGarden();
+}
+
+// Host: apply a co-op player's tend request to the shared grid (world mutation only)
+function hostApplyTend(r){
+  const p=gs.infra.get(r.k); if(!p)return;
+  if(r.a==='plant'){ if(p.type==='plot'&&p.state==='empty'&&CROPS[r.c]){p.state='growing';p.crop=r.c;p.growPhases=0;p.moisture=70;} }
+  else if(r.a==='water'){ if(p.type==='plot'&&(p.state==='growing'||p.state==='ready')){const[cx,cy]=gCenter(p.gx,p.gy);const w=nearestWell(cx,cy,true);if(w){w.water-=WATER_PER_USE;w._ripple=performance.now();const sp=w.freshness<25;p.moisture=Math.min(100,p.moisture+(sp?MOIST_PER_WATER*0.5:MOIST_PER_WATER));p._ripple=performance.now();}} }
+  else if(r.a==='harvest'){ if(p.type==='plot'&&p.state==='ready'){p.state='empty';p.crop=null;p.growPhases=0;p.moisture=0;} }
+  else if(r.a==='clear'){ if(p.type==='plot'){p.state='empty';p.crop=null;p.growPhases=0;p.moisture=0;} }
+  else if(r.a==='clean'){ if(p.type==='well'){p.freshness=100;p._ripple=performance.now();} }
+  else if(r.a==='drink'){ if(p.type==='well'&&p.water>=WATER_PER_USE){p.water-=WATER_PER_USE;p._ripple=performance.now();} }
 }
 
 function normalizeAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
@@ -2266,9 +2871,13 @@ function updateHUD(){
   document.getElementById('thirstFill').style.background=me.thirst<25?'#ef4444':'#06b6d4';
   document.getElementById('thirstVal').textContent=Math.ceil(me.thirst);
   document.getElementById('waveNum').textContent=gs.wave;
+  const pl_=document.getElementById('phaseLabel');
   if(gs.phase==='build'){
-    document.getElementById('phaseLabel').textContent='Příprava '+Math.ceil(gs.buildTimer)+'s';
-    document.getElementById('phaseLabel').style.color='#fbbf24';
+    pl_.textContent='Příprava '+Math.max(0,Math.ceil(gs.buildTimer))+'s';
+    pl_.style.color='#fbbf24';
+  } else {
+    pl_.textContent='Vlna '+gs.wave;
+    pl_.style.color='#ef4444';
   }
   // Players list (multiplayer)
   const others=Object.values(gs.players);
@@ -2289,6 +2898,12 @@ function drawMinimap(){
   mmCtx.fillRect(0,0,MM,MM);
   const tx=x=>(x-BARRIER.x)*scale;
   const ty=y=>(y-BARRIER.y)*scale;
+
+  // River
+  const rv=MAPS[gs.mapId].river;
+  if(rv){mmCtx.fillStyle='#0e6d96';mmCtx.fillRect(tx(rv.x),ty(rv.y),rv.w*scale,rv.h*scale);}
+  // Infra dots
+  if(gs.infra)gs.infra.forEach(p=>{const[cx,cy]=gCenter(p.gx,p.gy);mmCtx.fillStyle=p.type==='wire'?'#fbbf24':p.type==='channel'?'#38bdf8':'#84cc16';mmCtx.fillRect(tx(cx)-1,ty(cy)-1,2,2);});
 
   // Walls
   mmCtx.fillStyle='#333';
@@ -2350,11 +2965,12 @@ function draw(ts){
 
   drawFloor(map);
   drawBarrier();
-  drawFarm();
+  drawFarm(ts);
   drawStructures();
   drawBase();
   drawMapWalls(map);
   drawZombies(ts);
+  drawFx();
   drawSummons();
   drawBullets();
   drawPlayers(ts);
@@ -2393,49 +3009,146 @@ function drawBarrier(){
   ctx.setLineDash([]);
 }
 
-function drawFarm(){
-  if(!gs.farmPlots)return;
-  const PW=54,PH=54,REACH=70;
+function drawRiver(ts){
+  const r=MAPS[gs.mapId].river; if(!r)return;
+  const g=ctx.createLinearGradient(r.x,0,r.x+r.w,0);
+  g.addColorStop(0,'#0b3a52');g.addColorStop(0.5,'#0e6d96');g.addColorStop(1,'#0b3a52');
+  ctx.fillStyle=g;ctx.fillRect(r.x,r.y,r.w,r.h);
+  // flowing highlights
+  ctx.save();ctx.globalAlpha=0.25;ctx.strokeStyle='#bae6fd';ctx.lineWidth=2;
+  for(let i=0;i<6;i++){const yy=r.y+((ts/40+i*r.h/6)%r.h);ctx.beginPath();ctx.moveTo(r.x+8,yy);ctx.lineTo(r.x+r.w-8,yy+8);ctx.stroke();}
+  ctx.restore();
+  ctx.strokeStyle='rgba(186,230,253,.3)';ctx.lineWidth=2;ctx.strokeRect(r.x,r.y,r.w,r.h);
+}
+
+function drawFarm(ts){
+  drawRiver(ts);
+  if(!gs.infra)return;
+  const half=IT/2;
   ctx.textAlign='center';ctx.textBaseline='middle';
-  gs.farmPlots.forEach(p=>{
-    const near=gs.phase==='build'&&Math.hypot(me.x-p.x,me.y-p.y)<REACH;
-    ctx.fillStyle=p.state==='empty'?'#3b2a1a':p.state==='growing'?'#4a3a1e':'#5c4822';
-    ctx.strokeStyle=near?'#fbbf24':'rgba(255,255,255,.18)';
-    ctx.lineWidth=near?2.5:1;
-    ctx.fillRect(p.x-PW/2,p.y-PH/2,PW,PH);
-    ctx.strokeRect(p.x-PW/2,p.y-PH/2,PW,PH);
-    ctx.font='26px serif';
-    ctx.fillText(p.state==='empty'?'🌱':p.state==='growing'?'🌿':'🌾',p.x,p.y);
-    if(near){
-      const label=p.state==='ready'?'[G] Sklizeň':p.state==='empty'?'[G] Zasadit':'Roste ('+p.growPhases+'/2)';
-      ctx.fillStyle='rgba(0,0,0,.72)';ctx.fillRect(p.x-40,p.y-PH/2-20,80,16);
-      ctx.fillStyle=p.state==='ready'?'#fbbf24':'#86efac';ctx.font='10px Inter,sans-serif';
-      ctx.fillText(label,p.x,p.y-PH/2-11);
+
+  // Pass 1: channels + wires (ground level)
+  gs.infra.forEach(p=>{
+    const[cx,cy]=gCenter(p.gx,p.gy);
+    if(p.type==='channel'){
+      ctx.fillStyle=p._fed?(p._fresh?'#22d3ee':'#0e7490'):'#27313a';
+      roundRect(cx-half+4,cy-half+4,IT-8,IT-8,5);ctx.fill();
+      if(p._fed){ctx.save();ctx.globalAlpha=0.4+0.2*Math.sin(ts/300+p.gx);ctx.strokeStyle='#e0f2fe';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx-10,cy);ctx.lineTo(cx+10,cy);ctx.stroke();ctx.restore();}
+    } else if(p.type==='wire'){
+      ctx.strokeStyle=p._pow?'#fbbf24':'#52341a';ctx.lineWidth=p._pow?4:3;
+      ctx.beginPath();
+      let drew=false;
+      for(const[dx,dy]of N4){const np=infraAt(p.gx+dx,p.gy+dy);if(np&&(np.type==='wire'||np.type==='wheel')){ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*half,cy+dy*half);drew=true;}}
+      if(!drew){ctx.moveTo(cx-8,cy);ctx.lineTo(cx+8,cy);}
+      ctx.stroke();
+      if(p._pow){ctx.save();ctx.globalAlpha=0.5+0.3*Math.sin(ts/150+p.gx);ctx.fillStyle='#fde68a';ctx.beginPath();ctx.arc(cx,cy,2.5,0,Math.PI*2);ctx.fill();ctx.restore();}
     }
   });
-  // Well
-  const w=gs.well;
-  const nearW=gs.phase==='build'&&Math.hypot(me.x-w.x,me.y-w.y)<REACH;
-  const grad=ctx.createRadialGradient(w.x,w.y,0,w.x,w.y,30);
-  grad.addColorStop(0,'#1e3a5f');grad.addColorStop(1,'#0f172a');
-  ctx.fillStyle=grad;
-  ctx.beginPath();ctx.arc(w.x,w.y,28,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle=nearW?'#38bdf8':'rgba(56,189,248,.35)';
-  ctx.lineWidth=nearW?2:1;
-  ctx.beginPath();ctx.arc(w.x,w.y,28,0,Math.PI*2);ctx.stroke();
-  for(let i=0;i<w.maxCharges;i++){
-    const ang=-Math.PI/2+(i/w.maxCharges)*Math.PI*2;
-    ctx.fillStyle=i<w.charges?'#38bdf8':'#1e293b';
-    ctx.beginPath();ctx.arc(w.x+Math.cos(ang)*19,w.y+Math.sin(ang)*19,4.5,0,Math.PI*2);ctx.fill();
+
+  // Pass 2: structures (wells, purifier, wheel, plots, sprinkler, fence)
+  gs.infra.forEach(p=>{
+    const[cx,cy]=gCenter(p.gx,p.gy);
+    if(p.type==='well'){
+      const spoiled=p.freshness<25;
+      ctx.fillStyle='#475569';ctx.beginPath();ctx.arc(cx,cy,half-2,0,Math.PI*2);ctx.fill();
+      const wlvl=p.water/INFRA_DEFS.well.store;
+      const wg=ctx.createRadialGradient(cx-4,cy-4,2,cx,cy,half-6);
+      if(spoiled){wg.addColorStop(0,'#65734f');wg.addColorStop(1,'#3f4a2a');}
+      else{wg.addColorStop(0,'#7dd3fc');wg.addColorStop(1,'#075985');}
+      ctx.save();ctx.globalAlpha=0.35+wlvl*0.6;ctx.fillStyle=wg;ctx.beginPath();ctx.arc(cx,cy,half-6,0,Math.PI*2);ctx.fill();ctx.restore();
+      ctx.strokeStyle=spoiled?'#ef4444':(p._fed?'#38bdf8':'rgba(56,189,248,.4)');ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,half-2,0,Math.PI*2);ctx.stroke();
+      if(p._ripple){const el=performance.now()-p._ripple;if(el<700){ctx.save();ctx.globalAlpha=(1-el/700)*0.6;ctx.strokeStyle='#e0f2fe';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,4+el/700*20,0,Math.PI*2);ctx.stroke();ctx.restore();}else p._ripple=0;}
+      ctx.font='16px serif';ctx.fillText('🪣',cx,cy);
+      if(spoiled)drawWorldTag(cx,cy-half-8,'⚠ zkažená','#ef4444');
+    } else if(p.type==='purifier'){
+      ctx.fillStyle=p._fed?'#155e75':'#1e293b';roundRect(cx-half+4,cy-half+4,IT-8,IT-8,6);ctx.fill();
+      ctx.strokeStyle='#22d3ee';ctx.lineWidth=1.5;roundRect(cx-half+4,cy-half+4,IT-8,IT-8,6);ctx.stroke();
+      ctx.font='20px serif';ctx.fillText('💧',cx,cy);
+    } else if(p.type==='wheel'){
+      const active=tileTouchesRiver(p.gx,p.gy);
+      ctx.save();ctx.translate(cx,cy);if(active)ctx.rotate((ts/600)%(Math.PI*2));
+      ctx.font='26px serif';ctx.fillText('⚙️',0,0);ctx.restore();
+      drawWorldTag(cx,cy-half-8,active?'⚙️ +'+INFRA_DEFS.wheel.gen+'⚡':'⚙️ mimo řeku',active?'#fbbf24':'#94a3b8');
+    } else if(p.type==='sprinkler'){
+      ctx.fillStyle=p._pow?'#0e7490':'#1e293b';roundRect(cx-half+6,cy-half+6,IT-12,IT-12,5);ctx.fill();
+      ctx.font='18px serif';ctx.fillText('💦',cx,cy);
+      if(p._pow){ctx.save();ctx.globalAlpha=0.3+0.2*Math.sin(ts/200);ctx.strokeStyle='#7dd3fc';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,IT*0.9,0,Math.PI*2);ctx.stroke();ctx.restore();}
+    } else if(p.type==='fence'){
+      ctx.fillStyle=p._pow?'#3a2a10':'#252525';roundRect(cx-half+4,cy-half+4,IT-8,IT-8,4);ctx.fill();
+      ctx.strokeStyle=p._pow?'#fbbf24':'#555';ctx.lineWidth=2;roundRect(cx-half+4,cy-half+4,IT-8,IT-8,4);ctx.stroke();
+      ctx.font='18px serif';ctx.fillText('⚡',cx,cy);
+      if(p._pow){ctx.save();ctx.globalAlpha=0.4+0.3*Math.sin(ts/100+p.gx);ctx.strokeStyle='#fde68a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,half,0,Math.PI*2);ctx.stroke();ctx.restore();}
+    } else if(p.type==='plot'){
+      drawPlotPiece(p,cx,cy,ts);
+    }
+  });
+
+  // Tending progress arc at the active target
+  if(gs.infraTask){
+    const tp=gs.infra.get(gs.infraTask.key);
+    if(tp){const[tx,ty]=gCenter(tp.gx,tp.gy);
+      const prog=Math.min(1,(performance.now()-gs.infraTask.start)/(gs.infraTask.end-gs.infraTask.start));
+      ctx.save();ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=5;ctx.beginPath();ctx.arc(tx,ty,half+10,0,Math.PI*2);ctx.stroke();
+      ctx.strokeStyle='#84cc16';ctx.lineWidth=5;ctx.beginPath();ctx.arc(tx,ty,half+10,-Math.PI/2,-Math.PI/2+prog*Math.PI*2);ctx.stroke();ctx.restore();}
   }
-  ctx.font='18px serif';ctx.fillText('🪣',w.x,w.y);
-  if(nearW){
-    const label=w.charges>0?`[G] Nabrat (${w.charges}/${w.maxCharges})`:'Prázdná studna';
-    ctx.fillStyle='rgba(0,0,0,.72)';ctx.fillRect(w.x-46,w.y-42,92,16);
-    ctx.fillStyle=w.charges>0?'#38bdf8':'#94a3b8';ctx.font='10px Inter,sans-serif';
-    ctx.fillText(label,w.x,w.y-33);
+
+  // Hint when standing near the garden
+  if(nearInfra()&&!gs.infraTask){
+    const p=gardenPieces()[0];
+    if(p){const[cx,cy]=gCenter(p.gx,p.gy);drawWorldTag(cx,cy-half-22,'🌱 [G] Zahrada','#86efac');}
   }
   ctx.textAlign='left';ctx.textBaseline='alphabetic';
+}
+
+function drawPlotPiece(p,cx,cy,ts){
+  const half=IT/2,PW=IT-8,h=PW/2;
+  ctx.fillStyle=p.state==='withered'?'#33271b':p.state==='empty'?'#3a2817':'#48351c';
+  roundRect(cx-h,cy-h,PW,PW,6);ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.22)';ctx.lineWidth=1;
+  for(let f=-1;f<=1;f++){ctx.beginPath();ctx.moveTo(cx-h+6,cy+f*12);ctx.lineTo(cx+h-6,cy+f*12);ctx.stroke();}
+  if(p.state==='ready'){
+    const pulse=0.5+0.5*Math.sin(ts/320+p.gx);
+    ctx.save();ctx.globalAlpha=0.25+pulse*0.35;
+    const gr=ctx.createRadialGradient(cx,cy,2,cx,cy,h+10);
+    gr.addColorStop(0,'rgba(250,204,21,.9)');gr.addColorStop(1,'rgba(250,204,21,0)');
+    ctx.fillStyle=gr;ctx.beginPath();ctx.arc(cx,cy,h+10,0,Math.PI*2);ctx.fill();ctx.restore();
+  }
+  ctx.strokeStyle='rgba(255,255,255,.16)';ctx.lineWidth=1;roundRect(cx-h,cy-h,PW,PW,6);ctx.stroke();
+  if(p.state==='growing'){
+    const c=CROPS[p.crop];const grown=Math.min(1,(p.growPhases+0.4)/(c?c.grow:2));
+    const sway=Math.sin(ts/420+p.gx*1.7)*0.12;
+    ctx.save();ctx.translate(cx,cy+5);ctx.rotate(sway);ctx.font=(13+grown*13)+'px serif';ctx.fillText(grown>0.7?c.emoji:'🌿',0,0);ctx.restore();
+  } else if(p.state==='ready'){
+    const c=CROPS[p.crop];const bob=Math.sin(ts/300+p.gx)*2;ctx.font='24px serif';ctx.fillText(c?c.emoji:'🌾',cx,cy-bob);
+  } else if(p.state==='withered'){
+    ctx.font='22px serif';ctx.globalAlpha=0.8;ctx.fillText('🥀',cx,cy);ctx.globalAlpha=1;
+  } else {
+    ctx.fillStyle='rgba(0,0,0,.28)';for(let d=0;d<3;d++){ctx.beginPath();ctx.arc(cx-11+d*11,cy,2,0,Math.PI*2);ctx.fill();}
+  }
+  if(p.state==='growing'||p.state==='ready'){
+    const mc=p.moisture<25?'#ef4444':p.moisture<55?'#f59e0b':'#38bdf8';
+    ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(cx-h+4,cy+h-6,PW-8,4);
+    ctx.fillStyle=mc;ctx.fillRect(cx-h+4,cy+h-6,(PW-8)*p.moisture/100,4);
+  }
+  if(p._ripple){const el=performance.now()-p._ripple;if(el<600){ctx.save();ctx.globalAlpha=(1-el/600)*0.5;ctx.strokeStyle='#e0f2fe';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,4+el/600*20,0,Math.PI*2);ctx.stroke();ctx.restore();}else p._ripple=0;}
+}
+
+// Helper: rounded rect path (fill/stroke applied by caller)
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+}
+// Helper: floating world-space label tag
+function drawWorldTag(cx,cy,text,col){
+  ctx.font='600 10px Inter,sans-serif';
+  const wd=ctx.measureText(text).width+14;
+  ctx.fillStyle='rgba(4,4,14,.82)';
+  roundRect(cx-wd/2,cy-9,wd,16,5);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1;
+  roundRect(cx-wd/2,cy-9,wd,16,5);ctx.stroke();
+  ctx.fillStyle=col;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(text,cx,cy);
 }
 
 function drawBase(){
@@ -2490,6 +3203,12 @@ function drawStructures(){
     ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(s.x,s.y-6,s.w,4);
     ctx.fillStyle=pct>0.5?'#4ade80':pct>0.25?'#fbbf24':'#ef4444';
     ctx.fillRect(s.x,s.y-6,s.w*pct,4);
+    // Unpowered turret indicator (only meaningful for your own turrets)
+    if(def.turret&&!s._pow&&s.owner===me.uid){
+      ctx.font='12px serif';ctx.fillStyle='#ef4444';
+      ctx.fillText('⚡',s.x+s.w-6,s.y+6);
+      ctx.save();ctx.globalAlpha=0.45;ctx.fillStyle='#000';ctx.fillRect(s.x,s.y,s.w,s.h);ctx.restore();
+    }
   }
 }
 
@@ -2546,6 +3265,27 @@ function drawPlayers(ts){
 function drawPlayerSprite(x,y,angle,kitId,isLocal,ts){
   const kit=KITS[kitId]||KITS.militant;
   const r=PLAYER_R;
+  // Active buff auras (local player) — pulsing colored rings
+  if(isLocal){
+    const now=performance.now();
+    const auras=[];
+    if(me.eff.rage&&now<me.eff.rage.end)         auras.push('#ef4444');
+    if(me.eff.ultBerserk&&now<me.eff.ultBerserk.end)auras.push('#dc2626');
+    if(me.eff.fortify&&now<me.eff.fortify.end)   auras.push('#38bdf8');
+    if(me.eff.immune&&now<me.eff.immune.end)     auras.push('#e5e7eb');
+    if(me.eff.bless&&now<me.eff.bless.end)        auras.push('#fbbf24');
+    if(me.eff.mutagen&&now<me.eff.mutagen.end)   auras.push('#22c55e');
+    if(me.eff.jackpot&&now<me.eff.jackpot.end)   auras.push('#f59e0b');
+    if(me.eff.titan&&now<me.eff.titan.end)       auras.push('#f59e0b');
+    if(me.eff.backstab)                           auras.push('#a855f7');
+    auras.forEach((c,i)=>{
+      const pulse=0.5+0.5*Math.sin(ts/200+i*1.3);
+      ctx.save();ctx.globalAlpha=0.45+pulse*0.35;
+      ctx.strokeStyle=c;ctx.lineWidth=2.5;
+      ctx.beginPath();ctx.arc(x,y,r+5+i*4+pulse*2,0,Math.PI*2);ctx.stroke();
+      ctx.restore();
+    });
+  }
   // Shadow
   ctx.fillStyle='rgba(0,0,0,.4)';
   ctx.beginPath();ctx.ellipse(x,y+r*.7,r*.9,r*.4,0,0,Math.PI*2);ctx.fill();
@@ -2579,6 +3319,21 @@ function drawFloats(){
 
 function drawPlacingPreview(){
   if(!placing.active)return;
+  // Infrastructure: grid-snapped preview
+  if(INFRA_DEFS[placing.type]){
+    const def=INFRA_DEFS[placing.type];
+    const[gx,gy]=gridOf(mouse.wx,mouse.wy);const[cx,cy]=gCenter(gx,gy);
+    const blocked=infraAt(gx,gy)||rectOverlapsWall(cx,cy,IT-10,0)||(placing.type==='wheel'&&!tileTouchesRiver(gx,gy))||Math.hypot(cx-CX,cy-CY)<BASE_R+24;
+    ctx.fillStyle=blocked?'rgba(239,68,68,.25)':'rgba(132,204,22,.25)';
+    ctx.strokeStyle=blocked?'rgba(239,68,68,.8)':'rgba(132,204,22,.85)';
+    ctx.setLineDash([4,4]);ctx.lineWidth=2;
+    ctx.fillRect(gx*IT+3,gy*IT+3,IT-6,IT-6);ctx.strokeRect(gx*IT+3,gy*IT+3,IT-6,IT-6);
+    ctx.setLineDash([]);
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='20px serif';
+    ctx.fillStyle='rgba(255,255,255,.8)';ctx.fillText(def.emoji,cx,cy);
+    ctx.textAlign='left';ctx.textBaseline='alphabetic';
+    return;
+  }
   const def=STRUCT_DEFS[placing.type];
   let w=def.w,h=def.h;
   if(placing.rot===90||placing.rot===270){w=def.h;h=def.w;}
@@ -2717,38 +3472,197 @@ function gameOver(win){
 // ══════════════════════════════════════════════════════════
 //  MULTIPLAYER (Firebase Firestore)
 // ══════════════════════════════════════════════════════════
-let _lastSync=0;
+// ── Realtime layer (RTDB) ──────────────────────────────────
+// Host is the authority for the shared world (zombies/base/wave).
+// Live state goes over RTDB (low-latency); lobby/coins stay on Firestore.
+let _lastSync=0, _rtdb=null;
+function getRtdb(){ if(!_rtdb){ try{_rtdb=firebase.database();}catch(e){console.warn('[rtdb]',e);} } return _rtdb; }
+function liveRef(sub){ const d=getRtdb(); return (d&&gs.sessionId)?d.ref('live/'+gs.sessionId+(sub?'/'+sub:'')):null; }
+function isAuthority(){ return gs.isHost || !gs.sessionId; }
+
+let _lastStructSync=0,_lastInfraSync=0;
 function syncState(ts){
   if(!gs.sessionId)return;
-  if(ts-_lastSync<120)return; // sync at ~8fps
+  if(ts-_lastSync<66)return; // ~15 Hz
   _lastSync=ts;
   syncPlayerState();
-  if(gs.isHost) syncHostState();
+  if(gs.isHost){
+    syncWorld();
+    if(ts-_lastStructSync>250){ _lastStructSync=ts; syncStructs(); } // ~4 Hz: HP/destruction
+    if(ts-_lastInfraSync>250){ _lastInfraSync=ts; syncInfra(); }     // ~4 Hz: farm/water/power
+  }
 }
 
 function syncPlayerState(){
-  if(!gs.sessionId||!me.uid)return;
-  db.collection('survival_lobbies').doc(gs.sessionId)
-    .collection('player_states').doc(me.uid)
-    .set({x:me.x,y:me.y,angle:me.angle,hp:me.hp,maxHp:me.maxHp,
-          coins:me.coins,xp:me.xp,level:me.level,alive:me.alive,
-          kit:me.kit,name:me.name,ts:Date.now()},{merge:true})
-    .catch(()=>{});
+  const sref=liveRef('players/'+me.uid+'/s'); if(!sref)return;
+  const payload={x:Math.round(me.x),y:Math.round(me.y),angle:+(me.angle||0).toFixed(2),
+    hp:Math.round(me.hp),maxHp:me.maxHp,coins:me.coins,xp:me.xp,level:me.level,
+    alive:me.alive,kit:me.kit,name:me.name,ts:Date.now()};
+  // Forward queued hits to the host (clients only)
+  if(!isAuthority()&&me._pendingHits&&me._pendingHits.length){
+    me._hitBatch++;
+    payload.hits=me._pendingHits; payload.hb=me._hitBatch;
+    me._pendingHits=[];
+  } else { payload.hb=me._hitBatch; }
+  sref.set(payload).catch(()=>{});
+  if(isAuthority())return;
+  // Forward my placed structures to the host (declarative pending set)
+  if(me._buildDirty){
+    me._buildDirty=false;
+    liveRef('players/'+me.uid+'/build').set(me._pendingBuild||[]).catch(()=>{});
+  }
+  // Forward my placed infrastructure (declarative pending set)
+  if(me._infraDirty){
+    me._infraDirty=false;
+    liveRef('players/'+me.uid+'/binfra').set(me._pendingInfra||[]).catch(()=>{});
+  }
+  // Forward tend requests (plant/water/harvest/clean/drink/clear) with a batch id
+  if(me._infraReqDirty&&me._infraReqs&&me._infraReqs.length){
+    me._infraReqDirty=false;
+    me._reqBatch=(me._reqBatch||0)+1;
+    liveRef('players/'+me.uid+'/treq').set({b:me._reqBatch,list:me._infraReqs}).catch(()=>{});
+    me._infraReqs=[];
+  }
 }
 
-function syncHostState(){
-  if(!gs.sessionId)return;
-  // Sync game state (wave, base HP, zombies - simplified)
-  db.collection('survival_lobbies').doc(gs.sessionId)
-    .update({wave:gs.wave,baseHp:gs.baseHp,phase:gs.phase,ts:Date.now()})
-    .catch(()=>{});
+function syncWorld(){
+  const ref=liveRef('world'); if(!ref)return;
+  const z=[];
+  gs.zombies.forEach(zo=>{z.push({i:zo.id,t:zo.type,x:Math.round(zo.x),y:Math.round(zo.y),h:Math.round(zo.hp),m:zo.maxHp});});
+  // update() (not set) so the 'structs' child survives the 15 Hz dynamic write
+  ref.update({z,baseHp:Math.round(gs.baseHp),wave:gs.wave,phase:gs.phase,bt:Math.max(0,Math.ceil(gs.buildTimer)),
+    waveTotal:gs.waveTotal,spawnedCount:gs.spawnedCount,r:gs._rewards||{},ts:Date.now()}).catch(()=>{});
 }
 
-function syncStructures(){
-  if(!gs.sessionId)return;
-  db.collection('survival_lobbies').doc(gs.sessionId)
-    .update({structs:gs.structs.map(s=>({id:s.id,type:s.type,x:s.x,y:s.y,w:s.w,h:s.h,rot:s.rot,hp:s.hp,maxHp:s.maxHp}))})
-    .catch(()=>{});
+// Host broadcasts the authoritative structure list (HP/destruction + power flag)
+function syncStructs(){
+  const ref=liveRef('world/structs'); if(!ref)return;
+  const arr=[];
+  gs.structs.forEach(s=>{ if(s.hp>0) arr.push({i:s.id,t:s.type,x:s.x,y:s.y,w:s.w,h:s.h,r:s.rot||0,hp:Math.round(s.hp),m:s.maxHp,o:s.owner,pw:s._pow?1:0}); });
+  ref.set(arr).catch(()=>{});
+}
+
+// Host broadcasts the authoritative infrastructure (farm/water/power) grid
+function syncInfra(){
+  const ref=liveRef('world/infra'); if(!ref)return;
+  const arr=[];
+  gs.infra.forEach(p=>{
+    const o={k:p.key,gx:p.gx,gy:p.gy,t:p.type,o:p.owner,
+      fed:p._fed?1:0,fr:p._fresh?1:0,pw:p._pow?1:0};
+    if(p.type==='well'){o.wt=Math.round(p.water);o.frs=Math.round(p.freshness);}
+    if(p.type==='plot'){o.st=p.state;o.cr=p.crop||'';o.gp=p.growPhases;o.mo=Math.round(p.moisture);}
+    arr.push(o);
+  });
+  ref.set(arr).catch(()=>{});
+}
+
+function syncStructures(){} // legacy no-op
+
+// Apply host's world snapshot on a client
+function applyWorldSnapshot(d){
+  if(!d||gs.isHost)return;
+  if(gs.phase==='wave'&&d.phase==='build') setTimeout(()=>showGameQuiz(),600); // per-client quiz on wave end
+  gs.phase=d.phase; gs.wave=d.wave;
+  if(d.bt!=null)gs.buildTimer=d.bt;
+  if(d.baseHp!=null)gs.baseHp=d.baseHp;
+  if(d.waveTotal!=null)gs.waveTotal=d.waveTotal;
+  if(d.spawnedCount!=null)gs.spawnedCount=d.spawnedCount;
+  applyZombieSnapshot(d.z||[]);
+  if(d.structs!==undefined) applyStructsSnapshot(d.structs||[]);
+  if(d.infra!==undefined) applyInfraSnapshot(d.infra||[]);
+  // Apply kill rewards the host credited me (cumulative → delta)
+  if(d.r&&d.r[me.uid]){
+    const mine=d.r[me.uid];
+    if(!me._rewardApplied)me._rewardApplied={c:0,x:0};
+    const dc=(mine.c||0)-me._rewardApplied.c, dx=(mine.x||0)-me._rewardApplied.x;
+    if(dc>0){me.coins+=dc;}
+    if(dx>0){me.xp+=dx;me.totalKills++;checkLevelUp();}
+    me._rewardApplied={c:mine.c||0,x:mine.x||0};
+  }
+  const wn=document.getElementById('waveNum'); if(wn)wn.textContent=gs.wave;
+}
+function applyZombieSnapshot(arr){
+  const seen=new Set();
+  arr.forEach(o=>{
+    seen.add(o.i);
+    let z=gs.zombies.get(o.i);
+    if(!z){
+      const def=ZTYPES[o.t]||ZTYPES.normal;
+      z={id:o.i,type:o.t,def,x:o.x,y:o.y,r:def.r,hp:o.h,maxHp:o.m||def.hp,tx:o.x,ty:o.y,spd:def.spd,remote:true,
+         lastHitPlayer:0,lastHitBase:0,lastHitStruct:{},suppressed:0,nudgeAng:0,nudgeEnd:0};
+      gs.zombies.set(o.i,z);
+    } else {
+      z.tx=o.x; z.ty=o.y;
+      z.hp=Math.min(z.hp,o.h); // keep local hits, but never above host's value
+    }
+  });
+  gs.zombies.forEach((z,id)=>{ if(!seen.has(id)) gs.zombies.delete(id); });
+}
+// Client: rebuild gs.structs from host's authoritative list (+ my not-yet-confirmed placements)
+function applyStructsSnapshot(arr){
+  const byId=new Map(); gs.structs.forEach(s=>byId.set(s.id,s));
+  const next=[], snapIds=new Set();
+  arr.forEach(o=>{
+    snapIds.add(o.i);
+    let s=byId.get(o.i);
+    if(s){ s.x=o.x;s.y=o.y;s.w=o.w;s.h=o.h;s.rot=o.r;s.hp=o.hp;s.maxHp=o.m;s.owner=o.o;s.type=o.t;s.def=STRUCT_DEFS[o.t];s._pow=!!o.pw; }
+    else { s={id:o.i,type:o.t,def:STRUCT_DEFS[o.t],x:o.x,y:o.y,w:o.w,h:o.h,rot:o.r,hp:o.hp,maxHp:o.m,owner:o.o,lastShot:0,zombieHits:{},_pow:!!o.pw}; }
+    next.push(s);
+  });
+  // keep my optimistic placements until the host confirms them
+  if(me._pendingBuild&&me._pendingBuild.length){
+    const before=me._pendingBuild.length;
+    me._pendingBuild=me._pendingBuild.filter(b=>{
+      if(snapIds.has(b.id))return false; // confirmed by host → drop
+      const def=STRUCT_DEFS[b.type]; if(!def)return false;
+      next.push({id:b.id,type:b.type,def,x:b.x,y:b.y,w:b.w,h:b.h,rot:b.rot||0,hp:def.hp,maxHp:def.hp,owner:me.uid,lastShot:0,zombieHits:{}});
+      return true;
+    });
+    if(me._pendingBuild.length!==before) me._buildDirty=true; // resend trimmed set
+  }
+  gs.structs=next;
+}
+// Client: rebuild gs.infra from host's authoritative grid (+ my unconfirmed placements)
+function applyInfraSnapshot(arr){
+  const old=gs.infra||new Map();
+  const next=new Map(), snapKeys=new Set();
+  arr.forEach(o=>{
+    snapKeys.add(o.k);
+    const prev=old.get(o.k)||{};
+    const p={key:o.k,gx:o.gx,gy:o.gy,type:o.t,owner:o.o,
+      _fed:!!o.fed,_fresh:!!o.fr,_pow:!!o.pw,_ripple:prev._ripple||0,_lastZap:prev._lastZap||0};
+    if(o.t==='well'){p.water=o.wt||0;p.freshness=o.frs!=null?o.frs:100;}
+    if(o.t==='plot'){p.state=o.st||'empty';p.crop=o.cr||null;p.growPhases=o.gp||0;p.moisture=o.mo||0;}
+    next.set(o.k,p);
+  });
+  // keep my optimistic placements until the host confirms them
+  if(me._pendingInfra&&me._pendingInfra.length){
+    const before=me._pendingInfra.length;
+    me._pendingInfra=me._pendingInfra.filter(b=>{
+      if(snapKeys.has(b.key))return false; // confirmed → drop
+      if(!next.has(b.key)){
+        const p={key:b.key,gx:b.gx,gy:b.gy,type:b.type,owner:me.uid,_fed:false,_fresh:false,_pow:false,_ripple:0};
+        if(b.type==='well'){p.water=0;p.freshness=100;}
+        if(b.type==='plot'){p.state='empty';p.crop=null;p.growPhases=0;p.moisture=0;}
+        next.set(b.key,p);
+      }
+      return true;
+    });
+    if(me._pendingInfra.length!==before) me._infraDirty=true;
+  }
+  gs.infra=next;
+}
+function interpolateZombies(dt){
+  const k=Math.min(1,dt*12);
+  gs.zombies.forEach(z=>{ if(z.tx!=null){z.x+=(z.tx-z.x)*k; z.y+=(z.ty-z.y)*k;} });
+}
+function updateRemotePlayers(dt){
+  const k=Math.min(1,dt*12);
+  Object.values(gs.players).forEach(p=>{
+    if(p.tx==null){p.tx=p.x||CX;p.ty=p.y||CY;}
+    if(p.x==null){p.x=p.tx;p.y=p.ty;}
+    p.x+=(p.tx-p.x)*k; p.y+=(p.ty-p.y)*k;
+  });
 }
 
 function sendCoins(targetPlayer,amount){
@@ -2792,9 +3706,11 @@ async function joinLobby(lobbyId){
       if(d.status==='playing'&&gs.screen==='lobby'){
         kitSel.mapId=d.mapId||0;
         applyKitSelection();
+        loadSelectedDecks();
         initGame();
         subscribePlayerStates();
-        subscribeLobbyGameState();
+        subscribeWorld();
+        subscribeCoinTransfers();
         showScreen('game');
         buildBuildBar(); buildAbilBar();
         running=true; requestAnimationFrame(loop);
@@ -2837,35 +3753,73 @@ async function hostStartGame(){
 }
 
 function subscribePlayerStates(){
-  gs.unsubPlayers=db.collection('survival_lobbies').doc(gs.sessionId)
-    .collection('player_states').onSnapshot(snap=>{
-      snap.forEach(doc=>{
-        if(doc.id!==me.uid) gs.players[doc.id]={...doc.data(),uid:doc.id};
-      });
+  const ref=liveRef('players'); if(!ref)return;
+  ref.on('value',snap=>{
+    const val=snap.val()||{};
+    Object.keys(val).forEach(uid=>{
+      if(uid===me.uid)return;
+      const node=val[uid]||{};
+      const d=node.s; if(!d)return;       // player state lives under /s
+      let p=gs.players[uid];
+      if(!p){p={uid,x:d.x,y:d.y};gs.players[uid]=p;}
+      Object.assign(p,d,{uid,tx:d.x,ty:d.y});
+      // Host applies forwarded hits authoritatively
+      if(gs.isHost&&d.hits&&d.hb&&d.hb>(gs._hitSeen[uid]||0)){
+        gs._hitSeen[uid]=d.hb;
+        d.hits.forEach(hit=>{const z=gs.zombies.get(hit.z); if(z)dealDmg(hit.z,z,hit.d,{uid});});
+      }
+      if(!gs.isHost)return;
+      // Host creates structures a client placed (declarative pending set)
+      if(Array.isArray(node.build)){
+        node.build.forEach(b=>{
+          if(gs._builtIds.has(b.id)||gs.structs.some(s=>s.id===b.id))return;
+          const def=STRUCT_DEFS[b.type]; if(!def)return;
+          gs._builtIds.add(b.id);
+          gs.structs.push({id:b.id,type:b.type,def,x:b.x,y:b.y,w:b.w,h:b.h,rot:b.rot||0,
+            hp:def.hp,maxHp:def.hp,lastShot:0,zombieHits:{},owner:uid});
+        });
+      }
+      // Host creates infrastructure a client placed
+      if(Array.isArray(node.binfra)){
+        node.binfra.forEach(b=>{
+          if(gs._builtInfraKeys.has(b.key)||gs.infra.has(b.key))return;
+          if(!INFRA_DEFS[b.type])return;
+          gs._builtInfraKeys.add(b.key);
+          const piece={key:b.key,gx:b.gx,gy:b.gy,type:b.type,owner:uid};
+          if(b.type==='well'){piece.water=0;piece.freshness=100;piece._ripple=0;}
+          if(b.type==='plot'){piece.state='empty';piece.crop=null;piece.growPhases=0;piece.moisture=0;piece._ripple=0;}
+          gs.infra.set(b.key,piece);
+        });
+      }
+      // Host applies a client's tend requests (plant/water/harvest/clean/drink/clear)
+      if(node.treq&&node.treq.b>(gs._treqSeen[uid]||0)){
+        gs._treqSeen[uid]=node.treq.b;
+        (node.treq.list||[]).forEach(r=>hostApplyTend(r));
+      }
     });
+    Object.keys(gs.players).forEach(uid=>{ if(!val[uid])delete gs.players[uid]; });
+  });
+  // Remove own live node when leaving/closing
+  const meRef=liveRef('players/'+me.uid);
+  if(meRef)meRef.onDisconnect().remove();
 }
 
-function subscribeLobbyGameState(){
-  db.collection('survival_lobbies').doc(gs.sessionId).onSnapshot(snap=>{
-    const d=snap.data();
-    if(!d||!gs.isHost)return; // non-hosts sync base HP
-    if(!gs.isHost&&d.baseHp!==undefined) gs.baseHp=d.baseHp;
-    if(!gs.isHost&&d.wave!==undefined) gs.wave=d.wave;
-    // Sync structures from host
-    if(!gs.isHost&&d.structs){
-      gs.structs=d.structs.map(s=>({...s,def:STRUCT_DEFS[s.type],lastShot:0,zombieHits:{}}));
-    }
-    // Listen for incoming coin transfers
-    db.collection('survival_lobbies').doc(gs.sessionId)
-      .collection('coin_transfers').where('to','==',me.uid)
-      .where('ts','>',Date.now()-5000)
-      .onSnapshot(snap2=>{
-        snap2.docChanges().forEach(ch=>{
-          if(ch.type==='added'){
-            me.coins+=ch.doc.data().amount;
-            gToast(`+${ch.doc.data().amount}💰 od spoluhráče!`,'#fbbf24');
-          }
-        });
+function subscribeWorld(){
+  if(gs.isHost)return; // host owns the world
+  const ref=liveRef('world'); if(!ref)return;
+  ref.on('value',snap=>applyWorldSnapshot(snap.val()));
+}
+
+function subscribeCoinTransfers(){
+  // Coin gifts are low-frequency → stay on Firestore.
+  db.collection('survival_lobbies').doc(gs.sessionId)
+    .collection('coin_transfers').where('to','==',me.uid).where('ts','>',Date.now())
+    .onSnapshot(snap=>{
+      snap.docChanges().forEach(ch=>{
+        if(ch.type==='added'){
+          me.coins+=ch.doc.data().amount;
+          gToast(`+${ch.doc.data().amount}💰 od spoluhráče!`,'#fbbf24');
+        }
       });
-  });
+    });
 }
