@@ -18,9 +18,11 @@ async function init(user) {
   // Aktualizuj profil – vygeneruj friendCode pokud ještě nemá
   db.collection('users').doc(user.uid).get().then(snap => {
     const existing = snap.exists ? snap.data().friendCode : null;
-    // Načti uložený Gemini klíč do localStorage
+    // Načti uložené AI klíče do localStorage
     const savedKey = snap.exists ? snap.data().geminiKey : null;
     if (savedKey) localStorage.setItem('sb_gemini_key', savedKey);
+    const savedGroqKey = snap.exists ? snap.data().groqKey : null;
+    if (savedGroqKey) localStorage.setItem('sb_groq_key', savedGroqKey);
     db.collection('users').doc(user.uid).set({
       displayName: user.displayName || user.email,
       email:       (user.email || '').toLowerCase(),
@@ -540,36 +542,45 @@ function setupAddFriend(user) {
 }
 
 // ── Modal helpers ───────────────────────────────────────────────
-// ── Settings (Gemini klíč) ──────────────────────────────────────
+// ── Settings (Gemini + Groq klíče) ───────────────────────────────
 function setupSettings(user) {
-  const btn    = document.getElementById('settingsBtn');
-  const saveBtn = document.getElementById('settingsSave');
-  const input  = document.getElementById('settingsGeminiKey');
-  const status = document.getElementById('geminiKeyStatus');
+  const btn      = document.getElementById('settingsBtn');
+  const saveBtn  = document.getElementById('settingsSave');
+  const gInput   = document.getElementById('settingsGeminiKey');
+  const gStatus  = document.getElementById('geminiKeyStatus');
+  const qInput   = document.getElementById('settingsGroqKey');
+  const qStatus  = document.getElementById('groqKeyStatus');
 
-  const updateStatus = key => {
-    if (key) { status.textContent = '✓ nastaven'; status.style.color = '#4ade80'; }
-    else      { status.textContent = 'nenastaveno'; status.style.color = 'var(--text-muted)'; }
+  const updateStatus = (el, key) => {
+    if (key) { el.textContent = '✓ nastaven'; el.style.color = '#4ade80'; }
+    else      { el.textContent = 'nenastaveno'; el.style.color = 'var(--text-muted)'; }
   };
 
-  // Předvyplň aktuálně uloženým klíčem
+  // Předvyplň aktuálně uloženými klíči
   btn.addEventListener('click', () => {
-    input.value = localStorage.getItem('sb_gemini_key') || '';
-    updateStatus(input.value);
+    gInput.value = localStorage.getItem('sb_gemini_key') || '';
+    qInput.value = localStorage.getItem('sb_groq_key') || '';
+    updateStatus(gStatus, gInput.value);
+    updateStatus(qStatus, qInput.value);
     openModal('settingsModal');
   });
 
-  input.addEventListener('input', () => updateStatus(input.value.trim()));
+  gInput.addEventListener('input', () => updateStatus(gStatus, gInput.value.trim()));
+  qInput.addEventListener('input', () => updateStatus(qStatus, qInput.value.trim()));
 
   saveBtn.addEventListener('click', async () => {
-    const key = input.value.trim();
+    const gKey = gInput.value.trim();
+    const qKey = qInput.value.trim();
     saveBtn.disabled = true;
     try {
-      if (key) localStorage.setItem('sb_gemini_key', key);
-      else     localStorage.removeItem('sb_gemini_key');
-      await db.collection('users').doc(user.uid).update({ geminiKey: key || firebase.firestore.FieldValue.delete() });
+      if (gKey) localStorage.setItem('sb_gemini_key', gKey); else localStorage.removeItem('sb_gemini_key');
+      if (qKey) localStorage.setItem('sb_groq_key', qKey);   else localStorage.removeItem('sb_groq_key');
+      await db.collection('users').doc(user.uid).update({
+        geminiKey: gKey || firebase.firestore.FieldValue.delete(),
+        groqKey:   qKey || firebase.firestore.FieldValue.delete(),
+      });
       closeModal('settingsModal');
-      toast(key ? 'Gemini klíč uložen ✓' : 'Gemini klíč odstraněn');
+      toast('Klíče uloženy ✓');
     } catch(e) { toast('Chyba: ' + e.message); }
     saveBtn.disabled = false;
   });

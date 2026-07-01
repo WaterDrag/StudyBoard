@@ -9,6 +9,8 @@ const BARRIER_HALF=1250;
 const BARRIER={x:CX-BARRIER_HALF,y:CY-BARRIER_HALF,w:BARRIER_HALF*2,h:BARRIER_HALF*2};
 const BASE_R=52,PLAYER_R=16,SPAWN_M=120,FOV_DIST=800;
 const BUILD_DUR=20; // seconds
+// Angle offsets (radians) probed, full symmetric ring, when a zombie's direct path is blocked.
+const ZOMBIE_ESCAPE_OFFSETS=[0.4,-0.4,0.8,-0.8,1.2,-1.2,1.6,-1.6,2.0,-2.0,2.4,-2.4,2.8,-2.8,Math.PI];
 
 /* ── Maps ────────────────────────────────────────────────── */
 const MAPS=[
@@ -86,12 +88,12 @@ const WEAPONS={
   shotgun:{name:'Brokovnice',emoji:'💥',dmg:14,cd:900,range:260,spd:12,melee:false,spread:0.22,pellets:5,col:'#f97316'},
   rifle:  {name:'Puška',     emoji:'🎯',dmg:36,cd:700,range:600,spd:18,melee:false,spread:0.01,col:'#06b6d4'},
   bow:    {name:'Luk',       emoji:'🏹',dmg:30,cd:600,range:500,spd:11,melee:false,spread:0.03,col:'#84cc16',arrow:true},
-  sword:  {name:'Meč',       emoji:'⚔️',dmg:42,cd:480,range:72, spd:0, melee:true, arc:1.2,   col:'#ef4444'},
-  dagger: {name:'Dýka',      emoji:'🗡️',dmg:22,cd:240,range:56, spd:0, melee:true, arc:0.9,   col:'#a855f7'},
-  hammer: {name:'Kladivo',   emoji:'🔨',dmg:58,cd:800,range:82, spd:0, melee:true, arc:1.4,   col:'#64748b'},
-  staff:  {name:'Hůl',       emoji:'🪄',dmg:28,cd:350,range:68, spd:0, melee:true, arc:1.0,   col:'#818cf8'},
-  wrench: {name:'Klíč',      emoji:'🔧',dmg:20,cd:380,range:70, spd:0, melee:true, arc:1.0,   col:'#0ea5e9'},
-  mace:   {name:'Palcát',    emoji:'🏏',dmg:32,cd:580,range:74, spd:0, melee:true, arc:1.1,   col:'#fde68a'},
+  sword:  {name:'Meč',       emoji:'⚔️',dmg:42,cd:480,range:100,spd:0, melee:true, arc:1.2,   col:'#ef4444'},
+  dagger: {name:'Dýka',      emoji:'🗡️',dmg:22,cd:240,range:80, spd:0, melee:true, arc:0.9,   col:'#a855f7'},
+  hammer: {name:'Kladivo',   emoji:'🔨',dmg:58,cd:800,range:112,spd:0, melee:true, arc:1.4,   col:'#64748b'},
+  staff:  {name:'Hůl',       emoji:'🪄',dmg:28,cd:350,range:96, spd:0, melee:true, arc:1.0,   col:'#818cf8'},
+  wrench: {name:'Klíč',      emoji:'🔧',dmg:20,cd:380,range:98, spd:0, melee:true, arc:1.0,   col:'#0ea5e9'},
+  mace:   {name:'Palcát',    emoji:'🏏',dmg:32,cd:580,range:102,spd:0, melee:true, arc:1.1,   col:'#fde68a'},
 };
 
 /* ── Stat defs ───────────────────────────────────────────── */
@@ -651,10 +653,11 @@ auth.onAuthStateChanged(user=>{
   document.getElementById('overExit').onclick=()=>location.href='flashcards.html';
   document.getElementById('shopClose').onclick=()=>closeOv('shopOv');
   document.getElementById('gardenClose').onclick=()=>closeOv('gardenOv');
+  document.getElementById('helpClose').onclick=()=>closeOv('helpOv');
   document.getElementById('stClose').onclick=()=>closeOv('skillTreeOv');
   document.getElementById('respawnBtn').onclick=doRespawn;
   document.getElementById('luConfirm').onclick=confirmLevelUp;
-  document.getElementById('lobbyLeaveBtn').onclick=()=>{location.href='flashcards.html';};
+  document.getElementById('lobbyLeaveBtn').onclick=leaveLobby;
   document.getElementById('lobbyReadyBtn').onclick=setReady;
   document.getElementById('lobbyStartBtn').onclick=hostStartGame;
   setupInput();
@@ -670,7 +673,7 @@ function showScreen(name){
   ['screenKit','screenLobby','screenGame','screenOver'].forEach(id=>{
     document.getElementById(id).classList.toggle('hidden',id!=='screen'+cap(name));
   });
-  ['shopOv','levelUpOv','deathOv','quizOv','gardenOv'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.add('hidden');});
+  ['shopOv','levelUpOv','deathOv','quizOv','gardenOv','helpOv'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.add('hidden');});
 }
 const cap=s=>s[0].toUpperCase()+s.slice(1);
 function openOv(id){document.getElementById(id).classList.remove('hidden');}
@@ -792,8 +795,7 @@ function startSolo(){
   showScreen('game');
   buildBuildBar();
   buildAbilBar();
-  running=true;
-  requestAnimationFrame(loop);
+  startGameLoop();
 }
 
 // Co-op: after choosing kit/points on the kit screen, join the lobby (waiting room)
@@ -826,6 +828,7 @@ function applyKitSelection(){
 
 function initGame(){
   me.x=CX; me.y=CY;
+  _flowGrids=null; _flowNextBuild=0; // force fresh flow fields for this map
   gs.zombies.clear();
   gs.bullets=[];
   gs.structs=[];
@@ -844,6 +847,7 @@ function initGame(){
   gs._builtIds=new Set(); // host: structure ids already created from client requests
   gs._builtInfraKeys=new Set(); // host: infra keys already created from client requests
   gs._treqSeen={};      // host: uid → last processed tend-request batch
+  gs._fxSeen={};        // uid → last replayed FX batch
   gs._structDirty=false;
   me._pendingHits=[];   // client: hits to forward to host
   me._hitBatch=0;       // client: hit-batch counter
@@ -854,6 +858,8 @@ function initGame(){
   me._infraDirty=false;
   me._infraReqs=[];     // client: queued tend requests
   me._infraReqDirty=false;
+  me._fxq=[];           // queued visual FX to broadcast
+  me._fxBatch=0;
   gs.startTime=performance.now();
   // Difficulty multiplier based on player count
   const pCount=Object.keys(gs.players).length+1;
@@ -939,8 +945,10 @@ function setupInput(){
     if(e.code==='KeyT'){toggleSkillTree();}
     if(e.code==='KeyF'){detonateC4();}
     if(e.code==='KeyG'){toggleGarden();}
+    if(e.code==='KeyH'){toggleHelp();}
     if(e.code==='Escape'){
       if(placing.active){placing.active=false;document.getElementById('placInfo').style.display='none';document.querySelectorAll('.bb-btn').forEach(b=>b.classList.remove('active'));}
+      else if(!document.getElementById('helpOv').classList.contains('hidden'))closeOv('helpOv');
       else if(!document.getElementById('quizOv').classList.contains('hidden'))closeOv('quizOv');
       else if(!document.getElementById('skillTreeOv').classList.contains('hidden'))closeOv('skillTreeOv');
       else if(!document.getElementById('gardenOv').classList.contains('hidden'))closeOv('gardenOv');
@@ -985,13 +993,39 @@ function setupInput(){
 // ══════════════════════════════════════════════════════════
 //  MAIN LOOP
 // ══════════════════════════════════════════════════════════
-function loop(ts){
-  if(!running){return;}
-  const dt=Math.min((ts-lastTs)/1000,0.05);
-  lastTs=ts;
+// Simulation runs off a Web Worker timer so it KEEPS RUNNING when the window is
+// in the background (rAF is paused by the browser → would otherwise freeze the
+// host's authoritative sim for everyone). rAF only renders, when visible.
+let _simWorker=null;
+function startGameLoop(){
+  running=true;
+  lastTs=performance.now();
+  if(_simWorker===null){
+    try{
+      const blob=new Blob(["let h;onmessage=function(e){if(e.data){h=setInterval(function(){postMessage(1)},25)}else{clearInterval(h)}}"],{type:'text/javascript'});
+      _simWorker=new Worker(URL.createObjectURL(blob));
+      _simWorker.onmessage=simStep;
+    }catch(e){ _simWorker=false; } // false = unavailable → rAF drives sim instead
+  }
+  if(_simWorker) _simWorker.postMessage(true);
+  requestAnimationFrame(renderLoop);
+}
+function simStep(){
+  if(!running){ if(_simWorker)_simWorker.postMessage(false); return; }
+  const ts=performance.now();
+  let dt=(ts-lastTs)/1000; lastTs=ts;
+  if(dt>0.1)dt=0.1;          // cap big gaps (e.g. throttled background)
   update(dt,ts);
-  draw(ts);
-  requestAnimationFrame(loop);
+}
+function renderLoop(ts){
+  if(!running)return;
+  if(_simWorker){
+    if(!document.hidden) draw(ts);           // worker does sim; rAF just draws
+  } else {
+    let dt=(ts-lastTs)/1000; lastTs=ts; if(dt>0.1)dt=0.1;
+    update(dt,ts); draw(ts);                 // no worker → rAF drives both (legacy)
+  }
+  requestAnimationFrame(renderLoop);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1154,11 +1188,16 @@ function collidesWithAnyWall(entity,r,walls){
   return false;
 }
 
-function zombieMoveSlide(z,vx,vy,walls){
-  z.x+=vx;
-  if(collidesWithAnyWall(z,z.r,walls))z.x-=vx;
-  z.y+=vy;
-  if(collidesWithAnyWall(z,z.r,walls))z.y-=vy;
+// Pure (non-mutating) axis-separated slide: a wall blocking one axis still lets
+// the mover slide along the other. Returns the resulting [x,y] — the caller
+// decides whether/how to apply it, so probing candidate directions never
+// leaves a zombie in a half-moved intermediate state.
+function trialSlide(x,y,r,vx,vy,walls){
+  let nx=x+vx;
+  if(collidesWithAnyWall({x:nx,y},r,walls))nx=x;
+  let ny=y+vy;
+  if(collidesWithAnyWall({x:nx,y:ny},r,walls))ny=y;
+  return [nx,ny];
 }
 
 function wallCollide(entity,r){
@@ -1188,6 +1227,115 @@ function getBulletWalls(){
 function getFovWalls(){
   const map=MAPS[gs.mapId];
   return [...map.walls,...gs.structs.filter(s=>s.hp>0&&STRUCT_DEFS[s.type].blocks)];
+}
+
+/* ── Zombie pathfinding: flow field toward the base ──────────
+   Reactive per-frame steering (trialSlide + probe) can't reliably solve a
+   multi-phase detour — e.g. an L-shaped wall junction where escaping requires
+   moving briefly AWAY from the goal before it opens up. A cheap grid BFS from
+   the base gives every zombie a direction that's guaranteed to make progress
+   through the actual map layout. Recomputed periodically (not per-frame —
+   ~6000 cells is trivial, but still no reason to do it 60×/s), so it also
+   picks up player-built walls within about a second.
+
+   To avoid the whole horde marching single-file down the one mathematically
+   shortest route, we build a few VARIANT fields per cycle — each with a
+   couple of randomly placed "no-go" blobs overlaid on top of the real walls,
+   which forces that variant's BFS to route around them differently. Each
+   zombie is permanently assigned one variant at spawn, so some genuinely
+   take the left corridor and others the right — not just a heading wobble on
+   the same path. Safety is unaffected: a variant's blobs can only ever make
+   a route LONGER or (rarely) unreachable for that variant, never wrong, and
+   an unreachable pocket already falls back cleanly to straight-line +
+   reactive steering + the hard stuck-watchdog, same as before this existed. */
+const FLOW_CELL=40, FLOW_PROBE_R=18, FLOW_MARGIN=300, FLOW_REBUILD_MS=1000, FLOW_VARIANTS=3;
+let _flowGrids=null,_flowNextBuild=0;
+function buildFlowGrids(){
+  const ox=BARRIER.x-FLOW_MARGIN, oy=BARRIER.y-FLOW_MARGIN;
+  const cols=Math.ceil((BARRIER.w+FLOW_MARGIN*2)/FLOW_CELL), rows=Math.ceil((BARRIER.h+FLOW_MARGIN*2)/FLOW_CELL);
+  const walls=getAllWalls();
+  const n=cols*rows;
+  const baseBlocked=new Uint8Array(n);
+  for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+    const cx=ox+gx*FLOW_CELL+FLOW_CELL/2, cy=oy+gy*FLOW_CELL+FLOW_CELL/2;
+    if(collidesWithAnyWall({x:cx,y:cy},FLOW_PROBE_R,walls))baseBlocked[gy*cols+gx]=1;
+  }
+  const gcx=Math.max(0,Math.min(cols-1,Math.floor((CX-ox)/FLOW_CELL)));
+  const gcy=Math.max(0,Math.min(rows-1,Math.floor((CY-oy)/FLOW_CELL)));
+  const startIdx=gcy*cols+gcx;
+
+  // Blob centers are sampled near where zombies actually ARE (not uniformly
+  // over the whole, mostly-empty map) — otherwise the odds of a blob landing
+  // in the one corridor the current crowd is funneling through are tiny, and
+  // all variants end up identical exactly where it matters (e.g. right at a
+  // spawn edge), which is what caused the "5 in a row" report.
+  const liveZ=[...gs.zombies.values()];
+  _flowGrids=[];
+  for(let v=0;v<FLOW_VARIANTS;v++){
+    const blocked=baseBlocked.slice();
+    if(v>0){
+      const blobs=3+Math.floor(Math.random()*3); // 3–5 detour zones per variant
+      for(let b=0;b<blobs;b++){
+        let bcx,bcy;
+        if(liveZ.length){
+          const pick=liveZ[Math.floor(Math.random()*liveZ.length)];
+          bcx=Math.floor((pick.x-ox)/FLOW_CELL)+Math.floor((Math.random()-0.5)*8);
+          bcy=Math.floor((pick.y-oy)/FLOW_CELL)+Math.floor((Math.random()-0.5)*8);
+        } else {
+          bcx=Math.floor(Math.random()*cols); bcy=Math.floor(Math.random()*rows);
+        }
+        const rad=2+Math.floor(Math.random()*3); // 2–4 cell radius
+        for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){
+          if(dx*dx+dy*dy>rad*rad)continue;
+          const gx=bcx+dx,gy=bcy+dy;
+          if(gx<0||gy<0||gx>=cols||gy>=rows)continue;
+          const idx=gy*cols+gx;
+          if(idx!==startIdx)blocked[idx]=1; // never seal off the base's own cell
+        }
+      }
+    }
+    const dist=new Float32Array(n).fill(Infinity);
+    if(!blocked[startIdx]){
+      dist[startIdx]=0;
+      const q=[startIdx]; let qi=0;
+      while(qi<q.length){
+        const idx=q[qi++],d=dist[idx];
+        const gx=idx%cols,gy=(idx-gx)/cols;
+        const nb=[[gx+1,gy],[gx-1,gy],[gx,gy+1],[gx,gy-1]];
+        for(const[nx,ny]of nb){
+          if(nx<0||ny<0||nx>=cols||ny>=rows)continue;
+          const nidx=ny*cols+nx;
+          if(blocked[nidx]||dist[nidx]!==Infinity)continue;
+          dist[nidx]=d+1; q.push(nidx);
+        }
+      }
+    }
+    _flowGrids.push({ox,oy,cols,rows,dist});
+  }
+}
+// Returns a unit [dx,dy] toward the base along the BFS gradient for this
+// zombie's assigned route variant, or null if unavailable (isolated pocket —
+// caller falls back to a straight line, which reactive steering then tries).
+function flowDirectionToBase(x,y,ts,variant){
+  if(!_flowGrids||ts>=_flowNextBuild){buildFlowGrids();_flowNextBuild=ts+FLOW_REBUILD_MS;}
+  const g=_flowGrids[variant]||_flowGrids[0];
+  const gx=Math.floor((x-g.ox)/FLOW_CELL),gy=Math.floor((y-g.oy)/FLOW_CELL);
+  if(gx<0||gy<0||gx>=g.cols||gy>=g.rows)return null;
+  const idx=gy*g.cols+gx;
+  const d0=g.dist[idx];
+  if(d0===Infinity)return null;
+  let bestD=d0,bestGx=null,bestGy=null;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    if(!dx&&!dy)continue;
+    const nx=gx+dx,ny=gy+dy;
+    if(nx<0||ny<0||nx>=g.cols||ny>=g.rows)continue;
+    const nd=g.dist[ny*g.cols+nx];
+    if(nd<bestD){bestD=nd;bestGx=nx;bestGy=ny;}
+  }
+  if(bestGx===null)return null; // already essentially at the goal cell
+  const tx=g.ox+bestGx*FLOW_CELL+FLOW_CELL/2, ty=g.oy+bestGy*FLOW_CELL+FLOW_CELL/2;
+  const ang=Math.atan2(ty-y,tx-x);
+  return [Math.cos(ang),Math.sin(ang)];
 }
 
 /* ── Shooting ────────────────────────────────────────────── */
@@ -1298,13 +1446,36 @@ function doMelee(p){
   if(p.weapon==='wrench') repairNearby(p,w.range,hasSkill('eng_b1')?80:20);
 }
 
+// Liang-Barsky segment-vs-AABB clip test — true if the segment crosses the rect.
+function segmentHitsRect(x1,y1,x2,y2,rx,ry,rw,rh){
+  let t0=0,t1=1;
+  const dx=x2-x1,dy=y2-y1;
+  const p=[-dx,dx,-dy,dy];
+  const q=[x1-rx,(rx+rw)-x1,y1-ry,(ry+rh)-y1];
+  for(let i=0;i<4;i++){
+    if(p[i]===0){ if(q[i]<0)return false; }
+    else{
+      const r=q[i]/p[i];
+      if(p[i]<0){ if(r>t1)return false; if(r>t0)t0=r; }
+      else { if(r<t0)return false; if(r<t1)t1=r; }
+    }
+  }
+  return true;
+}
+function meleeBlocked(x1,y1,x2,y2,walls){
+  for(const w of walls){ if(segmentHitsRect(x1,y1,x2,y2,w.x,w.y,w.w,w.h))return true; }
+  return false;
+}
 function meleeHit(x,y,ang,range,arc,dmg,owner){
   const isMe=owner.uid===me.uid;
+  const walls=getBulletWalls(); // a weapon's swing can't reach through a solid wall
   gs.zombies.forEach((z,id)=>{
     const a=Math.atan2(z.y-y,z.x-x);
     const diff=Math.abs(normalizeAngle(a-ang));
     const dist=Math.hypot(z.x-x,z.y-y);
-    if(diff<arc/2&&dist<range){
+    // Reach counts to the zombie's near edge, not its center (consistent with
+    // every other hit check in this file — bullets/base/structs add z.r too).
+    if(diff<arc/2&&dist<range+z.r&&!meleeBlocked(x,y,z.x,z.y,walls)){
       // Warrior passive: Bojový rytmus — every 5th melee hit = ×2 dmg
       let finalDmg=dmg;
       if(isMe&&owner.kit==='warrior'){
@@ -1532,7 +1703,9 @@ function spawnZombie(type){
     spd:def.spd*spdMult,
     lastHitPlayer:0,lastHitBase:0,lastHitStruct:{},
     suppressed:0,
-    nudgeAng:0,nudgeEnd:0,
+    nudgeOff:0,nudgeEnd:0,_flowAng:0,_flowNext:0,_pTs:0,_pX:0,_pY:0,
+    _wobble:(Math.random()-0.5)*0.6, // ~±17° personal heading bias — keeps the horde from marching in one identical line
+    _variant:Math.floor(Math.random()*FLOW_VARIANTS), // which route-diversity flow field this zombie follows
   });
 }
 
@@ -1541,7 +1714,6 @@ function updateZombies(dt,ts){
   const _frameWalls=getAllWalls();
   const zombiesToKill=[];
   gs.zombies.forEach((z,id)=>{
-    if(z.suppressed>ts){z.spd*=0.3;}
     // Poison/burn tick
     if(z.poison&&ts<z.poison.end){
       if(!z.poison.tick||ts-z.poison.tick>1000){
@@ -1577,24 +1749,75 @@ function updateZombies(dt,ts){
       }
     }
 
-    const ang=Math.atan2(ty-z.y,tx-z.x);
-    // Use side nudge if stuck
-    let moveAng=ang;
-    if(z.nudgeEnd&&ts<z.nudgeEnd)moveAng=z.nudgeAng;
+    // Zombies heading for the base (the common case — most aren't currently
+    // chasing a nearby player) follow the flow field so they actually route
+    // through the map instead of just reacting to whichever wall is in front
+    // of them right now. Player-chasing/brute-vs-structure targets are close
+    // by nature of their small aggro range, so straight-line + reactive
+    // steering is enough there.
+    // The flow HEADING is resampled slowly (not every frame): right at a tight
+    // corner, tiny position deltas can flip which neighbor cell looks best,
+    // which otherwise makes the zombie's own goal angle oscillate every frame
+    // — physically it never gets blocked, it's just fighting itself.
+    let ang;
+    if(tx===CX&&ty===CY){
+      if(!z._flowNext||ts>=z._flowNext){
+        const dir=flowDirectionToBase(z.x,z.y,ts,z._variant);
+        z._flowAng=dir?Math.atan2(dir[1],dir[0]):Math.atan2(ty-z.y,tx-z.x);
+        z._flowNext=ts+250;
+      }
+      ang=z._flowAng+z._wobble; // personal bias so the horde doesn't all walk the identical line
+    } else {
+      z._flowNext=0; // not currently flow-following — resample fresh next time it is
+      ang=Math.atan2(ty-z.y,tx-z.x);
+    }
     // Speed modifiers from skills
     let spdMult=1;
+    if(z.suppressed&&ts<z.suppressed)spdMult*=0.3; // temporary — does NOT permanently alter z.spd
     if(z.taunted&&ts<z.taunted.end)spdMult*=z.taunted.spd;
     if(z.poison&&ts<z.poison.end&&hasSkill('rog_b3'))spdMult*=0.8;
     if(z._fearSlow)spdMult*=z._fearSlow;
     if(z.stunEnd&&ts<z.stunEnd)spdMult=0;
-    const vx=Math.cos(moveAng)*z.spd*spdMult*60*dt;
-    const vy=Math.sin(moveAng)*z.spd*spdMult*60*dt;
-    const ox=z.x,oy=z.y;
-    zombieMoveSlide(z,vx,vy,_frameWalls);
-    // If barely moved and not already nudging, pick a random side direction
-    if((!z.nudgeEnd||ts>z.nudgeEnd)&&Math.hypot(z.x-ox,z.y-oy)<0.8){
-      z.nudgeAng=ang+(Math.random()>0.5?1:-1)*(0.6+Math.random()*1.5);
-      z.nudgeEnd=ts+400+Math.random()*400;
+    const speed=z.spd*spdMult*60*dt;
+    if(speed>0){
+      const ox=z.x,oy=z.y;
+      const moveThresh=Math.max(0.6,speed*0.15);
+      // Keep steering with a remembered offset from the goal angle for a moment
+      // (avoids flip-flopping between two blocked directions frame-to-frame),
+      // but re-derive it from the CURRENT goal angle so it still tracks the target.
+      const useNudge=z.nudgeEnd&&ts<z.nudgeEnd;
+      const moveAng=useNudge?ang+z.nudgeOff:ang;
+      let [nx,ny]=trialSlide(ox,oy,z.r,Math.cos(moveAng)*speed,Math.sin(moveAng)*speed,_frameWalls);
+      if(Math.hypot(nx-ox,ny-oy)<moveThresh){
+        // Blocked: probe a full ring of directions and commit to whichever one
+        // actually moves the farthest — this "hugs" the obstacle's edge instead
+        // of bouncing between two directions that both re-enter the same wall,
+        // which is what left zombies stuck dead at concave (L-shaped) corners.
+        let bestDist=Math.hypot(nx-ox,ny-oy),bestOff=null,bestX=nx,bestY=ny;
+        for(const off of ZOMBIE_ESCAPE_OFFSETS){
+          const a=ang+off;
+          const [tx2,ty2]=trialSlide(ox,oy,z.r,Math.cos(a)*speed,Math.sin(a)*speed,_frameWalls);
+          const d=Math.hypot(tx2-ox,ty2-oy);
+          if(d>bestDist){bestDist=d;bestOff=off;bestX=tx2;bestY=ty2;}
+        }
+        nx=bestX; ny=bestY;
+        // Commit longer than one nudge cycle so there's time to actually clear
+        // the corner before re-aiming straight at the goal (which would just
+        // walk it back into the same wall).
+        z.nudgeOff=bestOff!==null?bestOff:0;
+        z.nudgeEnd=bestDist>moveThresh?ts+900:0;
+      }
+      z.x=nx; z.y=ny;
+      // Hard failsafe: whatever the specific cause (a geometry the steering
+      // logic doesn't handle, a flow field gap, a stalled network snapshot),
+      // a zombie must never stay frozen indefinitely. If it hasn't covered at
+      // least one body-width in 2s, force a small step straight at its target,
+      // ignoring collision once, and reset the tracker.
+      if(!z._pTs||Math.hypot(z.x-z._pX,z.y-z._pY)>z.r){z._pTs=ts;z._pX=z.x;z._pY=z.y;}
+      else if(ts-z._pTs>2000){
+        z.x+=Math.cos(ang)*z.r*1.5; z.y+=Math.sin(ang)*z.r*1.5;
+        z._pTs=ts; z._pX=z.x; z._pY=z.y;
+      }
     }
 
     // Keep within extended bounds
@@ -1647,6 +1870,30 @@ function updateZombies(dt,ts){
     }
   });
   zombiesToKill.forEach(([zid,zz])=>{if(gs.zombies.has(zid))killZombie(zid,zz,me);});
+  applyZombieSeparation();
+}
+
+// Zombies never collided with each other, so once they all follow the same
+// flow-field route they stack into a single overlapping line — trivial to
+// funnel and predictable. A gentle push-apart when overlapping spreads them
+// into a loose crowd instead, without touching the pathfinding itself.
+function applyZombieSeparation(){
+  const arr=[...gs.zombies.values()];
+  for(let i=0;i<arr.length;i++){
+    const a=arr[i];
+    for(let j=i+1;j<arr.length;j++){
+      const b=arr[j];
+      const dx=b.x-a.x,dy=b.y-a.y;
+      const dist=Math.hypot(dx,dy);
+      const minDist=(a.r+b.r)*0.85; // allow a little overlap — a loose crowd, not a rigid grid
+      if(dist>=minDist)continue;
+      let ang,push;
+      if(dist>0.01){ ang=Math.atan2(dy,dx); push=(minDist-dist)/2; }
+      else { ang=((a.id.charCodeAt(0)||0)+(b.id.charCodeAt(0)||0))%628/100; push=1; } // exact overlap: deterministic nudge
+      const px=Math.cos(ang)*push,py=Math.sin(ang)*push;
+      a.x-=px; a.y-=py; b.x+=px; b.y+=py;
+    }
+  }
 }
 
 function checkBaseHit(){
@@ -2113,18 +2360,32 @@ function updateFloats(dt){
 }
 
 /* ── Visual FX (shockwaves, swing arcs, dash trails) ─────── */
+// Broadcast FX so co-op players see each other's animations (capped per tick).
+let _fxReplaying=false;
+function fxQueue(o){ if(gs.sessionId&&!_fxReplaying){ if(!me._fxq)me._fxq=[]; if(me._fxq.length<12)me._fxq.push(o); } }
 function spawnRing(x,y,rEnd,col,opts={}){
   if(!gs.fx)gs.fx=[];
   gs.fx.push({type:'ring',x,y,r0:opts.r0||0,rEnd,t:0,
     dur:opts.dur||0.5,col,lineW:opts.lineW||4,fill:opts.fill||false});
+  fxQueue({f:'r',x:Math.round(x),y:Math.round(y),e:Math.round(rEnd),c:col,d:opts.dur||0.5,w:opts.lineW||4,l:opts.fill?1:0,r0:opts.r0||0});
 }
 function spawnSwing(x,y,ang,range,arc,col){
   if(!gs.fx)gs.fx=[];
   gs.fx.push({type:'swing',x,y,ang,range,arc:arc||1.0,col:col||'#fff',t:0,dur:0.16});
+  fxQueue({f:'s',x:Math.round(x),y:Math.round(y),a:+(ang||0).toFixed(2),rg:range,ar:arc||1.0,c:col||'#fff'});
 }
 function spawnTrail(x,y,col){
   if(!gs.fx)gs.fx=[];
   gs.fx.push({type:'dot',x,y,r:PLAYER_R*0.9,col:col||'#84cc16',t:0,dur:0.3});
+  fxQueue({f:'t',x:Math.round(x),y:Math.round(y),c:col||'#84cc16'});
+}
+// Replay a peer's FX event locally (without re-broadcasting)
+function replayFx(o){
+  _fxReplaying=true;
+  if(o.f==='r')spawnRing(o.x,o.y,o.e,o.c,{dur:o.d,lineW:o.w,fill:!!o.l,r0:o.r0||0});
+  else if(o.f==='s')spawnSwing(o.x,o.y,o.a,o.rg,o.ar,o.c);
+  else if(o.f==='t')spawnTrail(o.x,o.y,o.c);
+  _fxReplaying=false;
 }
 function updateFx(dt){
   if(!gs.fx)return;
@@ -2477,6 +2738,11 @@ function toggleGarden(){
   }
   buildGarden();
   openOv('gardenOv');
+}
+
+function toggleHelp(){
+  const ov=document.getElementById('helpOv');
+  if(ov.classList.contains('hidden'))openOv('helpOv'); else closeOv('helpOv');
 }
 
 /* ── Garden: timed tending tasks ─────────────────────────── */
@@ -2853,9 +3119,9 @@ function drawSummons(){
 /* ── HUD ─────────────────────────────────────────────────── */
 function updateHUD(){
   document.getElementById('playerHpFill').style.width=(me.hp/me.maxHp*100)+'%';
-  document.getElementById('playerHpVal').textContent=me.hp+'/'+me.maxHp;
+  document.getElementById('playerHpVal').textContent=Math.ceil(me.hp)+'/'+me.maxHp;
   document.getElementById('baseHpFill').style.width=(gs.baseHp/gs.baseMaxHp*100)+'%';
-  document.getElementById('baseHpVal').textContent=gs.baseHp+'/'+gs.baseMaxHp;
+  document.getElementById('baseHpVal').textContent=Math.ceil(gs.baseHp)+'/'+gs.baseMaxHp;
   document.getElementById('xpFill').style.width=(me.xp/me.xpNext*100)+'%';
   document.getElementById('xpVal').textContent=me.xp+'/'+me.xpNext;
   document.getElementById('coinsVal').textContent=me.coins;
@@ -2885,7 +3151,7 @@ function updateHUD(){
   if(others.length){
     pl.style.display='block';
     pl.innerHTML=`<div style="font-size:.7rem;color:#666;margin-bottom:4px;">Hráči</div>`+
-      `<div class="pl-row"><span>${KITS[me.kit].emoji} ${me.name}</span><span class="pl-hp">${me.hp}/${me.maxHp}</span></div>`+
+      `<div class="pl-row"><span>${KITS[me.kit].emoji} ${me.name}</span><span class="pl-hp">${Math.ceil(me.hp)}/${me.maxHp}</span></div>`+
       others.map(p=>`<div class="pl-row"><span>${KITS[p.kit]?.emoji||'?'} ${p.name}</span><span class="pl-hp">${Math.round(p.hp||0)}</span></div>`).join('');
   } else pl.style.display='none';
 }
@@ -3504,6 +3770,11 @@ function syncPlayerState(){
     payload.hits=me._pendingHits; payload.hb=me._hitBatch;
     me._pendingHits=[];
   } else { payload.hb=me._hitBatch; }
+  // Broadcast my visual FX so others see my animations
+  if(me._fxq&&me._fxq.length){
+    me._fxBatch=(me._fxBatch||0)+1;
+    payload.fx=me._fxq; payload.fxb=me._fxBatch; me._fxq=[];
+  } else { payload.fxb=me._fxBatch||0; }
   sref.set(payload).catch(()=>{});
   if(isAuthority())return;
   // Forward my placed structures to the host (declarative pending set)
@@ -3589,7 +3860,7 @@ function applyZombieSnapshot(arr){
     if(!z){
       const def=ZTYPES[o.t]||ZTYPES.normal;
       z={id:o.i,type:o.t,def,x:o.x,y:o.y,r:def.r,hp:o.h,maxHp:o.m||def.hp,tx:o.x,ty:o.y,spd:def.spd,remote:true,
-         lastHitPlayer:0,lastHitBase:0,lastHitStruct:{},suppressed:0,nudgeAng:0,nudgeEnd:0};
+         lastHitPlayer:0,lastHitBase:0,lastHitStruct:{},suppressed:0,nudgeOff:0,nudgeEnd:0};
       gs.zombies.set(o.i,z);
     } else {
       z.tx=o.x; z.ty=o.y;
@@ -3677,6 +3948,23 @@ function sendCoins(targetPlayer,amount){
 // ══════════════════════════════════════════════════════════
 //  LOBBY
 // ══════════════════════════════════════════════════════════
+// Leaving the waiting room must actually clean up — previously it just
+// navigated away, leaving the Firestore lobby doc (and this player's entry
+// in it) behind forever. Abandoned "waiting" lobbies piled up on the
+// Flashcards page indefinitely since nothing ever removed them.
+async function leaveLobby(){
+  if(gs.unsubLobby){gs.unsubLobby();gs.unsubLobby=null;}
+  const lobbyId=gs.sessionId;
+  try{
+    if(lobbyId){
+      const ref=db.collection('survival_lobbies').doc(lobbyId);
+      if(gs.isHost) await ref.delete(); // without a host the lobby can't start — remove it entirely
+      else await ref.update({[`players.${me.uid}`]:firebase.firestore.FieldValue.delete()});
+    }
+  }catch(e){ console.warn('[leaveLobby]',e); } // best-effort — always let the player leave
+  location.href='flashcards.html';
+}
+
 async function joinLobby(lobbyId){
   try{
     const ref=db.collection('survival_lobbies').doc(lobbyId);
@@ -3686,6 +3974,7 @@ async function joinLobby(lobbyId){
 
     // Check if host
     gs.isHost=(data.hostId===me.uid);
+    gs.hostUid=data.hostId;
     if(gs.isHost) document.getElementById('lobbyStartBtn').style.display='block';
     document.getElementById('lobbyCode').textContent=lobbyId.slice(0,6).toUpperCase();
     document.getElementById('kitLbl').textContent=(KITS[kitSel.kit]?.emoji||'')+' '+(KITS[kitSel.kit]?.name||'');
@@ -3713,7 +4002,7 @@ async function joinLobby(lobbyId){
         subscribeCoinTransfers();
         showScreen('game');
         buildBuildBar(); buildAbilBar();
-        running=true; requestAnimationFrame(loop);
+        startGameLoop();
       }
     });
   } catch(e){
@@ -3763,6 +4052,11 @@ function subscribePlayerStates(){
       let p=gs.players[uid];
       if(!p){p={uid,x:d.x,y:d.y};gs.players[uid]=p;}
       Object.assign(p,d,{uid,tx:d.x,ty:d.y});
+      // Replay this peer's visual FX so everyone sees their animations
+      if(d.fx&&d.fxb&&d.fxb>(gs._fxSeen[uid]||0)){
+        gs._fxSeen[uid]=d.fxb;
+        d.fx.forEach(replayFx);
+      }
       // Host applies forwarded hits authoritatively
       if(gs.isHost&&d.hits&&d.hb&&d.hb>(gs._hitSeen[uid]||0)){
         gs._hitSeen[uid]=d.hb;
@@ -3798,10 +4092,32 @@ function subscribePlayerStates(){
       }
     });
     Object.keys(gs.players).forEach(uid=>{ if(!val[uid])delete gs.players[uid]; });
+    checkHostMigration(val);
   });
   // Remove own live node when leaving/closing
   const meRef=liveRef('players/'+me.uid);
   if(meRef)meRef.onDisconnect().remove();
+}
+
+// If the host disappears, the remaining player with the smallest uid takes over.
+function checkHostMigration(val){
+  if(gs.isHost||!gs.sessionId)return;
+  if(gs.hostUid&&val[gs.hostUid])return;        // host still present
+  // Host is gone — elect deterministically (smallest uid among present + me)
+  const present=Object.keys(val); if(!present.includes(me.uid))present.push(me.uid);
+  present.sort();
+  if(present[0]===me.uid) becomeHost();
+  else gs.hostUid=present[0];                    // follow the newly-elected host
+}
+function becomeHost(){
+  if(gs.isHost)return;
+  gs.isHost=true; gs.hostUid=me.uid;
+  // fresh authority bookkeeping (structs/infra already mirrored from snapshots)
+  gs._rewards={}; gs._hitSeen={}; gs._treqSeen={};
+  gs._builtIds=new Set(); gs._builtInfraKeys=new Set();
+  gToast('👑 Hostitel odešel — přebíráš řízení hry','#fbbf24');
+  // best-effort: record new host in the lobby for late joiners
+  if(gs.sessionId)db.collection('survival_lobbies').doc(gs.sessionId).update({hostId:me.uid}).catch(()=>{});
 }
 
 function subscribeWorld(){

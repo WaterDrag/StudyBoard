@@ -34,6 +34,9 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         Flash Cards
       </a>
+      <button id="aiCardsBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Vygenerovat flash cards ze zápisků pomocí AI">
+        🤖 AI karty
+      </button>
       <button id="connectBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Propojit poznámky">
         🔗 Propojit
       </button>
@@ -186,6 +189,36 @@
     </div>
   </div>
 
+  <!-- MODAL: AI Flash Cards ze zápisků -->
+  <div class="modal-overlay" id="aiCardsModal">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>🤖 AI Flash Cards ze zápisků</h3>
+        <button class="modal-close" data-close="aiCardsModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Poznámky k použití</label>
+        <div id="aiNotesList" class="ai-notes-list"></div>
+      </div>
+      <div style="display:flex;gap:14px;">
+        <div class="form-group" style="flex:1;">
+          <label class="label">Počet kartiček</label>
+          <input type="number" id="aiCardCount" class="input" value="8" min="2" max="20">
+        </div>
+        <div class="form-group" style="flex:2;">
+          <label class="label">Název nového balíčku</label>
+          <input type="text" id="aiDeckName" class="input" placeholder="AI karty ze zápisků" maxlength="60">
+        </div>
+      </div>
+      <div id="aiCardsPreview"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="aiCardsModal">Zrušit</button>
+        <button id="aiGenerateBtn" class="btn btn-primary">✨ Vygenerovat</button>
+        <button id="aiSaveBtn" class="btn btn-primary" style="display:none;">💾 Uložit vybrané</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Sdílet -->
   <div class="modal-overlay" id="shareModal">
     <div class="modal">
@@ -246,6 +279,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="js/config.js"></script>
+  <script>document.write('<script src="js/ai.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>(function(){var s=document.createElement('script');s.src='js/room.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>
 </html>

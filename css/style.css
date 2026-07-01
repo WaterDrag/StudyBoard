@@ -476,8 +476,9 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 
 /* ===== ROOM NAV ===== */
 .room-nav {
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--border);
+  background: rgba(30,41,59,0.82);
+  backdrop-filter: blur(10px) saturate(1.3);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.25);
   padding: 0 16px;
   height: 58px;
   display: flex;
@@ -486,6 +487,14 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 100;
+}
+.room-nav::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), #a855f7, #ec4899, var(--accent));
+  opacity: 0.7;
 }
 
 .room-title {
@@ -506,35 +515,48 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   overflow: auto;
   cursor: default;
 }
+.board-wrap.panning { cursor: grabbing; }
 
 .board {
   position: relative;
   width: 3200px;
   height: 2200px;
-  background-color: #0c1322;
+  background-color: #0b1120;
   background-image:
-    linear-gradient(rgba(99,102,241,0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(99,102,241,0.06) 1px, transparent 1px);
-  background-size: 28px 28px;
+    radial-gradient(ellipse 1400px 900px at 50% 38%, rgba(99,102,241,0.07), transparent 70%),
+    linear-gradient(rgba(148,163,255,0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,255,0.055) 1px, transparent 1px),
+    linear-gradient(rgba(148,163,255,0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,255,0.09) 1px, transparent 1px);
+  background-size: 100% 100%, 28px 28px, 28px 28px, 140px 140px, 140px 140px;
 }
 
 /* ===== STICKY NOTE ===== */
 .note {
   position: absolute;
   width: 220px;
-  border-radius: 10px;
-  padding: 13px 13px 10px;
-  box-shadow: 0 3px 14px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.2);
+  border-radius: 4px 4px 12px 12px;
+  padding: 17px 14px 10px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.45), 0 2px 5px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
   cursor: grab;
   user-select: none;
-  transition: box-shadow 0.15s, transform 0.1s;
+  transition: box-shadow 0.2s, transform 0.18s;
   z-index: 1;
 }
+.note::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 5px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0.18), rgba(255,255,255,0.35), rgba(0,0,0,0.18));
+}
+.note:hover { transform: translateY(-4px) scale(1.015); box-shadow: 0 16px 36px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.35); }
 .note:active { cursor: grabbing; }
 .note.dragging {
   z-index: 100;
-  box-shadow: 0 14px 40px rgba(0,0,0,0.45);
-  transform: rotate(0.8deg) scale(1.02);
+  box-shadow: 0 16px 44px rgba(0,0,0,0.5);
+  transform: rotate(0.8deg) scale(1.03);
 }
 
 .note-header {
@@ -596,9 +618,9 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   position: fixed;
   bottom: 26px;
   right: 26px;
-  width: 54px;
-  height: 54px;
-  background: var(--accent);
+  width: 58px;
+  height: 58px;
+  background: linear-gradient(135deg, #818cf8, var(--accent) 55%, #7c3aed);
   color: #fff;
   border: none;
   border-radius: 50%;
@@ -607,11 +629,45 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(99,102,241,0.5);
-  transition: var(--transition);
+  box-shadow: 0 4px 22px rgba(99,102,241,0.6), 0 0 0 0 rgba(129,140,248,0.5);
+  transition: transform 0.2s, box-shadow 0.2s;
   z-index: 200;
+  animation: fab-pulse 2.6s ease-in-out infinite;
 }
-.fab:hover { background: var(--accent-dark); transform: scale(1.07); }
+.fab:hover { transform: scale(1.1) rotate(90deg); box-shadow: 0 8px 30px rgba(99,102,241,0.75); animation-play-state: paused; }
+@keyframes fab-pulse {
+  0%, 100% { box-shadow: 0 4px 22px rgba(99,102,241,0.6), 0 0 0 0 rgba(129,140,248,0.45); }
+  50%      { box-shadow: 0 4px 22px rgba(99,102,241,0.6), 0 0 0 9px rgba(129,140,248,0); }
+}
+
+/* ===== AI FLASH CARDS (room) ===== */
+.ai-notes-list {
+  max-height: 190px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: var(--bg-3);
+}
+.ai-note-row, .ai-card-row {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 7px 4px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.ai-note-row:last-child { border-bottom: none; }
+.ai-note-row input, .ai-card-row input { margin-top: 3px; accent-color: var(--accent); flex-shrink: 0; }
+.ai-cards-preview-list { max-height: 280px; overflow-y: auto; margin-top: 6px; }
+.ai-card-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-3);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
 
 /* ===== SIDE PANEL ===== */
 .panel-backdrop {

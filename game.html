@@ -85,6 +85,15 @@ canvas{display:block;cursor:crosshair;}
 .deck-chip-room{font-size:.6rem;color:var(--muted);font-weight:500;margin-top:1px;}
 .deck-chip-n{font-size:.68rem;color:var(--muted);background:var(--bg0);border-radius:5px;padding:1px 6px;}
 
+/* ── Help overlay ────────────────────── */
+.help-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.help-col h3{font-size:.86rem;font-weight:700;color:var(--acc2);margin-bottom:6px;}
+.help-row{display:flex;gap:8px;align-items:baseline;font-size:.76rem;color:var(--tx);padding:2px 0;line-height:1.35;}
+.help-k{flex-shrink:0;min-width:78px;font-size:.66rem;font-weight:700;color:var(--gold);background:var(--bg0);border:1px solid var(--brd);border-radius:5px;padding:1px 6px;text-align:center;}
+.help-p{font-size:.74rem;color:var(--muted);line-height:1.5;margin:5px 0;}
+.help-p b{color:var(--tx);}
+@media(max-width:680px){.help-grid{grid-template-columns:1fr;}}
+
 /* ── Garden overlay ──────────────────── */
 .grd-buy{text-align:center;padding:18px 10px;}
 .grd-act{cursor:pointer;}
@@ -426,7 +435,7 @@ canvas{display:block;cursor:crosshair;}
   <div id="passiveHint"></div>
   <div id="placInfo"></div>
   <div id="gToasts"></div>
-  <div id="hotkeysHint">B = Obchod · T = Dovednosti · G = Zahrada · 6-9 = Infrastruktura<br>R = Otočit · Esc = Zrušit</div>
+  <div id="hotkeysHint">B = Obchod · T = Dovednosti · G = Zahrada · 6-9 = Infrastruktura<br>H = Nápověda · R = Otočit · Esc = Zrušit</div>
 </div>
 
 <!-- ═══════════ OVERLAY: Shop ═══════════ -->
@@ -452,6 +461,54 @@ canvas{display:block;cursor:crosshair;}
       <button class="btn-s" id="gardenClose" style="padding:3px 12px;">✕</button>
     </div>
     <div id="gardenBody"></div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Help / Legend ═══════════ -->
+<div class="ov hidden" id="helpOv">
+  <div class="panel" style="width:760px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+    <div class="ov-head">
+      <h2>❓ Nápověda</h2>
+      <button class="btn-s" id="helpClose" style="padding:3px 12px;">✕</button>
+    </div>
+    <div class="help-grid">
+      <div class="help-col">
+        <h3>🎮 Ovládání</h3>
+        <div class="help-row"><span class="help-k">WASD / šipky</span> Pohyb</div>
+        <div class="help-row"><span class="help-k">Myš</span> Míření</div>
+        <div class="help-row"><span class="help-k">Levý klik</span> Útok / položit stavbu</div>
+        <div class="help-row"><span class="help-k">Q E R</span> Schopnosti kitu (R = ultimátka)</div>
+        <div class="help-row"><span class="help-k">B</span> Obchod</div>
+        <div class="help-row"><span class="help-k">T</span> Strom dovedností</div>
+        <div class="help-row"><span class="help-k">G</span> Zahrada (farma/voda)</div>
+        <div class="help-row"><span class="help-k">F</span> Odpálit C4</div>
+        <div class="help-row"><span class="help-k">H</span> Tato nápověda</div>
+        <div class="help-row"><span class="help-k">Esc</span> Zavřít / zrušit</div>
+        <h3 style="margin-top:14px;">🧱 Stavby (klávesy 1–5)</h3>
+        <div class="help-row"><span class="help-k">1</span> 🧱 Zeď — blokuje zombie</div>
+        <div class="help-row"><span class="help-k">2</span> 🪵 Barikáda — kryt, propouští střely</div>
+        <div class="help-row"><span class="help-k">3</span> 🗡️ Hroty — zraňují zombie</div>
+        <div class="help-row"><span class="help-k">4</span> 🔫 Věž — automaticky střílí (nutný proud)</div>
+        <div class="help-row"><span class="help-k">5</span> 🟫 Plošina — výšková výhoda</div>
+      </div>
+      <div class="help-col">
+        <h3>🚰 Infrastruktura (klávesy 6–9 + obchod)</h3>
+        <div class="help-row"><span class="help-k">6</span> 🚿 Kanál — vede vodu od řeky</div>
+        <div class="help-row"><span class="help-k">7</span> 🪣 Studna — zásoba vody (pití + zálivka)</div>
+        <div class="help-row"><span class="help-k">8</span> 💧 Čistička — udrží vodu čerstvou</div>
+        <div class="help-row"><span class="help-k">9</span> 🟫 Záhon — sázej, zalévej, sklízej</div>
+        <div class="help-row"><span class="help-k">obchod</span> ⚙️ Vodní kolo — proud (musí u řeky)</div>
+        <div class="help-row"><span class="help-k">obchod</span> 🔌 Kabel — vede proud ke spotřebiči</div>
+        <div class="help-row"><span class="help-k">obchod</span> 💦 Postřikovač — sám zalévá políčka</div>
+        <div class="help-row"><span class="help-k">obchod</span> ⚡ El. plot — pálí zombie (nutný proud)</div>
+        <h3 style="margin-top:14px;">🍖 Přežití &amp; mechaniky</h3>
+        <div class="help-p">🍖 <b>Hlad</b> a 💧 <b>žízeň</b> klesají — sklízej plodiny a pij ze studny v <b>zahradě [G]</b>.</div>
+        <div class="help-p">🌊 <b>Voda</b>: řeka → kanály → studna. Surová voda se <b>kazí</b> → 💧 čistička ji udrží čerstvou.</div>
+        <div class="help-p">⚡ <b>Elektřina</b>: ⚙️ vodní kolo u řeky → 🔌 kabely → věže / el. plot / postřikovač. Bez proudu nefungují.</div>
+        <div class="help-p">🧟 <b>Vlny</b>: mezi vlnami je příprava + kvíz z tvých balíčků (správně = bonus 💰).</div>
+        <div class="help-p">👥 <b>Co-op</b>: základna i zahrada jsou <b>sdílené</b>. Když hostitel odejde, řízení převezme jiný hráč.</div>
+      </div>
+    </div>
   </div>
 </div>
 

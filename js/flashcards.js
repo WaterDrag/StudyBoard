@@ -1,9 +1,8 @@
 const params  = new URLSearchParams(window.location.search);
 const DECK_ID = params.get('deck');
 const ROOM_ID = params.get('room');
-const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/';
-const GEMINI_MODELS   = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
-const getGeminiKey    = () => localStorage.getItem('sb_gemini_key');
+// Gemini/Groq calling logic lives in js/ai.js (shared with room.js's AI
+// flashcards feature) — see aiGenerate()/aiErrorMessage() below.
 
 let ME         = null;
 let DECK       = null;
@@ -334,51 +333,21 @@ function renderEditDistractors() {
 
 
 async function geminiSuggestDistractors(front, back, count = 3) {
-  const key = getGeminiKey();
-  if (!key) throw new Error('no-key');
-
   const prompt = `Generate exactly ${count} wrong but plausible multiple-choice distractors for this flashcard.
 Question: "${front}"
 Correct answer: "${back}"
 Rules: same format/length/language as the correct answer, plausible but clearly wrong to an expert, not variations of each other.
 Return ONLY a JSON array of ${count} strings: ["d1","d2",...]`;
 
-  const statusEl = () => document.getElementById('aiStatusMsg');
-  const countdown = async (seconds, label) => {
-    for (let s = seconds; s > 0; s--) {
-      const el = statusEl();
-      if (el) el.textContent = `${label} ${s} s…`;
-      await new Promise(r => setTimeout(r, 1000));
-    }
-  };
-
-  for (const model of GEMINI_MODELS) {
-    let attempts = 2;
-    let rateLimited = false;
-    while (attempts-- > 0) {
-      try {
-        if (statusEl()) statusEl().textContent = `Zkouším ${model}…`;
-        const res = await fetch(`${GEMINI_ENDPOINT}${model}:generateContent?key=${key}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, maxOutputTokens: 1600 } }),
-        });
-        if (res.status === 429) {
-          if (attempts > 0) { await countdown(30, `${model}: rate limit —`); continue; }
-          rateLimited = true; break;
-        }
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const m = text.match(/\[[\s\S]*?\]/);
-        if (m) { const arr = JSON.parse(m[0]); if (Array.isArray(arr) && arr.length >= count) return arr.slice(0, count).map(String); }
-        const lines = text.split('\n').map(l => l.replace(/^[\s\d.\-•*"']+|["']+$/g, '').trim()).filter(Boolean);
-        if (lines.length >= count) return lines.slice(0, count);
-        throw new Error('parse');
-      } catch(e) { console.warn('[Gemini]', model, e); break; }
-    }
-    if (!rateLimited) break;
-  }
-  throw new Error('rate-limit');
+  return aiGenerate(prompt, {
+    parse(text) {
+      const m = text.match(/\[[\s\S]*?\]/);
+      if (m) { const arr = JSON.parse(m[0]); if (Array.isArray(arr) && arr.length >= count) return arr.slice(0, count).map(String); }
+      const lines = text.split('\n').map(l => l.replace(/^[\s\d.\-•*"']+|["']+$/g, '').trim()).filter(Boolean);
+      if (lines.length >= count) return lines.slice(0, count);
+      throw new Error('parse');
+    },
+  });
 }
 
 function setupEditCardModal() {
@@ -419,11 +388,7 @@ function setupEditCardModal() {
         suggestEl.appendChild(chip);
       });
     } catch(e) {
-      const msg = e.message === 'no-key'
-        ? '🔑 Nastav Gemini API klíč v <b>⚙️ Nastavení</b> na dashboardu.'
-        : e.message === 'rate-limit'
-          ? '⏱ Limit AI překročen — počkej ~30 s a zkus znovu.'
-          : `Chyba: ${esc(e.message)}`;
+      const msg = aiErrorMessage(e);
       suggestEl.innerHTML = `<span style="color:#fca5a5;font-size:0.8rem;">${msg}</span>`;
     }
     btn.disabled = false; btn.textContent = '🤖';
@@ -619,17 +584,30 @@ function loadSurvivalLobbies() {
       if (snap.empty) {
         lobbyDiv.innerHTML = '<span style="color:var(--text-muted);font-size:.8rem;">Žádné aktivní hry — vytvoř novou!</span>';
       } else {
+        const STALE_MS = 3 * 60 * 60 * 1000; // 3h — auto-clear abandoned lobbies you hosted
         snap.forEach(doc => {
           const d = doc.data();
+          const isMine = d.hostId === ME.uid;
+          // Silent best-effort cleanup: an old lobby you host that never
+          // started is just clutter (e.g. from testing). Removing it here
+          // means the fix applies retroactively — no manual Firestore work.
+          const ageMs = d.createdAt?.toMillis ? Date.now() - d.createdAt.toMillis() : 0;
+          if (isMine && ageMs > STALE_MS) { doc.ref.delete().catch(() => {}); return; }
+
           const playerCount = Object.keys(d.players || {}).length;
           const card = document.createElement('div');
-          card.style.cssText = 'background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:180px;max-width:220px;';
+          card.style.cssText = 'background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:180px;max-width:220px;position:relative;';
           card.innerHTML = `
+            ${isMine ? `<button class="btn btn-ghost lobby-cancel-btn" title="Zrušit hru" data-lid="${doc.id}" style="position:absolute;top:6px;right:6px;padding:2px 7px;font-size:.75rem;line-height:1;">✕</button>` : ''}
             <div style="font-weight:700;font-size:.85rem;margin-bottom:4px;">🧟 Vlna ${d.wave || 0}</div>
             <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:4px;">Hostitel: ${esc(d.hostName || 'Hráč')}</div>
             <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;">👥 ${playerCount}/4 hráčů</div>
             <button class="btn btn-primary" style="font-size:.75rem;padding:5px 12px;width:100%;" data-lid="${doc.id}">Připojit se</button>`;
-          card.querySelector('button').addEventListener('click', () => joinSurvivalLobby(doc.id));
+          card.querySelector('.lobby-cancel-btn')?.addEventListener('click', e => {
+            e.stopPropagation();
+            doc.ref.delete().catch(err => toast('Nepodařilo se zrušit hru: ' + err.message));
+          });
+          card.querySelector('.btn-primary').addEventListener('click', () => joinSurvivalLobby(doc.id));
           lobbyDiv.appendChild(card);
         });
       }

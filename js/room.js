@@ -47,6 +47,8 @@ auth.onAuthStateChanged(async user => {
     setupEdit();
     setupShare();
     setupFlashCards();
+    setupAiCards();
+    setupBoardPan();
     setupMembers();
     setupConnections();
     setupLightbox();
@@ -740,6 +742,195 @@ function redrawConnections() {
 // ── Flash Cards link ──────────────────────────────────────────
 function setupFlashCards() {
   document.getElementById('flashcardsBtn').href = `flashcards.html?room=${ROOM_ID}`;
+}
+
+// ── Board panning: drag empty canvas (left button) or drag ANYWHERE
+//    (right button, including over notes) to pan ───────────────
+function setupBoardPan() {
+  const wrap = document.getElementById('boardWrap');
+  let panning = false, startX = 0, startY = 0, startSL = 0, startST = 0;
+
+  // Right-click pans instead of opening the browser's context menu.
+  wrap.addEventListener('contextmenu', e => e.preventDefault());
+
+  wrap.addEventListener('mousedown', e => {
+    if (e.button !== 0 && e.button !== 2) return; // only left or right — ignore middle/other buttons
+    // Left button: only pan when the empty canvas is grabbed. A note's own
+    // mousedown handler (bound directly on the note) owns left-click-drag on
+    // itself; without this check both would fire on every note click and
+    // fight each other (note tries to move itself, board tries to scroll).
+    if (e.button === 0 && e.target.closest('.note')) return;
+    panning = true;
+    startX = e.clientX; startY = e.clientY;
+    startSL = wrap.scrollLeft; startST = wrap.scrollTop;
+    wrap.classList.add('panning');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!panning) return;
+    wrap.scrollLeft = startSL - (e.clientX - startX);
+    wrap.scrollTop  = startST - (e.clientY - startY);
+  });
+
+  const stopPan = () => { panning = false; wrap.classList.remove('panning'); };
+  window.addEventListener('mouseup', stopPan);
+  window.addEventListener('blur', stopPan);
+}
+
+// ── AI Flash Cards from notes ───────────────────────────────────
+let AI_GENERATED_CARDS = [];
+
+// Flatten a note's content to plain text for the AI prompt. Tables are
+// converted to "cell | cell" rows (not just mashed together) since notes can
+// contain them; images/formatting are irrelevant for text-based extraction.
+function noteToPlainText(note) {
+  if (note.contentType !== 'html') return (note.content || '').trim();
+  const d = document.createElement('div');
+  d.innerHTML = note.content || '';
+  d.querySelectorAll('table').forEach(table => {
+    const rows = [...table.querySelectorAll('tr')].map(tr =>
+      [...tr.querySelectorAll('th,td')].map(c => c.textContent.trim()).join(' | ')
+    );
+    table.replaceWith(document.createTextNode('\n' + rows.join('\n') + '\n'));
+  });
+  return d.textContent.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function setupAiCards() {
+  const btn = document.getElementById('aiCardsBtn');
+  if (!btn) return;
+  btn.addEventListener('click', openAiCardsModal);
+  document.getElementById('aiGenerateBtn').addEventListener('click', generateAiCards);
+  document.getElementById('aiSaveBtn').addEventListener('click', saveAiCards);
+}
+
+async function openAiCardsModal() {
+  const listEl = document.getElementById('aiNotesList');
+  listEl.innerHTML = '<div style="text-align:center;padding:14px;color:var(--text-muted);font-size:.85rem;">Načítám poznámky…</div>';
+  document.getElementById('aiCardsPreview').innerHTML = '';
+  document.getElementById('aiSaveBtn').style.display = 'none';
+  document.getElementById('aiGenerateBtn').style.display = 'inline-flex';
+  document.getElementById('aiGenerateBtn').disabled = false;
+  document.getElementById('aiGenerateBtn').textContent = '✨ Vygenerovat';
+  document.getElementById('aiDeckName').value = 'AI karty ze zápisků';
+  openModal('aiCardsModal');
+
+  try {
+    const snap = await db.collection('rooms').doc(ROOM_ID).collection('notes').orderBy('createdAt', 'asc').get();
+    if (snap.empty) {
+      listEl.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:6px 2px;">Místnost ještě nemá žádné poznámky.</div>';
+      return;
+    }
+    listEl.innerHTML = snap.docs.map(d => {
+      const note = d.data();
+      const preview = noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
+      return `<label class="ai-note-row">
+        <input type="checkbox" class="ai-note-check" data-id="${d.id}" checked>
+        <span>${esc(preview)}</span>
+      </label>`;
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = `<div style="color:#fca5a5;font-size:.85rem;">Chyba při načítání poznámek: ${esc(e.message)}</div>`;
+  }
+}
+
+async function generateAiCards() {
+  const checkedIds = [...document.querySelectorAll('.ai-note-check:checked')].map(c => c.dataset.id);
+  if (!checkedIds.length) { toast('Vyber alespoň jednu poznámku.'); return; }
+  const count = Math.max(2, Math.min(20, parseInt(document.getElementById('aiCardCount').value) || 8));
+
+  const btn = document.getElementById('aiGenerateBtn');
+  btn.disabled = true; btn.textContent = '⏳ Připravuji…';
+  const previewEl = document.getElementById('aiCardsPreview');
+  previewEl.innerHTML = '<div id="aiStatusMsg" style="font-size:.82rem;color:var(--text-muted);margin-top:10px;">Generuji…</div>';
+
+  try {
+    const snap = await db.collection('rooms').doc(ROOM_ID).collection('notes').get();
+    const byId = new Map(snap.docs.map(d => [d.id, d.data()]));
+    const combinedText = checkedIds
+      .map(id => (byId.has(id) ? noteToPlainText(byId.get(id)) : ''))
+      .filter(Boolean)
+      .join('\n\n---\n\n');
+
+    if (!combinedText.trim()) { toast('Vybrané poznámky jsou prázdné.'); btn.disabled = false; btn.textContent = '✨ Vygenerovat'; return; }
+
+    const prompt = `You are creating study flashcards from the notes below. Keep the SAME language as the notes (they may be in Czech).
+Create exactly ${count} flashcards covering the key facts, terms, and concepts.
+Each flashcard: "front" is a short question or term, "back" is a concise, correct answer or definition.
+Return ONLY a JSON array like this, nothing else: [{"front":"...","back":"..."}, ...]
+
+NOTES:
+"""
+${combinedText.slice(0, 8000)}
+"""`;
+
+    const cards = await aiGenerate(prompt, {
+      maxOutputTokens: 2500,
+      parse(text) {
+        const m = text.match(/\[[\s\S]*\]/);
+        if (!m) throw new Error('no-json');
+        const arr = JSON.parse(m[0]);
+        const clean = arr
+          .filter(c => c && c.front && c.back)
+          .map(c => ({ front: String(c.front).trim(), back: String(c.back).trim() }));
+        if (!clean.length) throw new Error('empty');
+        return clean;
+      },
+    });
+
+    AI_GENERATED_CARDS = cards;
+    renderAiCardsPreview(cards);
+    document.getElementById('aiSaveBtn').style.display = 'inline-flex';
+    btn.style.display = 'none';
+  } catch (e) {
+    previewEl.innerHTML = `<div style="color:#fca5a5;font-size:.85rem;margin-top:10px;">${aiErrorMessage(e)}</div>`;
+    btn.disabled = false; btn.textContent = '✨ Vygenerovat';
+  }
+}
+
+function renderAiCardsPreview(cards) {
+  const el = document.getElementById('aiCardsPreview');
+  el.innerHTML = `<label class="label" style="margin-top:12px;display:block;">Náhled — odškrtni, co nechceš uložit:</label>
+    <div class="ai-cards-preview-list">` +
+    cards.map((c, i) => `
+      <label class="ai-card-row">
+        <input type="checkbox" class="ai-card-check" data-i="${i}" checked>
+        <span><b>${esc(c.front)}</b><br><span style="color:var(--text-muted);">${esc(c.back)}</span></span>
+      </label>`).join('') +
+    `</div>`;
+}
+
+async function saveAiCards() {
+  const checkedIdx = [...document.querySelectorAll('.ai-card-check:checked')].map(c => parseInt(c.dataset.i, 10));
+  const toSave = checkedIdx.map(i => AI_GENERATED_CARDS[i]).filter(Boolean);
+  if (!toSave.length) { toast('Nic není vybráno k uložení.'); return; }
+
+  const btn = document.getElementById('aiSaveBtn');
+  btn.disabled = true; btn.textContent = 'Ukládám…';
+  try {
+    // Always create a fresh deck owned by the current user — Firestore rules
+    // only let a deck's owner write cards into it, so reusing someone else's
+    // room deck here would just fail silently otherwise.
+    const name = document.getElementById('aiDeckName').value.trim() || 'AI karty ze zápisků';
+    const deckRef = await db.collection('decks').add({
+      name, color: '#6366f1', description: null,
+      ownerUid: ME.uid, roomId: ROOM_ID, cardCount: 0,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    const batch = db.batch();
+    const cardsCol = deckRef.collection('cards');
+    toSave.forEach(c => {
+      batch.set(cardsCol.doc(), { front: c.front, back: c.back, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    batch.update(deckRef, { cardCount: toSave.length });
+    await batch.commit();
+    toast(`Uloženo ${toSave.length} karet do balíčku „${name}" ✓`);
+    closeModal('aiCardsModal');
+  } catch (e) {
+    toast('Chyba při ukládání: ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = '💾 Uložit vybrané';
 }
 
 // ── Share ─────────────────────────────────────────────────────

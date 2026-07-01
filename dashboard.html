@@ -247,7 +247,14 @@
         <label class="label">Gemini API klíč <span id="geminiKeyStatus" style="font-size:0.75rem;margin-left:6px;"></span></label>
         <input id="settingsGeminiKey" type="password" class="input" placeholder="AQ.Ab8R…" autocomplete="off">
         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">
-          Zdarma na <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a> — používá se pro AI návrhy špatných odpovědí v kartičkách.
+          Zdarma na <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a> — hlavní zdroj pro AI funkce (návrhy špatných odpovědí atd.).
+        </p>
+      </div>
+      <div class="form-group">
+        <label class="label">Groq API klíč (záložní) <span id="groqKeyStatus" style="font-size:0.75rem;margin-left:6px;"></span></label>
+        <input id="settingsGroqKey" type="password" class="input" placeholder="gsk_…" autocomplete="off">
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">
+          Zdarma na <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent);">console.groq.com</a> — použije se automaticky, když je Gemini vytížený nebo nedostupný.
         </p>
       </div>
       <div class="modal-footer">
