@@ -4,6 +4,20 @@ let MY_ROLE   = null;
 let ROOM_ID   = null;
 let EDIT_ID   = null;
 
+// Empty "breathing room" around the content: notes are STORED in their own
+// coordinates (small numbers, starting near 0) but RENDERED shifted right &
+// down by this much. That leaves BOARD_PAD px of empty, scrollable space to
+// the left and above the content, so the board can be panned past it in
+// every direction and any note centered — instead of the content being
+// pinned to the top-left origin with nothing to scroll into. Only the
+// store↔render boundary converts; everything reading a note's live
+// el.style.left works in rendered coordinates and needs no change.
+const BOARD_PAD = 1500;
+const toRenderX = x => (x || 60) + BOARD_PAD;
+const toRenderY = y => (y || 60) + BOARD_PAD;
+const toStoreX  = renderedLeft => renderedLeft - BOARD_PAD;
+const toStoreY  = renderedTop  => renderedTop  - BOARD_PAD;
+
 // Connection state
 let CONNECT_MODE  = false;
 let CONNECT_FROM  = null;
@@ -93,6 +107,12 @@ auth.onAuthStateChanged(async user => {
     setupLightbox();
     setupModalClose();
     updateMemberCount();
+
+    // Start the view just inside the padded origin — content sits with a
+    // comfortable empty margin to its left/top that can be panned into.
+    const wrap = document.getElementById('boardWrap');
+    wrap.scrollLeft = BOARD_PAD - 280;
+    wrap.scrollTop  = BOARD_PAD - 220;
 
   } catch (e) {
     toast('Chyba: ' + e.message);
@@ -455,8 +475,8 @@ function renderNote(id, note) {
   const el = document.createElement('div');
   el.className = 'note';
   el.id        = 'n-' + id;
-  el.style.left       = (note.x || 60) + 'px';
-  el.style.top        = (note.y || 60) + 'px';
+  el.style.left       = toRenderX(note.x) + 'px';
+  el.style.top        = toRenderY(note.y) + 'px';
   el.style.background = note.color || '#fef9c3';
   el.dataset.authorId = note.authorId;
   el.dataset.dragged  = 'false';
@@ -493,8 +513,8 @@ function patchNote(id, note) {
   if (!el) { renderNote(id, note); return; }
 
   if (!el.classList.contains('dragging')) {
-    el.style.left = (note.x || 60) + 'px';
-    el.style.top  = (note.y || 60) + 'px';
+    el.style.left = toRenderX(note.x) + 'px';
+    el.style.top  = toRenderY(note.y) + 'px';
     expandBoardIfNeeded(el);
   }
   el.style.background = note.color || '#fef9c3';
@@ -588,8 +608,8 @@ function makeDraggable(el, noteId) {
 
       if (!moved) return;
 
-      const x = parseInt(el.style.left);
-      const y = parseInt(el.style.top);
+      const x = toStoreX(parseInt(el.style.left));
+      const y = toStoreY(parseInt(el.style.top));
       try {
         await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(noteId).update({
           x, y,
@@ -738,8 +758,10 @@ function setupAdd() {
 
     try {
       const wrap = document.getElementById('boardWrap');
-      const x    = Math.round(wrap.scrollLeft + 60  + Math.random() * 240);
-      const y    = Math.round(wrap.scrollTop  + 60  + Math.random() * 160);
+      // scrollLeft/Top are in rendered board coords; convert to stored coords
+      // so the note lands in the current viewport regardless of BOARD_PAD.
+      const x    = Math.round(toStoreX(wrap.scrollLeft + 60  + Math.random() * 240));
+      const y    = Math.round(toStoreY(wrap.scrollTop  + 60  + Math.random() * 160));
 
       await db.collection('rooms').doc(ROOM_ID).collection('notes').add({
         content,

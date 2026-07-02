@@ -75,6 +75,52 @@
 }
 [data-theme="svetly"] select { color-scheme: light; }
 
+/* ── Tlumené, méně syté varianty ─────────────────────────────── */
+[data-theme="breidlice"] {   /* chladná břidlicová šeď */
+  --bg:   #14181d;
+  --bg-2: #1f252c;
+  --bg-3: #333c47;
+  --accent:      #78909c;
+  --accent-dark: #607483;
+  --board-bg:          #101418;
+  --board-grid-fine:   rgba(176,190,197,0.045);
+  --board-grid-coarse: rgba(176,190,197,0.08);
+  --board-glow:        rgba(120,144,156,0.06);
+}
+[data-theme="kava"] {        /* teplá kávová hnědá */
+  --bg:   #1a1613;
+  --bg-2: #26201b;
+  --bg-3: #3d332a;
+  --accent:      #b08d6a;
+  --accent-dark: #957453;
+  --board-bg:          #14100d;
+  --board-grid-fine:   rgba(214,190,168,0.04);
+  --board-grid-coarse: rgba(214,190,168,0.075);
+  --board-glow:        rgba(176,141,106,0.055);
+}
+[data-theme="salvej"] {      /* zašlá šalvějová zeleň */
+  --bg:   #141a16;
+  --bg-2: #1e2620;
+  --bg-3: #313f35;
+  --accent:      #8aa891;
+  --accent-dark: #6f8c77;
+  --board-bg:          #101511;
+  --board-grid-fine:   rgba(180,204,187,0.04);
+  --board-grid-coarse: rgba(180,204,187,0.075);
+  --board-glow:        rgba(138,168,145,0.055);
+}
+[data-theme="serik"] {       /* zaprášená šeříková mauve */
+  --bg:   #191519;
+  --bg-2: #241e25;
+  --bg-3: #3b323d;
+  --accent:      #a48ca8;
+  --accent-dark: #86708a;
+  --board-bg:          #141014;
+  --board-grid-fine:   rgba(203,184,206,0.04);
+  --board-grid-coarse: rgba(203,184,206,0.075);
+  --board-glow:        rgba(164,140,168,0.055);
+}
+
 /* Theme picker in Nastavení */
 .theme-picker { display: flex; gap: 10px; flex-wrap: wrap; }
 .theme-opt {
@@ -677,8 +723,11 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 
 .board {
   position: relative;
-  width: 3200px;
-  height: 2200px;
+  /* Big enough to hold BOARD_PAD (1500) of empty space on the left/top plus
+     content and generous right/bottom room; expandBoardIfNeeded grows it
+     further as notes move outward. */
+  width: 6200px;
+  height: 5000px;
   background-image: radial-gradient(ellipse 1400px 900px at 50% 38%, var(--board-glow), transparent 70%);
   background-size: 100% 100%;
 }
