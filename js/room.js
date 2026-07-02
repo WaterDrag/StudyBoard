@@ -8,7 +8,13 @@ let EDIT_ID   = null;
 let CONNECT_MODE  = false;
 let CONNECT_FROM  = null;
 let CONNECT_COLOR = '#c0392b';
+let CONNECT_NAME  = '';
 const CONNS_MAP   = new Map(); // connId → conn data
+
+// View mode (board vs list)
+let VIEW_MODE     = 'board';
+const NOTES_MAP   = new Map(); // noteId → note data, kept in sync for the list view
+const FOLDERS_MAP = new Map(); // folderId → { name, parentId, color, noteIds[], authorId }
 
 // ── Auth guard ────────────────────────────────────────────────
 auth.onAuthStateChanged(async user => {
@@ -71,8 +77,10 @@ auth.onAuthStateChanged(async user => {
     }
 
     setupNotes();
+    setupFolders();
     setupAdd();
     setupEdit();
+    setupViewToggle();
     setupTableInsertModal();
     setupConnColorModal();
     setupShare();
@@ -98,11 +106,309 @@ function setupNotes() {
     .orderBy('createdAt', 'asc')
     .onSnapshot(snap => {
       snap.docChanges().forEach(ch => {
-        if (ch.type === 'added')    renderNote(ch.doc.id, ch.doc.data());
-        if (ch.type === 'modified') patchNote(ch.doc.id, ch.doc.data());
-        if (ch.type === 'removed')  document.getElementById('n-' + ch.doc.id)?.remove();
+        if (ch.type === 'added')    { renderNote(ch.doc.id, ch.doc.data()); NOTES_MAP.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() }); }
+        if (ch.type === 'modified') { patchNote(ch.doc.id, ch.doc.data());  NOTES_MAP.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() }); }
+        if (ch.type === 'removed')  { document.getElementById('n-' + ch.doc.id)?.remove(); NOTES_MAP.delete(ch.doc.id); }
       });
+      if (VIEW_MODE === 'list') renderNotesListView();
     });
+}
+
+// ── List view (scannable alternative to the freeform board) ────
+function setupViewToggle() {
+  const btn = document.getElementById('viewToggleBtn');
+  btn.addEventListener('click', () => {
+    VIEW_MODE = VIEW_MODE === 'board' ? 'list' : 'board';
+    document.getElementById('boardWrap').style.display     = VIEW_MODE === 'board' ? '' : 'none';
+    document.getElementById('notesListView').style.display = VIEW_MODE === 'list'  ? '' : 'none';
+    // Viewers never get connectBtn/newFolderBtn shown at all — don't undo that.
+    if (MY_ROLE !== 'viewer') {
+      document.getElementById('connectBtn').style.display   = VIEW_MODE === 'board' ? '' : 'none';
+      document.getElementById('newFolderBtn').style.display = VIEW_MODE === 'list'  ? '' : 'none';
+    }
+    btn.innerHTML = VIEW_MODE === 'board' ? '📋 Seznam' : '🗺️ Nástěnka';
+    if (VIEW_MODE === 'list') { exitConnectMode(); renderNotesListView(); }
+  });
+}
+
+const noteRecency = n => n.updatedAt?.toMillis?.() || n.createdAt?.toMillis?.() || 0;
+
+// ── Folders ──────────────────────────────────────────────────
+// A standalone, manual Windows-Explorer-style organization system for the
+// list view — deliberately independent of board connections (propojení).
+// Folder membership lives on the folder doc's noteIds[], not on the note,
+// so any editor can file/move any note without needing edit rights over
+// its content.
+function setupFolders() {
+  db.collection('rooms').doc(ROOM_ID).collection('folders')
+    .onSnapshot(snap => {
+      snap.docChanges().forEach(ch => {
+        if (ch.type === 'added' || ch.type === 'modified') FOLDERS_MAP.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() });
+        if (ch.type === 'removed') FOLDERS_MAP.delete(ch.doc.id);
+      });
+      if (VIEW_MODE === 'list') renderNotesListView();
+    });
+
+  if (MY_ROLE !== 'viewer') {
+    document.getElementById('newFolderBtn').addEventListener('click', () => openFolderModal(null));
+  }
+  setupFolderModal();
+}
+
+function folderPathLabel(folder) {
+  const parts = [folder.name];
+  let p = folder.parentId ? FOLDERS_MAP.get(folder.parentId) : null;
+  while (p) { parts.unshift(p.name); p = p.parentId ? FOLDERS_MAP.get(p.parentId) : null; }
+  return parts.join(' / ');
+}
+
+let PENDING_FOLDER_ID = null;
+
+function openFolderModal(folderId) {
+  PENDING_FOLDER_ID = folderId;
+  const folder = folderId ? FOLDERS_MAP.get(folderId) : null;
+  document.getElementById('folderModalTitle').textContent = folder ? 'Upravit složku' : 'Nová složka';
+  document.getElementById('folderSubmit').textContent = folder ? 'Uložit' : 'Vytvořit';
+  document.getElementById('folderNameInput').value = folder ? folder.name : '';
+  const color = folder?.color || '#6366f1';
+  document.getElementById('folderColorInput').value = color;
+  document.getElementById('folderColorSwatch').style.background = color;
+  document.getElementById('folderColorHex').textContent = color;
+  document.getElementById('folderDeleteBtn').style.display = folder ? 'block' : 'none';
+
+  // Exclude the folder itself and all its descendants from the parent
+  // picker — nesting a folder under its own child would create a cycle.
+  const excluded = new Set();
+  if (folderId) {
+    (function collect(id) {
+      excluded.add(id);
+      FOLDERS_MAP.forEach(f => { if (f.parentId === id) collect(f.id); });
+    })(folderId);
+  }
+  const select = document.getElementById('folderParentSelect');
+  const options = [...FOLDERS_MAP.values()].filter(f => !excluded.has(f.id))
+    .sort((a, b) => folderPathLabel(a).localeCompare(folderPathLabel(b), 'cs'));
+  select.innerHTML = '<option value="">— Bez složky (nejvyšší úroveň) —</option>'
+    + options.map(f => `<option value="${f.id}">${esc(folderPathLabel(f))}</option>`).join('');
+  const currentParentId = folder?.parentId || '';
+  select.value = currentParentId && !excluded.has(currentParentId) ? currentParentId : '';
+
+  openModal('folderModal');
+}
+
+function setupFolderModal() {
+  const colorInput = document.getElementById('folderColorInput');
+  colorInput.addEventListener('input', () => {
+    document.getElementById('folderColorSwatch').style.background = colorInput.value;
+    document.getElementById('folderColorHex').textContent = colorInput.value;
+  });
+
+  document.getElementById('folderSubmit').addEventListener('click', async () => {
+    const name = document.getElementById('folderNameInput').value.trim();
+    if (!name) { toast('Zadej název složky.'); return; }
+    const parentId = document.getElementById('folderParentSelect').value || null;
+    const color = colorInput.value;
+    const foldersCol = db.collection('rooms').doc(ROOM_ID).collection('folders');
+    try {
+      if (PENDING_FOLDER_ID) {
+        await foldersCol.doc(PENDING_FOLDER_ID).update({ name, parentId, color });
+      } else {
+        await foldersCol.add({
+          name, parentId, color, noteIds: [],
+          authorId: ME.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      closeModal('folderModal');
+      toast('Uloženo!');
+    } catch (e) { toast('Chyba: ' + e.message); }
+  });
+
+  document.getElementById('folderDeleteBtn').addEventListener('click', () => {
+    const folderId = PENDING_FOLDER_ID;
+    if (!folderId) return;
+    closeModal('folderModal');
+    confirmModal('Smazat složku? Poznámky uvnitř zůstanou, jen se z ní vyjmou.', async () => {
+      try {
+        const folder = FOLDERS_MAP.get(folderId);
+        const foldersCol = db.collection('rooms').doc(ROOM_ID).collection('folders');
+        const batch = db.batch();
+        // Reparent any child folders to this one's own parent instead of
+        // orphaning them.
+        FOLDERS_MAP.forEach(f => {
+          if (f.parentId === folderId) batch.update(foldersCol.doc(f.id), { parentId: folder?.parentId || null });
+        });
+        batch.delete(foldersCol.doc(folderId));
+        await batch.commit();
+      } catch (e) { toast('Chyba: ' + e.message); }
+    });
+  });
+}
+
+// Shared by the click-through modal and drag-and-drop — moves a note into
+// targetFolderId (or unfiles it if null), removing it from wherever it
+// currently sits first.
+async function moveNoteToFolder(noteId, targetFolderId) {
+  try {
+    const foldersCol = db.collection('rooms').doc(ROOM_ID).collection('folders');
+    const batch = db.batch();
+    FOLDERS_MAP.forEach(f => {
+      if ((f.noteIds || []).includes(noteId)) batch.update(foldersCol.doc(f.id), { noteIds: firebase.firestore.FieldValue.arrayRemove(noteId) });
+    });
+    if (targetFolderId) batch.update(foldersCol.doc(targetFolderId), { noteIds: firebase.firestore.FieldValue.arrayUnion(noteId) });
+    await batch.commit();
+    toast(targetFolderId ? 'Přesunuto!' : 'Vyjmuto ze složky.');
+  } catch (e) { toast('Chyba: ' + e.message); }
+}
+
+function openMoveToFolderModal(noteId) {
+  const listEl = document.getElementById('moveToFolderList');
+  const currentFolder = [...FOLDERS_MAP.values()].find(f => (f.noteIds || []).includes(noteId));
+  const folders = [...FOLDERS_MAP.values()].sort((a, b) => folderPathLabel(a).localeCompare(folderPathLabel(b), 'cs'));
+
+  if (!folders.length) {
+    listEl.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;padding:8px 0;text-align:center;">Zatím žádné složky — vytvoř je tlačítkem "📁+ Složka" v horní liště.</div>`;
+  } else {
+    listEl.innerHTML = `
+      <div class="move-to-folder-row${!currentFolder ? ' current' : ''}" data-folder="">🚫 Bez složky</div>
+      ${folders.map(f => `
+        <div class="move-to-folder-row${currentFolder?.id === f.id ? ' current' : ''}" data-folder="${f.id}" style="--row-color:${f.color || '#6366f1'}">
+          📁 ${esc(folderPathLabel(f))}
+        </div>`).join('')}`;
+  }
+
+  listEl.querySelectorAll('.move-to-folder-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const targetFolderId = row.dataset.folder || null;
+      closeModal('moveToFolderModal');
+      moveNoteToFolder(noteId, targetFolderId);
+    });
+  });
+
+  openModal('moveToFolderModal');
+}
+
+function renderNotesListView() {
+  const el = document.getElementById('notesListView');
+  const notes = [...NOTES_MAP.values()];
+
+  if (!notes.length) {
+    el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--text-muted);">Zatím žádné poznámky.</div>`;
+    return;
+  }
+
+  const filedIds = new Set();
+  FOLDERS_MAP.forEach(f => (f.noteIds || []).forEach(id => filedIds.add(id)));
+
+  const folderSubtreeCount = folder => {
+    const children = [...FOLDERS_MAP.values()].filter(f => f.parentId === folder.id);
+    return (folder.noteIds || []).length + children.reduce((sum, c) => sum + folderSubtreeCount(c), 0);
+  };
+
+  function renderFolderNode(folder) {
+    const children = [...FOLDERS_MAP.values()].filter(f => f.parentId === folder.id)
+      .sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+    const ownNotes = (folder.noteIds || []).map(id => NOTES_MAP.get(id)).filter(Boolean)
+      .sort((a, b) => noteRecency(b) - noteRecency(a));
+    const canManage = MY_ROLE !== 'viewer';
+    const body = ownNotes.map(renderNoteListRow).join('') + children.map(renderFolderNode).join('');
+    return `
+      <details class="notes-folder" open data-folder-id="${folder.id}" style="--folder-color:${folder.color || '#6366f1'}">
+        <summary class="notes-folder-summary">
+          <span class="notes-folder-icon">📁</span>
+          <span class="notes-folder-title">${esc(folder.name)}</span>
+          <span class="notes-folder-count">${folderSubtreeCount(folder)}</span>
+          ${canManage ? `<button class="notes-folder-edit" data-edit-folder="${folder.id}" title="Upravit složku">✏️</button>` : ''}
+        </summary>
+        <div class="notes-folder-body">${body}</div>
+      </details>`;
+  }
+
+  const topFolders = [...FOLDERS_MAP.values()].filter(f => !f.parentId || !FOLDERS_MAP.has(f.parentId))
+    .sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+  const unfiled = notes.filter(n => !filedIds.has(n.id)).sort((a, b) => noteRecency(b) - noteRecency(a));
+
+  el.innerHTML = topFolders.map(renderFolderNode).join('') + unfiled.map(renderNoteListRow).join('');
+  if (!topFolders.length && !unfiled.length) {
+    el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--text-muted);">Zatím žádné poznámky.</div>`;
+  }
+
+  el.querySelectorAll('.notes-list-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const note = NOTES_MAP.get(row.dataset.id);
+      if (note) openNoteDetail(null, note);
+    });
+  });
+  el.querySelectorAll('.notes-move-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openMoveToFolderModal(btn.dataset.moveNote);
+    });
+  });
+  el.querySelectorAll('.notes-folder-edit').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openFolderModal(btn.dataset.editFolder);
+    });
+  });
+
+  if (MY_ROLE !== 'viewer') setupListDragDrop(el);
+}
+
+// Drag a note row onto a folder to file it there — a faster alternative to
+// clicking the 📁 button and picking from the modal every time. One
+// delegated listener on the list container (not per-folder) so dropping on
+// a nested folder still resolves to that innermost folder via closest(),
+// and dropping on empty list space (no ancestor folder) unfiles the note.
+function setupListDragDrop(el) {
+  el.querySelectorAll('.notes-list-row').forEach(row => {
+    row.setAttribute('draggable', 'true');
+    row.addEventListener('dragstart', e => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', row.dataset.id);
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+  });
+
+  let lastDragOverFolder = null;
+  el.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const folderEl = e.target.closest('.notes-folder');
+    if (folderEl !== lastDragOverFolder) {
+      lastDragOverFolder?.classList.remove('drag-over');
+      folderEl?.classList.add('drag-over');
+      lastDragOverFolder = folderEl;
+    }
+  });
+  el.addEventListener('dragleave', e => {
+    if (!el.contains(e.relatedTarget)) { lastDragOverFolder?.classList.remove('drag-over'); lastDragOverFolder = null; }
+  });
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    lastDragOverFolder?.classList.remove('drag-over');
+    lastDragOverFolder = null;
+    const noteId = e.dataTransfer.getData('text/plain');
+    if (!noteId) return;
+    const folderEl = e.target.closest('.notes-folder');
+    moveNoteToFolder(noteId, folderEl ? folderEl.dataset.folderId : null);
+  });
+}
+
+function renderNoteListRow(note) {
+  const title = note.title || noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
+  const moveBtn = MY_ROLE !== 'viewer'
+    ? `<button class="notes-move-btn" data-move-note="${note.id}" title="Přesunout do složky">📁</button>`
+    : '';
+  return `
+    <div class="notes-list-row" data-id="${note.id}" style="--row-color:${note.color || '#fef9c3'}">
+      <div class="notes-list-dot"></div>
+      <div class="notes-list-main">
+        <div class="notes-list-title">${esc(title)}</div>
+        <div class="notes-list-meta">${esc(note.authorName || 'Anon')} · ${fmtTs(note.updatedAt || note.createdAt)}</div>
+      </div>
+      ${moveBtn}
+    </div>`;
 }
 
 // ── Render note ───────────────────────────────────────────────
@@ -225,11 +531,23 @@ function wireNoteButtons(el, id, note) {
 
 // ── Board auto-expand ─────────────────────────────────────────
 function expandBoardIfNeeded(noteEl) {
-  const board  = document.getElementById('board');
-  const right  = parseInt(noteEl.style.left) + noteEl.offsetWidth  + 400;
-  const bottom = parseInt(noteEl.style.top)  + noteEl.offsetHeight + 400;
-  if (right  > board.offsetWidth)  board.style.width  = right  + 'px';
-  if (bottom > board.offsetHeight) board.style.height = bottom + 'px';
+  const board = document.getElementById('board');
+  // offsetWidth/offsetHeight (on the note AND the board) read 0 whenever an
+  // ancestor is display:none — which #boardWrap is while the list view is
+  // active. Adding a note from there silently under-grew the board, so
+  // switching back to the board later showed that note sitting past the
+  // grid-textured background in plain unstyled space. Fall back to the
+  // note's known fixed CSS width/a reasonable height guess, and read the
+  // board's own inline style (set here, always readable regardless of
+  // visibility) instead of its live layout box.
+  const noteW = noteEl.offsetWidth  || 220;
+  const noteH = noteEl.offsetHeight || 160;
+  const right  = parseInt(noteEl.style.left) + noteW + 400;
+  const bottom = parseInt(noteEl.style.top)  + noteH + 400;
+  const curW = parseInt(board.style.width)  || board.offsetWidth  || 3200;
+  const curH = parseInt(board.style.height) || board.offsetHeight || 2200;
+  if (right  > curW) board.style.width  = right  + 'px';
+  if (bottom > curH) board.style.height = bottom + 'px';
 }
 
 // ── Drag & drop ───────────────────────────────────────────────
@@ -636,6 +954,13 @@ async function deleteNote(id) {
       db.collection('rooms').doc(ROOM_ID).collection('connections').where('toId',   '==', id).get(),
     ]);
     [...s1.docs, ...s2.docs].forEach(d => batch.delete(d.ref));
+    // Vyjmi ji i z případné složky
+    FOLDERS_MAP.forEach(f => {
+      if ((f.noteIds || []).includes(id)) {
+        batch.update(db.collection('rooms').doc(ROOM_ID).collection('folders').doc(f.id),
+          { noteIds: firebase.firestore.FieldValue.arrayRemove(id) });
+      }
+    });
     await batch.commit();
   } catch (e) {
     toast('Chyba: ' + e.message);
@@ -659,6 +984,7 @@ function setupConnections() {
 
   document.getElementById('connectCancel').addEventListener('click', exitConnectMode);
   document.getElementById('connectColorPicker').addEventListener('input', e => { CONNECT_COLOR = e.target.value; });
+  document.getElementById('connectNameInput').addEventListener('input', e => { CONNECT_NAME = e.target.value; });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && CONNECT_MODE) exitConnectMode(); });
 
   db.collection('rooms').doc(ROOM_ID).collection('connections')
@@ -668,6 +994,7 @@ function setupConnections() {
         if (ch.type === 'removed') CONNS_MAP.delete(ch.doc.id);
       });
       redrawConnections();
+      if (VIEW_MODE === 'list') renderNotesListView();
     });
 }
 
@@ -685,6 +1012,8 @@ function exitConnectMode() {
   document.getElementById('board').classList.remove('connect-mode');
   document.getElementById('connectHint').classList.remove('visible');
   document.querySelectorAll('.note.connect-from').forEach(el => el.classList.remove('connect-from'));
+  CONNECT_NAME = '';
+  document.getElementById('connectNameInput').value = '';
 }
 
 async function handleNoteConnectClick(noteId, noteEl) {
@@ -707,7 +1036,7 @@ async function handleNoteConnectClick(noteId, noteEl) {
   if (already) { toast('Tyto poznámky jsou již propojeny.'); exitConnectMode(); return; }
   try {
     await db.collection('rooms').doc(ROOM_ID).collection('connections').add({
-      fromId: CONNECT_FROM, toId: noteId, color: CONNECT_COLOR,
+      fromId: CONNECT_FROM, toId: noteId, color: CONNECT_COLOR, name: CONNECT_NAME.trim() || null,
       authorId: ME.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     toast('Propojeno! 🔗');
@@ -783,7 +1112,7 @@ function redrawConnections() {
       pg.appendChild(pbg); pg.appendChild(ptx);
       pg.addEventListener('click', e => {
         e.stopPropagation();
-        openConnColorModal(connId, conn.color || '#c0392b');
+        openConnColorModal(connId, conn.color || '#c0392b', conn.name);
       });
       g.appendChild(pg);
     }
@@ -839,7 +1168,7 @@ function setupBoardZoom() {
   wrap.addEventListener('wheel', e => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.08 : 0.92;
-    BOARD_ZOOM = Math.min(2.2, Math.max(0.35, BOARD_ZOOM * factor));
+    BOARD_ZOOM = Math.min(2.2, Math.max(0.15, BOARD_ZOOM * factor));
     board.style.zoom = BOARD_ZOOM;
   }, { passive: false });
 }
@@ -1208,11 +1537,12 @@ function setupTableInsertModal() {
 // asked for, and always works the same way regardless of browser.
 let PENDING_CONN_COLOR_ID = null;
 
-function openConnColorModal(connId, color) {
+function openConnColorModal(connId, color, name) {
   PENDING_CONN_COLOR_ID = connId;
   document.getElementById('connColorInput').value = color;
   document.getElementById('connColorSwatch').style.background = color;
   document.getElementById('connColorHex').textContent = color;
+  document.getElementById('connNameInput').value = name || '';
   openModal('connColorModal');
 }
 
@@ -1220,6 +1550,7 @@ function setupConnColorModal() {
   const input  = document.getElementById('connColorInput');
   const swatch = document.getElementById('connColorSwatch');
   const hex    = document.getElementById('connColorHex');
+  const nameInput = document.getElementById('connNameInput');
   input.addEventListener('input', () => {
     swatch.style.background = input.value;
     hex.textContent = input.value;
@@ -1227,9 +1558,10 @@ function setupConnColorModal() {
   document.getElementById('connColorSubmit').addEventListener('click', async () => {
     if (!PENDING_CONN_COLOR_ID) return;
     try {
-      await db.collection('rooms').doc(ROOM_ID).collection('connections').doc(PENDING_CONN_COLOR_ID).update({ color: input.value });
+      await db.collection('rooms').doc(ROOM_ID).collection('connections').doc(PENDING_CONN_COLOR_ID)
+        .update({ color: input.value, name: nameInput.value.trim() || null });
       closeModal('connColorModal');
-      toast('Barva uložena!');
+      toast('Uloženo!');
     } catch (err) { toast('Chyba: ' + err.message); }
   });
 

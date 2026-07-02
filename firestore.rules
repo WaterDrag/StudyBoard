@@ -61,6 +61,19 @@ service cloud.firestore {
           (roomRole(roomId) == 'editor' && resource.data.authorId == request.auth.uid)
         );
       }
+
+      // Windows-Explorer-style folders for organizing notes in the list
+      // view. Membership lives on the folder doc (noteIds[]), not on the
+      // note itself — any editor can file/move any note into any folder as
+      // a purely organizational action, without needing note-edit rights
+      // over content someone else authored.
+      match /folders/{folderId} {
+        allow read:   if isMember(roomId);
+        allow create: if isAuth() && canEditRoom(roomId) &&
+                         request.resource.data.authorId == request.auth.uid;
+        allow update: if isAuth() && canEditRoom(roomId);
+        allow delete: if isAuth() && canEditRoom(roomId);
+      }
     }
 
     // ── Uživatelské profily ────────────────────────────────────

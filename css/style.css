@@ -564,6 +564,18 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   top: 58px; left: 0; right: 0; bottom: 0;
   overflow: auto;
   cursor: default;
+  /* The tiling grid lives here (not on .board) so it's always full-viewport
+     and never scales with the board's CSS zoom — at low zoom .board's own
+     box shrinks well below the viewport, and previously the grid shrank
+     with it, leaving a plain seam beyond it. A fixed screen-space grid has
+     no seam at any zoom level or board size. */
+  background-color: #0b1120;
+  background-image:
+    linear-gradient(rgba(148,163,255,0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,255,0.055) 1px, transparent 1px),
+    linear-gradient(rgba(148,163,255,0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,255,0.09) 1px, transparent 1px);
+  background-size: 28px 28px, 28px 28px, 140px 140px, 140px 140px;
 }
 .board-wrap.panning { cursor: grabbing; }
 
@@ -571,15 +583,148 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   position: relative;
   width: 3200px;
   height: 2200px;
-  background-color: #0b1120;
-  background-image:
-    radial-gradient(ellipse 1400px 900px at 50% 38%, rgba(99,102,241,0.07), transparent 70%),
-    linear-gradient(rgba(148,163,255,0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148,163,255,0.055) 1px, transparent 1px),
-    linear-gradient(rgba(148,163,255,0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148,163,255,0.09) 1px, transparent 1px);
-  background-size: 100% 100%, 28px 28px, 28px 28px, 140px 140px, 140px 140px;
+  background-image: radial-gradient(ellipse 1400px 900px at 50% 38%, rgba(99,102,241,0.07), transparent 70%);
+  background-size: 100% 100%;
 }
+
+/* ===== NOTES LIST VIEW ===== */
+.notes-list-view {
+  position: fixed;
+  top: 58px; left: 0; right: 0; bottom: 0;
+  overflow-y: auto;
+  padding: 24px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.notes-list-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.notes-list-row:hover { border-color: var(--accent); transform: translateX(3px); }
+.notes-list-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--row-color, #fef9c3);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.06);
+}
+.notes-list-main { flex: 1; min-width: 0; }
+.notes-list-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notes-list-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 3px; }
+.notes-list-row[draggable="true"] { cursor: grab; }
+.notes-list-row.dragging { opacity: 0.4; }
+
+/* Manual, Windows-Explorer-style folders — independent of board
+   connections. Notes are filed into them explicitly by dragging a row onto
+   one, or via the 📁 button on each row, colored per-folder
+   (--folder-color). */
+.notes-folder {
+  --folder-color: #6366f1;
+  margin-bottom: 10px;
+  border: 1px solid color-mix(in srgb, var(--folder-color) 40%, var(--border));
+  border-left: 3px solid var(--folder-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--folder-color) 6%, transparent);
+  transition: box-shadow 0.12s, background 0.12s;
+}
+.notes-folder.drag-over {
+  box-shadow: 0 0 0 2px var(--folder-color);
+  background: color-mix(in srgb, var(--folder-color) 14%, transparent);
+}
+.notes-folder-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: var(--transition);
+}
+.notes-folder-summary::-webkit-details-marker { display: none; }
+.notes-folder-summary:hover { background: var(--bg-2); }
+.notes-folder-icon { font-size: 1rem; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--folder-color) 60%, transparent)); }
+.notes-folder-title {
+  flex: 1;
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notes-folder-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--bg-3);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+.notes-folder-body {
+  padding: 4px 12px 12px 32px;
+  border-top: 1px solid var(--border);
+}
+.notes-folder-body .notes-list-row { margin-bottom: 8px; }
+.notes-folder-body .notes-list-row:last-child { margin-bottom: 0; }
+
+.notes-folder-edit {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 3px 6px;
+  border-radius: 5px;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+.notes-folder-edit:hover { background: var(--bg-3); color: var(--text); }
+
+.notes-move-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 4px 7px;
+  border-radius: 6px;
+  transition: var(--transition);
+  flex-shrink: 0;
+  opacity: 0;
+}
+.notes-list-row:hover .notes-move-btn { opacity: 1; }
+.notes-move-btn:hover { background: var(--bg-3); color: var(--text); }
+
+/* Rows inside the "move to folder" picker modal */
+.move-to-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.87rem;
+  border-left: 3px solid var(--row-color, transparent);
+  transition: var(--transition);
+}
+.move-to-folder-row:hover { background: var(--bg-3); }
+.move-to-folder-row.current { background: rgba(99,102,241,0.14); font-weight: 600; }
 
 /* ===== STICKY NOTE ===== */
 .note {

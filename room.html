@@ -35,6 +35,12 @@
       <button id="connectBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Propojit poznámky">
         🔗 Propojit
       </button>
+      <button id="newFolderBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;display:none;" title="Nová složka">
+        📁+ Složka
+      </button>
+      <button id="viewToggleBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Přepnout mezi nástěnkou a seznamem">
+        📋 Seznam
+      </button>
       <button id="membersBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -50,6 +56,8 @@
   <!-- CONNECT MODE HINT -->
   <div id="connectHint" class="connect-hint">
     <span id="connectHintText">Klikni na první poznámku…</span>
+    <input type="text" id="connectNameInput" placeholder="Název (nepovinné)" maxlength="40"
+      style="width:150px;padding:4px 8px;font-size:0.78rem;border-radius:4px;border:1px solid var(--border);background:var(--bg-3);color:var(--text);">
     <label class="connect-color-wrap" title="Barva šňůrky">
       <span style="font-size:0.75rem;color:var(--text-muted);">Barva:</span>
       <input type="color" id="connectColorPicker" value="#c0392b" style="width:28px;height:22px;padding:1px;border-radius:4px;border:1px solid var(--border);cursor:pointer;">
@@ -62,6 +70,11 @@
     <div class="board" id="board">
       <!-- Notes injected by JS -->
     </div>
+  </div>
+
+  <!-- LIST VIEW -->
+  <div class="notes-list-view" id="notesListView" style="display:none;">
+    <!-- Rows injected by JS -->
   </div>
 
   <!-- FAB -->
@@ -233,6 +246,10 @@
         <h3>Propojení</h3>
         <button class="modal-close" data-close="connColorModal">✕</button>
       </div>
+      <div class="form-group">
+        <label class="label">Název (nepovinné)</label>
+        <input type="text" id="connNameInput" class="input" placeholder="např. Bílá nemoc" maxlength="40">
+      </div>
       <div class="color-input-wrap">
         <label class="color-input-swatch" id="connColorSwatch" style="background:#c0392b;">
           <input type="color" id="connColorInput" value="#c0392b">
@@ -247,6 +264,54 @@
         <button class="btn btn-secondary" data-close="connColorModal">Zrušit</button>
         <button id="connColorSubmit" class="btn btn-primary">Uložit</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Nová / upravit složku -->
+  <div class="modal-overlay" id="folderModal">
+    <div class="modal" style="max-width:320px;">
+      <div class="modal-header">
+        <h3 id="folderModalTitle">Nová složka</h3>
+        <button class="modal-close" data-close="folderModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Název složky</label>
+        <input type="text" id="folderNameInput" class="input" placeholder="např. Karel Čapek" maxlength="40">
+      </div>
+      <div class="form-group">
+        <label class="label">Nadřazená složka (nepovinné)</label>
+        <select id="folderParentSelect" class="input">
+          <option value="">— Bez složky (nejvyšší úroveň) —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="label">Barva</label>
+        <div class="color-input-wrap">
+          <label class="color-input-swatch" id="folderColorSwatch" style="background:#6366f1;">
+            <input type="color" id="folderColorInput" value="#6366f1">
+          </label>
+          <div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:3px;">Klikni pro výběr barvy</div>
+            <code id="folderColorHex" style="font-size:0.85rem;font-weight:600;color:var(--accent);">#6366f1</code>
+          </div>
+        </div>
+      </div>
+      <button id="folderDeleteBtn" class="btn btn-danger" style="width:100%;justify-content:center;margin-top:6px;display:none;">🗑 Smazat složku</button>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="folderModal">Zrušit</button>
+        <button id="folderSubmit" class="btn btn-primary">Vytvořit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Přesunout poznámku do složky -->
+  <div class="modal-overlay" id="moveToFolderModal">
+    <div class="modal" style="max-width:320px;">
+      <div class="modal-header">
+        <h3>Přesunout do složky</h3>
+        <button class="modal-close" data-close="moveToFolderModal">✕</button>
+      </div>
+      <div id="moveToFolderList"></div>
     </div>
   </div>
 
