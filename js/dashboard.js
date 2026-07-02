@@ -29,6 +29,11 @@ async function init(user) {
     if (savedKey) localStorage.setItem('sb_gemini_key', savedKey);
     const savedGroqKey = snap.exists ? snap.data().groqKey : null;
     if (savedGroqKey) localStorage.setItem('sb_groq_key', savedGroqKey);
+    // Téma uložené na účtu (localStorage je jen rychlá cache pro version.js)
+    const savedTheme = snap.exists ? snap.data().theme : null;
+    if (savedTheme != null && savedTheme !== (localStorage.getItem('sb_theme') || '')) {
+      applyTheme(savedTheme);
+    }
     db.collection('users').doc(user.uid).set({
       displayName: user.displayName || user.email,
       email:       (user.email || '').toLowerCase(),
@@ -641,7 +646,25 @@ function setupAddFriend(user) {
 }
 
 // ── Modal helpers ───────────────────────────────────────────────
-// ── Settings (Gemini + Groq klíče) ───────────────────────────────
+// ── Téma / vzhled ────────────────────────────────────────────────
+// Applies instantly and caches to localStorage — version.js reads that
+// cache in <head> on every page, so the choice sticks across the whole app
+// without a flash of the default theme.
+function applyTheme(theme) {
+  if (theme) document.documentElement.setAttribute('data-theme', theme);
+  else document.documentElement.removeAttribute('data-theme');
+  if (theme) localStorage.setItem('sb_theme', theme);
+  else localStorage.removeItem('sb_theme');
+  markSelectedTheme(theme);
+}
+
+function markSelectedTheme(theme) {
+  document.querySelectorAll('#themePicker .theme-opt').forEach(opt => {
+    opt.classList.toggle('selected', (opt.dataset.theme || '') === (theme || ''));
+  });
+}
+
+// ── Settings (vzhled + Gemini/Groq klíče) ───────────────────────
 function setupSettings(user) {
   const btn      = document.getElementById('settingsBtn');
   const saveBtn  = document.getElementById('settingsSave');
@@ -655,12 +678,24 @@ function setupSettings(user) {
     else      { el.textContent = 'nenastaveno'; el.style.color = 'var(--text-muted)'; }
   };
 
+  // Výběr tématu — aplikuje se okamžitě, uloží se i na účet
+  document.querySelectorAll('#themePicker .theme-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const theme = opt.dataset.theme || '';
+      applyTheme(theme);
+      db.collection('users').doc(user.uid)
+        .update({ theme })
+        .catch(() => { /* offline — localStorage stačí, doc se srovná příště */ });
+    });
+  });
+
   // Předvyplň aktuálně uloženými klíči
   btn.addEventListener('click', () => {
     gInput.value = localStorage.getItem('sb_gemini_key') || '';
     qInput.value = localStorage.getItem('sb_groq_key') || '';
     updateStatus(gStatus, gInput.value);
     updateStatus(qStatus, qInput.value);
+    markSelectedTheme(localStorage.getItem('sb_theme') || '');
     openModal('settingsModal');
   });
 

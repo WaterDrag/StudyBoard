@@ -16,6 +16,102 @@
   --radius-sm:    8px;
   --shadow:       0 4px 24px rgba(0,0,0,0.4);
   --transition:   0.18s ease;
+  --board-bg:          #0b1120;
+  --board-grid-fine:   rgba(148,163,255,0.055);
+  --board-grid-coarse: rgba(148,163,255,0.09);
+  --board-glow:        rgba(99,102,241,0.07);
+}
+
+/* ===== THEMES ===== */
+/* Selected in Nastavení on the dashboard; applied as data-theme on <html>
+   by js/version.js (loaded first on every page, so no flash of the wrong
+   theme). Everything below only overrides :root variables — components
+   pick the theme up automatically. */
+[data-theme="ocean"] {
+  --bg:   #071a26;
+  --bg-2: #0e2a3a;
+  --bg-3: #1b4054;
+  --accent:      #06b6d4;
+  --accent-dark: #0891b2;
+  --board-bg:          #06141d;
+  --board-grid-fine:   rgba(103,232,249,0.05);
+  --board-grid-coarse: rgba(103,232,249,0.09);
+  --board-glow:        rgba(6,182,212,0.08);
+}
+[data-theme="les"] {
+  --bg:   #0c1a12;
+  --bg-2: #16291d;
+  --bg-3: #244232;
+  --accent:      #22c55e;
+  --accent-dark: #16a34a;
+  --board-bg:          #08130b;
+  --board-grid-fine:   rgba(134,239,172,0.05);
+  --board-grid-coarse: rgba(134,239,172,0.09);
+  --board-glow:        rgba(34,197,94,0.07);
+}
+[data-theme="zapad"] {
+  --bg:   #1c1210;
+  --bg-2: #2b1c17;
+  --bg-3: #452e24;
+  --accent:      #f97316;
+  --accent-dark: #ea580c;
+  --board-bg:          #150d09;
+  --board-grid-fine:   rgba(253,186,116,0.05);
+  --board-grid-coarse: rgba(253,186,116,0.09);
+  --board-glow:        rgba(249,115,22,0.07);
+}
+[data-theme="svetly"] {
+  --bg:   #eef2f7;
+  --bg-2: #ffffff;
+  --bg-3: #dfe7f0;
+  --border:     rgba(15,23,42,0.12);
+  --text:       #0f172a;
+  --text-muted: #5b6b80;
+  --shadow:     0 4px 24px rgba(15,23,42,0.14);
+  --board-bg:          #e4eaf3;
+  --board-grid-fine:   rgba(30,41,90,0.06);
+  --board-grid-coarse: rgba(30,41,90,0.11);
+  --board-glow:        rgba(99,102,241,0.08);
+}
+[data-theme="svetly"] select { color-scheme: light; }
+
+/* Theme picker in Nastavení */
+.theme-picker { display: flex; gap: 10px; flex-wrap: wrap; }
+.theme-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-family: inherit;
+  padding: 4px;
+}
+.theme-opt-swatch {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  background: var(--to-bg, #0f172a);
+  position: relative;
+  transition: var(--transition);
+  overflow: hidden;
+}
+.theme-opt-swatch::after {
+  content: '';
+  position: absolute;
+  left: 7px; bottom: 7px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--to-accent, #6366f1);
+}
+.theme-opt:hover .theme-opt-swatch { border-color: var(--text-muted); }
+.theme-opt.selected { color: var(--text); }
+.theme-opt.selected .theme-opt-swatch {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 body {
@@ -511,8 +607,8 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   pointer-events: none;
 }
 .toast {
-  background: #293548;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
   color: var(--text);
   padding: 9px 18px;
   border-radius: 8px;
@@ -526,7 +622,7 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 
 /* ===== ROOM NAV ===== */
 .room-nav {
-  background: rgba(30,41,59,0.82);
+  background: color-mix(in srgb, var(--bg-2) 82%, transparent);
   backdrop-filter: blur(10px) saturate(1.3);
   box-shadow: 0 2px 16px rgba(0,0,0,0.25);
   padding: 0 16px;
@@ -569,12 +665,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
      box shrinks well below the viewport, and previously the grid shrank
      with it, leaving a plain seam beyond it. A fixed screen-space grid has
      no seam at any zoom level or board size. */
-  background-color: #0b1120;
+  background-color: var(--board-bg);
   background-image:
-    linear-gradient(rgba(148,163,255,0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148,163,255,0.055) 1px, transparent 1px),
-    linear-gradient(rgba(148,163,255,0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148,163,255,0.09) 1px, transparent 1px);
+    linear-gradient(var(--board-grid-fine) 1px, transparent 1px),
+    linear-gradient(90deg, var(--board-grid-fine) 1px, transparent 1px),
+    linear-gradient(var(--board-grid-coarse) 1px, transparent 1px),
+    linear-gradient(90deg, var(--board-grid-coarse) 1px, transparent 1px);
   background-size: 28px 28px, 28px 28px, 140px 140px, 140px 140px;
 }
 .board-wrap.panning { cursor: grabbing; }
@@ -583,7 +679,7 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   position: relative;
   width: 3200px;
   height: 2200px;
-  background-image: radial-gradient(ellipse 1400px 900px at 50% 38%, rgba(99,102,241,0.07), transparent 70%);
+  background-image: radial-gradient(ellipse 1400px 900px at 50% 38%, var(--board-glow), transparent 70%);
   background-size: 100% 100%;
 }
 

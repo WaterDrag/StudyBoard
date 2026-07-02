@@ -304,6 +304,26 @@
         <button class="modal-close" data-close="settingsModal">✕</button>
       </div>
       <div class="form-group">
+        <label class="label">Vzhled</label>
+        <div class="theme-picker" id="themePicker">
+          <button type="button" class="theme-opt" data-theme="">
+            <span class="theme-opt-swatch" style="--to-bg:#0f172a;--to-accent:#6366f1;"></span>Půlnoc
+          </button>
+          <button type="button" class="theme-opt" data-theme="ocean">
+            <span class="theme-opt-swatch" style="--to-bg:#071a26;--to-accent:#06b6d4;"></span>Oceán
+          </button>
+          <button type="button" class="theme-opt" data-theme="les">
+            <span class="theme-opt-swatch" style="--to-bg:#0c1a12;--to-accent:#22c55e;"></span>Les
+          </button>
+          <button type="button" class="theme-opt" data-theme="zapad">
+            <span class="theme-opt-swatch" style="--to-bg:#1c1210;--to-accent:#f97316;"></span>Západ
+          </button>
+          <button type="button" class="theme-opt" data-theme="svetly">
+            <span class="theme-opt-swatch" style="--to-bg:#eef2f7;--to-accent:#6366f1;"></span>Světlý
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
         <label class="label">Gemini API klíč <span id="geminiKeyStatus" style="font-size:0.75rem;margin-left:6px;"></span></label>
         <input id="settingsGeminiKey" type="password" class="input" placeholder="AQ.Ab8R…" autocomplete="off">
         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">
