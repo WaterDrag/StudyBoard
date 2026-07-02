@@ -1,6 +1,12 @@
 // ── Auth guard ─────────────────────────────────────────────────
 auth.onAuthStateChanged(user => {
-  if (!user) { window.location.href = 'index.html'; return; }
+  if (!user) {
+    // Preserve a friend-invite link (?addFriend=CODE) through the login
+    // round-trip, same mechanism as room.js's invite-link redirect.
+    if (window.location.search) localStorage.setItem('sb_pending_redirect', window.location.href);
+    window.location.href = 'index.html';
+    return;
+  }
   init(user);
 });
 
@@ -42,6 +48,8 @@ async function init(user) {
   setupJoin(user);
   setupNewDeck(user);
   setupAddFriend(user);
+  setupEditRoom();
+  setupEditDeck();
   setupModalClose();
 }
 
@@ -101,15 +109,45 @@ function buildRoomCard(id, room, role) {
   const a = document.createElement('a');
   a.href = `room.html?id=${id}`;
   a.className = 'room-card';
+  a.style.setProperty('--card-color', room.color || '#6366f1');
   a.innerHTML = `
-    <div class="room-card-dot" style="background:${room.color || '#6366f1'};"></div>
+    ${role === 'owner' ? `<button class="card-edit-btn" data-edit-room="${id}" title="Upravit barvu">✏️</button>` : ''}
     <h3>${esc(room.name)}</h3>
     ${room.description ? `<p class="card-desc">${esc(room.description)}</p>` : ''}
     <div class="room-card-meta">
       <span class="role-badge role-${role}">${labels[role] || role}</span>
       <span class="meta-date">${fmtDate(room.createdAt)}</span>
     </div>`;
+  const editBtn = a.querySelector('[data-edit-room]');
+  if (editBtn) {
+    editBtn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      openEditRoomModal(id, room);
+    });
+  }
   return a;
+}
+
+function setupEditRoom() {
+  setupColorInput('editRoomColorInput', 'editRoomColorSwatch', 'editRoomColorHex');
+  document.getElementById('editRoomSubmit').addEventListener('click', async () => {
+    const id    = document.getElementById('editRoomSubmit').dataset.roomId;
+    const color = document.getElementById('editRoomColorInput').value;
+    try {
+      await db.collection('rooms').doc(id).update({ color });
+      closeModal('editRoomModal');
+      toast('Barva uložena!');
+    } catch (e) { toast('Chyba: ' + e.message); }
+  });
+}
+
+function openEditRoomModal(id, room) {
+  document.getElementById('editRoomSubmit').dataset.roomId = id;
+  const color = room.color || '#6366f1';
+  document.getElementById('editRoomColorInput').value = color;
+  document.getElementById('editRoomColorSwatch').style.background = color;
+  document.getElementById('editRoomColorHex').textContent = color;
+  openModal('editRoomModal');
 }
 
 // ── Vytvořit místnost ───────────────────────────────────────────
@@ -247,6 +285,7 @@ function buildDeckCard(id, deck, roomName, ownerName, myUid) {
   const a = document.createElement('a');
   a.href      = `flashcards.html?deck=${id}`;
   a.className = 'deck-card';
+  a.style.setProperty('--card-color', deck.color || '#6366f1');
 
   const contextTag = roomName
     ? `<span class="deck-tag deck-tag-room">📂 ${esc(roomName)}</span>`
@@ -256,13 +295,46 @@ function buildDeckCard(id, deck, roomName, ownerName, myUid) {
     ? `<span class="deck-tag deck-tag-owner">👤 ${esc(ownerName)}</span>`
     : '';
 
+  const isOwner = deck.ownerUid === myUid;
   a.innerHTML = `
-    <div class="deck-dot" style="background:${deck.color || '#6366f1'};"></div>
+    ${isOwner ? `<button class="card-edit-btn" data-edit-deck="${id}" title="Upravit balíček">✏️</button>` : ''}
     <h3>${esc(deck.name)}</h3>
     ${deck.description ? `<p class="card-desc">${esc(deck.description)}</p>` : ''}
     <p style="margin-bottom:8px;">${deck.cardCount || 0} karet</p>
     <div class="deck-tags">${contextTag}${ownerTag}</div>`;
+  const editBtn = a.querySelector('[data-edit-deck]');
+  if (editBtn) {
+    editBtn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      openEditDeckModal(id, deck);
+    });
+  }
   return a;
+}
+
+function setupEditDeck() {
+  setupColorInput('editDeckColorInput', 'editDeckColorSwatch', 'editDeckColorHex');
+  document.getElementById('editDeckSubmit').addEventListener('click', async () => {
+    const id    = document.getElementById('editDeckSubmit').dataset.deckId;
+    const name  = document.getElementById('editDeckName').value.trim();
+    const color = document.getElementById('editDeckColorInput').value;
+    if (!name) { toast('Zadej název balíčku.'); return; }
+    try {
+      await db.collection('decks').doc(id).update({ name, color });
+      closeModal('editDeckModal');
+      toast('Balíček uložen!');
+    } catch (e) { toast('Chyba: ' + e.message); }
+  });
+}
+
+function openEditDeckModal(id, deck) {
+  document.getElementById('editDeckSubmit').dataset.deckId = id;
+  document.getElementById('editDeckName').value = deck.name || '';
+  const color = deck.color || '#6366f1';
+  document.getElementById('editDeckColorInput').value = color;
+  document.getElementById('editDeckColorSwatch').style.background = color;
+  document.getElementById('editDeckColorHex').textContent = color;
+  openModal('editDeckModal');
 }
 
 function setupNewDeck(user) {
@@ -297,18 +369,43 @@ function setupNewDeck(user) {
 }
 
 // ── Přátelé ─────────────────────────────────────────────────────
+// Friendship membership is derived purely from *accepted* friendRequests
+// docs (uid -> reqId), never mirrored onto the other user's doc — Firestore
+// rules only allow a user to write their own /users/{uid} doc, so a batch
+// that tried to also write `friends.*` onto the OTHER party's doc always
+// failed the whole batch atomically ("Missing or insufficient permissions"),
+// silently blocking every accept/remove. Nicknames still live on your own
+// doc (that's a self-write, always fine).
+let FRIEND_NICKNAMES = {};
+let FRIEND_MAP = {}; // uid -> friendRequest doc id (the relation to delete on "remove")
+
 function loadFriends(user) {
-  // Sleduj vlastní user doc pro přátele + zobraz vlastní kód
+  const render = () => renderFriendsList(user.uid, FRIEND_MAP, FRIEND_NICKNAMES);
+
   db.collection('users').doc(user.uid).onSnapshot(snap => {
     if (!snap.exists) return;
-    const data    = snap.data();
-    const friends = data.friends || {};
+    const data = snap.data();
+    FRIEND_NICKNAMES = data.friends || {};
 
     const codeEl = document.getElementById('myFriendCode');
     if (codeEl && data.friendCode) codeEl.textContent = data.friendCode;
 
-    renderFriendsList(user.uid, friends);
+    render();
   });
+
+  const watchAccepted = (field, otherField) =>
+    db.collection('friendRequests')
+      .where(field, '==', user.uid).where('status', '==', 'accepted')
+      .onSnapshot(snap => {
+        snap.docChanges().forEach(ch => {
+          const otherUid = ch.doc.data()[otherField];
+          if (ch.type === 'removed') delete FRIEND_MAP[otherUid];
+          else FRIEND_MAP[otherUid] = ch.doc.id;
+        });
+        render();
+      }, () => {});
+  watchAccepted('fromUid', 'toUid');
+  watchAccepted('toUid', 'fromUid');
 
   document.getElementById('copyFriendCode').addEventListener('click', () => {
     const code = document.getElementById('myFriendCode').textContent;
@@ -316,6 +413,22 @@ function loadFriends(user) {
       navigator.clipboard.writeText(code).then(() => toast('Kód zkopírován!'));
     }
   });
+
+  document.getElementById('copyFriendLink').addEventListener('click', () => {
+    const code = document.getElementById('myFriendCode').textContent;
+    if (!code || code === '------') return;
+    const url = new URL('dashboard.html', window.location.href);
+    url.searchParams.set('addFriend', code);
+    navigator.clipboard.writeText(url.href).then(() => toast('Odkaz zkopírován!'));
+  });
+
+  // Otevřený přes pozvánkový odkaz (?addFriend=CODE) — přepni na záložku
+  // Přátelé a předvyplň kód, ať jen kliknou na "Odeslat žádost".
+  const addFriendCode = new URLSearchParams(window.location.search).get('addFriend');
+  if (addFriendCode) {
+    document.querySelector('.tab-btn[data-tab="friends"]')?.click();
+    document.getElementById('friendCodeInput').value = addFriendCode.toUpperCase();
+  }
 
   // Sleduj příchozí žádosti
   db.collection('friendRequests')
@@ -329,9 +442,9 @@ function loadFriends(user) {
     }, () => { /* pravidla ještě nejsou plně propagována – tiše ignoruj */ });
 }
 
-function renderFriendsList(myUid, friends) {
+function renderFriendsList(myUid, friendMap, nicknames) {
   const el  = document.getElementById('friendsList');
-  const ids = Object.keys(friends);
+  const ids = Object.keys(friendMap);
   if (!ids.length) {
     el.innerHTML = `<div style="color:var(--text-muted);font-size:0.875rem;padding:8px 0;">Žádní přátelé zatím.</div>`;
     return;
@@ -343,7 +456,7 @@ function renderFriendsList(myUid, friends) {
     docs.forEach(doc => {
       if (!doc.exists) return;
       const p     = doc.data();
-      const nick  = (friends[doc.id] || {}).nickname || '';
+      const nick  = (nicknames[doc.id] || {}).nickname || '';
       const row   = document.createElement('div');
       row.className = 'friend-row';
       row.innerHTML = `
@@ -390,18 +503,20 @@ function renderFriendsList(myUid, friends) {
       });
     });
 
-    // Remove friend
+    // Remove friend — delete the shared friendRequest doc. Either party is
+    // allowed to delete it per firestore.rules, so this is a single legal
+    // write (unlike the old batch that tried to touch both user docs).
     el.querySelectorAll('[data-remove-friend]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Odebrat přítele?')) return;
+      btn.addEventListener('click', () => {
         const uid = btn.dataset.removeFriend;
-        try {
-          const batch = db.batch();
-          batch.update(db.collection('users').doc(myUid), { [`friends.${uid}`]: firebase.firestore.FieldValue.delete() });
-          batch.update(db.collection('users').doc(uid),   { [`friends.${myUid}`]: firebase.firestore.FieldValue.delete() });
-          await batch.commit();
-          toast('Přítel odebrán.');
-        } catch (e) { toast('Chyba: ' + e.message); }
+        confirmDialog('Odebrat přítele?', async () => {
+          try {
+            await db.collection('friendRequests').doc(friendMap[uid]).delete();
+            delete FRIEND_MAP[uid];
+            renderFriendsList(myUid, FRIEND_MAP, FRIEND_NICKNAMES);
+            toast('Přítel odebrán.');
+          } catch (e) { toast('Chyba: ' + e.message); }
+        });
       });
     });
   });
@@ -426,7 +541,7 @@ function renderRequests(user, docs) {
         <div class="f-email">${esc(r.fromEmail || '')}</div>
       </div>
       <div class="req-actions">
-        <button class="btn btn-primary"   style="padding:5px 12px;font-size:0.78rem;" data-accept="${doc.id}" data-from="${r.fromUid}">✓</button>
+        <button class="btn btn-primary"   style="padding:5px 12px;font-size:0.78rem;" data-accept="${doc.id}">✓</button>
         <button class="btn btn-secondary" style="padding:5px 10px;font-size:0.78rem;" data-decline="${doc.id}">✕</button>
       </div>`;
     el.appendChild(row);
@@ -434,26 +549,12 @@ function renderRequests(user, docs) {
 
   el.querySelectorAll('[data-accept]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const reqId   = btn.dataset.accept;
-      const fromUid = btn.dataset.from;
+      const reqId = btn.dataset.accept;
       try {
-        const [reqDoc, fromDoc] = await Promise.all([
-          db.collection('friendRequests').doc(reqId).get(),
-          db.collection('users').doc(fromUid).get(),
-        ]);
-        const fromData = fromDoc.data() || {};
-        const myData   = (await db.collection('users').doc(user.uid).get()).data() || {};
-        const now      = firebase.firestore.FieldValue.serverTimestamp();
-        const batch    = db.batch();
-        batch.update(db.collection('friendRequests').doc(reqId), { status: 'accepted' });
-        // Přidej oba ke svým přátelům
-        batch.update(db.collection('users').doc(user.uid), {
-          [`friends.${fromUid}`]: { nickname: '', addedAt: now },
-        });
-        batch.update(db.collection('users').doc(fromUid), {
-          [`friends.${user.uid}`]: { nickname: '', addedAt: now },
-        });
-        await batch.commit();
+        // Just flip the shared request's status — both parties are allowed
+        // to update it. loadFriends()'s accepted-status listeners pick this
+        // up and derive the friendship from it; no cross-user doc write.
+        await db.collection('friendRequests').doc(reqId).update({ status: 'accepted' });
         toast('Žádost přijata! 🎉');
       } catch (e) { toast('Chyba: ' + e.message); }
     });
@@ -501,20 +602,18 @@ function setupAddFriend(user) {
         btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
       }
 
-      // Zkontroluj jestli už jsou přátelé
-      const myDoc = await db.collection('users').doc(user.uid).get();
-      if (myDoc.exists && (myDoc.data().friends || {})[targetUid]) {
+      // Zkontroluj existující vztah (v obou směrech) — přátelství i pending žádost
+      const [sentSnap, receivedSnap] = await Promise.all([
+        db.collection('friendRequests').where('fromUid', '==', user.uid).where('toUid', '==', targetUid).get(),
+        db.collection('friendRequests').where('fromUid', '==', targetUid).where('toUid', '==', user.uid).get(),
+      ]);
+      const existingDocs = [...sentSnap.docs, ...receivedSnap.docs];
+      if (existingDocs.some(d => d.data().status === 'accepted')) {
         errEl.textContent = 'Tento uživatel je již tvůj přítel.';
         errEl.style.display = 'block';
         btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
       }
-
-      // Zkontroluj existující pending žádost (filtrujeme status client-side, ne třetí where)
-      const existingSnap = await db.collection('friendRequests')
-        .where('fromUid', '==', user.uid)
-        .where('toUid',   '==', targetUid)
-        .get();
-      if (existingSnap.docs.some(d => d.data().status === 'pending')) {
+      if (existingDocs.some(d => d.data().status === 'pending')) {
         errEl.textContent = 'Žádost už byla odeslána.';
         errEl.style.display = 'block';
         btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
@@ -596,6 +695,25 @@ function setupModalClose() {
 }
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Generic confirm popup (replaces native confirm()) ───────────
+function confirmDialog(message, onConfirm) {
+  const overlay = document.getElementById('confirmModal');
+  document.getElementById('confirmModalText').textContent = message;
+  overlay.classList.add('open');
+
+  // Clone-replace so stale listeners from a previous (possibly
+  // backdrop-dismissed) call can't stack and fire more than once.
+  const oldYes = document.getElementById('confirmModalYes');
+  const oldNo  = document.getElementById('confirmModalNo');
+  const yesBtn = oldYes.cloneNode(true);
+  const noBtn  = oldNo.cloneNode(true);
+  oldYes.replaceWith(yesBtn);
+  oldNo.replaceWith(noBtn);
+
+  yesBtn.addEventListener('click', () => { overlay.classList.remove('open'); onConfirm(); });
+  noBtn.addEventListener('click',  () => overlay.classList.remove('open'));
+}
 
 function setupColorInput(inputId, swatchId, hexId) {
   const input  = document.getElementById(inputId);

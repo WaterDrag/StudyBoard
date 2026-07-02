@@ -1,6 +1,10 @@
-// Přesměruj přihlášeného uživatele rovnou na dashboard
+// Přesměruj přihlášeného uživatele na dashboard — nebo zpět na odkaz
+// (pozvánka do místnosti/přátel), který ho sem přivedl před přihlášením.
 auth.onAuthStateChanged(user => {
-  if (user) window.location.href = 'dashboard.html';
+  if (!user) return;
+  const pending = localStorage.getItem('sb_pending_redirect');
+  localStorage.removeItem('sb_pending_redirect');
+  window.location.href = pending || 'dashboard.html';
 });
 
 const errorMsg     = document.getElementById('errorMsg');

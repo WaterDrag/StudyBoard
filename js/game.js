@@ -8,7 +8,8 @@ const WW=4000,WH=4000,CX=WW/2,CY=WH/2;
 const BARRIER_HALF=1250;
 const BARRIER={x:CX-BARRIER_HALF,y:CY-BARRIER_HALF,w:BARRIER_HALF*2,h:BARRIER_HALF*2};
 const BASE_R=52,PLAYER_R=16,SPAWN_M=120,FOV_DIST=800;
-const BUILD_DUR=20; // seconds
+const BUILD_DUR=40; // seconds — first QUIZ_ANSWER_DUR of this is the answer window
+const QUIZ_ANSWER_DUR=20; // seconds to answer before it's auto-marked wrong
 // Angle offsets (radians) probed, full symmetric ring, when a zombie's direct path is blocked.
 const ZOMBIE_ESCAPE_OFFSETS=[0.4,-0.4,0.8,-0.8,1.2,-1.2,1.6,-1.6,2.0,-2.0,2.4,-2.4,2.8,-2.8,Math.PI];
 
@@ -2168,7 +2169,10 @@ function getGameDistractors(card){
   return shuffle([...(card.distractors||[]),...extra]).slice(0,n);
 }
 
+let _quizTimerId=null;
+
 function showGameQuiz(){
+  if(_quizTimerId){clearInterval(_quizTimerId);_quizTimerId=null;}
   if(DECK_CARDS.length<2){_afterQuiz();return;}
   let available=DECK_CARDS.filter(c=>!QUIZ_USED.has(c.id)&&c.front&&c.back);
   if(!available.length){QUIZ_USED.clear();available=DECK_CARDS.filter(c=>c.front&&c.back);}
@@ -2200,34 +2204,76 @@ function showGameQuiz(){
     statusEl.textContent='';
   }
 
+  let resolved=false;
+  const timerEl=document.getElementById('quizOvTimer');
+  let timeLeft=QUIZ_ANSWER_DUR;
+  timerEl.textContent=timeLeft+'s';
+  timerEl.style.color='#4ade80';
+
   const wrap=document.getElementById('quizOvA');
   wrap.innerHTML='';
+
+  function finish(){
+    // Guaranteed close+cleanup regardless of how the question was resolved
+    // (answered, timed out) — button clicks after this point are already
+    // disabled, so a late click can never sneak an answer in after the
+    // window (and thus after the wave itself) has started.
+    if(_quizTimerId){clearInterval(_quizTimerId);_quizTimerId=null;}
+    setTimeout(()=>{closeOv('quizOv');_afterQuiz();},2200);
+  }
+
+  function markWrong(reasonHtml){
+    wrap.querySelectorAll('button').forEach(b=>{
+      b.disabled=true;
+      if(b.textContent===card.back)b.style.borderColor='#4ade80';
+    });
+    gs.wrongAnswers++;
+    const penalty=Math.min(70,gs.wrongAnswers*10);
+    const hpBoost=Math.round(gs.wrongAnswers*15);
+    msgEl.innerHTML=`${reasonHtml} Správná: <strong>${card.back}</strong><br><span style="color:#f87171;font-size:.75rem;">Příští vlna: zombie +${hpBoost}% HP · odměny −${penalty}%</span>`;
+    msgEl.style.color='#f87171';
+    finish();
+  }
+
   opts.forEach(opt=>{
     const btn=document.createElement('button');
     btn.className='btn-s';
     btn.style.cssText='padding:9px 12px;font-size:.8rem;text-align:left;white-space:normal;line-height:1.3;';
     btn.textContent=opt;
     btn.addEventListener('click',()=>{
-      wrap.querySelectorAll('button').forEach(b=>b.disabled=true);
+      if(resolved)return;
+      resolved=true;
       const ok=opt===card.back;
       btn.style.borderColor=ok?'#4ade80':'#f87171';
       if(ok){
+        wrap.querySelectorAll('button').forEach(b=>b.disabled=true);
         const reward=30+gs.wave*5;
         me.coins+=reward; updateHUD();
         msgEl.innerHTML=`✅ Správně! <span style="color:#fbbf24">+${reward} 💰</span>`;
         msgEl.style.color='';
+        finish();
       } else {
-        gs.wrongAnswers++;
-        wrap.querySelectorAll('button').forEach(b=>{if(b.textContent===card.back)b.style.borderColor='#4ade80';});
-        const penalty=Math.min(70,gs.wrongAnswers*10);
-        const hpBoost=Math.round(gs.wrongAnswers*15);
-        msgEl.innerHTML=`❌ Správná: <strong>${card.back}</strong><br><span style="color:#f87171;font-size:.75rem;">Příští vlna: zombie +${hpBoost}% HP · odměny −${penalty}%</span>`;
-        msgEl.style.color='#f87171';
+        markWrong('❌');
       }
-      setTimeout(()=>{closeOv('quizOv');_afterQuiz();},2200);
     });
     wrap.appendChild(btn);
   });
+
+  // Hard time limit — if it's not answered in time it counts as wrong (same
+  // penalty as picking a wrong option) and the correct answer is revealed,
+  // so waiting out the clock is never a way to dodge the question for free.
+  _quizTimerId=setInterval(()=>{
+    timeLeft--;
+    timerEl.textContent=Math.max(0,timeLeft)+'s';
+    if(timeLeft<=5)timerEl.style.color='#f87171';
+    if(timeLeft<=0){
+      clearInterval(_quizTimerId);_quizTimerId=null;
+      if(resolved)return;
+      resolved=true;
+      markWrong('⏰ Čas vypršel!');
+    }
+  },1000);
+
   openOv('quizOv');
 }
 

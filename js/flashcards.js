@@ -80,6 +80,7 @@ async function loadDeckList() {
   }
 
   setupNewDeckModal();
+  setupEditDeckModal();
   setupModalClose();
   loadSurvivalLobbies();
 }
@@ -101,16 +102,63 @@ function renderDeckGrid(docs) {
   grid.innerHTML = '';
   docs.forEach(doc => {
     const d = doc.data();
+    const isOwner = d.ownerUid === ME.uid;
     const a = document.createElement('a');
     a.href      = `flashcards.html?deck=${doc.id}${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
     a.className = 'deck-card';
+    a.style.setProperty('--card-color', d.color || '#6366f1');
     a.innerHTML = `
-      <div class="deck-dot" style="background:${d.color || '#6366f1'};"></div>
+      ${isOwner ? `<button class="card-edit-btn" data-edit-deck="${doc.id}" title="Upravit balíček">✏️</button>` : ''}
       <h3>${esc(d.name)}</h3>
       ${d.description ? `<p class="card-desc">${esc(d.description)}</p>` : ''}
       <p>${d.cardCount || 0} karet</p>`;
+    const editBtn = a.querySelector('[data-edit-deck]');
+    if (editBtn) {
+      editBtn.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        openEditDeckModal(doc.id, d);
+      });
+    }
     grid.appendChild(a);
   });
+}
+
+function setupEditDeckModal() {
+  const colorInput  = document.getElementById('editDeckColorInput');
+  const colorSwatch = document.getElementById('editDeckColorSwatch');
+  const colorHex    = document.getElementById('editDeckColorHex');
+  colorInput.addEventListener('input', () => {
+    colorSwatch.style.background = colorInput.value;
+    colorHex.textContent = colorInput.value;
+  });
+  document.getElementById('editDeckSubmit').addEventListener('click', async () => {
+    const id    = document.getElementById('editDeckSubmit').dataset.deckId;
+    const name  = document.getElementById('editDeckName').value.trim();
+    const color = colorInput.value;
+    if (!name) { toast('Zadej název balíčku.'); return; }
+    try {
+      await db.collection('decks').doc(id).update({ name, color });
+      if (DECK && DECK.id === id) {
+        DECK.name = name; DECK.color = color;
+        const deckTitle = document.getElementById('deckTitle');
+        const navTitle  = document.getElementById('navTitle');
+        if (deckTitle) deckTitle.textContent = name;
+        if (navTitle)  navTitle.textContent  = name;
+      }
+      closeModal('editDeckModal');
+      toast('Balíček uložen!');
+    } catch (e) { toast('Chyba: ' + e.message); }
+  });
+}
+
+function openEditDeckModal(id, deck) {
+  document.getElementById('editDeckSubmit').dataset.deckId = id;
+  document.getElementById('editDeckName').value = deck.name || '';
+  const color = deck.color || '#6366f1';
+  document.getElementById('editDeckColorInput').value = color;
+  document.getElementById('editDeckColorSwatch').style.background = color;
+  document.getElementById('editDeckColorHex').textContent = color;
+  openModal('editDeckModal');
 }
 
 function setupNewDeckModal() {
@@ -152,20 +200,37 @@ function setupNewDeckModal() {
 }
 
 // ── Load deck + cards ──────────────────────────────────────────
+let IS_DECK_OWNER = false;
+let ROOM_ROLE     = null; // role of ME in the room that owns this deck (if any)
+
+// Deck owner (Firestore ownerUid) can always manage every card and the deck
+// itself. A room editor/owner may add cards and edit/delete only the ones
+// they personally authored — they can never delete the whole deck.
+function canManageCard(card) {
+  return IS_DECK_OWNER || ((ROOM_ROLE === 'editor' || ROOM_ROLE === 'owner') && card.authorId === ME.uid);
+}
+function canAddCards() {
+  return IS_DECK_OWNER || ROOM_ROLE === 'editor' || ROOM_ROLE === 'owner';
+}
+
 async function loadDeck() {
   try {
     const deckDoc = await db.collection('decks').doc(DECK_ID).get();
     if (!deckDoc.exists) { toast('Balíček nenalezen.'); window.history.back(); return; }
 
     DECK = { id: deckDoc.id, ...deckDoc.data() };
-    const isOwner = DECK.ownerUid === ME.uid;
+    IS_DECK_OWNER = DECK.ownerUid === ME.uid;
+    ROOM_ROLE     = null;
+    const isOwner = IS_DECK_OWNER;
 
-    // Ověř přístup: owner nebo člen místnosti
-    if (!isOwner && DECK.roomId) {
-      const roomDoc = await db.collection('rooms').doc(DECK.roomId).get();
-      if (!roomDoc.exists || !(roomDoc.data().memberIds || []).includes(ME.uid)) {
+    // Ověř přístup: owner nebo člen místnosti; zjisti i roli v místnosti
+    if (DECK.roomId) {
+      const roomDoc  = await db.collection('rooms').doc(DECK.roomId).get();
+      const isMember = roomDoc.exists && (roomDoc.data().memberIds || []).includes(ME.uid);
+      if (!isOwner && !isMember) {
         toast('Nemáš přístup.'); window.location.href = 'dashboard.html'; return;
       }
+      if (isMember) ROOM_ROLE = (roomDoc.data().roles || {})[ME.uid] || null;
     } else if (!isOwner) {
       toast('Nemáš přístup.'); window.location.href = 'dashboard.html'; return;
     }
@@ -179,16 +244,22 @@ async function loadDeck() {
     showView('cards');
     document.getElementById('deckTitle').textContent = esc(DECK.name);
 
-    // Akce pro vlastníka
-    if (isOwner) {
+    if (canAddCards()) {
       document.getElementById('addCardForm').style.display = 'block';
-      const actions = document.getElementById('deckActions');
-      actions.innerHTML = `
-        <button class="btn btn-ghost" style="font-size:0.82rem;padding:7px 13px;" id="deleteDeckBtn">🗑 Smazat balíček</button>`;
-      document.getElementById('deleteDeckBtn').addEventListener('click', () => openModal('deleteDeckModal'));
-      setupDeleteModal();
       setupAddCard();
       setupEditCardModal();
+    }
+
+    // Přejmenovat/smazat celý balíček – jen vlastník balíčku
+    if (isOwner) {
+      const actions = document.getElementById('deckActions');
+      actions.innerHTML = `
+        <button class="btn btn-ghost" style="font-size:0.82rem;padding:7px 13px;" id="renameDeckBtn">✏️ Přejmenovat</button>
+        <button class="btn btn-ghost" style="font-size:0.82rem;padding:7px 13px;" id="deleteDeckBtn">🗑 Smazat balíček</button>`;
+      document.getElementById('renameDeckBtn').addEventListener('click', () => openEditDeckModal(DECK_ID, DECK));
+      document.getElementById('deleteDeckBtn').addEventListener('click', () => openModal('deleteDeckModal'));
+      setupDeleteModal();
+      setupEditDeckModal();
     }
 
     // Tlačítko Studovat (vždy viditelné)
@@ -206,19 +277,17 @@ async function loadDeck() {
     quizBtn.href        = `quiz.html?deck=${DECK_ID}${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
     studyBtn.insertAdjacentElement('afterend', quizBtn);
 
-    const survivalBtn = document.createElement('a');
-    survivalBtn.className   = 'btn btn-ghost';
-    survivalBtn.style.cssText = 'padding:7px 14px;font-size:0.82rem;';
-    survivalBtn.textContent = '🧟 Survival';
-    survivalBtn.href        = `game.html?deck=${DECK_ID}${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
-    quizBtn.insertAdjacentElement('afterend', survivalBtn);
+    // Survival is started from the room's lobby list (loadSurvivalLobbies
+    // below), whose deck picker already covers any deck — personal or
+    // room-linked, one or several at once — so a per-deck shortcut here is
+    // redundant no matter which kind of deck this is.
 
     // Real-time karty
     db.collection('decks').doc(DECK_ID).collection('cards')
       .orderBy('createdAt', 'asc')
       .onSnapshot(snap => {
         ALL_CARDS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        renderCardsList(isOwner);
+        renderCardsList();
         document.getElementById('deckCardCount').textContent = `${ALL_CARDS.length} karet`;
         // Aktualizuj počet v deck doc
         if (isOwner) db.collection('decks').doc(DECK_ID).update({ cardCount: ALL_CARDS.length }).catch(() => {});
@@ -251,16 +320,17 @@ function renderCardContent(card) {
   return `<div class="card-side-txt">${esc(card.back)}</div>`;
 }
 
-function renderCardsList(isOwner) {
+function renderCardsList() {
   const list = document.getElementById('cardsList');
   if (!ALL_CARDS.length) {
-    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);">Žádné karty. ${isOwner ? 'Přidej první výše!' : ''}</div>`;
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);">Žádné karty. ${canAddCards() ? 'Přidej první výše!' : ''}</div>`;
     return;
   }
   list.innerHTML = '';
   ALL_CARDS.forEach(card => {
     const row = document.createElement('div');
     row.className = 'card-row';
+    const editable = canManageCard(card);
     const distractorBadge = (card.distractors && card.distractors.length)
       ? `<div class="card-distractors-row">❌ ${card.distractors.map(d=>`<span class="distractor-badge">${esc(d)}</span>`).join(' ')}</div>` : '';
     row.innerHTML = `
@@ -275,7 +345,7 @@ function renderCardsList(isOwner) {
           ${distractorBadge}
         </div>
       </div>
-      ${isOwner ? `
+      ${editable ? `
         <div class="card-row-actions">
           <button class="btn btn-ghost" style="padding:5px 9px;font-size:0.8rem;" data-edit="${card.id}">✏️</button>
           <button class="btn btn-ghost" style="padding:5px 9px;color:#fca5a5;font-size:0.8rem;" data-del="${card.id}">🗑</button>
@@ -283,22 +353,21 @@ function renderCardsList(isOwner) {
     list.appendChild(row);
   });
 
-  if (isOwner) {
-    list.querySelectorAll('[data-del]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Smazat tuto kartu?')) return;
+  list.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      confirmDialog('Smazat tuto kartu?', async () => {
         try {
           await db.collection('decks').doc(DECK_ID).collection('cards').doc(btn.dataset.del).delete();
         } catch (e) { toast('Chyba: ' + e.message); }
       });
     });
-    list.querySelectorAll('[data-edit]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const card = ALL_CARDS.find(c => c.id === btn.dataset.edit);
-        if (card) openEditCard(card);
-      });
+  });
+  list.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const card = ALL_CARDS.find(c => c.id === btn.dataset.edit);
+      if (card) openEditCard(card);
     });
-  }
+  });
 }
 
 // ── Edit card ──────────────────────────────────────────────────
@@ -322,7 +391,19 @@ function renderEditDistractors() {
   editDistractors.forEach((d, i) => {
     const tag = document.createElement('span');
     tag.className = 'distractor-tag';
-    tag.innerHTML = `${esc(d)} <button class="distractor-rm" data-i="${i}">×</button>`;
+    tag.innerHTML = `<span class="distractor-text" contenteditable="true" spellcheck="false">${esc(d)}</span><button class="distractor-rm" data-i="${i}">×</button>`;
+
+    const textEl = tag.querySelector('.distractor-text');
+    const commit = () => {
+      const val = textEl.textContent.trim();
+      if (val) editDistractors[i] = val;
+      else renderEditDistractors(); // emptied out — drop it and re-render
+    };
+    textEl.addEventListener('blur', commit);
+    textEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); textEl.blur(); }
+    });
+
     tag.querySelector('.distractor-rm').addEventListener('click', () => {
       editDistractors.splice(i, 1);
       renderEditDistractors();
@@ -341,9 +422,22 @@ Return ONLY a JSON array of ${count} strings: ["d1","d2",...]`;
 
   return aiGenerate(prompt, {
     parse(text) {
-      const m = text.match(/\[[\s\S]*?\]/);
-      if (m) { const arr = JSON.parse(m[0]); if (Array.isArray(arr) && arr.length >= count) return arr.slice(0, count).map(String); }
-      const lines = text.split('\n').map(l => l.replace(/^[\s\d.\-•*"']+|["']+$/g, '').trim()).filter(Boolean);
+      // Strip ```json fences first — without this, a bracket-match that
+      // fails (e.g. an item contains a literal "]") fell through to the
+      // line-based fallback on the RAW text, leaking "```json [ ..." fence
+      // artifacts into a "suggestion" chip.
+      const cleaned = text.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+      const start = cleaned.indexOf('[');
+      const end   = cleaned.lastIndexOf(']');
+      if (start !== -1 && end > start) {
+        try {
+          const arr = JSON.parse(cleaned.slice(start, end + 1));
+          if (Array.isArray(arr) && arr.length >= count) return arr.slice(0, count).map(String);
+        } catch (_) { /* malformed — fall through to line-based parsing below */ }
+      }
+      const lines = cleaned.split('\n')
+        .map(l => l.replace(/^[\s\d.\-•*"'[\]]+|["',[\]]+$/g, '').trim())
+        .filter(Boolean);
       if (lines.length >= count) return lines.slice(0, count);
       throw new Error('parse');
     },
@@ -454,6 +548,8 @@ function setupAddCard() {
     try {
       await db.collection('decks').doc(DECK_ID).collection('cards').add({
         front, back,
+        authorId:   ME.uid,
+        authorName: ME.displayName || ME.email,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       document.getElementById('cardFront').value = '';
@@ -651,6 +747,23 @@ function setupModalClose() {
 }
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Generic confirm popup (replaces native confirm()) ───────────
+function confirmDialog(message, onConfirm) {
+  const overlay = document.getElementById('confirmModal');
+  document.getElementById('confirmModalText').textContent = message;
+  overlay.classList.add('open');
+
+  const oldYes = document.getElementById('confirmModalYes');
+  const oldNo  = document.getElementById('confirmModalNo');
+  const yesBtn = oldYes.cloneNode(true);
+  const noBtn  = oldNo.cloneNode(true);
+  oldYes.replaceWith(yesBtn);
+  oldNo.replaceWith(noBtn);
+
+  yesBtn.addEventListener('click', () => { overlay.classList.remove('open'); onConfirm(); });
+  noBtn.addEventListener('click',  () => overlay.classList.remove('open'));
+}
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg) {

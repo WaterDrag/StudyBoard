@@ -19,6 +19,15 @@ service cloud.firestore {
       return roomRole(roomId) == 'owner' || roomRole(roomId) == 'editor';
     }
 
+    function deckData(deckId) { return get(/databases/$(database)/documents/decks/$(deckId)).data; }
+    function isDeckOwner(deckId) { return deckData(deckId).ownerUid == request.auth.uid; }
+    // A room editor/owner may manage cards in a room-scoped deck even if
+    // they didn't create the deck itself (deck.ownerUid is just whoever
+    // happened to create it, e.g. via the AI flashcards feature).
+    function canEditDeckRoom(deckId) {
+      return deckData(deckId).roomId != null && canEditRoom(deckData(deckId).roomId);
+    }
+
     // ── Místnosti ──────────────────────────────────────────────
     match /rooms/{roomId} {
       allow read:   if isAuth();
@@ -33,6 +42,8 @@ service cloud.firestore {
         allow read:   if isMember(roomId);
         allow create: if isAuth() && canEditRoom(roomId) &&
                          request.resource.data.authorId == request.auth.uid;
+        allow update: if isAuth() && (isRoomOwner(roomId) ||
+                         resource.data.authorId == request.auth.uid);
         allow delete: if isAuth() && (isRoomOwner(roomId) ||
                          resource.data.authorId == request.auth.uid);
       }
@@ -88,12 +99,20 @@ service cloud.firestore {
 
       match /cards/{cardId} {
         allow read: if isAuth() && (
-          get(/databases/$(database)/documents/decks/$(deckId)).data.ownerUid == request.auth.uid ||
-          (get(/databases/$(database)/documents/decks/$(deckId)).data.roomId != null &&
-           isMember(get(/databases/$(database)/documents/decks/$(deckId)).data.roomId))
+          isDeckOwner(deckId) ||
+          (deckData(deckId).roomId != null && isMember(deckData(deckId).roomId))
         );
-        allow write: if isAuth() &&
-          get(/databases/$(database)/documents/decks/$(deckId)).data.ownerUid == request.auth.uid;
+        // Deck owner manages every card. A room editor/owner may only create
+        // cards under their own name, and may only edit/delete cards they
+        // authored — never someone else's, and never the deck itself.
+        allow create: if isAuth() && (
+          isDeckOwner(deckId) ||
+          (canEditDeckRoom(deckId) && request.resource.data.authorId == request.auth.uid)
+        );
+        allow update, delete: if isAuth() && (
+          isDeckOwner(deckId) ||
+          (canEditDeckRoom(deckId) && resource.data.authorId == request.auth.uid)
+        );
       }
     }
 

@@ -12,7 +12,14 @@ const CONNS_MAP   = new Map(); // connId → conn data
 
 // ── Auth guard ────────────────────────────────────────────────
 auth.onAuthStateChanged(async user => {
-  if (!user) { window.location.href = 'index.html'; return; }
+  if (!user) {
+    // Preserve the invite link (?id=..&code=..&role=..) through the login
+    // round-trip — otherwise clicking a link while logged out would land on
+    // the dashboard after signing in instead of joining the room.
+    localStorage.setItem('sb_pending_redirect', window.location.href);
+    window.location.href = 'index.html';
+    return;
+  }
   ME = user;
 
   ROOM_ID = new URLSearchParams(window.location.search).get('id');
@@ -26,9 +33,30 @@ auth.onAuthStateChanged(async user => {
     MY_ROLE = (ROOM.roles || {})[ME.uid];
 
     if (!MY_ROLE) {
-      toast('Nemáš přístup k této místnosti.');
-      setTimeout(() => (window.location.href = 'dashboard.html'), 1600);
-      return;
+      // Invite link (room.html?id=..&code=..&role=..) — join automatically
+      // with the role the link-creator picked, mirroring dashboard.js's
+      // code-only join flow but with an embedded role instead of always
+      // defaulting to viewer.
+      const params   = new URLSearchParams(window.location.search);
+      const linkCode = params.get('code');
+      const linkRole = params.get('role');
+      const validRole = linkRole === 'editor' || linkRole === 'viewer' ? linkRole : 'viewer';
+
+      if (linkCode && ROOM.inviteCode && linkCode === ROOM.inviteCode) {
+        await doc.ref.update({
+          memberIds:               firebase.firestore.FieldValue.arrayUnion(ME.uid),
+          [`roles.${ME.uid}`]:     validRole,
+          [`members.${ME.uid}`]:   { displayName: ME.displayName || ME.email, email: ME.email, photoURL: ME.photoURL || null },
+        });
+        ROOM.memberIds = [...(ROOM.memberIds || []), ME.uid];
+        ROOM.roles     = { ...(ROOM.roles || {}), [ME.uid]: validRole };
+        MY_ROLE = validRole;
+        toast(`Připojeno jako ${roleLabel(validRole)}! 🎉`);
+      } else {
+        toast('Nemáš přístup k této místnosti.');
+        setTimeout(() => (window.location.href = 'dashboard.html'), 1600);
+        return;
+      }
     }
 
     document.getElementById('roomTitle').textContent = ROOM.name;
@@ -45,10 +73,13 @@ auth.onAuthStateChanged(async user => {
     setupNotes();
     setupAdd();
     setupEdit();
+    setupTableInsertModal();
+    setupConnColorModal();
     setupShare();
     setupFlashCards();
     setupAiCards();
     setupBoardPan();
+    setupBoardZoom();
     setupMembers();
     setupConnections();
     setupLightbox();
@@ -90,6 +121,18 @@ function setNoteContent(contentEl, note) {
   addImageClickHandlers(contentEl);
 }
 
+// Compact board card: show ONLY the manually-entered title when set (long
+// note bodies — e.g. reading-journal writeups — would otherwise dominate the
+// board). Falls back to the full content when no title was given, same as
+// before titles existed.
+function setNoteCardContent(contentEl, note) {
+  if (note.title) {
+    contentEl.innerHTML = `<div class="note-card-title">${esc(note.title)}</div>`;
+  } else {
+    setNoteContent(contentEl, note);
+  }
+}
+
 function addImageClickHandlers(contentEl) {
   contentEl.querySelectorAll('img').forEach(img => {
     img.style.cursor = 'zoom-in';
@@ -121,7 +164,7 @@ function renderNote(id, note) {
     <div class="note-content"></div>
     <div class="note-time">${fmtTs(note.updatedAt || note.createdAt)}</div>`;
 
-  setNoteContent(el.querySelector('.note-content'), note);
+  setNoteCardContent(el.querySelector('.note-content'), note);
   wireNoteButtons(el, id, note);
 
   if (canEdit(note)) makeDraggable(el, id);
@@ -149,7 +192,7 @@ function patchNote(id, note) {
     expandBoardIfNeeded(el);
   }
   el.style.background = note.color || '#fef9c3';
-  setNoteContent(el.querySelector('.note-content'), note);
+  setNoteCardContent(el.querySelector('.note-content'), note);
   el.querySelector('.note-time').textContent = fmtTs(note.updatedAt || note.createdAt);
 
   const btns = el.querySelector('.note-btns');
@@ -286,27 +329,15 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
     });
   });
 
-  // Table insert button
+  // Table insert button — opens the shared #tableInsertModal instead of two
+  // sequential native prompt()s (which forced a double-cancel: canceling the
+  // rows prompt still popped up the cols prompt right after).
   const tableBtn = toolbar.querySelector('.rt-table-btn');
   if (tableBtn) {
     tableBtn.addEventListener('mousedown', e => e.preventDefault());
     tableBtn.addEventListener('click', () => {
-      const rows = parseInt(prompt('Počet řádků:', '3') || '0');
-      const cols = parseInt(prompt('Počet sloupců:', '3') || '0');
-      if (!rows || !cols || rows < 1 || cols < 1) return;
-      let html = '<table class="note-table" style="border-collapse:collapse;width:100%;margin:6px 0;">';
-      for (let r = 0; r < rows; r++) {
-        html += '<tr>';
-        for (let c = 0; c < cols; c++) {
-          const tag = r === 0 ? 'th' : 'td';
-          html += `<${tag} contenteditable="true" style="border:1px solid #555;padding:5px 8px;min-width:60px;">${r===0 ? 'Záhlaví '+(c+1) : ''}</${tag}>`;
-        }
-        html += '</tr>';
-      }
-      html += '</table><br>';
-      restoreRange();
-      document.execCommand('insertHTML', false, html);
-      editor.focus();
+      saveRange();
+      openTableInsertModal(() => { restoreRange(); editor.focus(); });
     });
   }
 
@@ -353,9 +384,14 @@ function setupAdd() {
 
   document.getElementById('addBtn').addEventListener('click', () => {
     editor.innerHTML = '';
+    document.getElementById('noteTitleInput').value = '';
     openModal('addModal');
     setTimeout(() => editor.focus(), 80);
   });
+
+  const noteColorCustom      = document.getElementById('noteColorCustom');
+  const noteColorCustomInput = document.getElementById('noteColorCustomInput');
+  noteColorCustom.dataset.color = noteColorCustomInput.value;
 
   document.querySelectorAll('#noteColorPicker .color-swatch').forEach(sw => {
     sw.addEventListener('click', () => {
@@ -364,11 +400,19 @@ function setupAdd() {
       color = sw.dataset.color;
     });
   });
+  noteColorCustomInput.addEventListener('input', () => {
+    noteColorCustom.dataset.color = noteColorCustomInput.value;
+    noteColorCustom.style.background = noteColorCustomInput.value;
+    document.querySelectorAll('#noteColorPicker .color-swatch').forEach(s => s.classList.remove('selected'));
+    noteColorCustom.classList.add('selected');
+    color = noteColorCustomInput.value;
+  });
 
   setupRichToolbar('noteEditor', 'addToolbar', 'addTextColor', 'addColorA');
 
   document.getElementById('addSubmit').addEventListener('click', async () => {
     const content = editor.innerHTML;
+    const title   = document.getElementById('noteTitleInput').value.trim();
     if (!editor.textContent.trim()) { toast('Poznámka nesmí být prázdná.'); return; }
 
     const btn = document.getElementById('addSubmit');
@@ -382,6 +426,7 @@ function setupAdd() {
       await db.collection('rooms').doc(ROOM_ID).collection('notes').add({
         content,
         contentType: 'html',
+        title: title || null,
         color,
         x, y,
         authorId:   ME.uid,
@@ -401,11 +446,21 @@ function setupAdd() {
 
 // ── Edit note ─────────────────────────────────────────────────
 function setupEdit() {
+  const editColorCustom      = document.getElementById('editColorCustom');
+  const editColorCustomInput = document.getElementById('editColorCustomInput');
+  editColorCustom.dataset.color = editColorCustomInput.value;
+
   document.querySelectorAll('#editColorPicker .color-swatch').forEach(sw => {
     sw.addEventListener('click', () => {
       document.querySelectorAll('#editColorPicker .color-swatch').forEach(s => s.classList.remove('selected'));
       sw.classList.add('selected');
     });
+  });
+  editColorCustomInput.addEventListener('input', () => {
+    editColorCustom.dataset.color = editColorCustomInput.value;
+    editColorCustom.style.background = editColorCustomInput.value;
+    document.querySelectorAll('#editColorPicker .color-swatch').forEach(s => s.classList.remove('selected'));
+    editColorCustom.classList.add('selected');
   });
 
   setupRichToolbar('noteEditorEdit', 'editToolbar', 'editTextColor', 'editColorA');
@@ -414,6 +469,7 @@ function setupEdit() {
     if (!EDIT_ID) return;
     const editor  = document.getElementById('noteEditorEdit');
     const content = editor.innerHTML;
+    const title   = document.getElementById('noteTitleInputEdit').value.trim();
     const colorSw = document.querySelector('#editColorPicker .color-swatch.selected');
     const color   = colorSw ? colorSw.dataset.color : '#fef9c3';
     if (!editor.textContent.trim()) { toast('Poznámka nesmí být prázdná.'); return; }
@@ -425,6 +481,7 @@ function setupEdit() {
       await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(EDIT_ID).update({
         content,
         contentType: 'html',
+        title: title || null,
         color,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
@@ -438,6 +495,7 @@ function setupEdit() {
 
 function openEdit(id, note) {
   EDIT_ID = id;
+  document.getElementById('noteTitleInputEdit').value = note.title || '';
   const editor = document.getElementById('noteEditorEdit');
   if (note.contentType === 'html') {
     editor.innerHTML = note.content || '';
@@ -445,11 +503,24 @@ function openEdit(id, note) {
     editor.textContent = note.content || '';
   }
 
-  document.querySelectorAll('#editColorPicker .color-swatch').forEach(sw => {
-    sw.classList.toggle('selected', sw.dataset.color === note.color);
-  });
-  if (!document.querySelector('#editColorPicker .color-swatch.selected')) {
-    document.querySelector('#editColorPicker .color-swatch').classList.add('selected');
+  const presetSwatches = [...document.querySelectorAll('#editColorPicker .color-swatch:not(.color-swatch-custom)')];
+  const matchedPreset  = presetSwatches.find(sw => sw.dataset.color === note.color);
+  presetSwatches.forEach(sw => sw.classList.remove('selected'));
+
+  const editColorCustom      = document.getElementById('editColorCustom');
+  const editColorCustomInput = document.getElementById('editColorCustomInput');
+  if (matchedPreset) {
+    matchedPreset.classList.add('selected');
+    editColorCustom.classList.remove('selected');
+  } else {
+    // Note's color doesn't match any preset (e.g. picked via the custom
+    // swatch before) — reflect its actual color there instead of silently
+    // falling back to the first preset.
+    const noteColor = note.color || '#fef9c3';
+    editColorCustomInput.value = noteColor;
+    editColorCustom.dataset.color = noteColor;
+    editColorCustom.style.background = noteColor;
+    editColorCustom.classList.add('selected');
   }
 
   openModal('editModal');
@@ -466,6 +537,12 @@ function openNoteDetail(el, note) {
 
   const contentEl = document.getElementById('detailContent');
   setNoteContent(contentEl, note);
+  if (note.title) {
+    const h = document.createElement('h4');
+    h.className = 'note-detail-title';
+    h.textContent = note.title;
+    contentEl.prepend(h);
+  }
 
   openModal('noteDetailModal');
 }
@@ -680,58 +757,33 @@ function redrawConnections() {
 
     if (canDel) {
       const dist = Math.hypot(to.x - from.x, to.y - from.y);
+      const sag  = Math.min(dist * 0.15 + 18, 95);
       const mx = (from.x + to.x) / 2;
-      const my = (from.y + to.y) / 2 + Math.min(dist * 0.15 + 18, 95);
+      // A quadratic bezier's point at t=0.5 is halfway between the straight
+      // line's midpoint and the control point — the control point itself
+      // (used by makeStringPath) sags by the full `sag`, so the point that
+      // actually sits ON the drawn curve only sags by sag/2. Using the full
+      // sag here (as before) placed the button well below the visible line.
+      const my = (from.y + to.y) / 2 + sag / 2;
 
-      // Delete button
-      const dg = document.createElementNS(ns, 'g');
-      dg.setAttribute('class', 'conn-del');
-      dg.setAttribute('transform', `translate(${mx},${my})`);
-      const bg = document.createElementNS(ns, 'circle');
-      bg.setAttribute('r', '10'); bg.setAttribute('class', 'conn-del-bg');
-      const tx = document.createElementNS(ns, 'text');
-      tx.setAttribute('text-anchor', 'middle');
-      tx.setAttribute('dominant-baseline', 'central');
-      tx.setAttribute('class', 'conn-del-x');
-      tx.textContent = '×';
-      dg.appendChild(bg); dg.appendChild(tx);
-      dg.addEventListener('click', async e => {
-        e.stopPropagation();
-        if (!confirm('Smazat propojení?')) return;
-        try { await db.collection('rooms').doc(ROOM_ID).collection('connections').doc(connId).delete(); }
-        catch (err) { toast('Chyba: ' + err.message); }
-      });
-      g.appendChild(dg);
-
-      // Color picker button (palette icon, offset from delete)
+      // Single button, right on the curve — opens one popup with both
+      // "change color" and "delete" (previously two separate tiny buttons
+      // were error-prone to hit on a thin curved line).
       const pg = document.createElementNS(ns, 'g');
       pg.setAttribute('class', 'conn-color');
-      pg.setAttribute('transform', `translate(${mx + 22},${my})`);
+      pg.setAttribute('transform', `translate(${mx},${my})`);
       const pbg = document.createElementNS(ns, 'circle');
-      pbg.setAttribute('r', '10'); pbg.setAttribute('class', 'conn-del-bg');
+      pbg.setAttribute('r', '11'); pbg.setAttribute('class', 'conn-del-bg');
       const ptx = document.createElementNS(ns, 'text');
       ptx.setAttribute('text-anchor', 'middle');
       ptx.setAttribute('dominant-baseline', 'central');
       ptx.setAttribute('class', 'conn-del-x');
       ptx.textContent = '🎨';
-      ptx.setAttribute('font-size', '10');
+      ptx.setAttribute('font-size', '11');
       pg.appendChild(pbg); pg.appendChild(ptx);
       pg.addEventListener('click', e => {
         e.stopPropagation();
-        const inp = document.createElement('input');
-        inp.type = 'color';
-        inp.value = conn.color || '#c0392b';
-        inp.style.position = 'fixed';
-        inp.style.opacity  = '0';
-        inp.style.pointerEvents = 'none';
-        document.body.appendChild(inp);
-        inp.click();
-        inp.addEventListener('change', async () => {
-          try { await db.collection('rooms').doc(ROOM_ID).collection('connections').doc(connId).update({ color: inp.value }); }
-          catch (err) { toast('Chyba: ' + err.message); }
-          inp.remove();
-        });
-        inp.addEventListener('blur', () => setTimeout(() => inp.remove(), 300));
+        openConnColorModal(connId, conn.color || '#c0392b');
       });
       g.appendChild(pg);
     }
@@ -776,6 +828,20 @@ function setupBoardPan() {
   const stopPan = () => { panning = false; wrap.classList.remove('panning'); };
   window.addEventListener('mouseup', stopPan);
   window.addEventListener('blur', stopPan);
+}
+
+// ── Board zoom: mouse wheel zooms the board instead of scrolling the
+//    page/wrapper — panning still works via left/right-click drag above.
+let BOARD_ZOOM = 1;
+function setupBoardZoom() {
+  const wrap  = document.getElementById('boardWrap');
+  const board = document.getElementById('board');
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.08 : 0.92;
+    BOARD_ZOOM = Math.min(2.2, Math.max(0.35, BOARD_ZOOM * factor));
+    board.style.zoom = BOARD_ZOOM;
+  }, { passive: false });
 }
 
 // ── AI Flash Cards from notes ───────────────────────────────────
@@ -826,7 +892,7 @@ async function openAiCardsModal() {
       const note = d.data();
       const preview = noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
       return `<label class="ai-note-row">
-        <input type="checkbox" class="ai-note-check" data-id="${d.id}" checked>
+        <input type="checkbox" class="ai-note-check" data-id="${d.id}" data-color="${note.color || '#fef9c3'}" checked>
         <span>${esc(preview)}</span>
       </label>`;
     }).join('');
@@ -913,8 +979,11 @@ async function saveAiCards() {
     // only let a deck's owner write cards into it, so reusing someone else's
     // room deck here would just fail silently otherwise.
     const name = document.getElementById('aiDeckName').value.trim() || 'AI karty ze zápisků';
+    // Match the color of the note(s) these cards were generated from,
+    // instead of always defaulting to the same indigo.
+    const sourceColor = document.querySelector('.ai-note-check:checked')?.dataset.color || '#6366f1';
     const deckRef = await db.collection('decks').add({
-      name, color: '#6366f1', description: null,
+      name, color: sourceColor, description: null,
       ownerUid: ME.uid, roomId: ROOM_ID, cardCount: 0,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
@@ -935,13 +1004,33 @@ async function saveAiCards() {
 
 // ── Share ─────────────────────────────────────────────────────
 function setupShare() {
+  const roleSelect = document.getElementById('inviteRoleSelect');
+  const linkText    = document.getElementById('inviteLinkText');
+
+  function buildInviteLink() {
+    const url = new URL('room.html', window.location.href);
+    url.searchParams.set('id', ROOM_ID);
+    url.searchParams.set('code', ROOM.inviteCode || '');
+    url.searchParams.set('role', roleSelect.value);
+    return url.href;
+  }
+
+  function refreshLink() { linkText.textContent = buildInviteLink(); }
+
   document.getElementById('shareBtn').addEventListener('click', () => {
     document.getElementById('inviteCode').textContent = ROOM.inviteCode || '------';
+    refreshLink();
     openModal('shareModal');
   });
 
   document.getElementById('copyBtn').addEventListener('click', () => {
     navigator.clipboard.writeText(ROOM.inviteCode || '').then(() => toast('Kód zkopírován!'));
+  });
+
+  roleSelect.addEventListener('change', refreshLink);
+
+  document.getElementById('copyLinkBtn').addEventListener('click', () => {
+    navigator.clipboard.writeText(buildInviteLink()).then(() => toast('Odkaz zkopírován!'));
   });
 }
 
@@ -1077,6 +1166,102 @@ function setupModalClose() {
 }
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Table insert modal (shared by add + edit rich toolbars) ────
+let PENDING_TABLE_RESTORE = null;
+
+function openTableInsertModal(restoreFocusAndRange) {
+  PENDING_TABLE_RESTORE = restoreFocusAndRange;
+  document.getElementById('tableRowsInput').value = 3;
+  document.getElementById('tableColsInput').value = 3;
+  openModal('tableInsertModal');
+}
+
+function setupTableInsertModal() {
+  document.getElementById('tableInsertSubmit').addEventListener('click', () => {
+    const rows = parseInt(document.getElementById('tableRowsInput').value) || 0;
+    const cols = parseInt(document.getElementById('tableColsInput').value) || 0;
+    if (rows < 1 || cols < 1) { toast('Zadej platný počet řádků a sloupců.'); return; }
+
+    let html = '<table class="note-table" style="border-collapse:collapse;width:100%;margin:6px 0;">';
+    for (let r = 0; r < rows; r++) {
+      html += '<tr>';
+      for (let c = 0; c < cols; c++) {
+        const tag = r === 0 ? 'th' : 'td';
+        html += `<${tag} contenteditable="true" style="border:1px solid #555;padding:5px 8px;min-width:60px;">${r === 0 ? 'Záhlaví ' + (c + 1) : ''}</${tag}>`;
+      }
+      html += '</tr>';
+    }
+    html += '</table><br>';
+
+    closeModal('tableInsertModal');
+    if (PENDING_TABLE_RESTORE) PENDING_TABLE_RESTORE();
+    document.execCommand('insertHTML', false, html);
+  });
+}
+
+// ── Connection color modal ──────────────────────────────────────
+// Replaces the old "invisible native <input type=color>, call .click()"
+// trick — that relied on the browser opening its OS color chooser from a
+// programmatic click on a hidden element, which isn't reliable everywhere.
+// A real modal with a visible color input is the "pop up okno" that was
+// asked for, and always works the same way regardless of browser.
+let PENDING_CONN_COLOR_ID = null;
+
+function openConnColorModal(connId, color) {
+  PENDING_CONN_COLOR_ID = connId;
+  document.getElementById('connColorInput').value = color;
+  document.getElementById('connColorSwatch').style.background = color;
+  document.getElementById('connColorHex').textContent = color;
+  openModal('connColorModal');
+}
+
+function setupConnColorModal() {
+  const input  = document.getElementById('connColorInput');
+  const swatch = document.getElementById('connColorSwatch');
+  const hex    = document.getElementById('connColorHex');
+  input.addEventListener('input', () => {
+    swatch.style.background = input.value;
+    hex.textContent = input.value;
+  });
+  document.getElementById('connColorSubmit').addEventListener('click', async () => {
+    if (!PENDING_CONN_COLOR_ID) return;
+    try {
+      await db.collection('rooms').doc(ROOM_ID).collection('connections').doc(PENDING_CONN_COLOR_ID).update({ color: input.value });
+      closeModal('connColorModal');
+      toast('Barva uložena!');
+    } catch (err) { toast('Chyba: ' + err.message); }
+  });
+
+  document.getElementById('connDeleteBtn').addEventListener('click', () => {
+    const connId = PENDING_CONN_COLOR_ID;
+    if (!connId) return;
+    closeModal('connColorModal');
+    confirmModal('Smazat propojení?', async () => {
+      try { await db.collection('rooms').doc(ROOM_ID).collection('connections').doc(connId).delete(); }
+      catch (err) { toast('Chyba: ' + err.message); }
+    });
+  });
+}
+
+// ── Generic confirm popup (replaces native confirm()) ───────────
+function confirmModal(message, onConfirm) {
+  const overlay = document.getElementById('confirmModal');
+  document.getElementById('confirmModalText').textContent = message;
+  overlay.classList.add('open');
+
+  // Clone-replace so stale listeners from a previous (possibly
+  // backdrop-dismissed, never-cleaned-up) call can't stack and fire twice.
+  const oldYes = document.getElementById('confirmModalYes');
+  const oldNo  = document.getElementById('confirmModalNo');
+  const yesBtn = oldYes.cloneNode(true);
+  const noBtn  = oldNo.cloneNode(true);
+  oldYes.replaceWith(yesBtn);
+  oldNo.replaceWith(noBtn);
+
+  yesBtn.addEventListener('click', () => { overlay.classList.remove('open'); onConfirm(); });
+  noBtn.addEventListener('click',  () => overlay.classList.remove('open'));
+}
 
 // ── Toast ─────────────────────────────────────────────────────
 function toast(msg) {

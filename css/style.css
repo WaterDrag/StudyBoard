@@ -90,6 +90,17 @@ a { color: inherit; text-decoration: none; }
 .input:focus { border-color: var(--accent); background: rgba(99,102,241,0.06); }
 .input::placeholder { color: var(--text-muted); }
 
+/* Native <select> dropdown popups default to a white/light popup with only
+   the OS default text color — since we never styled <option>, light theme
+   text (var(--text)) on that unstyled white background came out barely
+   legible except for the currently-hovered row. color-scheme + explicit
+   option colors fix this in Chromium and Firefox alike. */
+select { color-scheme: dark; }
+select option {
+  background: var(--bg-2);
+  color: var(--text);
+}
+
 textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 
 .label {
@@ -279,8 +290,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 }
 
 .room-card {
-  background: var(--bg-2);
-  border: 1px solid var(--border);
+  --card-color: #6366f1;
+  position: relative;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--card-color) 38%, transparent) 0%, transparent 60%),
+    var(--bg-2);
+  border: 1px solid color-mix(in srgb, var(--card-color) 45%, var(--border));
   border-radius: var(--radius);
   padding: 20px;
   cursor: pointer;
@@ -289,19 +304,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   color: var(--text);
 }
 .room-card:hover {
-  border-color: var(--accent);
+  border-color: var(--card-color);
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(99,102,241,0.12);
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--card-color) 30%, transparent);
 }
 
-.room-card-dot {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  margin-bottom: 14px;
-}
-
-.room-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; word-break: break-word; }
+.room-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; word-break: break-word; padding-right: 22px; }
 
 .room-card-meta {
   display: flex;
@@ -323,6 +331,29 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .role-viewer { background: rgba(148,163,184,0.14); color: var(--text-muted); }
 
 .meta-date { font-size: 0.78rem; color: var(--text-muted); }
+
+/* Owner-only edit (pencil) button overlaid top-right on room/deck cards */
+.card-edit-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.25);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 24px;
+  text-align: center;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  transition: var(--transition);
+}
+.room-card:hover .card-edit-btn,
+.deck-card:hover .card-edit-btn { opacity: 1; }
+.card-edit-btn:hover { background: rgba(0,0,0,0.45); }
 
 .empty-state {
   grid-column: 1 / -1;
@@ -406,6 +437,25 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 }
 .color-swatch:hover { transform: scale(1.12); }
 .color-swatch.selected { border-color: #fff; transform: scale(1.12); box-shadow: 0 0 0 2px var(--accent); }
+
+.color-swatch-custom {
+  background: conic-gradient(from 90deg, #f87171, #fbbf24, #34d399, #60a5fa, #a78bfa, #f87171);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+.color-swatch-custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
 
 /* ===== INVITE CODE ===== */
 .invite-box {
@@ -611,6 +661,15 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   color: rgba(0,0,0,0.35);
   margin-top: 9px;
   text-align: right;
+}
+
+/* Compact board card showing only the manual title (no body) */
+.note-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 /* ===== FAB ===== */
@@ -897,8 +956,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 }
 
 .deck-card {
-  background: var(--bg-2);
-  border: 1px solid var(--border);
+  --card-color: #6366f1;
+  position: relative;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--card-color) 38%, transparent) 0%, transparent 60%),
+    var(--bg-2);
+  border: 1px solid color-mix(in srgb, var(--card-color) 45%, var(--border));
   border-radius: var(--radius);
   padding: 18px;
   cursor: pointer;
@@ -908,12 +971,11 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   text-decoration: none;
 }
 .deck-card:hover {
-  border-color: var(--accent);
+  border-color: var(--card-color);
   transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(99,102,241,0.12);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--card-color) 30%, transparent);
 }
-.deck-dot { width: 32px; height: 32px; border-radius: 8px; margin-bottom: 12px; }
-.deck-card h3 { font-size: 0.9rem; margin-bottom: 4px; }
+.deck-card h3 { font-size: 0.9rem; margin-bottom: 4px; padding-right: 20px; }
 .deck-card p  { font-size: 0.78rem; color: var(--text-muted); }
 .deck-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .deck-tag  { font-size: 0.68rem; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
@@ -946,7 +1008,11 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   overflow: hidden;
   position: relative;
 }
-.color-input-swatch:hover { border-color: var(--accent); transform: scale(1.06); }
+/* No hover transform here on purpose — scaling a small clickable box can
+   push its edge out from under a near-boundary cursor, causing hover to
+   drop, the scale to reverse, hover to re-trigger, and so on: a visible
+   flicker/"wobble" loop. A border-color change is enough of a hover cue. */
+.color-input-swatch:hover { border-color: var(--accent); }
 .color-input-swatch input[type="color"] {
   position: absolute;
   width: 200%; height: 200%;
@@ -1108,13 +1174,6 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
   pointer-events: none;
 }
-.conn-group:hover .conn-del { opacity: 1; }
-.conn-del {
-  opacity: 0;
-  transition: opacity 0.15s;
-  pointer-events: all;
-  cursor: pointer;
-}
 .conn-del-bg {
   fill: #1e1e2e;
   stroke: #c0392b;
@@ -1177,6 +1236,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   line-height: 1.7;
   word-break: break-word;
   padding: 4px 0 8px;
+  color: var(--text);
+}
+.note-detail-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 10px;
   color: var(--text);
 }
 .note-detail-content img {
@@ -1307,6 +1372,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   cursor: text;
   word-break: break-word;
 }
+.rich-editor ul, .note-content ul, .note-detail-content ul {
+  margin: 6px 0;
+  padding-left: 22px;
+  list-style: disc outside;
+}
+.rich-editor li, .note-content li, .note-detail-content li { margin: 2px 0; }
 .rich-editor:empty::before {
   content: attr(data-placeholder);
   color: #aaa;
@@ -2126,6 +2197,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   padding: 0;
 }
 .distractor-rm:hover { color: #fca5a5; }
+.distractor-text {
+  outline: none;
+  cursor: text;
+  border-bottom: 1px dashed transparent;
+}
+.distractor-text:hover, .distractor-text:focus { border-bottom-color: var(--accent); }
 
 /* ── Toggle checkbox label ────────────────────────────────────── */
 .toggle-label {
@@ -2203,4 +2280,10 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   gap: 5px;
   cursor: pointer;
 }
-.conn-color { cursor: pointer; }
+.conn-color {
+  cursor: pointer;
+  /* .conn-svg (the parent) sets pointer-events:none so the overlay doesn't
+     block clicks on notes underneath — this button needs it re-enabled on
+     itself, or clicks pass straight through to whatever's behind it. */
+  pointer-events: all;
+}

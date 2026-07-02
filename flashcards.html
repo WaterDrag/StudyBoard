@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Flash Cards – StudyBoard</title>
-  <script src="js/version.js"></script>
+  <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -171,6 +174,36 @@
     </div>
   </div>
 
+  <!-- MODAL: Upravit balíček (název + barva) -->
+  <div class="modal-overlay" id="editDeckModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Upravit balíček</h3>
+        <button class="modal-close" data-close="editDeckModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="label">Název balíčku</label>
+        <input id="editDeckName" type="text" class="input" maxlength="60">
+      </div>
+      <div class="form-group">
+        <label class="label">Barva</label>
+        <div class="color-input-wrap">
+          <label class="color-input-swatch" id="editDeckColorSwatch" style="background:#6366f1;">
+            <input type="color" id="editDeckColorInput" value="#6366f1">
+          </label>
+          <div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:3px;">Klikni pro výběr barvy (RGB)</div>
+            <code id="editDeckColorHex" style="font-size:0.85rem;font-weight:600;color:var(--accent);">#6366f1</code>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="editDeckModal">Zrušit</button>
+        <button id="editDeckSubmit" class="btn btn-primary">Uložit</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Smazat balíček (3 fáze) -->
   <div class="modal-overlay" id="deleteDeckModal">
     <div class="modal">
@@ -245,6 +278,17 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close="editCardModal">Zrušit</button>
         <button class="btn btn-primary" id="saveEditCardBtn">Uložit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Generický potvrzovací popup -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal" style="max-width:340px;">
+      <p id="confirmModalText" style="margin-bottom:18px;font-size:0.92rem;"></p>
+      <div class="modal-footer">
+        <button id="confirmModalNo"  class="btn btn-secondary">Zrušit</button>
+        <button id="confirmModalYes" class="btn btn-danger">Smazat</button>
       </div>
     </div>
   </div>
