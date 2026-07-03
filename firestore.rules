@@ -28,20 +28,38 @@ service cloud.firestore {
       return deckData(deckId).roomId != null && canEditRoom(deckData(deckId).roomId);
     }
 
+    // A non-owner may write the room doc ONLY as a first-time self-join:
+    // they weren't a member before, they add ONLY themselves to memberIds,
+    // they touch ONLY their own key in the roles map, and they don't change
+    // the owner. Crucially, an EXISTING member fails the first check
+    // (`!(uid in resource memberIds)`), so a viewer can never flip their own
+    // role to editor/owner from the console — only the owner can change
+    // roles. The invite-link role (viewer/editor) still works because that's
+    // decided at the moment of joining, before you're a member.
+    function isRoomSelfJoin(roomId) {
+      return !(request.auth.uid in resource.data.memberIds)
+        && (request.auth.uid in request.resource.data.memberIds)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.memberIds.removeAll(resource.data.memberIds) == [request.auth.uid]
+        && request.resource.data.roles.diff(resource.data.roles).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
     // ── Místnosti ──────────────────────────────────────────────
     match /rooms/{roomId} {
       allow read:   if isAuth();
       allow create: if isAuth() && request.auth.uid in request.resource.data.memberIds;
       allow update: if isAuth() && (
         isRoomOwner(roomId) ||
-        request.auth.uid in request.resource.data.memberIds
+        isRoomSelfJoin(roomId)
       );
       allow delete: if isAuth() && isRoomOwner(roomId);
 
       match /connections/{connId} {
         allow read:   if isMember(roomId);
-        allow create: if isAuth() && canEditRoom(roomId) &&
-                         request.resource.data.authorId == request.auth.uid;
+        // Owner may create with any authorId (needed to restore a backup and
+        // keep the original author); editors only under their own name.
+        allow create: if isAuth() && (isRoomOwner(roomId) ||
+                         (canEditRoom(roomId) && request.resource.data.authorId == request.auth.uid));
         allow update: if isAuth() && (isRoomOwner(roomId) ||
                          resource.data.authorId == request.auth.uid);
         allow delete: if isAuth() && (isRoomOwner(roomId) ||
@@ -50,8 +68,8 @@ service cloud.firestore {
 
       match /notes/{noteId} {
         allow read:   if isMember(roomId);
-        allow create: if isAuth() && canEditRoom(roomId) &&
-                         request.resource.data.authorId == request.auth.uid;
+        allow create: if isAuth() && (isRoomOwner(roomId) ||
+                         (canEditRoom(roomId) && request.resource.data.authorId == request.auth.uid));
         allow update: if isAuth() && (
           isRoomOwner(roomId) ||
           (roomRole(roomId) == 'editor' && resource.data.authorId == request.auth.uid)
@@ -69,10 +87,17 @@ service cloud.firestore {
       // over content someone else authored.
       match /folders/{folderId} {
         allow read:   if isMember(roomId);
-        allow create: if isAuth() && canEditRoom(roomId) &&
-                         request.resource.data.authorId == request.auth.uid;
+        allow create: if isAuth() && (isRoomOwner(roomId) ||
+                         (canEditRoom(roomId) && request.resource.data.authorId == request.auth.uid));
         allow update: if isAuth() && canEditRoom(roomId);
         allow delete: if isAuth() && canEditRoom(roomId);
+      }
+
+      // Owner-only durable snapshots of the whole room (notes + connections
+      // + folders). They live server-side in Firestore, so they survive any
+      // local outage, and only the owner can read/create/delete them.
+      match /backups/{backupId} {
+        allow read, create, delete: if isRoomOwner(roomId);
       }
     }
 

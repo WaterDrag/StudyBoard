@@ -77,6 +77,7 @@
     <div class="notes-list-header">
       <span class="notes-list-heading">📋 Seznam poznámek</span>
     </div>
+    <div id="listTopDropZone" class="top-drop-zone">⬆️ Sem pusť pro nejvyšší úroveň (mimo složky)</div>
     <div id="notesListBody">
       <!-- Rows injected by JS -->
     </div>
@@ -399,11 +400,33 @@
       <div class="panel-body" id="membersList">
         <div style="text-align:center;padding:32px 0;color:var(--text-muted);">Načítám...</div>
       </div>
+      <div style="padding:14px 18px 0;" id="backupsWrap" style="display:none;">
+        <button id="backupsBtn" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:0.82rem;gap:6px;">
+          🗄️ Zálohy místnosti
+        </button>
+      </div>
       <div style="padding:14px 18px;border-top:1px solid var(--border);" id="deleteRoomWrap" style="display:none;">
         <button id="deleteRoomBtn" class="btn btn-danger" style="width:100%;justify-content:center;">
           Smazat místnost
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Zálohy -->
+  <div class="modal-overlay" id="backupsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>🗄️ Zálohy místnosti</h3>
+        <button class="modal-close" data-close="backupsModal">✕</button>
+      </div>
+      <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:12px;line-height:1.5;">
+        Záloha uloží všechny poznámky, propojení i složky. Ukládá se bezpečně na server (Firebase), takže přežije i výpadek. Automaticky se vytvoří max. jednou za 12 hodin, když otevřeš místnost.
+      </p>
+      <button id="backupNowBtn" class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:14px;">
+        💾 Zálohovat teď
+      </button>
+      <div id="backupsList" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;"></div>
     </div>
   </div>
 

@@ -90,6 +90,7 @@ auth.onAuthStateChanged(async user => {
       document.body.appendChild(notice);
     }
 
+    await loadListPrefs(); // personal marks/pins/folder state before first list render
     setupNotes();
     setupFolders();
     setupAdd();
@@ -103,6 +104,7 @@ auth.onAuthStateChanged(async user => {
     setupBoardPan();
     setupBoardZoom();
     setupMembers();
+    setupBackups();
     setupConnections();
     setupLightbox();
     setupModalClose();
@@ -191,6 +193,107 @@ function setupViewToggle() {
 }
 
 const noteRecency = n => n.updatedAt?.toMillis?.() || n.createdAt?.toMillis?.() || 0;
+
+// ── Per-user, per-room list preferences (Firebase) ─────────────
+// Folder open/closed state, the colored "puntíky" marks, and pins are
+// personal — stored under the user's own profile so they sync across
+// devices and survive cache clears, instead of living in localStorage.
+// Shape: users/{uid}.roomPrefs[roomId] = { marks:{id:color}, pins:[id],
+// collapsed:[folderId] }. Loaded once on room open into LIST_PREFS; writes
+// are debounced and replace the whole per-room object (so deletions stick).
+const MARK_COLORS = ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#3b82f6', '#a855f7'];
+let LIST_PREFS = { marks: {}, pins: new Set(), collapsed: new Set() };
+
+async function loadListPrefs() {
+  try {
+    const snap = await db.collection('users').doc(ME.uid).get();
+    const p = snap.exists ? (snap.data().roomPrefs || {})[ROOM_ID] : null;
+    LIST_PREFS = {
+      marks: (p && p.marks) || {},
+      pins: new Set((p && p.pins) || []),
+      collapsed: new Set((p && p.collapsed) || []),
+    };
+  } catch { LIST_PREFS = { marks: {}, pins: new Set(), collapsed: new Set() }; }
+}
+
+let _prefsSaveTimer = null;
+function persistListPrefs() {
+  clearTimeout(_prefsSaveTimer);
+  _prefsSaveTimer = setTimeout(async () => {
+    const obj = { marks: LIST_PREFS.marks, pins: [...LIST_PREFS.pins], collapsed: [...LIST_PREFS.collapsed] };
+    try {
+      // Field-path update REPLACES the whole per-room object (deletions too).
+      await db.collection('users').doc(ME.uid).update({ [`roomPrefs.${ROOM_ID}`]: obj });
+    } catch {
+      // Doc/field doesn't exist yet — create it.
+      try { await db.collection('users').doc(ME.uid).set({ roomPrefs: { [ROOM_ID]: obj } }, { merge: true }); } catch {}
+    }
+  }, 400);
+}
+
+// These return the LIVE in-memory objects; callers mutate them and then call
+// the matching save* to trigger a debounced Firestore write.
+function getCollapsedFolders() { return LIST_PREFS.collapsed; }
+function saveCollapsedFolders() { persistListPrefs(); }
+function getMarks() { return LIST_PREFS.marks; }
+function saveMarks() { persistListPrefs(); }
+function markHtml(id, marks) {
+  const c = marks[id] || '';
+  return `<button class="list-mark" data-mark-id="${id}"${c ? ` data-marked="1" style="--mark-color:${c}"` : ''} title="Puntík — klik = červená/nic, pravý klik = výběr barvy"></button>`;
+}
+
+// Set/clear a mark's color (persist + update the button in place).
+function applyMark(markId, color, btnEl) {
+  const m = getMarks();
+  if (color) m[markId] = color; else delete m[markId];
+  saveMarks(m);
+  if (btnEl) {
+    if (color) { btnEl.dataset.marked = '1'; btnEl.style.setProperty('--mark-color', color); }
+    else { delete btnEl.dataset.marked; btnEl.style.removeProperty('--mark-color'); }
+  }
+}
+
+// Right-click color chooser for a mark — a small floating swatch popup at the
+// cursor, plus a clear (×) option.
+function closeMarkColorPopup() { document.getElementById('markColorPopup')?.remove(); }
+function openMarkColorPopup(x, y, markId, btnEl) {
+  closeMarkColorPopup();
+  const pop = document.createElement('div');
+  pop.className = 'mark-color-popup';
+  pop.id = 'markColorPopup';
+  pop.innerHTML = MARK_COLORS.map(c => `<button class="mark-color-swatch" data-c="${c}" style="background:${c}"></button>`).join('')
+    + `<button class="mark-color-swatch mark-color-clear" data-c="" title="Zrušit">×</button>`;
+  document.body.appendChild(pop);
+
+  // Position at the cursor, clamped into the viewport.
+  pop.style.left = x + 'px';
+  pop.style.top  = y + 'px';
+  const r = pop.getBoundingClientRect();
+  if (r.right  > window.innerWidth)  pop.style.left = (window.innerWidth  - r.width  - 8) + 'px';
+  if (r.bottom > window.innerHeight) pop.style.top  = (y - r.height) + 'px';
+
+  pop.querySelectorAll('.mark-color-swatch').forEach(sw => {
+    sw.addEventListener('click', e => {
+      e.stopPropagation();
+      applyMark(markId, sw.dataset.c, btnEl);
+      closeMarkColorPopup();
+    });
+  });
+  // Close on the next outside click / Escape.
+  setTimeout(() => {
+    document.addEventListener('click', closeMarkColorPopup, { once: true });
+    document.addEventListener('keydown', function esc(ev) { if (ev.key === 'Escape') { closeMarkColorPopup(); document.removeEventListener('keydown', esc); } });
+  }, 0);
+}
+
+// Pins: personal "keep at the top" flags. A pinned note/folder gets a COPY
+// in the top "Připnuté" section while still appearing in its normal place.
+function getPins() { return LIST_PREFS.pins; }
+function savePins() { persistListPrefs(); }
+function pinHtml(id, pins) {
+  const on = pins.has(id);
+  return `<button class="list-pin${on ? ' pinned' : ''}" data-pin-id="${id}" title="${on ? 'Odepnout' : 'Připnout nahoru'}">📌</button>`;
+}
 
 // ── Folders ──────────────────────────────────────────────────
 // A standalone, manual Windows-Explorer-style organization system for the
@@ -343,6 +446,10 @@ function renderNotesListView() {
   const filedIds = new Set();
   FOLDERS_MAP.forEach(f => (f.noteIds || []).forEach(id => filedIds.add(id)));
 
+  const collapsed = getCollapsedFolders();
+  const marks = getMarks();
+  const pins  = getPins();
+
   const folderSubtreeCount = folder => {
     const children = [...FOLDERS_MAP.values()].filter(f => f.parentId === folder.id);
     return (folder.noteIds || []).length + children.reduce((sum, c) => sum + folderSubtreeCount(c), 0);
@@ -354,14 +461,16 @@ function renderNotesListView() {
     const ownNotes = (folder.noteIds || []).map(id => NOTES_MAP.get(id)).filter(Boolean)
       .sort((a, b) => noteRecency(b) - noteRecency(a));
     const canManage = MY_ROLE !== 'viewer';
-    const body = ownNotes.map(renderNoteListRow).join('') + children.map(renderFolderNode).join('');
+    const body = ownNotes.map(n => renderNoteListRow(n, marks, pins)).join('') + children.map(renderFolderNode).join('');
     return `
-      <details class="notes-folder" open data-folder-id="${folder.id}" style="--folder-color:${folder.color || '#6366f1'}">
+      <details class="notes-folder"${collapsed.has(folder.id) ? '' : ' open'} data-folder-id="${folder.id}" style="--folder-color:${folder.color || '#6366f1'}">
         <summary class="notes-folder-summary">
+          ${pinHtml(folder.id, pins)}
           <span class="notes-folder-icon">📁</span>
           <span class="notes-folder-title">${esc(folder.name)}</span>
           <span class="notes-folder-count">${folderSubtreeCount(folder)}</span>
           ${canManage ? `<button class="notes-folder-edit" data-edit-folder="${folder.id}" title="Upravit složku">✏️</button>` : ''}
+          ${markHtml(folder.id, marks)}
         </summary>
         <div class="notes-folder-body">${body}</div>
       </details>`;
@@ -371,8 +480,33 @@ function renderNotesListView() {
     .sort((a, b) => a.name.localeCompare(b.name, 'cs'));
   const unfiled = notes.filter(n => !filedIds.has(n.id)).sort((a, b) => noteRecency(b) - noteRecency(a));
 
-  el.innerHTML = topFolders.map(renderFolderNode).join('') + unfiled.map(renderNoteListRow).join('');
-  if (!topFolders.length && !unfiled.length) {
+  // Pinned section: a compact shortcut copy of each pinned note/folder at the
+  // very top. The originals still render normally in the list below.
+  const pinnedIds = [...pins].filter(id => NOTES_MAP.has(id) || FOLDERS_MAP.has(id));
+  let pinnedHtml = '';
+  if (pinnedIds.length) {
+    pinnedHtml = `<div class="pinned-section"><div class="pinned-title">📌 Připnuté</div>` +
+      pinnedIds.map(id => {
+        if (NOTES_MAP.has(id)) {
+          const n = NOTES_MAP.get(id);
+          const t = n.title || noteToPlainText(n).slice(0, 90) || '(prázdná poznámka)';
+          return `<div class="pinned-row" data-pin-note="${id}" style="--row-color:${n.color || '#fef9c3'}">
+            <div class="notes-list-dot"></div>
+            <span class="pinned-row-label">${esc(t)}</span>
+            <button class="list-pin pinned" data-pin-id="${id}" title="Odepnout">📌</button>
+          </div>`;
+        }
+        const f = FOLDERS_MAP.get(id);
+        return `<div class="pinned-row" data-pin-folder="${id}" style="--row-color:${f.color || '#6366f1'}">
+          <span class="notes-folder-icon">📁</span>
+          <span class="pinned-row-label">${esc(f.name)}</span>
+          <button class="list-pin pinned" data-pin-id="${id}" title="Odepnout">📌</button>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+
+  el.innerHTML = pinnedHtml + topFolders.map(renderFolderNode).join('') + unfiled.map(n => renderNoteListRow(n, marks, pins)).join('');
+  if (!topFolders.length && !unfiled.length && !pinnedIds.length) {
     el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--text-muted);">Zatím žádné poznámky.</div>`;
   }
 
@@ -392,6 +526,56 @@ function renderNotesListView() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       openFolderModal(btn.dataset.editFolder);
+    });
+  });
+
+  // Puntíky: LEFT click toggles red/none; RIGHT click opens a color picker.
+  // Saved per-user. preventDefault stops a folder summary from toggling / a
+  // note from opening.
+  el.querySelectorAll('.list-mark').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      const has = !!(getMarks()[btn.dataset.markId]);
+      applyMark(btn.dataset.markId, has ? '' : '#ef4444', btn);
+    });
+    btn.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      openMarkColorPopup(e.clientX, e.clientY, btn.dataset.markId, btn);
+    });
+  });
+
+  // Připínáčky: toggle pin, re-render so the top section updates.
+  el.querySelectorAll('.list-pin').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      const set = getPins();
+      if (set.has(btn.dataset.pinId)) set.delete(btn.dataset.pinId); else set.add(btn.dataset.pinId);
+      savePins(set);
+      renderNotesListView();
+    });
+  });
+
+  // Clicking a pinned copy: a note opens its detail; a folder jumps to and
+  // opens the original folder further down the list.
+  el.querySelectorAll('.pinned-row[data-pin-note]').forEach(row => {
+    row.addEventListener('click', () => {
+      const note = NOTES_MAP.get(row.dataset.pinNote);
+      if (note) openNoteDetail(null, note);
+    });
+  });
+  el.querySelectorAll('.pinned-row[data-pin-folder]').forEach(row => {
+    row.addEventListener('click', () => {
+      const target = el.querySelector(`.notes-folder[data-folder-id="${row.dataset.pinFolder}"]`);
+      if (target) { target.open = true; target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    });
+  });
+
+  // Remember which folders each user leaves open/closed.
+  el.querySelectorAll('.notes-folder').forEach(d => {
+    d.addEventListener('toggle', () => {
+      const set = getCollapsedFolders();
+      if (d.open) set.delete(d.dataset.folderId); else set.add(d.dataset.folderId);
+      saveCollapsedFolders(set);
     });
   });
 
@@ -438,6 +622,10 @@ let DRAGGING = null; // { type: 'note' | 'folder', id }
 //     silently ignored.
 let LIST_DND_WIRED = false;
 function setupListDragDrop(body) {
+  const listView = document.getElementById('notesListView');
+  const startDrag = () => listView.classList.add('dnd-active');   // reveals the top-level drop zone
+  const endDrag   = () => { listView.classList.remove('dnd-active'); DRAGGING = null; };
+
   body.querySelectorAll('.notes-list-row').forEach(row => {
     row.setAttribute('draggable', 'true');
     row.addEventListener('dragstart', e => {
@@ -446,8 +634,9 @@ function setupListDragDrop(body) {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', 'note:' + row.dataset.id);
       row.classList.add('dragging');
+      startDrag();
     });
-    row.addEventListener('dragend', () => { row.classList.remove('dragging'); DRAGGING = null; });
+    row.addEventListener('dragend', () => { row.classList.remove('dragging'); endDrag(); });
   });
 
   body.querySelectorAll('.notes-folder-summary').forEach(sum => {
@@ -459,8 +648,9 @@ function setupListDragDrop(body) {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', 'folder:' + folderEl.dataset.folderId);
       folderEl.classList.add('dragging');
+      startDrag();
     });
-    sum.addEventListener('dragend', () => { folderEl.classList.remove('dragging'); DRAGGING = null; });
+    sum.addEventListener('dragend', () => { folderEl.classList.remove('dragging'); endDrag(); });
   });
 
   if (LIST_DND_WIRED) return;
@@ -474,8 +664,12 @@ function setupListDragDrop(body) {
     return !isFolderInside(targetFolderEl.dataset.folderId, DRAGGING.id);
   };
 
+  const topZone = document.getElementById('listTopDropZone');
   let lastDragOverFolder = null;
-  const clearHighlight = () => { lastDragOverFolder?.classList.remove('drag-over'); lastDragOverFolder = null; };
+  const clearHighlight = () => {
+    lastDragOverFolder?.classList.remove('drag-over'); lastDragOverFolder = null;
+    topZone.classList.remove('drag-over');
+  };
 
   container.addEventListener('dragover', e => {
     if (!DRAGGING) return; // ignore drags that didn't start in the list
@@ -483,10 +677,20 @@ function setupListDragDrop(body) {
     if (!targetValid(folderEl)) { e.dataTransfer.dropEffect = 'none'; clearHighlight(); return; }
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    if (folderEl !== lastDragOverFolder) {
-      clearHighlight();
-      folderEl?.classList.add('drag-over');
-      lastDragOverFolder = folderEl;
+
+    // Auto-scroll near the edges so a distant folder (or the empty bottom)
+    // is reachable while dragging — HTML5 DnD doesn't scroll on its own.
+    const r = container.getBoundingClientRect();
+    if (e.clientY < r.top + 70) container.scrollTop -= 16;
+    else if (e.clientY > r.bottom - 70) container.scrollTop += 16;
+
+    const overTop = !!e.target.closest('#listTopDropZone');
+    topZone.classList.toggle('drag-over', overTop);
+    const highlightFolder = overTop ? null : folderEl;
+    if (highlightFolder !== lastDragOverFolder) {
+      lastDragOverFolder?.classList.remove('drag-over');
+      highlightFolder?.classList.add('drag-over');
+      lastDragOverFolder = highlightFolder;
     }
   });
   container.addEventListener('dragleave', e => { if (!container.contains(e.relatedTarget)) clearHighlight(); });
@@ -507,19 +711,21 @@ function setupListDragDrop(body) {
   });
 }
 
-function renderNoteListRow(note) {
+function renderNoteListRow(note, marks, pins) {
   const title = note.title || noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
   const moveBtn = MY_ROLE !== 'viewer'
     ? `<button class="notes-move-btn" data-move-note="${note.id}" title="Přesunout do složky">📁</button>`
     : '';
   return `
     <div class="notes-list-row" data-id="${note.id}" style="--row-color:${note.color || '#fef9c3'}">
+      ${pinHtml(note.id, pins || new Set())}
       <div class="notes-list-dot"></div>
       <div class="notes-list-main">
         <div class="notes-list-title">${esc(title)}</div>
         <div class="notes-list-meta">${esc(note.authorName || 'Anon')} · ${fmtTs(note.updatedAt || note.createdAt)}</div>
       </div>
       ${moveBtn}
+      ${markHtml(note.id, marks || {})}
     </div>`;
 }
 
@@ -1489,8 +1695,9 @@ function setupMembers() {
     if (e.target === document.getElementById('panelBack')) closePanel();
   });
 
-  // Delete room (owner only)
+  // Backups + delete room (owner only)
   if (MY_ROLE === 'owner') {
+    document.getElementById('backupsWrap').style.display = 'block';
     const wrap = document.getElementById('deleteRoomWrap');
     wrap.style.display = 'block';
     document.getElementById('deleteRoomBtn').addEventListener('click', async () => {
@@ -1512,6 +1719,149 @@ function setupMembers() {
 
 function closePanel() {
   document.getElementById('panelBack').classList.remove('open');
+}
+
+// ── Backups (owner-only, durable snapshots in Firestore) ──────
+const BACKUP_INTERVAL_MS = 12 * 60 * 60 * 1000; // auto-backup at most every 12h
+const BACKUP_KEEP        = 24;                   // keep the newest N (≈12 days)
+
+function backupsCol() { return db.collection('rooms').doc(ROOM_ID).collection('backups'); }
+
+// Snapshot the whole room into ONE backup doc: notes + connections + folders
+// as arrays (with their original ids preserved so restore can recreate them
+// exactly, keeping connection endpoints and folder membership valid).
+async function createBackup(auto) {
+  const [notesSnap, connsSnap, foldersSnap] = await Promise.all([
+    db.collection('rooms').doc(ROOM_ID).collection('notes').get(),
+    db.collection('rooms').doc(ROOM_ID).collection('connections').get(),
+    db.collection('rooms').doc(ROOM_ID).collection('folders').get(),
+  ]);
+  const dump = snap => snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const notes = dump(notesSnap), connections = dump(connsSnap), folders = dump(foldersSnap);
+
+  await backupsCol().add({
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: ME.uid,
+    auto: !!auto,
+    counts: { notes: notes.length, connections: connections.length, folders: folders.length },
+    notes, connections, folders,
+  });
+
+  // Prune old backups beyond the keep limit so storage doesn't grow forever.
+  const all = await backupsCol().orderBy('createdAt', 'desc').get();
+  if (all.size > BACKUP_KEEP) {
+    const batch = db.batch();
+    all.docs.slice(BACKUP_KEEP).forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+
+// Called once on owner room-load: if the newest backup is older than 12h (or
+// none exists), make a fresh automatic one. This is the serverless stand-in
+// for a scheduled job — it can only fire while the owner has the room open.
+async function maybeAutoBackup() {
+  try {
+    const latest = await backupsCol().orderBy('createdAt', 'desc').limit(1).get();
+    const lastMs = latest.empty ? 0 : (latest.docs[0].data().createdAt?.toMillis?.() || 0);
+    if (Date.now() - lastMs >= BACKUP_INTERVAL_MS) await createBackup(true);
+  } catch (_) { /* backups are best-effort; never block the room */ }
+}
+
+function setupBackups() {
+  if (MY_ROLE !== 'owner') return;
+  maybeAutoBackup();
+
+  document.getElementById('backupsBtn').addEventListener('click', () => {
+    openModal('backupsModal');
+    renderBackupsList();
+  });
+
+  document.getElementById('backupNowBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('backupNowBtn');
+    btn.disabled = true; btn.textContent = 'Zálohuji…';
+    try { await createBackup(false); toast('Záloha vytvořena ✓'); renderBackupsList(); }
+    catch (e) { toast('Chyba: ' + e.message); }
+    btn.disabled = false; btn.textContent = '💾 Zálohovat teď';
+  });
+}
+
+async function renderBackupsList() {
+  const el = document.getElementById('backupsList');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.85rem;">Načítám…</div>';
+  try {
+    const snap = await backupsCol().orderBy('createdAt', 'desc').get();
+    if (snap.empty) {
+      el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.85rem;">Zatím žádné zálohy.</div>';
+      return;
+    }
+    el.innerHTML = snap.docs.map(d => {
+      const b = d.data();
+      const when = b.createdAt?.toDate ? b.createdAt.toDate().toLocaleString('cs-CZ', { day:'numeric', month:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+      const c = b.counts || {};
+      return `
+        <div class="backup-row">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:0.86rem;font-weight:600;">${b.auto ? '🕛' : '💾'} ${esc(when)}</div>
+            <div style="font-size:0.74rem;color:var(--text-muted);">${c.notes||0} poznámek · ${c.connections||0} propojení · ${c.folders||0} složek</div>
+          </div>
+          <button class="btn btn-secondary" style="padding:5px 12px;font-size:0.78rem;" data-restore="${d.id}">Obnovit</button>
+        </div>`;
+    }).join('');
+
+    el.querySelectorAll('[data-restore]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        confirmModal('Obnovit tuto zálohu? Současný obsah místnosti (poznámky, propojení, složky) se nahradí stavem ze zálohy.', () => restoreBackup(btn.dataset.restore));
+      });
+    });
+  } catch (e) {
+    el.innerHTML = `<div style="color:#fca5a5;font-size:.85rem;padding:10px;">Chyba: ${esc(e.message)}</div>`;
+  }
+}
+
+// Wipe the current notes/connections/folders and recreate them from the
+// backup, reusing the original doc ids. Firestore batches cap at 500 writes,
+// so everything is chunked.
+async function restoreBackup(backupId) {
+  const btn = document.querySelector(`[data-restore="${backupId}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Obnovuji…'; }
+  try {
+    const doc = await backupsCol().doc(backupId).get();
+    if (!doc.exists) { toast('Záloha nenalezena.'); return; }
+    const b = doc.data();
+    const roomRef = db.collection('rooms').doc(ROOM_ID);
+
+    // 1) Safety backup of the CURRENT state first, so a restore is itself
+    //    undoable if it wasn't what the owner wanted.
+    await createBackup(true);
+
+    // 2) Gather every current doc to delete, then all recreations, and run
+    //    them as ordered chunks of ≤450 writes.
+    const [curNotes, curConns, curFolders] = await Promise.all([
+      roomRef.collection('notes').get(),
+      roomRef.collection('connections').get(),
+      roomRef.collection('folders').get(),
+    ]);
+
+    const ops = [];
+    curNotes.docs.forEach(d => ops.push(['del', d.ref]));
+    curConns.docs.forEach(d => ops.push(['del', d.ref]));
+    curFolders.docs.forEach(d => ops.push(['del', d.ref]));
+    (b.notes || []).forEach(n => { const { id, ...data } = n; ops.push(['set', roomRef.collection('notes').doc(id), data]); });
+    (b.connections || []).forEach(c => { const { id, ...data } = c; ops.push(['set', roomRef.collection('connections').doc(id), data]); });
+    (b.folders || []).forEach(f => { const { id, ...data } = f; ops.push(['set', roomRef.collection('folders').doc(id), data]); });
+
+    for (let i = 0; i < ops.length; i += 450) {
+      const batch = db.batch();
+      ops.slice(i, i + 450).forEach(([kind, ref, data]) => kind === 'del' ? batch.delete(ref) : batch.set(ref, data));
+      await batch.commit();
+    }
+
+    closeModal('backupsModal');
+    toast('Záloha obnovena ✓');
+  } catch (e) {
+    toast('Chyba při obnově: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Obnovit'; }
+  }
 }
 
 function updateMemberCount() {
