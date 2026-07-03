@@ -134,21 +134,60 @@ function setupNotes() {
     });
 }
 
-// ── List view (scannable alternative to the freeform board) ────
+// ── List view (a standalone "page" reachable/leavable via browser history)
+// The list is driven through the History API so the mouse "back" button and
+// the browser back arrow both return to the board, just like a real page —
+// opening the list pushes a history entry (with ?view=list in the URL), and
+// leaving it (back button, nav toggle, or browser/mouse back) pops it.
+function applyView(mode) {
+  VIEW_MODE = mode;
+  document.getElementById('boardWrap').style.display     = mode === 'board' ? '' : 'none';
+  document.getElementById('notesListView').style.display = mode === 'list'  ? '' : 'none';
+  // Viewers never get connectBtn/newFolderBtn shown at all — don't undo that.
+  if (MY_ROLE !== 'viewer') {
+    document.getElementById('connectBtn').style.display   = mode === 'board' ? '' : 'none';
+    document.getElementById('newFolderBtn').style.display = mode === 'list'  ? '' : 'none';
+  }
+  document.getElementById('viewToggleBtn').innerHTML = mode === 'board' ? '📋 Seznam' : '🗺️ Nástěnka';
+  if (mode === 'list') { exitConnectMode(); renderNotesListView(); }
+}
+
+function goToList() {
+  if (VIEW_MODE === 'list') return;
+  const url = new URL(location.href);
+  url.searchParams.set('view', 'list');
+  history.pushState({ sbView: 'list' }, '', url);
+  applyView('list');
+}
+
+function goToBoard() {
+  if (VIEW_MODE === 'board') return;
+  // Pop the list entry so browser/mouse "back" and this button behave
+  // identically; popstate below then applies the board view.
+  history.back();
+}
+
 function setupViewToggle() {
-  const btn = document.getElementById('viewToggleBtn');
-  btn.addEventListener('click', () => {
-    VIEW_MODE = VIEW_MODE === 'board' ? 'list' : 'board';
-    document.getElementById('boardWrap').style.display     = VIEW_MODE === 'board' ? '' : 'none';
-    document.getElementById('notesListView').style.display = VIEW_MODE === 'list'  ? '' : 'none';
-    // Viewers never get connectBtn/newFolderBtn shown at all — don't undo that.
-    if (MY_ROLE !== 'viewer') {
-      document.getElementById('connectBtn').style.display   = VIEW_MODE === 'board' ? '' : 'none';
-      document.getElementById('newFolderBtn').style.display = VIEW_MODE === 'list'  ? '' : 'none';
-    }
-    btn.innerHTML = VIEW_MODE === 'board' ? '📋 Seznam' : '🗺️ Nástěnka';
-    if (VIEW_MODE === 'list') { exitConnectMode(); renderNotesListView(); }
+  document.getElementById('viewToggleBtn').addEventListener('click', () => {
+    VIEW_MODE === 'board' ? goToList() : goToBoard();
   });
+  // Top-left nav "Zpět": on the board it's the normal dashboard link; in the
+  // list view it returns to the board instead (same label, context-aware).
+  document.getElementById('navBackBtn').addEventListener('click', e => {
+    if (VIEW_MODE === 'list') { e.preventDefault(); goToBoard(); }
+  });
+  window.addEventListener('popstate', e => {
+    applyView(e.state && e.state.sbView === 'list' ? 'list' : 'board');
+  });
+  // Deep-link / refresh support: landing directly on ?view=list opens the
+  // list, with a board entry seeded beneath it so back still reaches the board.
+  if (new URLSearchParams(location.search).get('view') === 'list') {
+    const boardUrl = new URL(location.href); boardUrl.searchParams.delete('view');
+    history.replaceState({ sbView: 'board' }, '', boardUrl);
+    const listUrl = new URL(location.href); listUrl.searchParams.set('view', 'list');
+    history.pushState({ sbView: 'list' }, '', listUrl);
+    applyView('list');
+  }
 }
 
 const noteRecency = n => n.updatedAt?.toMillis?.() || n.createdAt?.toMillis?.() || 0;
@@ -196,23 +235,6 @@ function openFolderModal(folderId) {
   document.getElementById('folderColorHex').textContent = color;
   document.getElementById('folderDeleteBtn').style.display = folder ? 'block' : 'none';
 
-  // Exclude the folder itself and all its descendants from the parent
-  // picker — nesting a folder under its own child would create a cycle.
-  const excluded = new Set();
-  if (folderId) {
-    (function collect(id) {
-      excluded.add(id);
-      FOLDERS_MAP.forEach(f => { if (f.parentId === id) collect(f.id); });
-    })(folderId);
-  }
-  const select = document.getElementById('folderParentSelect');
-  const options = [...FOLDERS_MAP.values()].filter(f => !excluded.has(f.id))
-    .sort((a, b) => folderPathLabel(a).localeCompare(folderPathLabel(b), 'cs'));
-  select.innerHTML = '<option value="">— Bez složky (nejvyšší úroveň) —</option>'
-    + options.map(f => `<option value="${f.id}">${esc(folderPathLabel(f))}</option>`).join('');
-  const currentParentId = folder?.parentId || '';
-  select.value = currentParentId && !excluded.has(currentParentId) ? currentParentId : '';
-
   openModal('folderModal');
 }
 
@@ -226,15 +248,17 @@ function setupFolderModal() {
   document.getElementById('folderSubmit').addEventListener('click', async () => {
     const name = document.getElementById('folderNameInput').value.trim();
     if (!name) { toast('Zadej název složky.'); return; }
-    const parentId = document.getElementById('folderParentSelect').value || null;
     const color = colorInput.value;
     const foldersCol = db.collection('rooms').doc(ROOM_ID).collection('folders');
     try {
       if (PENDING_FOLDER_ID) {
-        await foldersCol.doc(PENDING_FOLDER_ID).update({ name, parentId, color });
+        // Only name/color here — the folder's nesting (parentId) is changed
+        // by dragging it in the list, not from this dialog.
+        await foldersCol.doc(PENDING_FOLDER_ID).update({ name, color });
       } else {
+        // New folders start at the top level; drag them into a parent after.
         await foldersCol.add({
-          name, parentId, color, noteIds: [],
+          name, parentId: null, color, noteIds: [],
           authorId: ME.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
       }
@@ -308,7 +332,7 @@ function openMoveToFolderModal(noteId) {
 }
 
 function renderNotesListView() {
-  const el = document.getElementById('notesListView');
+  const el = document.getElementById('notesListBody');
   const notes = [...NOTES_MAP.values()];
 
   if (!notes.length) {
@@ -374,44 +398,112 @@ function renderNotesListView() {
   if (MY_ROLE !== 'viewer') setupListDragDrop(el);
 }
 
-// Drag a note row onto a folder to file it there — a faster alternative to
-// clicking the 📁 button and picking from the modal every time. One
-// delegated listener on the list container (not per-folder) so dropping on
-// a nested folder still resolves to that innermost folder via closest(),
-// and dropping on empty list space (no ancestor folder) unfiles the note.
-function setupListDragDrop(el) {
-  el.querySelectorAll('.notes-list-row').forEach(row => {
+// Is `folderId` the same as, or nested somewhere under, `ancestorId`?
+// Used to forbid dropping a folder into itself or one of its own children
+// (which would orphan a whole subtree into an unreachable cycle).
+function isFolderInside(folderId, ancestorId) {
+  let f = FOLDERS_MAP.get(folderId);
+  while (f) {
+    if (f.id === ancestorId) return true;
+    f = f.parentId ? FOLDERS_MAP.get(f.parentId) : null;
+  }
+  return false;
+}
+
+async function moveFolderToParent(folderId, parentId) {
+  if (parentId && isFolderInside(parentId, folderId)) { toast('Nelze vložit složku do sebe.'); return; }
+  const cur = FOLDERS_MAP.get(folderId);
+  if (!cur || (cur.parentId || null) === (parentId || null)) return; // no change
+  try {
+    await db.collection('rooms').doc(ROOM_ID).collection('folders').doc(folderId).update({ parentId: parentId || null });
+    toast('Složka přesunuta!');
+  } catch (e) { toast('Chyba: ' + e.message); }
+}
+
+// What's currently being dragged — set on dragstart so dragover (where
+// dataTransfer contents aren't readable in most browsers) can validate drop
+// targets, e.g. reject a folder dropped onto its own descendant.
+let DRAGGING = null; // { type: 'note' | 'folder', id }
+
+// Drag a note row OR a whole folder onto a folder to file/nest it — a
+// faster alternative to the 📁 button / the parent-folder dropdown.
+// Per-render this just (re)marks rows/folder headers as draggable; the
+// container-level dragover/drop listeners are attached ONCE (see
+// LIST_DND_WIRED) on the full-height #notesListView, NOT on #notesListBody:
+//   - once, because renderNotesListView re-runs on every snapshot and would
+//     otherwise stack a new set of listeners each time;
+//   - on the full-height container, because dropping in the empty area BELOW
+//     the content (the natural place to drop when pulling something OUT of a
+//     folder to the top level) is outside #notesListBody's short box and was
+//     silently ignored.
+let LIST_DND_WIRED = false;
+function setupListDragDrop(body) {
+  body.querySelectorAll('.notes-list-row').forEach(row => {
     row.setAttribute('draggable', 'true');
     row.addEventListener('dragstart', e => {
+      e.stopPropagation();
+      DRAGGING = { type: 'note', id: row.dataset.id };
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', row.dataset.id);
+      e.dataTransfer.setData('text/plain', 'note:' + row.dataset.id);
       row.classList.add('dragging');
     });
-    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+    row.addEventListener('dragend', () => { row.classList.remove('dragging'); DRAGGING = null; });
   });
 
+  body.querySelectorAll('.notes-folder-summary').forEach(sum => {
+    sum.setAttribute('draggable', 'true');
+    const folderEl = sum.closest('.notes-folder');
+    sum.addEventListener('dragstart', e => {
+      e.stopPropagation();
+      DRAGGING = { type: 'folder', id: folderEl.dataset.folderId };
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 'folder:' + folderEl.dataset.folderId);
+      folderEl.classList.add('dragging');
+    });
+    sum.addEventListener('dragend', () => { folderEl.classList.remove('dragging'); DRAGGING = null; });
+  });
+
+  if (LIST_DND_WIRED) return;
+  LIST_DND_WIRED = true;
+  const container = document.getElementById('notesListView');
+
+  // A folder target is invalid for a folder-drag if it IS the dragged folder
+  // or one of its descendants.
+  const targetValid = targetFolderEl => {
+    if (!DRAGGING || DRAGGING.type !== 'folder' || !targetFolderEl) return true;
+    return !isFolderInside(targetFolderEl.dataset.folderId, DRAGGING.id);
+  };
+
   let lastDragOverFolder = null;
-  el.addEventListener('dragover', e => {
+  const clearHighlight = () => { lastDragOverFolder?.classList.remove('drag-over'); lastDragOverFolder = null; };
+
+  container.addEventListener('dragover', e => {
+    if (!DRAGGING) return; // ignore drags that didn't start in the list
+    const folderEl = e.target.closest('.notes-folder');
+    if (!targetValid(folderEl)) { e.dataTransfer.dropEffect = 'none'; clearHighlight(); return; }
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    const folderEl = e.target.closest('.notes-folder');
     if (folderEl !== lastDragOverFolder) {
-      lastDragOverFolder?.classList.remove('drag-over');
+      clearHighlight();
       folderEl?.classList.add('drag-over');
       lastDragOverFolder = folderEl;
     }
   });
-  el.addEventListener('dragleave', e => {
-    if (!el.contains(e.relatedTarget)) { lastDragOverFolder?.classList.remove('drag-over'); lastDragOverFolder = null; }
-  });
-  el.addEventListener('drop', e => {
+  container.addEventListener('dragleave', e => { if (!container.contains(e.relatedTarget)) clearHighlight(); });
+  container.addEventListener('drop', e => {
     e.preventDefault();
-    lastDragOverFolder?.classList.remove('drag-over');
-    lastDragOverFolder = null;
-    const noteId = e.dataTransfer.getData('text/plain');
-    if (!noteId) return;
+    clearHighlight();
+    const data = e.dataTransfer.getData('text/plain');
+    if (!data) return;
     const folderEl = e.target.closest('.notes-folder');
-    moveNoteToFolder(noteId, folderEl ? folderEl.dataset.folderId : null);
+    const targetId = folderEl ? folderEl.dataset.folderId : null;
+    if (data.startsWith('note:')) {
+      moveNoteToFolder(data.slice(5), targetId);
+    } else if (data.startsWith('folder:')) {
+      const draggedId = data.slice(7);
+      if (targetId && isFolderInside(targetId, draggedId)) return; // invalid, ignore
+      moveFolderToParent(draggedId, targetId);
+    }
   });
 }
 
