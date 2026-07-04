@@ -740,6 +740,9 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   background-size: 28px 28px, 28px 28px, 140px 140px, 140px 140px;
 }
 .board-wrap.panning { cursor: grabbing; }
+/* Touch: we run our own pan/pinch on the board (see setupBoardPan) — without
+   this the browser would consume the gestures as page scroll/zoom first. */
+.board-wrap { touch-action: none; }
 
 .board {
   position: relative;
@@ -1005,6 +1008,20 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   flex-shrink: 0;
 }
 .notes-folder-edit:hover { background: var(--bg-3); color: var(--text); }
+
+/* Folder move button — desktop has drag & drop, so hide it there; on touch
+   (coarse pointer) it's the only way to re-nest a folder. */
+.notes-folder-move {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 3px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
 
 .notes-move-btn {
   background: none;
@@ -2752,4 +2769,24 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
      block clicks on notes underneath — this button needs it re-enabled on
      itself, or clicks pass straight through to whatever's behind it. */
   pointer-events: all;
+}
+
+/* ===== TOUCH DEVICES (coarse pointer) ===== */
+/* On touch there is no hover — everything hover-revealed must be always
+   visible — and no right-click/drag, so the touch-only substitutes (folder
+   move button, long-press color picker) show up here. Tap targets grow to
+   comfortable finger sizes. */
+@media (pointer: coarse) {
+  .note-btns { opacity: 1; }                    /* edit/delete on notes */
+  .notes-move-btn { opacity: 1; font-size: 1rem; padding: 6px 9px; }
+  .notes-folder-move { display: inline-block; font-size: 1rem; padding: 5px 8px; }
+  .notes-folder-edit { font-size: 1rem; padding: 5px 8px; }
+  .list-mark { width: 20px; height: 20px; }
+  .list-pin  { font-size: 1.05rem; padding: 4px; }
+  .mark-color-swatch { width: 30px; height: 30px; }
+
+  /* Nav has many buttons — let it scroll sideways instead of overflowing. */
+  .room-nav { overflow-x: auto; }
+  .room-nav-right { flex-shrink: 0; }
+  .room-title { min-width: 70px; }
 }

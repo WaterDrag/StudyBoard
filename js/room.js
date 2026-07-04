@@ -434,6 +434,33 @@ function openMoveToFolderModal(noteId) {
   openModal('moveToFolderModal');
 }
 
+// Same picker, but for moving a FOLDER — the touch-friendly counterpart to
+// dragging one (HTML5 drag & drop doesn't exist on touch screens). Excludes
+// the folder itself and its descendants to keep the cycle protection.
+function openMoveFolderPicker(folderId) {
+  const listEl = document.getElementById('moveToFolderList');
+  const cur = FOLDERS_MAP.get(folderId);
+  const targets = [...FOLDERS_MAP.values()]
+    .filter(f => !isFolderInside(f.id, folderId))
+    .sort((a, b) => folderPathLabel(a).localeCompare(folderPathLabel(b), 'cs'));
+
+  listEl.innerHTML = `
+    <div class="move-to-folder-row${!cur?.parentId ? ' current' : ''}" data-folder="">⬆️ Nejvyšší úroveň</div>
+    ${targets.map(f => `
+      <div class="move-to-folder-row${cur?.parentId === f.id ? ' current' : ''}" data-folder="${f.id}" style="--row-color:${f.color || '#6366f1'}">
+        📁 ${esc(folderPathLabel(f))}
+      </div>`).join('')}`;
+
+  listEl.querySelectorAll('.move-to-folder-row').forEach(row => {
+    row.addEventListener('click', () => {
+      closeModal('moveToFolderModal');
+      moveFolderToParent(folderId, row.dataset.folder || null);
+    });
+  });
+
+  openModal('moveToFolderModal');
+}
+
 function renderNotesListView() {
   const el = document.getElementById('notesListBody');
   const notes = [...NOTES_MAP.values()];
@@ -469,6 +496,7 @@ function renderNotesListView() {
           <span class="notes-folder-icon">📁</span>
           <span class="notes-folder-title">${esc(folder.name)}</span>
           <span class="notes-folder-count">${folderSubtreeCount(folder)}</span>
+          ${canManage ? `<button class="notes-folder-move" data-move-folder="${folder.id}" title="Přesunout složku">📂</button>` : ''}
           ${canManage ? `<button class="notes-folder-edit" data-edit-folder="${folder.id}" title="Upravit složku">✏️</button>` : ''}
           ${markHtml(folder.id, marks)}
         </summary>
@@ -528,20 +556,40 @@ function renderNotesListView() {
       openFolderModal(btn.dataset.editFolder);
     });
   });
-
-  // Puntíky: LEFT click toggles red/none; RIGHT click opens a color picker.
-  // Saved per-user. preventDefault stops a folder summary from toggling / a
-  // note from opening.
-  el.querySelectorAll('.list-mark').forEach(btn => {
+  el.querySelectorAll('.notes-folder-move').forEach(btn => {
     btn.addEventListener('click', e => {
       e.preventDefault(); e.stopPropagation();
+      openMoveFolderPicker(btn.dataset.moveFolder);
+    });
+  });
+
+  // Puntíky: LEFT click (or tap) toggles red/none; RIGHT click — or a
+  // long-press on touch, where right-click doesn't exist — opens the color
+  // picker. Saved per-user. preventDefault stops a folder summary from
+  // toggling / a note from opening.
+  el.querySelectorAll('.list-mark').forEach(btn => {
+    let lpTimer = null, lpFired = false;
+    btn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      if (lpFired) { lpFired = false; return; } // long-press already handled this touch
       const has = !!(getMarks()[btn.dataset.markId]);
       applyMark(btn.dataset.markId, has ? '' : '#ef4444', btn);
     });
     btn.addEventListener('contextmenu', e => {
       e.preventDefault(); e.stopPropagation();
+      if (lpFired) return; // Android fires contextmenu on long-press too
       openMarkColorPopup(e.clientX, e.clientY, btn.dataset.markId, btn);
     });
+    btn.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      lpFired = false;
+      lpTimer = setTimeout(() => {
+        lpFired = true;
+        openMarkColorPopup(t.clientX, t.clientY, btn.dataset.markId, btn);
+      }, 450);
+    }, { passive: true });
+    ['touchend', 'touchmove', 'touchcancel'].forEach(ev =>
+      btn.addEventListener(ev, () => clearTimeout(lpTimer), { passive: true }));
   });
 
   // Připínáčky: toggle pin, re-render so the top section updates.
@@ -920,6 +968,55 @@ function makeDraggable(el, noteId) {
     document.addEventListener('mouseup',   onUp);
     e.preventDefault();
   });
+
+  // Touch drag: same as the mouse path, but with an 8px movement threshold
+  // so a plain tap still opens the note detail (the synthesized click after
+  // touchend is suppressed via dataset.dragged only when a real drag ran).
+  el.addEventListener('touchstart', e => {
+    if (e.target.closest('[data-action]')) return;
+    if (e.touches.length !== 1) return;
+    const t0 = e.touches[0];
+    const startX = t0.clientX, startY = t0.clientY;
+    const startL = parseInt(el.style.left) || 0;
+    const startT = parseInt(el.style.top)  || 0;
+    let moved = false;
+    el.dataset.dragged = 'false';
+
+    const onMove = mv => {
+      const t = mv.touches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (!moved && Math.hypot(dx, dy) < 8) return; // still a tap
+      if (!moved) { moved = true; el.classList.add('dragging'); el.style.zIndex = 100; el.dataset.dragged = 'true'; }
+      mv.preventDefault(); // dragging — don't let the board pan/scroll under it
+      el.style.left = Math.max(0, startL + dx) + 'px';
+      el.style.top  = Math.max(0, startT + dy) + 'px';
+      expandBoardIfNeeded(el);
+      redrawConnections();
+    };
+
+    const onEnd = async () => {
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+      if (!moved) return;
+      el.classList.remove('dragging');
+      el.style.zIndex = '';
+      setTimeout(() => { el.dataset.dragged = 'false'; }, 150); // outlive the ghost click
+      const x = toStoreX(parseInt(el.style.left));
+      const y = toStoreY(parseInt(el.style.top));
+      try {
+        await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(noteId).update({
+          x, y,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (_) { /* silent – position reverts on next snapshot */ }
+    };
+
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+  }, { passive: true });
 }
 
 // ── ImgBB upload ──────────────────────────────────────────────
@@ -1477,19 +1574,54 @@ function setupBoardPan() {
   const stopPan = () => { panning = false; wrap.classList.remove('panning'); };
   window.addEventListener('mouseup', stopPan);
   window.addEventListener('blur', stopPan);
+
+  // ── Touch: one finger on empty canvas pans, two fingers pinch-zoom.
+  // Notes handle their own touch drag in makeDraggable; the .note check
+  // below keeps the board from panning underneath while a note is dragged.
+  let touchPan = null;   // { x, y, sl, st }
+  let pinch    = null;   // { dist, zoom }
+  const touchDist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+  wrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      pinch = { dist: touchDist(e.touches), zoom: BOARD_ZOOM };
+      touchPan = null;
+      e.preventDefault();
+    } else if (e.touches.length === 1 && !e.target.closest('.note')) {
+      const t = e.touches[0];
+      touchPan = { x: t.clientX, y: t.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop };
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchmove', e => {
+    if (pinch && e.touches.length === 2) {
+      e.preventDefault();
+      setBoardZoom(pinch.zoom * (touchDist(e.touches) / pinch.dist));
+    } else if (touchPan && e.touches.length === 1) {
+      e.preventDefault();
+      const t = e.touches[0];
+      wrap.scrollLeft = touchPan.sl - (t.clientX - touchPan.x);
+      wrap.scrollTop  = touchPan.st - (t.clientY - touchPan.y);
+    }
+  }, { passive: false });
+
+  const endTouch = e => { if (e.touches.length < 2) pinch = null; if (e.touches.length === 0) touchPan = null; };
+  wrap.addEventListener('touchend', endTouch);
+  wrap.addEventListener('touchcancel', endTouch);
 }
 
-// ── Board zoom: mouse wheel zooms the board instead of scrolling the
-//    page/wrapper — panning still works via left/right-click drag above.
+// ── Board zoom: mouse wheel (desktop) or pinch (touch, above) zooms the
+//    board instead of scrolling the page/wrapper.
 let BOARD_ZOOM = 1;
+function setBoardZoom(z) {
+  BOARD_ZOOM = Math.min(2.2, Math.max(0.15, z));
+  document.getElementById('board').style.zoom = BOARD_ZOOM;
+}
 function setupBoardZoom() {
-  const wrap  = document.getElementById('boardWrap');
-  const board = document.getElementById('board');
+  const wrap = document.getElementById('boardWrap');
   wrap.addEventListener('wheel', e => {
     e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.08 : 0.92;
-    BOARD_ZOOM = Math.min(2.2, Math.max(0.15, BOARD_ZOOM * factor));
-    board.style.zoom = BOARD_ZOOM;
+    setBoardZoom(BOARD_ZOOM * (e.deltaY < 0 ? 1.08 : 0.92));
   }, { passive: false });
 }
 
