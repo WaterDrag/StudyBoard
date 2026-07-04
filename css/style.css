@@ -301,15 +301,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 }
 
 .logo-icon {
-  width: 56px;
-  height: 56px;
-  background: var(--accent);
-  border-radius: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 14px;
-  box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+  font-size: 3rem;
+  line-height: 1;
 }
 
 .auth-logo h1 { font-size: 1.65rem; font-weight: 700; margin-bottom: 4px; }
@@ -383,14 +380,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 }
 
 .logo-icon-sm {
-  width: 32px;
-  height: 32px;
-  background: var(--accent);
-  border-radius: 9px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  font-size: 1.4rem;
+  line-height: 1;
 }
 
 .user-info {
