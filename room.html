@@ -365,18 +365,39 @@
       <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
         <label class="label">Odkaz s oprávněním</label>
         <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:10px;">
-          Kdo otevře tento odkaz, se rovnou připojí s vybraným oprávněním.
+          Kdo otevře odkaz, rovnou se připojí. Editora může získat jen
+          <strong style="color:var(--text);">přítel vlastníka</strong> — ostatní se připojí jako prohlížeč.
+          Host (anonym) má členství vždy max&nbsp;1&nbsp;hodinu.
         </p>
-        <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <p id="editorInviteHint" style="display:none;color:var(--text-muted);font-size:0.75rem;margin-bottom:10px;">
+          ℹ️ Pozvánky s právem editora může vytvářet jen vlastník místnosti.
+        </p>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+          <select id="inviteTypeSelect" class="input" style="flex:0 0 auto;">
+            <option value="perm">Trvalý</option>
+            <option value="temp">Dočasný</option>
+          </select>
+          <span id="inviteDurWrap" style="display:none;gap:8px;align-items:center;">
+            <input id="tempDurVal" type="number" min="1" max="999" value="1" class="input" style="width:76px;flex:0 0 auto;">
+            <select id="tempDurUnit" class="input" style="flex:0 0 auto;">
+              <option value="3600000">hodin</option>
+              <option value="86400000">dní</option>
+            </select>
+          </span>
           <select id="inviteRoleSelect" class="input" style="flex:0 0 auto;">
             <option value="viewer">Prohlížeč</option>
             <option value="editor">Editor</option>
           </select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-muted);flex:0 0 auto;cursor:pointer;">
+            <input type="checkbox" id="tempOnceChk"> jen 1 použití
+          </label>
+          <button id="inviteGenBtn" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Vytvořit</button>
         </div>
-        <div class="invite-box">
+        <div class="invite-box" id="inviteLinkBox" style="display:none;">
           <div class="invite-code" id="inviteLinkText" style="font-size:0.72rem;font-family:inherit;letter-spacing:0;word-break:break-all;">–</div>
-          <button id="copyLinkBtn" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Kopírovat odkaz</button>
+          <button id="copyLinkBtn" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Kopírovat</button>
         </div>
+        <div id="tempInvitesList" style="margin-top:12px;"></div>
       </div>
     </div>
   </div>
@@ -406,10 +427,11 @@
           🗄️ Zálohy místnosti
         </button>
       </div>
-      <div style="padding:14px 18px;border-top:1px solid var(--border);" id="deleteRoomWrap" style="display:none;">
-        <button id="deleteRoomBtn" class="btn btn-danger" style="width:100%;justify-content:center;">
-          Smazat místnost
+      <div style="padding:14px 18px;border-top:1px solid var(--border);" id="leaveRoomWrap">
+        <button id="leaveRoomBtn" class="btn btn-danger" style="width:100%;justify-content:center;">
+          Opustit místnost
         </button>
+        <p style="margin:8px 2px 0;font-size:0.72rem;color:var(--text-muted);line-height:1.4;" id="leaveRoomHint"></p>
       </div>
     </div>
   </div>

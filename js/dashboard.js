@@ -215,11 +215,18 @@ function setupJoin(user) {
         closeModal('joinModal');
         window.location.href = `room.html?id=${roomDoc.id}`; return;
       }
-      await roomDoc.ref.update({
+      const joinUpdate = {
         memberIds:              firebase.firestore.FieldValue.arrayUnion(user.uid),
         [`roles.${user.uid}`]:  'viewer',
-        [`members.${user.uid}`]: { displayName: user.displayName || user.email, email: user.email, photoURL: user.photoURL || null },
-      });
+        [`members.${user.uid}`]: {
+          displayName: user.isAnonymous ? 'Host' : (user.displayName || user.email),
+          email: user.email || null, photoURL: user.photoURL || null,
+          isAnon: !!user.isAnonymous,
+        },
+      };
+      // Anonymous guests get at most 1 hour of membership (enforced on room load)
+      if (user.isAnonymous) joinUpdate[`memberExpiry.${user.uid}`] = Date.now() + 3600000;
+      await roomDoc.ref.update(joinUpdate);
       closeModal('joinModal');
       window.location.href = `room.html?id=${roomDoc.id}`;
     } catch (e) {

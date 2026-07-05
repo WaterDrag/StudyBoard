@@ -44,15 +44,43 @@ service cloud.firestore {
         && request.resource.data.roles.diff(resource.data.roles).affectedKeys().hasOnly([request.auth.uid]);
     }
 
+    // Any member may create/refresh TEMPORARY invite codes — but that must be
+    // the ONLY field the write touches, so it can't smuggle in role or member
+    // changes. (Whether an editor invite actually grants editor is decided at
+    // join time: only the owner's friends get it.)
+    function isTempInviteWrite(roomId) {
+      return (request.auth.uid in resource.data.memberIds)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tempInvites']);
+    }
+
+    // The mirror image of a self-join: a member may remove ONLY themselves.
+    // They must already be a member, end up NOT a member, add no one else,
+    // leave the owner untouched, and only clear their own key in roles. The
+    // OWNER never uses this — an owner leaving does a full owner update that
+    // also hands ownership to a successor (allowed via isRoomOwner), so a room
+    // is never left ownerless and never deleted.
+    function isRoomSelfLeave(roomId) {
+      return (request.auth.uid in resource.data.memberIds)
+        && !(request.auth.uid in request.resource.data.memberIds)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.memberIds.removeAll(resource.data.memberIds).size() == 0
+        && resource.data.memberIds.removeAll(request.resource.data.memberIds) == [request.auth.uid]
+        && request.resource.data.roles.diff(resource.data.roles).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
     // ── Místnosti ──────────────────────────────────────────────
     match /rooms/{roomId} {
       allow read:   if isAuth();
       allow create: if isAuth() && request.auth.uid in request.resource.data.memberIds;
       allow update: if isAuth() && (
         isRoomOwner(roomId) ||
-        isRoomSelfJoin(roomId)
+        isRoomSelfJoin(roomId) ||
+        isRoomSelfLeave(roomId) ||
+        isTempInviteWrite(roomId)
       );
-      allow delete: if isAuth() && isRoomOwner(roomId);
+      // Rooms are never deleted. The owner "leaving" transfers ownership to a
+      // remaining member (a normal owner update), so the room always survives.
+      allow delete: if false;
 
       match /connections/{connId} {
         allow read:   if isMember(roomId);

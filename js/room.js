@@ -53,34 +53,106 @@ auth.onAuthStateChanged(async user => {
     MY_ROLE = (ROOM.roles || {})[ME.uid];
 
     if (!MY_ROLE) {
-      // Invite link (room.html?id=..&code=..&role=..) — join automatically
-      // with the role the link-creator picked, mirroring dashboard.js's
-      // code-only join flow but with an embedded role instead of always
-      // defaulting to viewer.
+      // Invite link — either the permanent one (?code=..&role=..) or a
+      // temporary one (?tcode=..) whose role+expiry live server-side in
+      // ROOM.tempInvites, so the link itself can't be tampered with.
       const params   = new URLSearchParams(window.location.search);
       const linkCode = params.get('code');
-      const linkRole = params.get('role');
-      const validRole = linkRole === 'editor' || linkRole === 'viewer' ? linkRole : 'viewer';
+      const tempCode = params.get('tcode');
+      let   linkRole = params.get('role');
+      let   inviteExp = null; // membership expiry carried by a temp invite
 
-      if (linkCode && ROOM.inviteCode && linkCode === ROOM.inviteCode) {
-        await doc.ref.update({
-          memberIds:               firebase.firestore.FieldValue.arrayUnion(ME.uid),
-          [`roles.${ME.uid}`]:     validRole,
-          [`members.${ME.uid}`]:   { displayName: ME.displayName || ME.email, email: ME.email, photoURL: ME.photoURL || null },
-        });
-        ROOM.memberIds = [...(ROOM.memberIds || []), ME.uid];
-        ROOM.roles     = { ...(ROOM.roles || {}), [ME.uid]: validRole };
-        MY_ROLE = validRole;
-        toast(`Připojeno jako ${roleLabel(validRole)}! 🎉`);
-      } else {
+      let allowed = false;
+      if (tempCode) {
+        const t = (ROOM.tempInvites || {})[tempCode];
+        // exp:null = permanent single-use link — never expires, only gets
+        // consumed (on join) or revoked.
+        if (t && (t.exp == null || t.exp > Date.now())) { allowed = true; linkRole = t.role; inviteExp = t.exp; }
+        else if (t) {
+          toast('Tato pozvánka už vypršela.');
+          setTimeout(() => (window.location.href = 'dashboard.html'), 1600);
+          return;
+        }
+      } else if (linkCode && ROOM.inviteCode && linkCode === ROOM.inviteCode) {
+        allowed = true;
+      }
+
+      if (!allowed) {
         toast('Nemáš přístup k této místnosti.');
         setTimeout(() => (window.location.href = 'dashboard.html'), 1600);
         return;
       }
+
+      // Editor via invite is reserved for the OWNER's friends. A forged or
+      // leaked role=editor link therefore grants nothing — anyone who isn't
+      // the owner's friend silently joins as viewer instead. Anonymous
+      // guests are ALWAYS viewers: their membership is temporary, so letting
+      // them create permanent content makes no sense.
+      let joinRole = linkRole === 'editor' ? 'editor' : 'viewer';
+      if (ME.isAnonymous) {
+        joinRole = 'viewer';
+      } else if (joinRole === 'editor') {
+        const friends = await loadFriendState();
+        if (!friends.accepted.has(ROOM.ownerId)) {
+          joinRole = 'viewer';
+          toast('Editora může získat jen přítel vlastníka — připojeno jako prohlížeč.');
+        }
+      }
+
+
+      // Membership expiry: a temp invite carries its own; anonymous guests
+      // are capped at 1 hour no matter which invite they used.
+      let expiry = inviteExp;
+      if (ME.isAnonymous) expiry = Math.min(expiry ?? Infinity, Date.now() + 3600000);
+
+      const joinUpdate = {
+        memberIds:             firebase.firestore.FieldValue.arrayUnion(ME.uid),
+        [`roles.${ME.uid}`]:   joinRole,
+        [`members.${ME.uid}`]: {
+          displayName: ME.isAnonymous ? 'Host' : (ME.displayName || ME.email),
+          email: ME.email || null, photoURL: ME.photoURL || null,
+          isAnon: !!ME.isAnonymous,
+        },
+      };
+      if (expiry) joinUpdate[`memberExpiry.${ME.uid}`] = expiry;
+      // Single-use invite: consume it atomically with the join itself, so a
+      // shared one-shot link can't let a second person in.
+      if (tempCode && (ROOM.tempInvites || {})[tempCode]?.once) {
+        joinUpdate[`tempInvites.${tempCode}`] = firebase.firestore.FieldValue.delete();
+      }
+
+      await doc.ref.update(joinUpdate);
+      ROOM.memberIds = [...(ROOM.memberIds || []), ME.uid];
+      ROOM.roles     = { ...(ROOM.roles || {}), [ME.uid]: joinRole };
+      if (expiry) ROOM.memberExpiry = { ...(ROOM.memberExpiry || {}), [ME.uid]: expiry };
+      MY_ROLE = joinRole;
+      toast(`Připojeno jako ${roleLabel(joinRole)}! 🎉`);
     }
+
+    // Expired / expiring membership (anonymous guests, temp invites):
+    // kick on load if already past, otherwise schedule the kick and show
+    // a countdown notice.
+    const myExpiry = (ROOM.memberExpiry || {})[ME.uid];
+    if (myExpiry && Date.now() >= myExpiry) {
+      await performLeave().catch(() => {});
+      toast('Tvůj dočasný přístup vypršel.');
+      setTimeout(() => (window.location.href = 'dashboard.html'), 1600);
+      return;
+    }
+    if (myExpiry) scheduleExpiryKick(myExpiry);
+
+    // Owner housekeeping: expired members only remove THEMSELVES when they
+    // happen to reload the room — if they just closed the tab, they'd linger
+    // forever. The owner sweeps them out on load instead.
+    if (MY_ROLE === 'owner') purgeExpiredMembers();
 
     document.getElementById('roomTitle').textContent = ROOM.name;
     document.title = ROOM.name + ' – StudyBoard';
+
+    // Anonymous guests are strictly view-only in shared rooms, no matter what
+    // role a legacy/edge path may have left them — their membership is
+    // temporary, permanent content from them makes no sense.
+    if (ME.isAnonymous && MY_ROLE !== 'owner') MY_ROLE = 'viewer';
 
     if (MY_ROLE === 'viewer') {
       document.getElementById('addBtn').style.display = 'none';
@@ -1673,6 +1745,8 @@ function noteToPlainText(note) {
 function setupAiCards() {
   const btn = document.getElementById('aiCardsBtn');
   if (!btn) return;
+  // Anonymous guests can't create AI decks — they'd outlive the guest.
+  if (ME.isAnonymous) { btn.style.display = 'none'; return; }
   btn.addEventListener('click', openAiCardsModal);
   document.getElementById('aiGenerateBtn').addEventListener('click', generateAiCards);
   document.getElementById('aiSaveBtn').addEventListener('click', saveAiCards);
@@ -1810,23 +1884,44 @@ async function saveAiCards() {
 }
 
 // ── Share ─────────────────────────────────────────────────────
+// One unified link builder: Trvalý/Dočasný type switch, role, and a "jen 1
+// použití" flag. A plain permanent link reuses the room's inviteCode (no
+// server write); anything temporary or single-use becomes a server-side
+// entry in ROOM.tempInvites so it can expire, be consumed, or be revoked.
 function setupShare() {
   const roleSelect = document.getElementById('inviteRoleSelect');
-  const linkText    = document.getElementById('inviteLinkText');
+  const typeSelect = document.getElementById('inviteTypeSelect');
+  const linkText   = document.getElementById('inviteLinkText');
 
-  function buildInviteLink() {
-    const url = new URL('room.html', window.location.href);
-    url.searchParams.set('id', ROOM_ID);
-    url.searchParams.set('code', ROOM.inviteCode || '');
-    url.searchParams.set('role', roleSelect.value);
-    return url.href;
+  // Only the OWNER can create invites with editor rights — everyone else
+  // (including viewers, who used to be able to self-escalate this way) gets
+  // a viewer-only picker. The join flow enforces the friend rule on top.
+  if (MY_ROLE !== 'owner') {
+    roleSelect.querySelector('option[value="editor"]')?.remove();
+    const hint = document.getElementById('editorInviteHint');
+    if (hint) hint.style.display = 'block';
   }
 
-  function refreshLink() { linkText.textContent = buildInviteLink(); }
+  // Owner housekeeping: prune EXPIRED invites (exp:null = permanent one-shot
+  // links — those never expire, only get consumed or revoked).
+  if (MY_ROLE === 'owner' && ROOM.tempInvites) {
+    const dead = Object.entries(ROOM.tempInvites).filter(([, t]) => t.exp != null && t.exp < Date.now());
+    if (dead.length) {
+      const update = {};
+      dead.forEach(([c]) => { update[`tempInvites.${c}`] = firebase.firestore.FieldValue.delete(); delete ROOM.tempInvites[c]; });
+      db.collection('rooms').doc(ROOM_ID).update(update).catch(() => {});
+    }
+  }
+
+  // Duration inputs only make sense for the temporary type
+  typeSelect.addEventListener('change', () => {
+    document.getElementById('inviteDurWrap').style.display =
+      typeSelect.value === 'temp' ? 'inline-flex' : 'none';
+  });
 
   document.getElementById('shareBtn').addEventListener('click', () => {
     document.getElementById('inviteCode').textContent = ROOM.inviteCode || '------';
-    refreshLink();
+    renderTempInvites();
     openModal('shareModal');
   });
 
@@ -1834,11 +1929,87 @@ function setupShare() {
     navigator.clipboard.writeText(ROOM.inviteCode || '').then(() => toast('Kód zkopírován!'));
   });
 
-  roleSelect.addEventListener('change', refreshLink);
+  document.getElementById('inviteGenBtn').addEventListener('click', async () => {
+    const role = roleSelect.value;
+    const once = document.getElementById('tempOnceChk').checked;
+    const temp = typeSelect.value === 'temp';
+
+    // Plain permanent link → just the classic inviteCode URL, nothing stored.
+    if (!temp && !once) {
+      const url = new URL('room.html', window.location.href);
+      url.searchParams.set('id', ROOM_ID);
+      url.searchParams.set('code', ROOM.inviteCode || '');
+      url.searchParams.set('role', role);
+      linkText.textContent = url.href;
+      document.getElementById('inviteLinkBox').style.display = 'flex';
+      return;
+    }
+
+    // Temporary and/or single-use → server-side invite entry.
+    let exp = null;
+    if (temp) {
+      const val  = parseInt(document.getElementById('tempDurVal').value, 10);
+      const unit = parseInt(document.getElementById('tempDurUnit').value, 10);
+      if (!val || val < 1 || val > 999) { toast('Zadej platnou dobu (1–999).'); return; }
+      exp = Date.now() + val * unit;
+    }
+    const code  = Array.from({ length: 10 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
+    const entry = { role, exp, by: ME.uid, once };
+    try {
+      await db.collection('rooms').doc(ROOM_ID).update({ [`tempInvites.${code}`]: entry });
+      ROOM.tempInvites = { ...(ROOM.tempInvites || {}), [code]: entry };
+      linkText.textContent = tempInviteUrl(code);
+      document.getElementById('inviteLinkBox').style.display = 'flex';
+      renderTempInvites();
+      toast('Pozvánka vytvořena ✓');
+    } catch (e) { toast('Chyba: ' + e.message); }
+  });
 
   document.getElementById('copyLinkBtn').addEventListener('click', () => {
-    navigator.clipboard.writeText(buildInviteLink()).then(() => toast('Odkaz zkopírován!'));
+    const t = linkText.textContent;
+    if (t && t !== '–') navigator.clipboard.writeText(t).then(() => toast('Odkaz zkopírován!'));
   });
+}
+
+function tempInviteUrl(code) {
+  const url = new URL('room.html', window.location.href);
+  url.searchParams.set('id', ROOM_ID);
+  url.searchParams.set('tcode', code);
+  return url.href;
+}
+
+// Active temp invites with copy + revoke. The owner sees (and can revoke)
+// all of them; other members only the ones they created.
+function renderTempInvites() {
+  const el = document.getElementById('tempInvitesList');
+  if (!el) return;
+  const mine = Object.entries(ROOM.tempInvites || {})
+    .filter(([, t]) => t.exp == null || t.exp > Date.now())
+    .filter(([, t]) => MY_ROLE === 'owner' || t.by === ME.uid)
+    .sort((a, b) => (a[1].exp ?? Infinity) - (b[1].exp ?? Infinity));
+  if (!mine.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `<label class="label" style="margin-bottom:6px;">Aktivní pozvánky</label>` +
+    mine.map(([code, t]) => `
+      <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-muted);padding:6px 0;border-bottom:1px solid var(--border);">
+        <span style="flex:1;">${roleLabel(t.role)} · ${t.exp == null ? 'trvalá' : 'do ' + new Date(t.exp).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}${t.once ? ' · 1 použití' : ''}</span>
+        <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.72rem;" data-copy-temp="${code}" title="Kopírovat odkaz">📋</button>
+        <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.72rem;color:#fca5a5;" data-revoke-temp="${code}" title="Zrušit pozvánku">✕</button>
+      </div>`).join('');
+
+  el.querySelectorAll('[data-copy-temp]').forEach(b => b.addEventListener('click', () => {
+    navigator.clipboard.writeText(tempInviteUrl(b.dataset.copyTemp)).then(() => toast('Odkaz zkopírován!'));
+  }));
+  el.querySelectorAll('[data-revoke-temp]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      await db.collection('rooms').doc(ROOM_ID).update({
+        [`tempInvites.${b.dataset.revokeTemp}`]: firebase.firestore.FieldValue.delete(),
+      });
+      delete ROOM.tempInvites[b.dataset.revokeTemp];
+      renderTempInvites();
+      toast('Pozvánka zrušena.');
+    } catch (e) { toast('Chyba: ' + e.message); }
+  }));
 }
 
 // ── Members ───────────────────────────────────────────────────
@@ -1853,26 +2024,159 @@ function setupMembers() {
     if (e.target === document.getElementById('panelBack')) closePanel();
   });
 
-  // Backups + delete room (owner only)
+  // Backups (owner only)
   if (MY_ROLE === 'owner') {
     document.getElementById('backupsWrap').style.display = 'block';
-    const wrap = document.getElementById('deleteRoomWrap');
-    wrap.style.display = 'block';
-    document.getElementById('deleteRoomBtn').addEventListener('click', async () => {
-      if (!confirm('Opravdu chceš smazat celou místnost? Tato akce je nevratná.')) return;
-      try {
-        // Delete all notes first
-        const notes = await db.collection('rooms').doc(ROOM_ID).collection('notes').get();
-        const batch = db.batch();
-        notes.docs.forEach(d => batch.delete(d.ref));
-        batch.delete(db.collection('rooms').doc(ROOM_ID));
-        await batch.commit();
-        window.location.href = 'dashboard.html';
-      } catch (e) {
-        toast('Chyba: ' + e.message);
-      }
-    });
   }
+
+  // Leave room (everyone). Rooms are never deleted — instead, when the OWNER
+  // leaves, ownership is handed to another member so the room lives on.
+  const hint = document.getElementById('leaveRoomHint');
+  if (MY_ROLE === 'owner') {
+    hint.textContent = 'Místnost nelze smazat. Když ji opustíš, vlastnictví převezme jiný člen.';
+  }
+  document.getElementById('leaveRoomBtn').addEventListener('click', leaveRoom);
+}
+
+// Pick the member who inherits the room when the owner leaves: prefer an
+// existing editor (most trusted), otherwise any remaining member.
+function pickSuccessor() {
+  const roles = ROOM.roles || {};
+  const others = (ROOM.memberIds || []).filter(id => id !== ME.uid);
+  if (!others.length) return null;
+  return others.find(id => roles[id] === 'editor') || others[0];
+}
+
+function memberName(uid) {
+  const m = (ROOM.members || {})[uid] || {};
+  return m.displayName || m.email || 'další člen';
+}
+
+// The actual leave write, shared by the button and the expiry auto-kick.
+// Returns false when leaving is impossible (sole-member owner).
+async function performLeave() {
+  const amOwner = MY_ROLE === 'owner';
+  const successor = amOwner ? pickSuccessor() : null;
+  if (amOwner && !successor) return false;
+
+  const update = {
+    memberIds:                  firebase.firestore.FieldValue.arrayRemove(ME.uid),
+    [`roles.${ME.uid}`]:        firebase.firestore.FieldValue.delete(),
+    [`members.${ME.uid}`]:      firebase.firestore.FieldValue.delete(),
+    [`memberExpiry.${ME.uid}`]: firebase.firestore.FieldValue.delete(),
+  };
+  if (amOwner) {
+    update.ownerId = successor;
+    update[`roles.${successor}`] = 'owner';
+  }
+  await db.collection('rooms').doc(ROOM_ID).update(update);
+  return true;
+}
+
+async function leaveRoom() {
+  if (MY_ROLE === 'owner') {
+    const successor = pickSuccessor();
+    if (!successor) {
+      toast('Jsi jediný člen — nejdřív někoho pozvi, komu se místnost předá.');
+      return;
+    }
+    if (!confirm(`Opustit místnost? Vlastnictví převezme ${memberName(successor)}.`)) return;
+  } else {
+    if (!confirm('Opustit místnost? Ztratíš k ní přístup.')) return;
+  }
+
+  try {
+    await performLeave();
+    window.location.href = 'dashboard.html';
+  } catch (e) {
+    toast('Chyba: ' + e.message);
+  }
+}
+
+// Is this member's temporary access already over? (No expiry = permanent.)
+function memberExpired(uid) {
+  const e = (ROOM.memberExpiry || {})[uid];
+  return !!e && e < Date.now();
+}
+
+// Owner-side sweep of expired members (they can't be trusted to come back
+// and remove themselves). One batched update for all of them.
+async function purgeExpiredMembers() {
+  const dead = (ROOM.memberIds || []).filter(uid => uid !== ME.uid && memberExpired(uid));
+  if (!dead.length) return;
+  const update = { memberIds: firebase.firestore.FieldValue.arrayRemove(...dead) };
+  dead.forEach(uid => {
+    update[`roles.${uid}`]        = firebase.firestore.FieldValue.delete();
+    update[`members.${uid}`]      = firebase.firestore.FieldValue.delete();
+    update[`memberExpiry.${uid}`] = firebase.firestore.FieldValue.delete();
+  });
+  try {
+    await db.collection('rooms').doc(ROOM_ID).update(update);
+    ROOM.memberIds = ROOM.memberIds.filter(id => !dead.includes(id));
+    dead.forEach(uid => { delete ROOM.roles?.[uid]; delete ROOM.members?.[uid]; delete ROOM.memberExpiry?.[uid]; });
+    updateMemberCount();
+  } catch (_) { /* best effort */ }
+}
+
+// ── Temporary membership (anonymous guests, temp invites) ─────
+// Client-side enforcement: when the expiry hits while the room is open, the
+// member removes themselves and is sent back to the dashboard. A banner shows
+// when the access ends.
+function scheduleExpiryKick(expiry) {
+  const notice = document.createElement('div');
+  notice.className = 'viewer-notice';
+  // Don't overlap the viewer notice if both are shown
+  if (MY_ROLE === 'viewer') notice.style.top = '104px';
+  notice.textContent = `⏳ Tvůj přístup vyprší v ${new Date(expiry).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}`;
+  document.body.appendChild(notice);
+
+  const remaining = Math.min(expiry - Date.now(), 2147483647);
+  setTimeout(async () => {
+    await performLeave().catch(() => {});
+    alert('Tvůj dočasný přístup do místnosti vypršel.');
+    window.location.href = 'dashboard.html';
+  }, remaining);
+}
+
+// ── Friends (shared with dashboard's friendRequests collection) ──
+// Friendship = an *accepted* friendRequest in either direction. Loaded once
+// and cached; `pending` covers both sent and received requests so the member
+// list can show the right button state.
+let FRIEND_STATE = null;
+async function loadFriendState(force) {
+  if (FRIEND_STATE && !force) return FRIEND_STATE;
+  const [sent, received] = await Promise.all([
+    db.collection('friendRequests').where('fromUid', '==', ME.uid).get(),
+    db.collection('friendRequests').where('toUid', '==', ME.uid).get(),
+  ]);
+  const accepted = new Set(), pending = new Set();
+  const eat = (docSnap, otherField) => {
+    const r = docSnap.data();
+    if (r.status === 'accepted')     accepted.add(r[otherField]);
+    else if (r.status === 'pending') pending.add(r[otherField]);
+  };
+  sent.docs.forEach(d => eat(d, 'toUid'));
+  received.docs.forEach(d => eat(d, 'fromUid'));
+  FRIEND_STATE = { accepted, pending };
+  return FRIEND_STATE;
+}
+
+async function sendFriendRequestTo(uid, member) {
+  try {
+    await db.collection('friendRequests').add({
+      fromUid:   ME.uid,
+      fromName:  ME.displayName || ME.email,
+      fromEmail: (ME.email || '').toLowerCase(),
+      fromPhoto: ME.photoURL || null,
+      toUid:     uid,
+      toEmail:   (member.email || '').toLowerCase(),
+      status:    'pending',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    FRIEND_STATE?.pending.add(uid);
+    toast('Žádost o přátelství odeslána!');
+    renderMembers();
+  } catch (e) { toast('Chyba: ' + e.message); }
 }
 
 function closePanel() {
@@ -2023,20 +2327,29 @@ async function restoreBackup(backupId) {
 }
 
 function updateMemberCount() {
-  const ids = ROOM.memberIds || [];
+  const ids = (ROOM.memberIds || []).filter(uid => !memberExpired(uid));
   document.getElementById('memberCount').textContent = ids.length;
 }
 
-function renderMembers() {
+async function renderMembers() {
   const list    = document.getElementById('membersList');
   const members = ROOM.members || {};
   const roles   = ROOM.roles   || {};
-  const ids     = ROOM.memberIds || [];
+  // Hide members whose temporary access already ran out — the owner's sweep
+  // removes them from the doc, but the list shouldn't show them even before
+  // that happens.
+  const ids = (ROOM.memberIds || []).filter(uid => !memberExpired(uid));
+  if (MY_ROLE === 'owner') purgeExpiredMembers();
 
   if (!ids.length) {
     list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:24px 0;">Žádní členové.</p>';
     return;
   }
+
+  // Friend states drive both the "add friend" buttons and the
+  // editor-only-for-friends guard on the role select.
+  let friends = { accepted: new Set(), pending: new Set() };
+  try { friends = await loadFriendState(); } catch (_) { /* best effort */ }
 
   list.innerHTML = '';
   ids.forEach(uid => {
@@ -2048,34 +2361,65 @@ function renderMembers() {
     const row = document.createElement('div');
     row.className = 'member-row';
 
-    const av = m.photoURL
-      ? `<img src="${m.photoURL}" alt="">`
-      : initial(m.displayName || m.email || '?');
+    // Expiring membership (guests, temp invites) — show until when
+    const exp = (ROOM.memberExpiry || {})[uid];
+    const expLabel = exp
+      ? `<div class="m-email">⏳ do ${new Date(exp).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</div>`
+      : '';
+
+    // Friend button: not for myself, not for anonymous guests as TARGETS,
+    // and not at all when I'M the anonymous guest (guests have no friends).
+    let friendHtml = '';
+    if (!isMe && !m.isAnon && !ME.isAnonymous) {
+      if (friends.accepted.has(uid))     friendHtml = `<span style="font-size:0.68rem;color:var(--text-muted);">👥 Přítel</span>`;
+      else if (friends.pending.has(uid)) friendHtml = `<span style="font-size:0.68rem;color:var(--text-muted);">⏳ Žádost čeká</span>`;
+      else friendHtml = `<button class="btn btn-ghost" style="padding:3px 8px;font-size:0.7rem;" data-add-friend="${uid}">➕ Přítel</button>`;
+    }
 
     row.innerHTML = `
       <div class="m-avatar">${m.photoURL ? `<img src="${m.photoURL}" alt="">` : initial(m.displayName || m.email || '?')}</div>
       <div class="m-info">
         <div class="m-name">${esc(m.displayName || m.email || uid)}${isMe ? ' <span style="color:var(--text-muted);font-weight:400;">(ty)</span>' : ''}</div>
         <div class="m-email">${esc(m.email || '')}</div>
+        ${expLabel}
       </div>
-      ${canMng
-        ? `<select class="role-select" data-uid="${uid}">
-             <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
-             <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>Prohlížeč</option>
-           </select>
-           <button class="btn btn-danger" style="padding:4px 8px;font-size:0.72rem;" data-rm="${uid}">✕</button>`
-        : `<span class="role-badge role-${role}">${roleLabel(role)}</span>`
-      }`;
+      <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
+        ${canMng
+          ? `<div style="display:flex;gap:6px;align-items:center;">
+               <select class="role-select" data-uid="${uid}">
+                 <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
+                 <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>Prohlížeč</option>
+               </select>
+               <button class="btn btn-danger" style="padding:4px 8px;font-size:0.72rem;" data-rm="${uid}">✕</button>
+             </div>`
+          : `<span class="role-badge role-${role}">${roleLabel(role)}</span>`
+        }
+        ${friendHtml}
+      </div>`;
 
-    // Role change
+    // Role change — editor is reserved for the owner's friends.
     const sel = row.querySelector('.role-select');
     if (sel) {
       sel.addEventListener('change', async () => {
+        if (sel.value === 'editor' && !friends.accepted.has(uid)) {
+          sel.value = role; // revert
+          toast('Editora může mít jen tvůj přítel. Nejdřív si ho přidej do přátel.');
+          return;
+        }
         try {
           await db.collection('rooms').doc(ROOM_ID).update({ [`roles.${uid}`]: sel.value });
           ROOM.roles[uid] = sel.value;
           toast('Oprávnění změněno.');
         } catch (e) { toast('Chyba: ' + e.message); }
+      });
+    }
+
+    // Send friend request straight from the member list
+    const addBtn = row.querySelector('[data-add-friend]');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        addBtn.disabled = true;
+        sendFriendRequestTo(uid, m);
       });
     }
 
