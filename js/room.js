@@ -288,11 +288,67 @@ function openMarkColorPopup(x, y, markId, btnEl) {
 
 // Pins: personal "keep at the top" flags. A pinned note/folder gets a COPY
 // in the top "Připnuté" section while still appearing in its normal place.
+// There's no visible pin button — pinning is offered via a right-click /
+// long-press context menu on the row itself (see wirePinTrigger).
 function getPins() { return LIST_PREFS.pins; }
 function savePins() { persistListPrefs(); }
-function pinHtml(id, pins) {
-  const on = pins.has(id);
-  return `<button class="list-pin${on ? ' pinned' : ''}" data-pin-id="${id}" title="${on ? 'Odepnout' : 'Připnout nahoru'}">📌</button>`;
+
+function togglePin(id) {
+  const set = getPins();
+  if (set.has(id)) set.delete(id); else set.add(id);
+  savePins(set);
+  renderNotesListView();
+}
+
+// Small "Připnout / Odepnout" menu at the cursor.
+function closePinMenu() { document.getElementById('pinMenu')?.remove(); }
+function openPinMenu(x, y, id) {
+  closePinMenu();
+  const on = getPins().has(id);
+  const pop = document.createElement('div');
+  pop.className = 'context-menu';
+  pop.id = 'pinMenu';
+  pop.innerHTML = `<button class="context-menu-item">📌 ${on ? 'Odepnout' : 'Připnout nahoru'}</button>`;
+  document.body.appendChild(pop);
+  pop.style.left = x + 'px';
+  pop.style.top  = y + 'px';
+  const r = pop.getBoundingClientRect();
+  if (r.right  > window.innerWidth)  pop.style.left = (window.innerWidth  - r.width  - 8) + 'px';
+  if (r.bottom > window.innerHeight) pop.style.top  = (y - r.height) + 'px';
+  pop.querySelector('button').addEventListener('click', e => {
+    e.stopPropagation();
+    closePinMenu();
+    togglePin(id);
+  });
+  setTimeout(() => {
+    document.addEventListener('click', closePinMenu, { once: true });
+    document.addEventListener('keydown', function esc(ev) { if (ev.key === 'Escape') { closePinMenu(); document.removeEventListener('keydown', esc); } });
+  }, 0);
+}
+
+// Offer the pin menu on right-click, and on touch via long-press. The
+// long-press swallows the click that would otherwise open the note / toggle
+// the folder (capture-phase, so it beats those handlers on the same element).
+function wirePinTrigger(elem, id) {
+  if (!id) return;
+  let lpTimer = null, lpFired = false;
+  elem.addEventListener('contextmenu', e => {
+    if (e.target.closest('button')) return; // let mark / edit / move buttons keep their own menus
+    e.preventDefault(); e.stopPropagation();
+    if (lpFired) return; // Android fires contextmenu on long-press too
+    openPinMenu(e.clientX, e.clientY, id);
+  });
+  elem.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1 || e.target.closest('button')) { clearTimeout(lpTimer); return; }
+    const t = e.touches[0];
+    lpFired = false;
+    lpTimer = setTimeout(() => { lpFired = true; openPinMenu(t.clientX, t.clientY, id); }, 500);
+  }, { passive: true });
+  ['touchend', 'touchmove', 'touchcancel'].forEach(ev =>
+    elem.addEventListener(ev, () => clearTimeout(lpTimer), { passive: true }));
+  elem.addEventListener('click', e => {
+    if (lpFired) { lpFired = false; e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
 }
 
 // ── Folders ──────────────────────────────────────────────────
@@ -491,8 +547,7 @@ function renderNotesListView() {
     const body = ownNotes.map(n => renderNoteListRow(n, marks, pins)).join('') + children.map(renderFolderNode).join('');
     return `
       <details class="notes-folder"${collapsed.has(folder.id) ? '' : ' open'} data-folder-id="${folder.id}" style="--folder-color:${folder.color || '#6366f1'}">
-        <summary class="notes-folder-summary">
-          ${pinHtml(folder.id, pins)}
+        <summary class="notes-folder-summary"${pins.has(folder.id) ? ' data-pinned="1"' : ''}>
           <span class="notes-folder-icon">📁</span>
           <span class="notes-folder-title">${esc(folder.name)}</span>
           <span class="notes-folder-count">${folderSubtreeCount(folder)}</span>
@@ -508,29 +563,19 @@ function renderNotesListView() {
     .sort((a, b) => a.name.localeCompare(b.name, 'cs'));
   const unfiled = notes.filter(n => !filedIds.has(n.id)).sort((a, b) => noteRecency(b) - noteRecency(a));
 
-  // Pinned section: a compact shortcut copy of each pinned note/folder at the
-  // very top. The originals still render normally in the list below.
+  // Pinned section: a full, interactive copy of each pinned note/folder at the
+  // very top. A pinned folder renders as a real openable folder (click expands
+  // its contents in place — not a jump link); a pinned note as a normal row
+  // that opens its detail. The originals still render normally below.
   const pinnedIds = [...pins].filter(id => NOTES_MAP.has(id) || FOLDERS_MAP.has(id));
   let pinnedHtml = '';
   if (pinnedIds.length) {
     pinnedHtml = `<div class="pinned-section"><div class="pinned-title">📌 Připnuté</div>` +
-      pinnedIds.map(id => {
-        if (NOTES_MAP.has(id)) {
-          const n = NOTES_MAP.get(id);
-          const t = n.title || noteToPlainText(n).slice(0, 90) || '(prázdná poznámka)';
-          return `<div class="pinned-row" data-pin-note="${id}" style="--row-color:${n.color || '#fef9c3'}">
-            <div class="notes-list-dot"></div>
-            <span class="pinned-row-label">${esc(t)}</span>
-            <button class="list-pin pinned" data-pin-id="${id}" title="Odepnout">📌</button>
-          </div>`;
-        }
-        const f = FOLDERS_MAP.get(id);
-        return `<div class="pinned-row" data-pin-folder="${id}" style="--row-color:${f.color || '#6366f1'}">
-          <span class="notes-folder-icon">📁</span>
-          <span class="pinned-row-label">${esc(f.name)}</span>
-          <button class="list-pin pinned" data-pin-id="${id}" title="Odepnout">📌</button>
-        </div>`;
-      }).join('') + `</div>`;
+      pinnedIds.map(id =>
+        NOTES_MAP.has(id)
+          ? renderNoteListRow(NOTES_MAP.get(id), marks, pins)
+          : renderFolderNode(FOLDERS_MAP.get(id))
+      ).join('') + `</div>`;
   }
 
   el.innerHTML = pinnedHtml + topFolders.map(renderFolderNode).join('') + unfiled.map(n => renderNoteListRow(n, marks, pins)).join('');
@@ -592,31 +637,13 @@ function renderNotesListView() {
       btn.addEventListener(ev, () => clearTimeout(lpTimer), { passive: true }));
   });
 
-  // Připínáčky: toggle pin, re-render so the top section updates.
-  el.querySelectorAll('.list-pin').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.preventDefault(); e.stopPropagation();
-      const set = getPins();
-      if (set.has(btn.dataset.pinId)) set.delete(btn.dataset.pinId); else set.add(btn.dataset.pinId);
-      savePins(set);
-      renderNotesListView();
-    });
-  });
-
-  // Clicking a pinned copy: a note opens its detail; a folder jumps to and
-  // opens the original folder further down the list.
-  el.querySelectorAll('.pinned-row[data-pin-note]').forEach(row => {
-    row.addEventListener('click', () => {
-      const note = NOTES_MAP.get(row.dataset.pinNote);
-      if (note) openNoteDetail(null, note);
-    });
-  });
-  el.querySelectorAll('.pinned-row[data-pin-folder]').forEach(row => {
-    row.addEventListener('click', () => {
-      const target = el.querySelector(`.notes-folder[data-folder-id="${row.dataset.pinFolder}"]`);
-      if (target) { target.open = true; target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-    });
-  });
+  // Připínáčky: no visible button — pinning is offered on RIGHT-click (or a
+  // long-press on touch, where right-click doesn't exist) on any note row or
+  // folder header. A pinned item gets a full interactive copy in the top
+  // "Připnuté" section.
+  el.querySelectorAll('.notes-list-row').forEach(row => wirePinTrigger(row, row.dataset.id));
+  el.querySelectorAll('.notes-folder-summary').forEach(sum =>
+    wirePinTrigger(sum, sum.closest('.notes-folder').dataset.folderId));
 
   // Remember which folders each user leaves open/closed.
   el.querySelectorAll('.notes-folder').forEach(d => {
@@ -765,8 +792,7 @@ function renderNoteListRow(note, marks, pins) {
     ? `<button class="notes-move-btn" data-move-note="${note.id}" title="Přesunout do složky">📁</button>`
     : '';
   return `
-    <div class="notes-list-row" data-id="${note.id}" style="--row-color:${note.color || '#fef9c3'}">
-      ${pinHtml(note.id, pins || new Set())}
+    <div class="notes-list-row" data-id="${note.id}"${(pins && pins.has(note.id)) ? ' data-pinned="1"' : ''} style="--row-color:${note.color || '#fef9c3'}">
       <div class="notes-list-dot"></div>
       <div class="notes-list-main">
         <div class="notes-list-title">${esc(title)}</div>
