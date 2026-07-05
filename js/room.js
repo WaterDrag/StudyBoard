@@ -177,10 +177,12 @@ auth.onAuthStateChanged(async user => {
     setupBoardZoom();
     setupMembers();
     setupBackups();
+    setupActivityLog();
     setupConnections();
     setupLightbox();
     setupModalClose();
     updateMemberCount();
+    refreshMembersBadge(); // pending friend-request badge on the members button
 
     // Start the view just inside the padded origin — content sits with a
     // comfortable empty margin to its left/top that can be panned into.
@@ -1460,6 +1462,8 @@ function setupLightbox() {
 // ── Delete note ───────────────────────────────────────────────
 async function deleteNote(id) {
   if (!confirm('Opravdu chceš smazat tuto poznámku?')) return;
+  const deleted = NOTES_MAP.get(id);
+  const label = deleted ? (deleted.title || noteToPlainText(deleted).slice(0, 40) || 'poznámku') : 'poznámku';
   try {
     const batch = db.batch();
     batch.delete(db.collection('rooms').doc(ROOM_ID).collection('notes').doc(id));
@@ -1477,6 +1481,7 @@ async function deleteNote(id) {
       }
     });
     await batch.commit();
+    logActivity('note', `smazal poznámku „${label}"`);
   } catch (e) {
     toast('Chyba: ' + e.message);
   }
@@ -2026,7 +2031,7 @@ function setupMembers() {
 
   // Backups (owner only)
   if (MY_ROLE === 'owner') {
-    document.getElementById('backupsWrap').style.display = 'block';
+    document.getElementById('backupsBtn').style.display = 'inline-flex';
   }
 
   // Leave room (everyone). Rooms are never deleted — instead, when the OWNER
@@ -2053,10 +2058,12 @@ function memberName(uid) {
 }
 
 // The actual leave write, shared by the button and the expiry auto-kick.
-// Returns false when leaving is impossible (sole-member owner).
-async function performLeave() {
+// `successorOverride` lets the owner hand ownership to a specific member;
+// without it, pickSuccessor() chooses automatically. Returns false when
+// leaving is impossible (sole-member owner).
+async function performLeave(successorOverride) {
   const amOwner = MY_ROLE === 'owner';
-  const successor = amOwner ? pickSuccessor() : null;
+  const successor = amOwner ? (successorOverride || pickSuccessor()) : null;
   if (amOwner && !successor) return false;
 
   const update = {
@@ -2068,29 +2075,68 @@ async function performLeave() {
   if (amOwner) {
     update.ownerId = successor;
     update[`roles.${successor}`] = 'owner';
+    logActivity('owner', `předal vlastnictví na ${memberName(successor)} a opustil místnost`);
   }
   await db.collection('rooms').doc(ROOM_ID).update(update);
   return true;
 }
 
 async function leaveRoom() {
+  let successor = null;
   if (MY_ROLE === 'owner') {
-    const successor = pickSuccessor();
-    if (!successor) {
+    // Eligible = every other CURRENT member (skip already-expired guests).
+    const others = (ROOM.memberIds || []).filter(id => id !== ME.uid && !memberExpired(id));
+    if (!others.length) {
       toast('Jsi jediný člen — nejdřív někoho pozvi, komu se místnost předá.');
       return;
     }
-    if (!confirm(`Opustit místnost? Vlastnictví převezme ${memberName(successor)}.`)) return;
+    // One other member → straight confirm; several → let the owner choose.
+    if (others.length === 1) {
+      successor = others[0];
+      if (!confirm(`Opustit místnost? Vlastnictví převezme ${memberName(successor)}.`)) return;
+    } else {
+      successor = await openSuccessorPicker(others);
+      if (!successor) return; // cancelled
+    }
   } else {
     if (!confirm('Opustit místnost? Ztratíš k ní přístup.')) return;
   }
 
   try {
-    await performLeave();
+    await performLeave(successor);
     window.location.href = 'dashboard.html';
   } catch (e) {
     toast('Chyba: ' + e.message);
   }
+}
+
+// Modal: owner chooses which member inherits the room. Resolves to the chosen
+// uid, or null if cancelled.
+function openSuccessorPicker(candidateIds) {
+  return new Promise(resolve => {
+    const list = document.getElementById('successorList');
+    list.innerHTML = candidateIds.map(uid => {
+      const m = (ROOM.members || {})[uid] || {};
+      const role = (ROOM.roles || {})[uid] || 'viewer';
+      return `<button class="successor-opt" data-uid="${uid}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg-2);color:var(--text);cursor:pointer;margin-bottom:8px;">
+        <div class="m-avatar">${m.photoURL ? `<img src="${m.photoURL}" alt="">` : initial(m.displayName || m.email || '?')}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:0.88rem;">${esc(m.displayName || m.email || uid)}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted);">${roleLabel(role)}</div>
+        </div>
+      </button>`;
+    }).join('');
+
+    let done = false;
+    const finish = val => { if (done) return; done = true; closeModal('successorModal'); resolve(val); };
+    list.querySelectorAll('.successor-opt').forEach(btn =>
+      btn.addEventListener('click', () => {
+        if (!confirm(`Předat vlastnictví uživateli ${memberName(btn.dataset.uid)} a opustit místnost?`)) return;
+        finish(btn.dataset.uid);
+      }));
+    document.getElementById('successorCancel').onclick = () => finish(null);
+    openModal('successorModal');
+  });
 }
 
 // Is this member's temporary access already over? (No expiry = permanent.)
@@ -2138,6 +2184,51 @@ function scheduleExpiryKick(expiry) {
   }, remaining);
 }
 
+// ── Activity log ──────────────────────────────────────────────
+// Append-only trail of who did what (deletes, role changes, ownership
+// hand-offs). Best-effort — a failed log never blocks the actual action.
+function logActivity(type, text) {
+  if (!ROOM_ID || !ME || ME.isAnonymous) return;
+  db.collection('rooms').doc(ROOM_ID).collection('activity').add({
+    type, text,
+    byUid:  ME.uid,
+    byName: ME.displayName || ME.email || 'Někdo',
+    at:     firebase.firestore.FieldValue.serverTimestamp(),
+  }).catch(() => {});
+}
+
+function setupActivityLog() {
+  const btn = document.getElementById('activityBtn');
+  if (btn) btn.addEventListener('click', () => { openModal('activityModal'); renderActivityLog(); });
+}
+
+async function renderActivityLog() {
+  const el = document.getElementById('activityList');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.85rem;">Načítám…</div>';
+  try {
+    const snap = await db.collection('rooms').doc(ROOM_ID).collection('activity')
+      .orderBy('at', 'desc').limit(100).get();
+    if (snap.empty) {
+      el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.85rem;">Zatím žádná aktivita.</div>';
+      return;
+    }
+    const icon = { note: '🗑️', member: '👤', role: '🛡️', owner: '👑', restore: '↩️' };
+    el.innerHTML = snap.docs.map(d => {
+      const a = d.data();
+      const when = a.at?.toDate ? a.at.toDate().toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
+        <span>${icon[a.type] || '•'}</span>
+        <div style="flex:1;min-width:0;">
+          <div><strong>${esc(a.byName || 'Někdo')}</strong> ${esc(a.text || '')}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">${esc(when)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="text-align:center;padding:16px;color:#fca5a5;font-size:.85rem;">Chyba: ${esc(e.message)}</div>`;
+  }
+}
+
 // ── Friends (shared with dashboard's friendRequests collection) ──
 // Friendship = an *accepted* friendRequest in either direction. Loaded once
 // and cached; `pending` covers both sent and received requests so the member
@@ -2145,25 +2236,48 @@ function scheduleExpiryKick(expiry) {
 let FRIEND_STATE = null;
 async function loadFriendState(force) {
   if (FRIEND_STATE && !force) return FRIEND_STATE;
+  if (ME.isAnonymous) { FRIEND_STATE = { accepted: new Set(), pending: new Set(), incoming: [] }; return FRIEND_STATE; }
   const [sent, received] = await Promise.all([
     db.collection('friendRequests').where('fromUid', '==', ME.uid).get(),
     db.collection('friendRequests').where('toUid', '==', ME.uid).get(),
   ]);
-  const accepted = new Set(), pending = new Set();
-  const eat = (docSnap, otherField) => {
-    const r = docSnap.data();
-    if (r.status === 'accepted')     accepted.add(r[otherField]);
-    else if (r.status === 'pending') pending.add(r[otherField]);
-  };
-  sent.docs.forEach(d => eat(d, 'toUid'));
-  received.docs.forEach(d => eat(d, 'fromUid'));
-  FRIEND_STATE = { accepted, pending };
+  const accepted = new Set(), pending = new Set(), incoming = [];
+  sent.docs.forEach(d => {
+    const r = d.data();
+    if (r.status === 'accepted')     accepted.add(r.toUid);
+    else if (r.status === 'pending') pending.add(r.toUid);
+  });
+  received.docs.forEach(d => {
+    const r = d.data();
+    if (r.status === 'accepted')     accepted.add(r.fromUid);
+    else if (r.status === 'pending') { pending.add(r.fromUid); incoming.push({ id: d.id, ...r }); }
+  });
+  FRIEND_STATE = { accepted, pending, incoming };
   return FRIEND_STATE;
+}
+
+// Badge on the "Členové" button: number of pending friend requests I've
+// received. Refreshed on room load and whenever the panel re-renders.
+async function refreshMembersBadge() {
+  const badge = document.getElementById('membersReqBadge');
+  if (!badge || ME.isAnonymous) return;
+  try {
+    const fs = await loadFriendState(true);
+    const n = (fs.incoming || []).length;
+    badge.textContent = n;
+    badge.style.display = n ? 'inline-block' : 'none';
+  } catch (_) { /* ignore */ }
 }
 
 async function sendFriendRequestTo(uid, member) {
   try {
-    await db.collection('friendRequests').add({
+    // Deterministic pair id (sorted) — matches dashboard + the rules gate.
+    const pairId = [ME.uid, uid].sort().join('_');
+    const existing = await db.collection('friendRequests').doc(pairId).get();
+    if (existing.exists && existing.data().status === 'declined') {
+      await existing.ref.delete().catch(() => {});
+    }
+    await db.collection('friendRequests').doc(pairId).set({
       fromUid:   ME.uid,
       fromName:  ME.displayName || ME.email,
       fromEmail: (ME.email || '').toLowerCase(),
@@ -2319,6 +2433,7 @@ async function restoreBackup(backupId) {
     }
 
     closeModal('backupsModal');
+    logActivity('restore', 'obnovil místnost ze zálohy');
     toast('Záloha obnovena ✓');
   } catch (e) {
     toast('Chyba při obnově: ' + e.message);
@@ -2341,17 +2456,24 @@ async function renderMembers() {
   const ids = (ROOM.memberIds || []).filter(uid => !memberExpired(uid));
   if (MY_ROLE === 'owner') purgeExpiredMembers();
 
+  // Friend states drive the "add friend" buttons, the editor-only-for-friends
+  // guard on the role select, and the incoming-requests section.
+  let friends = { accepted: new Set(), pending: new Set(), incoming: [] };
+  try { friends = await loadFriendState(); } catch (_) { /* best effort */ }
+  const badge = document.getElementById('membersReqBadge');
+  if (badge) {
+    const n = (friends.incoming || []).length;
+    badge.textContent = n;
+    badge.style.display = n ? 'inline-block' : 'none';
+  }
+
+  list.innerHTML = renderIncomingRequests(friends.incoming || []);
   if (!ids.length) {
-    list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:24px 0;">Žádní členové.</p>';
+    list.innerHTML += '<p style="color:var(--text-muted);text-align:center;padding:24px 0;">Žádní členové.</p>';
+    wireIncomingRequestButtons(list);
     return;
   }
 
-  // Friend states drive both the "add friend" buttons and the
-  // editor-only-for-friends guard on the role select.
-  let friends = { accepted: new Set(), pending: new Set() };
-  try { friends = await loadFriendState(); } catch (_) { /* best effort */ }
-
-  list.innerHTML = '';
   ids.forEach(uid => {
     const m      = members[uid] || {};
     const role   = roles[uid] || 'viewer';
@@ -2406,11 +2528,13 @@ async function renderMembers() {
           toast('Editora může mít jen tvůj přítel. Nejdřív si ho přidej do přátel.');
           return;
         }
+        const prev = role;
         try {
           await db.collection('rooms').doc(ROOM_ID).update({ [`roles.${uid}`]: sel.value });
           ROOM.roles[uid] = sel.value;
+          logActivity('role', `změnil roli ${memberName(uid)} na ${roleLabel(sel.value)}`);
           toast('Oprávnění změněno.');
-        } catch (e) { toast('Chyba: ' + e.message); }
+        } catch (e) { sel.value = prev; toast('Chyba: ' + e.message); }
       });
     }
 
@@ -2438,6 +2562,7 @@ async function renderMembers() {
           ROOM.memberIds = (ROOM.memberIds || []).filter(i => i !== uid);
           delete ROOM.roles[uid];
           delete ROOM.members[uid];
+          logActivity('member', `odebral člena ${memberName(uid) || esc(m.displayName || m.email || uid)}`);
           updateMemberCount();
           renderMembers();
           toast('Člen odebrán.');
@@ -2447,6 +2572,48 @@ async function renderMembers() {
 
     list.appendChild(row);
   });
+
+  wireIncomingRequestButtons(list);
+}
+
+// ── Incoming friend requests (shown at the top of the members panel) ──
+function renderIncomingRequests(incoming) {
+  if (!incoming.length) return '';
+  return `<div style="padding:0 0 12px;margin-bottom:12px;border-bottom:1px solid var(--border);">
+    <div class="label" style="margin-bottom:8px;">Žádosti o přátelství (${incoming.length})</div>` +
+    incoming.map(r => `
+      <div class="member-row" style="padding:6px 0;">
+        <div class="m-avatar">${r.fromPhoto ? `<img src="${r.fromPhoto}" alt="">` : initial(r.fromName || r.fromEmail || '?')}</div>
+        <div class="m-info">
+          <div class="m-name">${esc(r.fromName || r.fromEmail || r.fromUid)}</div>
+          <div class="m-email">${esc(r.fromEmail || '')}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-primary"   style="padding:4px 10px;font-size:0.75rem;" data-accept-req="${r.id}">✓</button>
+          <button class="btn btn-secondary" style="padding:4px 9px;font-size:0.75rem;"  data-decline-req="${r.id}">✕</button>
+        </div>
+      </div>`).join('') + `</div>`;
+}
+
+function wireIncomingRequestButtons(scope) {
+  scope.querySelectorAll('[data-accept-req]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await db.collection('friendRequests').doc(btn.dataset.acceptReq).update({ status: 'accepted' });
+      FRIEND_STATE = null; // force reload
+      toast('Žádost přijata! 🎉');
+      renderMembers();
+    } catch (e) { toast('Chyba: ' + e.message); btn.disabled = false; }
+  }));
+  scope.querySelectorAll('[data-decline-req]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await db.collection('friendRequests').doc(btn.dataset.declineReq).update({ status: 'declined' });
+      FRIEND_STATE = null;
+      toast('Žádost odmítnuta.');
+      renderMembers();
+    } catch (e) { toast('Chyba: ' + e.message); btn.disabled = false; }
+  }));
 }
 
 // ── Modal helpers ─────────────────────────────────────────────

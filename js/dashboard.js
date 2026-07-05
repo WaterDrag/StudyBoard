@@ -614,24 +614,28 @@ function setupAddFriend(user) {
         btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
       }
 
-      // Zkontroluj existující vztah (v obou směrech) — přátelství i pending žádost
-      const [sentSnap, receivedSnap] = await Promise.all([
-        db.collection('friendRequests').where('fromUid', '==', user.uid).where('toUid', '==', targetUid).get(),
-        db.collection('friendRequests').where('fromUid', '==', targetUid).where('toUid', '==', user.uid).get(),
-      ]);
-      const existingDocs = [...sentSnap.docs, ...receivedSnap.docs];
-      if (existingDocs.some(d => d.data().status === 'accepted')) {
-        errEl.textContent = 'Tento uživatel je již tvůj přítel.';
-        errEl.style.display = 'block';
-        btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
-      }
-      if (existingDocs.some(d => d.data().status === 'pending')) {
-        errEl.textContent = 'Žádost už byla odeslána.';
-        errEl.style.display = 'block';
-        btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
+      // One deterministic doc per pair (sorted "uidA_uidB"), so rules can look
+      // the friendship up directly for the editor gate.
+      const pairId = [user.uid, targetUid].sort().join('_');
+      const existing = await db.collection('friendRequests').doc(pairId).get();
+      if (existing.exists) {
+        const st = existing.data().status;
+        if (st === 'accepted') {
+          errEl.textContent = 'Tento uživatel je již tvůj přítel.';
+          errEl.style.display = 'block';
+          btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
+        }
+        if (st === 'pending') {
+          errEl.textContent = 'Žádost už byla odeslána.';
+          errEl.style.display = 'block';
+          btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
+        }
+        // Previously declined — delete the stale doc so a fresh request (which
+        // may flip the sender/recipient direction) can be created cleanly.
+        await existing.ref.delete().catch(() => {});
       }
 
-      await db.collection('friendRequests').add({
+      await db.collection('friendRequests').doc(pairId).set({
         fromUid:   user.uid,
         fromName:  user.displayName || user.email,
         fromEmail: (user.email || '').toLowerCase(),

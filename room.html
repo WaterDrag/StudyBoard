@@ -50,6 +50,7 @@
           <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
         </svg>
         Členové <span id="memberCount" style="background:var(--bg-3);padding:1px 6px;border-radius:10px;font-size:0.72rem;margin-left:2px;"></span>
+        <span id="membersReqBadge" style="display:none;background:#ef4444;color:#fff;padding:1px 6px;border-radius:10px;font-size:0.7rem;margin-left:4px;font-weight:700;"></span>
       </button>
     </div>
   </nav>
@@ -422,8 +423,11 @@
       <div class="panel-body" id="membersList">
         <div style="text-align:center;padding:32px 0;color:var(--text-muted);">Načítám...</div>
       </div>
-      <div style="padding:14px 18px 0;" id="backupsWrap" style="display:none;">
-        <button id="backupsBtn" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:0.82rem;gap:6px;">
+      <div style="padding:14px 18px 0;display:flex;flex-direction:column;gap:8px;">
+        <button id="activityBtn" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:0.82rem;gap:6px;">
+          📜 Historie místnosti
+        </button>
+        <button id="backupsBtn" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:0.82rem;gap:6px;display:none;">
           🗄️ Zálohy místnosti
         </button>
       </div>
@@ -450,6 +454,37 @@
         💾 Zálohovat teď
       </button>
       <div id="backupsList" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: Historie místnosti -->
+  <div class="modal-overlay" id="activityModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>📜 Historie místnosti</h3>
+        <button class="modal-close" data-close="activityModal">✕</button>
+      </div>
+      <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:12px;line-height:1.5;">
+        Kdo co smazal, komu se změnila role, předání vlastnictví. Posledních 100 událostí.
+      </p>
+      <div id="activityList" style="max-height:380px;overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: Předat vlastnictví -->
+  <div class="modal-overlay" id="successorModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Komu předat místnost?</h3>
+        <button class="modal-close" data-close="successorModal">✕</button>
+      </div>
+      <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:12px;line-height:1.5;">
+        Vyber člena, který převezme vlastnictví. Ty pak místnost opustíš.
+      </p>
+      <div id="successorList" style="max-height:340px;overflow-y:auto;"></div>
+      <div style="display:flex;justify-content:center;margin-top:8px;">
+        <button id="successorCancel" class="btn btn-ghost" style="padding:7px 16px;font-size:0.82rem;">Zrušit</button>
+      </div>
     </div>
   </div>
 
