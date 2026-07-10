@@ -29,6 +29,7 @@ const CONNS_MAP   = new Map(); // connId → conn data
 let VIEW_MODE     = 'board';
 const NOTES_MAP   = new Map(); // noteId → note data, kept in sync for the list view
 const FOLDERS_MAP = new Map(); // folderId → { name, parentId, color, noteIds[], authorId }
+const WHITEBOARDS_MAP = new Map(); // wbId → whiteboard data (drawable "tabule", behind notes)
 
 // ── Auth guard ────────────────────────────────────────────────
 auth.onAuthStateChanged(async user => {
@@ -179,6 +180,8 @@ auth.onAuthStateChanged(async user => {
     setupBackups();
     setupActivityLog();
     setupConnections();
+    setupWhiteboards();
+    setupBoardContextMenu();
     setupLightbox();
     setupModalClose();
     updateMemberCount();
@@ -1210,17 +1213,22 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
   }
 }
 
+// Open the "add note" modal (shared by the toolbar + the board right-click
+// menu; the caller sets PENDING_ADD_POS beforehand if it wants a pinned spot).
+function openAddNote() {
+  document.getElementById('noteEditor').innerHTML = '';
+  document.getElementById('noteTitleInput').value = '';
+  openModal('addModal');
+  setTimeout(() => document.getElementById('noteEditor').focus(), 80);
+}
+
 // ── Add note ──────────────────────────────────────────────────
 function setupAdd() {
   let color = '#fef9c3';
   const editor = document.getElementById('noteEditor');
 
-  document.getElementById('addBtn').addEventListener('click', () => {
-    editor.innerHTML = '';
-    document.getElementById('noteTitleInput').value = '';
-    openModal('addModal');
-    setTimeout(() => editor.focus(), 80);
-  });
+  // Toolbar "+" = add with no pinned position (lands in the viewport).
+  document.getElementById('addBtn').addEventListener('click', () => { PENDING_ADD_POS = null; openAddNote(); });
 
   const noteColorCustom      = document.getElementById('noteColorCustom');
   const noteColorCustomInput = document.getElementById('noteColorCustomInput');
@@ -1253,10 +1261,17 @@ function setupAdd() {
 
     try {
       const wrap = document.getElementById('boardWrap');
-      // scrollLeft/Top are in rendered board coords; convert to stored coords
-      // so the note lands in the current viewport regardless of BOARD_PAD.
-      const x    = Math.round(toStoreX(wrap.scrollLeft + 60  + Math.random() * 240));
-      const y    = Math.round(toStoreY(wrap.scrollTop  + 60  + Math.random() * 160));
+      // A right-click "Přidat poznámku zde" pins an exact spot; otherwise the
+      // note lands somewhere in the current viewport. scrollLeft/Top are in
+      // rendered coords; convert to stored coords (BOARD_PAD offset).
+      let x, y;
+      if (PENDING_ADD_POS) {
+        x = Math.round(PENDING_ADD_POS.x); y = Math.round(PENDING_ADD_POS.y);
+        PENDING_ADD_POS = null;
+      } else {
+        x = Math.round(toStoreX(wrap.scrollLeft + 60 + Math.random() * 240));
+        y = Math.round(toStoreY(wrap.scrollTop  + 60 + Math.random() * 160));
+      }
 
       await db.collection('rooms').doc(ROOM_ID).collection('notes').add({
         content,
@@ -1645,6 +1660,387 @@ function setupFlashCards() {
   document.getElementById('flashcardsBtn').href = `flashcards.html?room=${ROOM_ID}`;
 }
 
+// ══ Whiteboards ("tabule") ════════════════════════════════════
+// Bounded, growable freehand drawing surfaces that live BEHIND the notes
+// (z-index 0). Created from the board's right-click menu. Strokes are stored
+// as an array on the whiteboard doc (polylines in board-local coords),
+// appended with arrayUnion so concurrent drawing merges and removed with
+// arrayRemove for undo. A tabule can be grown but never shrunk below the
+// bounding box of what's already drawn on it.
+// Global drawing tool state (shared across all tabule):
+//  type: pen | pencil | marker | spray   ·   mode: draw | erase | pick
+const WB_TOOL = { color: '#111827', width: 3, type: 'pen', mode: 'draw' };
+
+function wbCol() { return db.collection('rooms').doc(ROOM_ID).collection('whiteboards'); }
+
+// Bounding box of everything drawn (whiteboard-local coords).
+function wbBBox(wb) {
+  let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0, has = false;
+  (wb.strokes || []).forEach(s => {
+    for (let i = 0; i + 1 < s.pts.length; i += 2) {
+      has = true;
+      const x = s.pts[i], y = s.pts[i + 1];
+      if (x < minX) minX = x; if (y < minY) minY = y;
+      if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+    }
+  });
+  return { has, minX, minY, maxX, maxY };
+}
+
+// Deterministic PRNG so spray strokes redraw with the same speckle pattern
+// every time (seeded from the stroke id).
+function wbSeed(str) {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+  return () => { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
+}
+function canDrawWb() { return MY_ROLE === 'owner' || MY_ROLE === 'editor'; }
+function wbId() { return (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)); }
+
+function setupWhiteboards() {
+  wbCol().onSnapshot(snap => {
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'removed') {
+        WHITEBOARDS_MAP.delete(ch.doc.id);
+        document.getElementById('wb-' + ch.doc.id)?.remove();
+        return;
+      }
+      const data = { id: ch.doc.id, ...ch.doc.data() };
+      WHITEBOARDS_MAP.set(ch.doc.id, data);
+      renderWhiteboard(data);
+    });
+  }, () => {});
+}
+
+async function createWhiteboard(storeX, storeY) {
+  if (!canDrawWb()) { toast('Tabuli může přidat jen editor.'); return; }
+  try {
+    await wbCol().add({
+      x: Math.round(storeX), y: Math.round(storeY),
+      w: 460, h: 320,
+      authorId: ME.uid, authorName: ME.displayName || ME.email,
+      strokes: [],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    logActivity('board', 'přidal tabuli');
+  } catch (e) { toast('Chyba: ' + e.message); }
+}
+
+function drawOneStroke(ctx, s) {
+  if (!s.pts || s.pts.length < 2) return;
+  const col = s.c || '#111827', w = s.w || 3, pts = s.pts;
+  ctx.save();
+  // Eraser: clear pixels (reveals the tabule background behind).
+  if (s.e) { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.fillStyle = 'rgba(0,0,0,1)'; }
+  else     { ctx.strokeStyle = col; ctx.fillStyle = col; }
+
+  if (s.t === 'spray' && !s.e) {
+    const rng = wbSeed(s.id || 'x');
+    const R = w * 1.6, dots = Math.max(3, Math.round(w * 1.2));
+    for (let i = 0; i + 1 < pts.length; i += 2) {
+      for (let k = 0; k < dots; k++) {
+        const a = rng() * Math.PI * 2, rr = Math.sqrt(rng()) * R;
+        ctx.beginPath(); ctx.arc(pts[i] + Math.cos(a) * rr, pts[i + 1] + Math.sin(a) * rr, 0.7, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore(); return;
+  }
+
+  // Line-based tools
+  ctx.lineJoin = 'round';
+  if (s.t === 'marker' && !s.e) { ctx.globalAlpha = 0.35; ctx.lineCap = 'butt'; ctx.lineWidth = w * 2.4; }
+  else if (s.t === 'pencil' && !s.e) { ctx.globalAlpha = 0.85; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, w * 0.8); }
+  else { ctx.lineCap = 'round'; ctx.lineWidth = s.e ? w * 2 : w; } // pen / eraser
+
+  if (pts.length === 2) { // single tap → dot
+    ctx.beginPath(); ctx.arc(pts[0], pts[1], ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill(); ctx.restore(); return;
+  }
+  ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+  for (let i = 2; i + 1 < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function redrawWbCanvas(canvas, wb) {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  (wb.strokes || []).forEach(s => drawOneStroke(ctx, s));
+}
+
+function renderWhiteboard(wb) {
+  let el = document.getElementById('wb-' + wb.id);
+  const creating = !el;
+  if (creating) {
+    el = document.createElement('div');
+    el.className = 'whiteboard';
+    el.id = 'wb-' + wb.id;
+    const editable = canDrawWb();
+    const handles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']
+      .map(d => `<div class="wb-h wb-h-${d}" data-dir="${d}"></div>`).join('');
+    el.innerHTML = `
+      <canvas class="wb-canvas"></canvas>
+      ${editable ? `
+      <div class="wb-bar">
+        <button class="wb-btn wb-draw" title="Zapnout/vypnout kreslení">✏️</button>
+        <select class="wb-type" title="Nástroj">
+          <option value="pen">🖊️ Pero</option>
+          <option value="pencil">✏️ Tužka</option>
+          <option value="marker">🖍️ Zvýrazňovač</option>
+          <option value="spray">💨 Sprej</option>
+        </select>
+        <button class="wb-btn wb-erase" title="Guma">🧽</button>
+        <button class="wb-btn wb-pick" title="Kapátko – vybrat barvu z kresby">💧</button>
+        <input type="color" class="wb-color" value="${WB_TOOL.color}" title="Barva">
+        <input type="range"  class="wb-wrange" min="1" max="40" value="${WB_TOOL.width}" title="Tloušťka">
+        <input type="number" class="wb-wnum"   min="1" max="40" value="${WB_TOOL.width}" title="Tloušťka">
+        <button class="wb-btn wb-undo" title="Zpět (můj tah)">↶</button>
+        <span class="wb-spacer"></span>
+        <button class="wb-btn wb-del" title="Smazat tabuli">🗑️</button>
+      </div>` : `<div class="wb-bar wb-bar-ro"><span style="font-size:.7rem;opacity:.7;">🖊️ Tabule</span></div>`}
+      ${editable ? handles : ''}`;
+    // Behind notes: z-index 0 via CSS. Board grid shows through transparent bits.
+    document.getElementById('board').appendChild(el);
+    if (canDrawWb()) wireWhiteboard(el, wb.id);
+  }
+
+  // Position + size (rendered coords)
+  el.style.left   = toRenderX(wb.x) + 'px';
+  el.style.top    = toRenderY(wb.y) + 'px';
+  el.style.width  = wb.w + 'px';
+  el.style.height = wb.h + 'px';
+  const canvas = el.querySelector('.wb-canvas');
+  if (canvas.width !== wb.w || canvas.height !== wb.h) { canvas.width = wb.w; canvas.height = wb.h; }
+  redrawWbCanvas(canvas, wb);
+  expandBoardIfNeeded(el);
+}
+
+// Map a pointer event to whiteboard-local canvas coords, undoing board zoom.
+function wbLocalPoint(canvas, clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  return [
+    Math.round((clientX - r.left) * (canvas.width / r.width)),
+    Math.round((clientY - r.top) * (canvas.height / r.height)),
+  ];
+}
+
+function wireWhiteboard(el, id) {
+  const canvas = el.querySelector('.wb-canvas');
+  const drawBtn = el.querySelector('.wb-draw');
+  const colorInp = el.querySelector('.wb-color');
+  const typeSel = el.querySelector('.wb-type');
+  const eraseBtn = el.querySelector('.wb-erase');
+  const pickBtn = el.querySelector('.wb-pick');
+  const wrange = el.querySelector('.wb-wrange');
+  const wnum = el.querySelector('.wb-wnum');
+
+  const syncToolButtons = () => {
+    eraseBtn.classList.toggle('active', WB_TOOL.mode === 'erase');
+    pickBtn.classList.toggle('active', WB_TOOL.mode === 'pick');
+    typeSel.value = WB_TOOL.type;
+  };
+
+  drawBtn.addEventListener('click', () => {
+    const on = el.classList.toggle('drawing');
+    drawBtn.classList.toggle('active', on);
+  });
+  typeSel.addEventListener('change', () => { WB_TOOL.type = typeSel.value; WB_TOOL.mode = 'draw'; syncToolButtons(); });
+  eraseBtn.addEventListener('click', () => { WB_TOOL.mode = WB_TOOL.mode === 'erase' ? 'draw' : 'erase'; syncToolButtons(); });
+  pickBtn.addEventListener('click', () => { WB_TOOL.mode = WB_TOOL.mode === 'pick' ? 'draw' : 'pick'; syncToolButtons(); });
+  colorInp.addEventListener('input', () => { WB_TOOL.color = colorInp.value; if (WB_TOOL.mode === 'pick') { WB_TOOL.mode = 'draw'; syncToolButtons(); } });
+
+  // Thickness: slider + number field kept in lock-step.
+  const setWidth = v => {
+    v = Math.max(1, Math.min(40, parseInt(v, 10) || 1));
+    WB_TOOL.width = v; wrange.value = v; wnum.value = v;
+  };
+  wrange.addEventListener('input', () => setWidth(wrange.value));
+  wnum.addEventListener('input', () => setWidth(wnum.value));
+
+  // Eyedropper: sample the pixel colour under the cursor into the palette.
+  const pickColorAt = (cx, cy) => {
+    let [x, y] = wbLocalPoint(canvas, cx, cy);
+    x = Math.max(0, Math.min(canvas.width - 1, x));
+    y = Math.max(0, Math.min(canvas.height - 1, y));
+    const d = canvas.getContext('2d').getImageData(x, y, 1, 1).data;
+    if (d[3] < 12) { toast('Tady nic není — klikni na kresbu.'); return; }
+    const hex = '#' + [d[0], d[1], d[2]].map(n => n.toString(16).padStart(2, '0')).join('');
+    WB_TOOL.color = hex; colorInp.value = hex;
+    WB_TOOL.mode = 'draw'; syncToolButtons();
+  };
+
+  // ── Freehand drawing / erasing ──
+  let stroke = null;
+  const startDraw = (cx, cy) => {
+    if (!el.classList.contains('drawing')) return false;
+    if (WB_TOOL.mode === 'pick') { pickColorAt(cx, cy); return false; }
+    stroke = { id: wbId(), by: ME.uid, c: WB_TOOL.color, w: WB_TOOL.width, t: WB_TOOL.type, pts: wbLocalPoint(canvas, cx, cy) };
+    if (WB_TOOL.mode === 'erase') stroke.e = true;
+    return true;
+  };
+  const moveDraw = (cx, cy) => {
+    if (!stroke) return;
+    const [x, y] = wbLocalPoint(canvas, cx, cy);
+    const n = stroke.pts.length;
+    if (n >= 2 && Math.abs(x - stroke.pts[n - 2]) < 2 && Math.abs(y - stroke.pts[n - 1]) < 2) return;
+    stroke.pts.push(x, y);
+    const wb = WHITEBOARDS_MAP.get(id);
+    redrawWbCanvas(canvas, { strokes: [...(wb.strokes || []), stroke] });
+  };
+  const endDraw = async () => {
+    if (!stroke) return;
+    const s = stroke; stroke = null;
+    try { await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayUnion(s) }); }
+    catch (e) { toast('Chyba: ' + e.message); }
+  };
+
+  canvas.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (!startDraw(e.clientX, e.clientY)) { if (el.classList.contains('drawing')) { e.stopPropagation(); e.preventDefault(); } return; }
+    e.stopPropagation(); e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => { if (stroke) moveDraw(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', () => { if (stroke) endDraw(); });
+
+  canvas.addEventListener('touchstart', e => {
+    if (!el.classList.contains('drawing') || e.touches.length !== 1) return;
+    startDraw(e.touches[0].clientX, e.touches[0].clientY);
+    e.stopPropagation(); e.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    if (!stroke || e.touches.length !== 1) return;
+    moveDraw(e.touches[0].clientX, e.touches[0].clientY);
+    e.stopPropagation(); e.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener('touchend', e => { if (stroke) { endDraw(); e.stopPropagation(); } });
+
+  // ── Undo (my last stroke; owner may undo anyone's) ──
+  el.querySelector('.wb-undo').addEventListener('click', async () => {
+    const wb = WHITEBOARDS_MAP.get(id);
+    const strokes = wb.strokes || [];
+    for (let i = strokes.length - 1; i >= 0; i--) {
+      if (MY_ROLE === 'owner' || strokes[i].by === ME.uid) {
+        try { await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayRemove(strokes[i]) }); }
+        catch (e) { toast('Chyba: ' + e.message); }
+        return;
+      }
+    }
+    toast('Žádný tvůj tah k vrácení.');
+  });
+
+  // ── Delete tabule (author or owner) ──
+  el.querySelector('.wb-del').addEventListener('click', async () => {
+    const wb = WHITEBOARDS_MAP.get(id);
+    if (!(MY_ROLE === 'owner' || wb.authorId === ME.uid)) { toast('Smazat může jen autor nebo vlastník.'); return; }
+    if (!confirm('Smazat celou tabuli i s kresbou?')) return;
+    try { await wbCol().doc(id).delete(); logActivity('board', 'smazal tabuli'); }
+    catch (e) { toast('Chyba: ' + e.message); }
+  });
+
+  // ── Move by dragging the bar (author or owner) ──
+  const bar = el.querySelector('.wb-bar');
+  bar.addEventListener('mousedown', e => {
+    if (e.target.closest('.wb-btn, .wb-color, .wb-type, .wb-wrange, .wb-wnum')) return;
+    const wb = WHITEBOARDS_MAP.get(id);
+    if (!(MY_ROLE === 'owner' || wb.authorId === ME.uid)) return;
+    e.stopPropagation(); e.preventDefault();
+    const sx = e.clientX, sy = e.clientY, ox = parseInt(el.style.left), oy = parseInt(el.style.top);
+    const mv = ev => { el.style.left = (ox + (ev.clientX - sx) / BOARD_ZOOM) + 'px'; el.style.top = (oy + (ev.clientY - sy) / BOARD_ZOOM) + 'px'; };
+    const up = async () => {
+      window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up);
+      try { await wbCol().doc(id).update({ x: Math.round(toStoreX(parseInt(el.style.left))), y: Math.round(toStoreY(parseInt(el.style.top))) }); }
+      catch (_) {}
+    };
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+  });
+
+  // ── Resize from any corner / edge. Growing is free; the N/W sides move the
+  //    origin (so strokes shift to stay put) and can't shrink past the drawn
+  //    bounding box. ──
+  el.querySelectorAll('.wb-h').forEach(h => {
+    h.addEventListener('mousedown', e => {
+      e.stopPropagation(); e.preventDefault();
+      const dir = h.dataset.dir;
+      const wb = WHITEBOARDS_MAP.get(id);
+      const bb = wbBBox(wb);
+      const minW = bb.has ? Math.max(120, bb.maxX + 4) : 120;
+      const minH = bb.has ? Math.max(120, bb.maxY + 4) : 120;
+      const sx = e.clientX, sy = e.clientY;
+      const ox = parseInt(el.style.left), oy = parseInt(el.style.top), ow = wb.w, oh = wb.h;
+      const cv = el.querySelector('.wb-canvas');
+      let shiftX = 0, shiftY = 0, newLeft = ox, newTop = oy, newW = ow, newH = oh;
+
+      const mv = ev => {
+        const dx = (ev.clientX - sx) / BOARD_ZOOM, dy = (ev.clientY - sy) / BOARD_ZOOM;
+        shiftX = 0; shiftY = 0; newLeft = ox; newTop = oy; newW = ow; newH = oh;
+        if (dir.includes('e')) newW = Math.max(minW, Math.round(ow + dx));
+        if (dir.includes('s')) newH = Math.max(minH, Math.round(oh + dy));
+        if (dir.includes('w')) { shiftX = Math.round(Math.min(dx, bb.has ? bb.minX : Infinity, ow - minW)); newLeft = ox + shiftX; newW = ow - shiftX; }
+        if (dir.includes('n')) { shiftY = Math.round(Math.min(dy, bb.has ? bb.minY : Infinity, oh - minH)); newTop = oy + shiftY; newH = oh - shiftY; }
+        el.style.left = newLeft + 'px'; el.style.top = newTop + 'px';
+        el.style.width = newW + 'px'; el.style.height = newH + 'px';
+        cv.width = newW; cv.height = newH;
+        const shown = (shiftX || shiftY)
+          ? { strokes: (wb.strokes || []).map(s => ({ ...s, pts: s.pts.map((v, i) => i % 2 === 0 ? v - shiftX : v - shiftY) })) }
+          : wb;
+        redrawWbCanvas(cv, shown);
+      };
+      const up = async () => {
+        window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up);
+        const upd = { x: Math.round(toStoreX(newLeft)), y: Math.round(toStoreY(newTop)), w: newW, h: newH };
+        if (shiftX || shiftY) upd.strokes = (wb.strokes || []).map(s => ({ ...s, pts: s.pts.map((v, i) => i % 2 === 0 ? v - shiftX : v - shiftY) }));
+        try { await wbCol().doc(id).update(upd); } catch (_) {}
+      };
+      window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+    });
+  });
+}
+
+// ── Board right-click menu: add a note or a tabule at the cursor ──
+function setupBoardContextMenu() {
+  const wrap = document.getElementById('boardWrap');
+  let downX = 0, downY = 0;
+  wrap.addEventListener('mousedown', e => { if (e.button === 2) { downX = e.clientX; downY = e.clientY; } });
+  wrap.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    // A right-DRAG pans (handled in setupBoardPan); only a right-CLICK (no
+    // real movement) opens the menu. Viewers get nothing to add.
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;
+    if (MY_ROLE === 'viewer' || (ME.isAnonymous && MY_ROLE !== 'owner')) return;
+    if (e.target.closest('.note, .whiteboard')) return; // let those keep their own menus
+    openBoardMenu(e.clientX, e.clientY);
+  });
+}
+
+function closeBoardMenu() { document.getElementById('boardCtxMenu')?.remove(); }
+function openBoardMenu(clientX, clientY) {
+  closeBoardMenu();
+  // Board-store coords at the cursor, so new content lands exactly here.
+  const wrap = document.getElementById('boardWrap');
+  const bx = (wrap.scrollLeft + clientX - wrap.getBoundingClientRect().left) / BOARD_ZOOM;
+  const by = (wrap.scrollTop  + clientY - wrap.getBoundingClientRect().top)  / BOARD_ZOOM;
+  const sx = toStoreX(bx), sy = toStoreY(by);
+
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'boardCtxMenu';
+  menu.innerHTML = `
+    <button class="context-menu-item" data-act="note">➕ Přidat poznámku</button>
+    <button class="context-menu-item" data-act="board">🖊️ Přidat tabuli</button>`;
+  document.body.appendChild(menu);
+  menu.style.left = clientX + 'px'; menu.style.top = clientY + 'px';
+  const r = menu.getBoundingClientRect();
+  if (r.right > window.innerWidth)  menu.style.left = (window.innerWidth - r.width - 8) + 'px';
+  if (r.bottom > window.innerHeight) menu.style.top = (clientY - r.height) + 'px';
+
+  menu.querySelector('[data-act="note"]').addEventListener('click', () => { closeBoardMenu(); PENDING_ADD_POS = { x: sx, y: sy }; openAddNote(); });
+  menu.querySelector('[data-act="board"]').addEventListener('click', () => { closeBoardMenu(); createWhiteboard(sx, sy); });
+  setTimeout(() => document.addEventListener('click', closeBoardMenu, { once: true }), 0);
+}
+
+// When set, the next note created uses this board-store position instead of
+// the default "somewhere in the current viewport".
+let PENDING_ADD_POS = null;
+
 // ── Board panning: drag empty canvas (left button) or drag ANYWHERE
 //    (right button, including over notes) to pan ───────────────
 function setupBoardPan() {
@@ -1657,10 +2053,12 @@ function setupBoardPan() {
   wrap.addEventListener('mousedown', e => {
     if (e.button !== 0 && e.button !== 2) return; // only left or right — ignore middle/other buttons
     // Left button: only pan when the empty canvas is grabbed. A note's own
-    // mousedown handler (bound directly on the note) owns left-click-drag on
-    // itself; without this check both would fire on every note click and
-    // fight each other (note tries to move itself, board tries to scroll).
-    if (e.button === 0 && e.target.closest('.note')) return;
+    // mousedown handler owns left-drag on itself, and a whiteboard's toolbar/
+    // resize own their controls — panning here would preventDefault() the
+    // mousedown and stop a <select>/color picker from ever opening (and start
+    // an unwanted scroll). The tabule's empty canvas (pointer-events:none when
+    // idle) isn't matched, so panning over a tabule still works.
+    if (e.button === 0 && e.target.closest('.note, .wb-bar, .wb-h')) return;
     panning = true;
     startX = e.clientX; startY = e.clientY;
     startSL = wrap.scrollLeft; startST = wrap.scrollTop;
@@ -1690,7 +2088,7 @@ function setupBoardPan() {
       pinch = { dist: touchDist(e.touches), zoom: BOARD_ZOOM };
       touchPan = null;
       e.preventDefault();
-    } else if (e.touches.length === 1 && !e.target.closest('.note')) {
+    } else if (e.touches.length === 1 && !e.target.closest('.note, .wb-bar, .wb-h')) {
       const t = e.touches[0];
       touchPan = { x: t.clientX, y: t.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop };
     }
@@ -2212,7 +2610,7 @@ async function renderActivityLog() {
       el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.85rem;">Zatím žádná aktivita.</div>';
       return;
     }
-    const icon = { note: '🗑️', member: '👤', role: '🛡️', owner: '👑', restore: '↩️' };
+    const icon = { note: '🗑️', member: '👤', role: '🛡️', owner: '👑', restore: '↩️', board: '🖊️' };
     el.innerHTML = snap.docs.map(d => {
       const a = d.data();
       const when = a.at?.toDate ? a.at.toDate().toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';

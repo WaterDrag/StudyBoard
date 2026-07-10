@@ -137,6 +137,18 @@ service cloud.firestore {
         allow delete: if isAuth() && canEditRoom(roomId);
       }
 
+      // Whiteboards ("tabule"): drawable surfaces. Any editor may draw on any
+      // tabule (strokes are a collaborative layer), so update is open to
+      // editors; only the author or owner deletes one.
+      match /whiteboards/{wbId} {
+        allow read:   if isMember(roomId);
+        allow create: if isAuth() && (isRoomOwner(roomId) ||
+                         (canEditRoom(roomId) && request.resource.data.authorId == request.auth.uid));
+        allow update: if isAuth() && canEditRoom(roomId);
+        allow delete: if isAuth() && (isRoomOwner(roomId) ||
+                         resource.data.authorId == request.auth.uid);
+      }
+
       // Owner-only durable snapshots of the whole room (notes + connections
       // + folders). They live server-side in Firestore, so they survive any
       // local outage, and only the owner can read/create/delete them.
