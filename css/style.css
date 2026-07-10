@@ -1107,6 +1107,63 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   transition: box-shadow 0.2s, transform 0.18s;
   z-index: 1;
 }
+
+/* ── Whiteboard ("tabule") — a drawable surface behind the notes ── */
+.whiteboard {
+  position: absolute;
+  z-index: 0;                 /* behind .note (z-index 1) */
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(0,0,0,0.18);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+  overflow: hidden;
+}
+:root[data-theme="light"] .whiteboard { background: rgba(255,255,255,0.96); }
+.wb-canvas {
+  display: block;
+  width: 100%; height: 100%;
+  pointer-events: none;       /* click-through until draw mode is on */
+  touch-action: none;
+}
+.whiteboard.drawing { outline: 2px solid var(--accent); outline-offset: -2px; }
+.whiteboard.drawing .wb-canvas { pointer-events: auto; cursor: crosshair; }
+.wb-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 5px;
+  flex-wrap: wrap;
+  padding: 4px 6px;
+  background: rgba(15,23,42,0.82);
+  backdrop-filter: blur(3px);
+  cursor: grab;
+}
+.wb-bar-ro { background: rgba(15,23,42,0.55); justify-content: center; }
+.wb-spacer { flex: 1; }
+.wb-btn {
+  background: none; border: none; color: #e5e7eb;
+  font-size: 0.9rem; cursor: pointer; padding: 2px 5px; border-radius: 5px;
+  line-height: 1;
+}
+.wb-btn:hover { background: rgba(255,255,255,0.14); }
+.wb-btn.active { background: var(--accent); color: #fff; }
+.wb-color { width: 26px; height: 22px; border: none; background: none; padding: 0; cursor: pointer; }
+.wb-type { font-size: 0.72rem; padding: 1px 2px; border-radius: 4px; max-width: 108px; }
+.wb-wrange { width: 78px; cursor: pointer; }
+.wb-wnum { width: 44px; font-size: 0.72rem; padding: 1px 3px; border-radius: 4px; }
+
+/* Resize handles — 4 edges + 4 corners. Kept fully inside the box because
+   .whiteboard is overflow:hidden (anything sticking out would be clipped). */
+.wb-h { position: absolute; z-index: 2; }
+.wb-h-n, .wb-h-s { left: 12px; right: 12px; height: 7px; cursor: ns-resize; }
+.wb-h-e, .wb-h-w { top: 12px; bottom: 12px; width: 7px; cursor: ew-resize; }
+.wb-h-n { top: 0; } .wb-h-s { bottom: 0; }
+.wb-h-e { right: 0; } .wb-h-w { left: 0; }
+.wb-h-ne, .wb-h-nw, .wb-h-se, .wb-h-sw { width: 12px; height: 12px; }
+.wb-h-ne { top: 0; right: 0; cursor: nesw-resize; }
+.wb-h-nw { top: 0; left: 0;  cursor: nwse-resize; }
+.wb-h-se { bottom: 0; right: 0; cursor: nwse-resize; }
+.wb-h-sw { bottom: 0; left: 0;  cursor: nesw-resize; }
+.wb-h-se { background: linear-gradient(135deg, transparent 55%, rgba(0,0,0,0.4) 55%); }
 .note::before {
   content: '';
   position: absolute;
