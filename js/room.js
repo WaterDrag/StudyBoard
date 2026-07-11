@@ -179,6 +179,8 @@ auth.onAuthStateChanged(async user => {
     setupMembers();
     setupBackups();
     setupActivityLog();
+    setupSearch();
+    setupPresence();
     setupConnections();
     setupWhiteboards();
     setupBoardContextMenu();
@@ -1668,15 +1670,22 @@ function setupFlashCards() {
 // arrayRemove for undo. A tabule can be grown but never shrunk below the
 // bounding box of what's already drawn on it.
 // Global drawing tool state (shared across all tabule):
-//  type: pen | pencil | marker | spray   ·   mode: draw | erase | pick
+//  type: pen | pencil | marker | spray | line | rect | ellipse | text
+//  mode: draw | erase | pick | fill
 const WB_TOOL = { color: '#111827', width: 3, type: 'pen', mode: 'draw' };
+let WB_NEW_TEXT_FOCUS = null; // id of a just-created text box to focus after render
+let WB_EDITING_TEXT = null;   // id of the text box currently being edited (don't clobber it)
+const WB_REDO = new Map();    // wbId → [strokes removed by undo, newest last] for redo
 
 function wbCol() { return db.collection('rooms').doc(ROOM_ID).collection('whiteboards'); }
 
-// Bounding box of everything drawn (whiteboard-local coords).
+// Bounding box of everything drawn (whiteboard-local coords). Fill strokes are
+// skipped — their points are the seed + a clip rectangle, not visible extent,
+// so counting them would wrongly force the min resize size to the full canvas.
 function wbBBox(wb) {
   let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0, has = false;
   (wb.strokes || []).forEach(s => {
+    if (s.t === 'fill') return;
     for (let i = 0; i + 1 < s.pts.length; i += 2) {
       has = true;
       const x = s.pts[i], y = s.pts[i + 1];
@@ -1686,6 +1695,50 @@ function wbBBox(wb) {
   });
   return { has, minX, minY, maxX, maxY };
 }
+
+function hexToRgb(hex) {
+  const h = (hex || '#000000').replace('#', '');
+  return [parseInt(h.slice(0, 2), 16) || 0, parseInt(h.slice(2, 4), 16) || 0, parseInt(h.slice(4, 6), 16) || 0];
+}
+
+// Scanline flood fill (paint bucket) on the canvas pixels, starting at (sx,sy).
+// Replaces the contiguous same-coloured region with `hex`. Runs during redraw
+// at the fill stroke's position in the sequence, so it's deterministic.
+// The fill is clipped to the rectangle [cx0,cy0)–[cx1,cy1) — that's the tabule
+// size at the moment of filling, so growing the tabule later never lets the
+// fill bleed into the freshly-added empty space.
+function floodFill(ctx, w, h, sx, sy, hex, cx0, cy0, cx1, cy1) {
+  sx = Math.round(sx); sy = Math.round(sy);
+  const x0 = Math.max(0, Math.round(cx0 ?? 0)), y0c = Math.max(0, Math.round(cy0 ?? 0));
+  const x1 = Math.min(w, Math.round(cx1 ?? w)), y1 = Math.min(h, Math.round(cy1 ?? h));
+  if (sx < x0 || sy < y0c || sx >= x1 || sy >= y1) return;
+  if (w * h > 4_000_000) { toast('Tabule je příliš velká na vylití.'); return; }
+  const img = ctx.getImageData(0, 0, w, h), d = img.data;
+  const idx = (x, y) => (y * w + x) * 4;
+  const si = idx(sx, sy);
+  const tr = d[si], tg = d[si + 1], tb = d[si + 2], ta = d[si + 3];
+  const [fr, fg, fb] = hexToRgb(hex), fa = 255;
+  if (tr === fr && tg === fg && tb === fb && ta === fa) return; // already that colour
+  const match = i => d[i] === tr && d[i + 1] === tg && d[i + 2] === tb && d[i + 3] === ta;
+  const stack = [[sx, sy]];
+  while (stack.length) {
+    const [x, ys] = stack.pop();
+    let y = ys;
+    while (y >= y0c && match(idx(x, y))) y--;
+    y++;
+    let reachL = false, reachR = false;
+    while (y < y1 && match(idx(x, y))) {
+      const ci = idx(x, y);
+      d[ci] = fr; d[ci + 1] = fg; d[ci + 2] = fb; d[ci + 3] = fa;
+      if (x > x0)     { if (match(idx(x - 1, y))) { if (!reachL) { stack.push([x - 1, y]); reachL = true; } } else reachL = false; }
+      if (x < x1 - 1) { if (match(idx(x + 1, y))) { if (!reachR) { stack.push([x + 1, y]); reachR = true; } } else reachR = false; }
+      y++;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+const WB_SHAPES = ['line', 'rect', 'ellipse'];
 
 // Deterministic PRNG so spray strokes redraw with the same speckle pattern
 // every time (seeded from the stroke id).
@@ -1729,10 +1782,27 @@ async function createWhiteboard(storeX, storeY) {
 function drawOneStroke(ctx, s) {
   if (!s.pts || s.pts.length < 2) return;
   const col = s.c || '#111827', w = s.w || 3, pts = s.pts;
+
+  // Paint bucket: flood fill from the seed point, clipped to the tabule size
+  // recorded at fill time (pts[2..5], if present).
+  if (s.t === 'fill') { floodFill(ctx, ctx.canvas.width, ctx.canvas.height, pts[0], pts[1], col, pts[2], pts[3], pts[4], pts[5]); return; }
+
   ctx.save();
   // Eraser: clear pixels (reveals the tabule background behind).
   if (s.e) { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.fillStyle = 'rgba(0,0,0,1)'; }
   else     { ctx.strokeStyle = col; ctx.fillStyle = col; }
+
+  // Geometric shapes (line / rectangle / ellipse) — drawn from start→end.
+  if (WB_SHAPES.includes(s.t) && pts.length >= 4) {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = s.e ? w * 2 : w;
+    const x0 = pts[0], y0 = pts[1], x1 = pts[2], y1 = pts[3];
+    ctx.beginPath();
+    if (s.t === 'line') { ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); }
+    else if (s.t === 'rect') { ctx.rect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)); }
+    else { ctx.ellipse((x0 + x1) / 2, (y0 + y1) / 2, Math.abs(x1 - x0) / 2, Math.abs(y1 - y0) / 2, 0, 0, Math.PI * 2); }
+    ctx.stroke();
+    ctx.restore(); return;
+  }
 
   if (s.t === 'spray' && !s.e) {
     const rng = wbSeed(s.id || 'x');
@@ -1779,6 +1849,7 @@ function renderWhiteboard(wb) {
       .map(d => `<div class="wb-h wb-h-${d}" data-dir="${d}"></div>`).join('');
     el.innerHTML = `
       <canvas class="wb-canvas"></canvas>
+      ${editable ? '<div class="wb-brush"></div>' : ''}
       ${editable ? `
       <div class="wb-bar">
         <button class="wb-btn wb-draw" title="Zapnout/vypnout kreslení">✏️</button>
@@ -1787,19 +1858,26 @@ function renderWhiteboard(wb) {
           <option value="pencil">✏️ Tužka</option>
           <option value="marker">🖍️ Zvýrazňovač</option>
           <option value="spray">💨 Sprej</option>
+          <option value="line">／ Čára</option>
+          <option value="rect">▭ Obdélník</option>
+          <option value="ellipse">◯ Elipsa</option>
+          <option value="text">🔤 Text</option>
         </select>
         <button class="wb-btn wb-erase" title="Guma">🧽</button>
+        <button class="wb-btn wb-fill" title="Kýbl – vylít plochu barvou">🪣</button>
         <button class="wb-btn wb-pick" title="Kapátko – vybrat barvu z kresby">💧</button>
         <input type="color" class="wb-color" value="${WB_TOOL.color}" title="Barva">
         <input type="range"  class="wb-wrange" min="1" max="40" value="${WB_TOOL.width}" title="Tloušťka">
         <input type="number" class="wb-wnum"   min="1" max="40" value="${WB_TOOL.width}" title="Tloušťka">
         <button class="wb-btn wb-undo" title="Zpět (můj tah)">↶</button>
+        <button class="wb-btn wb-redo" title="Znovu">↷</button>
         <span class="wb-spacer"></span>
         <button class="wb-btn wb-del" title="Smazat tabuli">🗑️</button>
       </div>` : `<div class="wb-bar wb-bar-ro"><span style="font-size:.7rem;opacity:.7;">🖊️ Tabule</span></div>`}
       ${editable ? handles : ''}`;
     // Behind notes: z-index 0 via CSS. Board grid shows through transparent bits.
     document.getElementById('board').appendChild(el);
+    el.classList.toggle('text-mode', WB_TOOL.type === 'text' && WB_TOOL.mode === 'draw');
     if (canDrawWb()) wireWhiteboard(el, wb.id);
   }
 
@@ -1811,16 +1889,119 @@ function renderWhiteboard(wb) {
   const canvas = el.querySelector('.wb-canvas');
   if (canvas.width !== wb.w || canvas.height !== wb.h) { canvas.width = wb.w; canvas.height = wb.h; }
   redrawWbCanvas(canvas, wb);
+  renderWhiteboardTexts(el, wb);
   expandBoardIfNeeded(el);
 }
 
+// Reconcile the editable DOM text boxes to match wb.texts. A box that's being
+// edited right now is left untouched (so typing/caret aren't clobbered by an
+// echoing snapshot).
+function renderWhiteboardTexts(el, wb) {
+  const texts = wb.texts || [];
+  const ids = new Set(texts.map(t => t.id));
+  const editable = canDrawWb();
+  // Remove stale boxes
+  el.querySelectorAll('.wb-text').forEach(node => { if (!ids.has(node.dataset.tid)) node.remove(); });
+  texts.forEach(t => {
+    let node = el.querySelector(`.wb-text[data-tid="${t.id}"]`);
+    if (t.id === WB_EDITING_TEXT && node) { // only reposition, don't touch content/caret
+      node.style.left = t.x + 'px'; node.style.top = t.y + 'px';
+      node.style.width = t.w + 'px'; node.style.height = t.h + 'px';
+      return;
+    }
+    if (!node) {
+      node = document.createElement('div');
+      node.className = 'wb-text'; node.dataset.tid = t.id;
+      node.innerHTML = `<div class="wb-text-body"${editable ? ' contenteditable="true"' : ''}></div>` +
+        (editable ? '<div class="wb-text-move" title="Přesunout">✥</div><div class="wb-text-rz" title="Změnit velikost"></div><button class="wb-text-del" title="Smazat">✕</button>' : '');
+      el.appendChild(node);
+      if (editable) wireTextBox(el, node, wb.id);
+    }
+    node.style.left = t.x + 'px'; node.style.top = t.y + 'px';
+    node.style.width = t.w + 'px'; node.style.height = t.h + 'px';
+    node.style.color = t.c || '#111827';
+    node.style.fontSize = (t.fs || 18) + 'px';
+    const body = node.querySelector('.wb-text-body');
+    if (body.textContent !== (t.txt || '')) body.textContent = t.txt || '';
+  });
+
+  // A freshly created box: focus it for immediate typing.
+  if (WB_NEW_TEXT_FOCUS && ids.has(WB_NEW_TEXT_FOCUS)) {
+    const node = el.querySelector(`.wb-text[data-tid="${WB_NEW_TEXT_FOCUS}"] .wb-text-body`);
+    WB_NEW_TEXT_FOCUS = null;
+    if (node) setTimeout(() => node.focus(), 0);
+  }
+}
+
+// Save the whole texts array (small; rewritten wholesale on any change).
+async function saveWbTexts(wbId, texts) {
+  try { await wbCol().doc(wbId).update({ texts }); } catch (e) { toast('Chyba: ' + e.message); }
+}
+
+function wireTextBox(el, node, wbId) {
+  const tid = node.dataset.tid;
+  const body = node.querySelector('.wb-text-body');
+  const getT = () => (WHITEBOARDS_MAP.get(wbId).texts || []).find(t => t.id === tid);
+  const writeT = patch => {
+    const texts = (WHITEBOARDS_MAP.get(wbId).texts || []).map(t => t.id === tid ? { ...t, ...patch } : t);
+    return saveWbTexts(wbId, texts);
+  };
+
+  // ── Editing (debounced save) ──
+  let saveTimer = null;
+  body.addEventListener('focus', () => { WB_EDITING_TEXT = tid; });
+  body.addEventListener('input', () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => writeT({ txt: body.textContent }), 500); });
+  body.addEventListener('keydown', e => e.stopPropagation()); // don't trigger board shortcuts
+  body.addEventListener('blur', async () => {
+    WB_EDITING_TEXT = null; clearTimeout(saveTimer);
+    const txt = body.textContent;
+    if (!txt.trim()) { // empty box → delete it
+      const texts = (WHITEBOARDS_MAP.get(wbId).texts || []).filter(t => t.id !== tid);
+      await saveWbTexts(wbId, texts);
+    } else await writeT({ txt });
+  });
+  body.addEventListener('mousedown', e => e.stopPropagation()); // click to edit, don't draw/pan
+
+  // ── Delete ──
+  node.querySelector('.wb-text-del').addEventListener('click', async e => {
+    e.stopPropagation();
+    const texts = (WHITEBOARDS_MAP.get(wbId).texts || []).filter(t => t.id !== tid);
+    await saveWbTexts(wbId, texts);
+  });
+
+  // ── Move (drag the ✥ grip) ──
+  node.querySelector('.wb-text-move').addEventListener('mousedown', e => {
+    e.stopPropagation(); e.preventDefault();
+    const t0 = getT(); if (!t0) return;
+    const sx = e.clientX, sy = e.clientY, ox = t0.x, oy = t0.y;
+    let nx = ox, ny = oy;
+    const mv = ev => { nx = Math.round(ox + (ev.clientX - sx) / BOARD_ZOOM); ny = Math.round(oy + (ev.clientY - sy) / BOARD_ZOOM); node.style.left = nx + 'px'; node.style.top = ny + 'px'; };
+    const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); writeT({ x: nx, y: ny }); };
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+  });
+
+  // ── Resize FREELY (grow AND shrink — so a raised height can be brought
+  //    back down again) ──
+  node.querySelector('.wb-text-rz').addEventListener('mousedown', e => {
+    e.stopPropagation(); e.preventDefault();
+    const t0 = getT(); if (!t0) return;
+    const sx = e.clientX, sy = e.clientY, ow = t0.w, oh = t0.h;
+    let nw = ow, nh = oh;
+    const mv = ev => { nw = Math.max(40, Math.round(ow + (ev.clientX - sx) / BOARD_ZOOM)); nh = Math.max(24, Math.round(oh + (ev.clientY - sy) / BOARD_ZOOM)); node.style.width = nw + 'px'; node.style.height = nh + 'px'; };
+    const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); writeT({ w: nw, h: nh }); };
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+  });
+}
+
 // Map a pointer event to whiteboard-local canvas coords, undoing board zoom.
+// Clamped to the canvas so a stroke that runs off the edge can't store
+// out-of-bounds points (which would blow up the resize bounding box and make
+// the tabule grow / refuse to shrink).
 function wbLocalPoint(canvas, clientX, clientY) {
   const r = canvas.getBoundingClientRect();
-  return [
-    Math.round((clientX - r.left) * (canvas.width / r.width)),
-    Math.round((clientY - r.top) * (canvas.height / r.height)),
-  ];
+  const x = Math.round((clientX - r.left) * (canvas.width / r.width));
+  const y = Math.round((clientY - r.top) * (canvas.height / r.height));
+  return [Math.max(0, Math.min(canvas.width, x)), Math.max(0, Math.min(canvas.height, y))];
 }
 
 function wireWhiteboard(el, id) {
@@ -1829,14 +2010,20 @@ function wireWhiteboard(el, id) {
   const colorInp = el.querySelector('.wb-color');
   const typeSel = el.querySelector('.wb-type');
   const eraseBtn = el.querySelector('.wb-erase');
+  const fillBtn = el.querySelector('.wb-fill');
   const pickBtn = el.querySelector('.wb-pick');
   const wrange = el.querySelector('.wb-wrange');
   const wnum = el.querySelector('.wb-wnum');
 
   const syncToolButtons = () => {
     eraseBtn.classList.toggle('active', WB_TOOL.mode === 'erase');
+    fillBtn.classList.toggle('active', WB_TOOL.mode === 'fill');
     pickBtn.classList.toggle('active', WB_TOOL.mode === 'pick');
     typeSel.value = WB_TOOL.type;
+    // Text boxes are only interactive (edit/move/resize) with the Text tool
+    // active — otherwise a drawing tool passes through them.
+    document.querySelectorAll('.whiteboard').forEach(w =>
+      w.classList.toggle('text-mode', WB_TOOL.type === 'text' && WB_TOOL.mode === 'draw'));
   };
 
   drawBtn.addEventListener('click', () => {
@@ -1845,6 +2032,7 @@ function wireWhiteboard(el, id) {
   });
   typeSel.addEventListener('change', () => { WB_TOOL.type = typeSel.value; WB_TOOL.mode = 'draw'; syncToolButtons(); });
   eraseBtn.addEventListener('click', () => { WB_TOOL.mode = WB_TOOL.mode === 'erase' ? 'draw' : 'erase'; syncToolButtons(); });
+  fillBtn.addEventListener('click', () => { WB_TOOL.mode = WB_TOOL.mode === 'fill' ? 'draw' : 'fill'; syncToolButtons(); });
   pickBtn.addEventListener('click', () => { WB_TOOL.mode = WB_TOOL.mode === 'pick' ? 'draw' : 'pick'; syncToolButtons(); });
   colorInp.addEventListener('input', () => { WB_TOOL.color = colorInp.value; if (WB_TOOL.mode === 'pick') { WB_TOOL.mode = 'draw'; syncToolButtons(); } });
 
@@ -1868,29 +2056,74 @@ function wireWhiteboard(el, id) {
     WB_TOOL.mode = 'draw'; syncToolButtons();
   };
 
-  // ── Freehand drawing / erasing ──
-  let stroke = null;
+  // Commit a one-shot stroke (fill bucket, text) that needs no drag.
+  const commitStroke = async s => {
+    WB_REDO.delete(id); // a genuinely new stroke invalidates the redo stack
+    try { await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayUnion(s) }); }
+    catch (e) { toast('Chyba: ' + e.message); }
+  };
+
+  // ── Drawing / erasing / shapes / fill / text-box ──
+  // Text is NOT baked into the canvas: dragging a rectangle with the text tool
+  // creates a real, editable DOM text box (see createTextBox); `textDrag`
+  // holds the rubber-band rectangle while you size it.
+  let stroke = null, shapeMode = false, textDrag = null;
   const startDraw = (cx, cy) => {
     if (!el.classList.contains('drawing')) return false;
     if (WB_TOOL.mode === 'pick') { pickColorAt(cx, cy); return false; }
-    stroke = { id: wbId(), by: ME.uid, c: WB_TOOL.color, w: WB_TOOL.width, t: WB_TOOL.type, pts: wbLocalPoint(canvas, cx, cy) };
-    if (WB_TOOL.mode === 'erase') stroke.e = true;
+    const p = wbLocalPoint(canvas, cx, cy);
+    if (WB_TOOL.mode === 'draw' && WB_TOOL.type === 'text') { textDrag = { x0: p[0], y0: p[1], x1: p[0], y1: p[1] }; return true; }
+    if (WB_TOOL.mode === 'fill') { commitStroke({ id: wbId(), by: ME.uid, c: WB_TOOL.color, t: 'fill', pts: [p[0], p[1], 0, 0, canvas.width, canvas.height] }); return false; }
+    shapeMode = WB_TOOL.mode === 'draw' && WB_SHAPES.includes(WB_TOOL.type);
+    stroke = { id: wbId(), by: ME.uid, c: WB_TOOL.color, w: WB_TOOL.width, t: WB_TOOL.type, pts: p };
+    if (WB_TOOL.mode === 'erase') { stroke.e = true; stroke.t = 'pen'; shapeMode = false; }
     return true;
   };
+  const drawTextDragPreview = () => {
+    const wb = WHITEBOARDS_MAP.get(id);
+    redrawWbCanvas(canvas, wb || { strokes: [] });
+    const ctx = canvas.getContext('2d');
+    const x = Math.min(textDrag.x0, textDrag.x1), y = Math.min(textDrag.y0, textDrag.y1);
+    const w = Math.abs(textDrag.x1 - textDrag.x0), h = Math.abs(textDrag.y1 - textDrag.y0);
+    ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = 'rgba(99,102,241,0.9)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w, h); ctx.restore();
+  };
   const moveDraw = (cx, cy) => {
-    if (!stroke) return;
     const [x, y] = wbLocalPoint(canvas, cx, cy);
-    const n = stroke.pts.length;
-    if (n >= 2 && Math.abs(x - stroke.pts[n - 2]) < 2 && Math.abs(y - stroke.pts[n - 1]) < 2) return;
-    stroke.pts.push(x, y);
+    if (textDrag) { textDrag.x1 = x; textDrag.y1 = y; drawTextDragPreview(); return; }
+    if (!stroke) return;
+    if (shapeMode) {
+      stroke.pts = [stroke.pts[0], stroke.pts[1], x, y];
+    } else {
+      const n = stroke.pts.length;
+      if (n >= 2 && Math.abs(x - stroke.pts[n - 2]) < 2 && Math.abs(y - stroke.pts[n - 1]) < 2) return;
+      stroke.pts.push(x, y);
+    }
     const wb = WHITEBOARDS_MAP.get(id);
     redrawWbCanvas(canvas, { strokes: [...(wb.strokes || []), stroke] });
   };
   const endDraw = async () => {
+    if (textDrag) { const td = textDrag; textDrag = null; redrawWbCanvas(canvas, WHITEBOARDS_MAP.get(id) || { strokes: [] }); await createTextBox(td); return; }
     if (!stroke) return;
-    const s = stroke; stroke = null;
-    try { await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayUnion(s) }); }
-    catch (e) { toast('Chyba: ' + e.message); }
+    const s = stroke; stroke = null; const wasShape = shapeMode; shapeMode = false;
+    // A shape needs an actual drag (start≠end) — a plain click makes nothing.
+    if (wasShape && s.pts.length < 4) { redrawWbCanvas(canvas, WHITEBOARDS_MAP.get(id) || { strokes: [] }); return; }
+    await commitStroke(s);
+  };
+
+  // Create a text box from the dragged rectangle (a tiny drag → default size),
+  // then focus it for immediate typing.
+  const createTextBox = async td => {
+    let x = Math.min(td.x0, td.x1), y = Math.min(td.y0, td.y1);
+    let w = Math.abs(td.x1 - td.x0), h = Math.abs(td.y1 - td.y0);
+    if (w < 12 && h < 12) { w = 180; h = 46; }
+    w = Math.max(40, Math.round(w)); h = Math.max(24, Math.round(h));
+    const t = { id: wbId(), by: ME.uid, x: Math.round(x), y: Math.round(y), w, h,
+      c: WB_TOOL.color, fs: Math.max(12, Math.round(WB_TOOL.width * 4)), txt: '' };
+    const wb = WHITEBOARDS_MAP.get(id);
+    const texts = [...(wb.texts || []), t];
+    WB_NEW_TEXT_FOCUS = t.id;
+    try { await wbCol().doc(id).update({ texts }); } catch (e) { toast('Chyba: ' + e.message); }
   };
 
   canvas.addEventListener('mousedown', e => {
@@ -1898,8 +2131,35 @@ function wireWhiteboard(el, id) {
     if (!startDraw(e.clientX, e.clientY)) { if (el.classList.contains('drawing')) { e.stopPropagation(); e.preventDefault(); } return; }
     e.stopPropagation(); e.preventDefault();
   });
-  window.addEventListener('mousemove', e => { if (stroke) moveDraw(e.clientX, e.clientY); });
-  window.addEventListener('mouseup', () => { if (stroke) endDraw(); });
+  window.addEventListener('mousemove', e => { if (stroke || textDrag) moveDraw(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', () => { if (stroke || textDrag) endDraw(); });
+
+  // ── Brush-size preview: a circle following the cursor that shows how thick
+  //    the next mark will be (before you even draw). Hidden for tools where a
+  //    round footprint makes no sense (text / fill / eyedropper). ──
+  const brush = el.querySelector('.wb-brush');
+  const brushDiameter = () => {
+    const w = WB_TOOL.width;
+    if (WB_TOOL.mode === 'erase') return w * 2;
+    if (WB_TOOL.mode !== 'draw') return 0;              // pick / fill
+    if (WB_TOOL.type === 'text') return 0;
+    if (WB_TOOL.type === 'marker') return w * 2.4;
+    if (WB_TOOL.type === 'pencil') return Math.max(1, w * 0.8);
+    if (WB_TOOL.type === 'spray') return w * 3.2;
+    return w;                                            // pen / line / rect / ellipse
+  };
+  canvas.addEventListener('mousemove', e => {
+    const d = brushDiameter();
+    if (!d) { brush.style.display = 'none'; return; }
+    const [x, y] = wbLocalPoint(canvas, e.clientX, e.clientY);
+    const [r, g, b] = hexToRgb(WB_TOOL.color);
+    brush.style.display = 'block';
+    brush.style.width = brush.style.height = d + 'px';
+    brush.style.left = (x - d / 2) + 'px';
+    brush.style.top = (y - d / 2) + 'px';
+    brush.style.background = WB_TOOL.mode === 'erase' ? 'rgba(255,255,255,0.35)' : `rgba(${r},${g},${b},0.35)`;
+  });
+  canvas.addEventListener('mouseleave', () => { brush.style.display = 'none'; });
 
   canvas.addEventListener('touchstart', e => {
     if (!el.classList.contains('drawing') || e.touches.length !== 1) return;
@@ -1907,24 +2167,37 @@ function wireWhiteboard(el, id) {
     e.stopPropagation(); e.preventDefault();
   }, { passive: false });
   canvas.addEventListener('touchmove', e => {
-    if (!stroke || e.touches.length !== 1) return;
+    if ((!stroke && !textDrag) || e.touches.length !== 1) return;
     moveDraw(e.touches[0].clientX, e.touches[0].clientY);
     e.stopPropagation(); e.preventDefault();
   }, { passive: false });
-  canvas.addEventListener('touchend', e => { if (stroke) { endDraw(); e.stopPropagation(); } });
+  canvas.addEventListener('touchend', e => { if (stroke || textDrag) { endDraw(); e.stopPropagation(); } });
 
-  // ── Undo (my last stroke; owner may undo anyone's) ──
+  // ── Undo (my last stroke; owner may undo anyone's) — pushes the removed
+  //    stroke onto a redo stack. ──
   el.querySelector('.wb-undo').addEventListener('click', async () => {
     const wb = WHITEBOARDS_MAP.get(id);
     const strokes = wb.strokes || [];
     for (let i = strokes.length - 1; i >= 0; i--) {
       if (MY_ROLE === 'owner' || strokes[i].by === ME.uid) {
-        try { await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayRemove(strokes[i]) }); }
-        catch (e) { toast('Chyba: ' + e.message); }
+        const removed = strokes[i];
+        try {
+          await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayRemove(removed) });
+          const stack = WB_REDO.get(id) || []; stack.push(removed); WB_REDO.set(id, stack);
+        } catch (e) { toast('Chyba: ' + e.message); }
         return;
       }
     }
     toast('Žádný tvůj tah k vrácení.');
+  });
+
+  // ── Redo (re-add the last undone stroke) ──
+  el.querySelector('.wb-redo').addEventListener('click', async () => {
+    const stack = WB_REDO.get(id) || [];
+    if (!stack.length) { toast('Není co opakovat.'); return; }
+    const s = stack.pop(); WB_REDO.set(id, stack);
+    try { await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayUnion(s) }); }
+    catch (e) { toast('Chyba: ' + e.message); stack.push(s); }
   });
 
   // ── Delete tabule (author or owner) ──
@@ -1962,10 +2235,28 @@ function wireWhiteboard(el, id) {
       const dir = h.dataset.dir;
       const wb = WHITEBOARDS_MAP.get(id);
       const bb = wbBBox(wb);
-      const minW = bb.has ? Math.max(120, bb.maxX + 4) : 120;
-      const minH = bb.has ? Math.max(120, bb.maxY + 4) : 120;
+      const ow = wb.w, oh = wb.h;
+      // Content extent = strokes + text boxes. The min size must contain it,
+      // but is CAPPED at the current size so grabbing a handle can never make
+      // the tabule jump larger (the old "+4" pushed the min past the width when
+      // a drawing reached the edge, which grew it on every shrink attempt).
+      const texts = wb.texts || [];
+      let cMaxX = bb.has ? bb.maxX : 0, cMaxY = bb.has ? bb.maxY : 0;
+      let cMinX = bb.has ? bb.minX : Infinity, cMinY = bb.has ? bb.minY : Infinity;
+      texts.forEach(t => {
+        cMaxX = Math.max(cMaxX, t.x + t.w); cMaxY = Math.max(cMaxY, t.y + t.h);
+        cMinX = Math.min(cMinX, t.x); cMinY = Math.min(cMinY, t.y);
+      });
+      // Ignore any content that already lies outside the tabule (e.g. an old
+      // stroke drawn off the edge) — clamp the extent into [0, size] so it
+      // can never force the tabule to grow.
+      cMaxX = Math.min(ow, cMaxX); cMaxY = Math.min(oh, cMaxY);
+      cMinX = Math.max(0, Math.min(cMinX, ow)); cMinY = Math.max(0, Math.min(cMinY, oh));
+      const hasContent = bb.has || texts.length > 0;
+      const minW = hasContent ? Math.max(120, Math.min(ow, Math.ceil(cMaxX))) : Math.min(120, ow);
+      const minH = hasContent ? Math.max(120, Math.min(oh, Math.ceil(cMaxY))) : Math.min(120, oh);
       const sx = e.clientX, sy = e.clientY;
-      const ox = parseInt(el.style.left), oy = parseInt(el.style.top), ow = wb.w, oh = wb.h;
+      const ox = parseInt(el.style.left), oy = parseInt(el.style.top);
       const cv = el.querySelector('.wb-canvas');
       let shiftX = 0, shiftY = 0, newLeft = ox, newTop = oy, newW = ow, newH = oh;
 
@@ -1974,8 +2265,8 @@ function wireWhiteboard(el, id) {
         shiftX = 0; shiftY = 0; newLeft = ox; newTop = oy; newW = ow; newH = oh;
         if (dir.includes('e')) newW = Math.max(minW, Math.round(ow + dx));
         if (dir.includes('s')) newH = Math.max(minH, Math.round(oh + dy));
-        if (dir.includes('w')) { shiftX = Math.round(Math.min(dx, bb.has ? bb.minX : Infinity, ow - minW)); newLeft = ox + shiftX; newW = ow - shiftX; }
-        if (dir.includes('n')) { shiftY = Math.round(Math.min(dy, bb.has ? bb.minY : Infinity, oh - minH)); newTop = oy + shiftY; newH = oh - shiftY; }
+        if (dir.includes('w')) { shiftX = Math.round(Math.min(dx, hasContent ? cMinX : Infinity, ow - minW)); newLeft = ox + shiftX; newW = ow - shiftX; }
+        if (dir.includes('n')) { shiftY = Math.round(Math.min(dy, hasContent ? cMinY : Infinity, oh - minH)); newTop = oy + shiftY; newH = oh - shiftY; }
         el.style.left = newLeft + 'px'; el.style.top = newTop + 'px';
         el.style.width = newW + 'px'; el.style.height = newH + 'px';
         cv.width = newW; cv.height = newH;
@@ -1983,11 +2274,19 @@ function wireWhiteboard(el, id) {
           ? { strokes: (wb.strokes || []).map(s => ({ ...s, pts: s.pts.map((v, i) => i % 2 === 0 ? v - shiftX : v - shiftY) })) }
           : wb;
         redrawWbCanvas(cv, shown);
+        // Keep text boxes visually pinned while the N/W edge shifts the origin.
+        el.querySelectorAll('.wb-text').forEach(tb => {
+          const t = (wb.texts || []).find(x => x.id === tb.dataset.tid);
+          if (t) { tb.style.left = (t.x - shiftX) + 'px'; tb.style.top = (t.y - shiftY) + 'px'; }
+        });
       };
       const up = async () => {
         window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up);
         const upd = { x: Math.round(toStoreX(newLeft)), y: Math.round(toStoreY(newTop)), w: newW, h: newH };
-        if (shiftX || shiftY) upd.strokes = (wb.strokes || []).map(s => ({ ...s, pts: s.pts.map((v, i) => i % 2 === 0 ? v - shiftX : v - shiftY) }));
+        if (shiftX || shiftY) {
+          upd.strokes = (wb.strokes || []).map(s => ({ ...s, pts: s.pts.map((v, i) => i % 2 === 0 ? v - shiftX : v - shiftY) }));
+          if ((wb.texts || []).length) upd.texts = wb.texts.map(t => ({ ...t, x: t.x - shiftX, y: t.y - shiftY }));
+        }
         try { await wbCol().doc(id).update(upd); } catch (_) {}
       };
       window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
@@ -2097,7 +2396,9 @@ function setupBoardPan() {
   wrap.addEventListener('touchmove', e => {
     if (pinch && e.touches.length === 2) {
       e.preventDefault();
-      setBoardZoom(pinch.zoom * (touchDist(e.touches) / pinch.dist));
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      setBoardZoom(pinch.zoom * (touchDist(e.touches) / pinch.dist), mx, my);
     } else if (touchPan && e.touches.length === 1) {
       e.preventDefault();
       const t = e.touches[0];
@@ -2114,15 +2415,31 @@ function setupBoardPan() {
 // ── Board zoom: mouse wheel (desktop) or pinch (touch, above) zooms the
 //    board instead of scrolling the page/wrapper.
 let BOARD_ZOOM = 1;
-function setBoardZoom(z) {
+// Zoom toward a focal screen point (the cursor / pinch midpoint) instead of
+// the board's top-left: keep whatever board coordinate is under the focal
+// point pinned there by re-scrolling after the zoom changes. Focal point
+// defaults to the viewport centre.
+function setBoardZoom(z, focalClientX, focalClientY) {
+  const wrap = document.getElementById('boardWrap');
+  const rect = wrap.getBoundingClientRect();
+  const fx = focalClientX == null ? rect.left + wrap.clientWidth / 2 : focalClientX;
+  const fy = focalClientY == null ? rect.top + wrap.clientHeight / 2 : focalClientY;
+  // Board coord under the focal point BEFORE the zoom change.
+  const bx = (wrap.scrollLeft + fx - rect.left) / BOARD_ZOOM;
+  const by = (wrap.scrollTop  + fy - rect.top)  / BOARD_ZOOM;
+
   BOARD_ZOOM = Math.min(2.2, Math.max(0.15, z));
   document.getElementById('board').style.zoom = BOARD_ZOOM;
+
+  // Re-scroll so that same board coord stays under the focal point.
+  wrap.scrollLeft = bx * BOARD_ZOOM - (fx - rect.left);
+  wrap.scrollTop  = by * BOARD_ZOOM - (fy - rect.top);
 }
 function setupBoardZoom() {
   const wrap = document.getElementById('boardWrap');
   wrap.addEventListener('wheel', e => {
     e.preventDefault();
-    setBoardZoom(BOARD_ZOOM * (e.deltaY < 0 ? 1.08 : 0.92));
+    setBoardZoom(BOARD_ZOOM * (e.deltaY < 0 ? 1.08 : 0.92), e.clientX, e.clientY);
   }, { passive: false });
 }
 
@@ -2582,6 +2899,110 @@ function scheduleExpiryKick(expiry) {
   }, remaining);
 }
 
+// ── Search across notes ───────────────────────────────────────
+// Diacritics-insensitive match over each note's title + plain-text content.
+function searchNormalize(s) {
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// Scroll the board so a note sits in the middle of the viewport.
+function centerOnNote(note) {
+  const wrap = document.getElementById('boardWrap');
+  wrap.scrollLeft = toRenderX(note.x) * BOARD_ZOOM - wrap.clientWidth / 2;
+  wrap.scrollTop  = toRenderY(note.y) * BOARD_ZOOM - wrap.clientHeight / 2;
+}
+
+function setupSearch() {
+  const btn = document.getElementById('searchBtn');
+  const input = document.getElementById('searchInput');
+  if (!btn || !input) return;
+  btn.addEventListener('click', () => {
+    openModal('searchModal');
+    input.value = '';
+    renderSearchResults('');
+    setTimeout(() => input.focus(), 60);
+  });
+  input.addEventListener('input', () => renderSearchResults(input.value));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { const first = document.querySelector('#searchResults [data-note-id]'); if (first) first.click(); }
+  });
+}
+
+function renderSearchResults(q) {
+  const el = document.getElementById('searchResults');
+  const nq = searchNormalize(q.trim());
+  if (!nq) { el.innerHTML = `<div style="color:var(--text-muted);font-size:.85rem;padding:10px 2px;">Napiš, co hledáš — prohledají se názvy i obsah poznámek.</div>`; return; }
+
+  const hits = [];
+  NOTES_MAP.forEach(note => {
+    const title = note.title || '';
+    const text = noteToPlainText(note);
+    const hay = searchNormalize(title + ' ' + text);
+    const at = hay.indexOf(nq);
+    if (at === -1) return;
+    // Snippet around the first match (from the ORIGINAL text so accents show).
+    const combined = (title ? title + ' — ' : '') + text;
+    const nCombined = searchNormalize(combined);
+    const pos = nCombined.indexOf(nq);
+    const start = Math.max(0, pos - 30);
+    const snippet = (start > 0 ? '…' : '') + combined.slice(start, pos + nq.length + 40).trim() + '…';
+    hits.push({ note, title: title || '(bez názvu)', snippet });
+  });
+
+  if (!hits.length) { el.innerHTML = `<div style="color:var(--text-muted);font-size:.85rem;padding:10px 2px;">Nic nenalezeno.</div>`; return; }
+
+  el.innerHTML = hits.slice(0, 40).map(h => `
+    <div class="search-hit" data-note-id="${h.note.id}" style="padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--border);margin-bottom:6px;--row-color:${h.note.color || '#fef9c3'};border-left:3px solid var(--row-color);">
+      <div style="font-weight:600;font-size:0.88rem;">${esc(h.title)}</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">${esc(h.snippet)}</div>
+    </div>`).join('') + (hits.length > 40 ? `<div style="color:var(--text-muted);font-size:.75rem;padding:6px 2px;">…a další (${hits.length - 40})</div>` : '');
+
+  el.querySelectorAll('[data-note-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      const note = NOTES_MAP.get(row.dataset.noteId);
+      if (!note) return;
+      closeModal('searchModal');
+      if (VIEW_MODE === 'board') centerOnNote(note);
+      openNoteDetail(document.getElementById('n-' + note.id), note);
+    });
+  });
+}
+
+// ── Presence (who's in the room right now) ────────────────────
+// Live via RTDB: each open tab writes presence/{roomId}/{uid} and clears it on
+// disconnect (tab close / navigation), so the list is instantly accurate.
+let ONLINE_UIDS = new Set();
+function setupPresence() {
+  let rtdb;
+  try { rtdb = firebase.database(); } catch (e) { return; } // RTDB unavailable → skip silently
+  const base = rtdb.ref(`presence/${ROOM_ID}`);
+  const meRef = base.child(ME.uid);
+  meRef.set({
+    name: ME.isAnonymous ? 'Host' : (ME.displayName || ME.email || 'Uživatel'),
+    photo: ME.photoURL || null,
+    at: firebase.database.ServerValue.TIMESTAMP,
+  }).catch(() => {});
+  meRef.onDisconnect().remove();
+  base.on('value', snap => renderPresence(snap.val() || {}), () => {});
+}
+
+function renderPresence(map) {
+  ONLINE_UIDS = new Set(Object.keys(map));
+  const bar = document.getElementById('presenceBar');
+  if (bar) {
+    const entries = Object.entries(map);
+    const shown = entries.slice(0, 6);
+    bar.innerHTML = shown.map(([uid, p]) => `
+      <div class="presence-av${uid === ME.uid ? ' me' : ''}" title="${esc(p.name || '')}${uid === ME.uid ? ' (ty)' : ''}">
+        ${p.photo ? `<img src="${esc(p.photo)}" alt="">` : `<span>${esc(initial(p.name || '?'))}</span>`}
+      </div>`).join('') +
+      (entries.length > 6 ? `<div class="presence-more">+${entries.length - 6}</div>` : '');
+    bar.title = entries.length + ' online';
+  }
+  // Refresh the members panel's online dots if it's open.
+  if (document.getElementById('panelBack')?.classList.contains('open')) renderMembers();
+}
+
 // ── Activity log ──────────────────────────────────────────────
 // Append-only trail of who did what (deletes, role changes, ownership
 // hand-offs). Best-effort — a failed log never blocks the actual action.
@@ -2896,10 +3317,11 @@ async function renderMembers() {
       else friendHtml = `<button class="btn btn-ghost" style="padding:3px 8px;font-size:0.7rem;" data-add-friend="${uid}">➕ Přítel</button>`;
     }
 
+    const online = ONLINE_UIDS.has(uid);
     row.innerHTML = `
-      <div class="m-avatar">${m.photoURL ? `<img src="${m.photoURL}" alt="">` : initial(m.displayName || m.email || '?')}</div>
+      <div class="m-avatar${online ? ' online' : ''}">${m.photoURL ? `<img src="${m.photoURL}" alt="">` : initial(m.displayName || m.email || '?')}</div>
       <div class="m-info">
-        <div class="m-name">${esc(m.displayName || m.email || uid)}${isMe ? ' <span style="color:var(--text-muted);font-weight:400;">(ty)</span>' : ''}</div>
+        <div class="m-name">${esc(m.displayName || m.email || uid)}${isMe ? ' <span style="color:var(--text-muted);font-weight:400;">(ty)</span>' : ''}${online ? ' <span style="color:#22c55e;font-size:0.7rem;">● online</span>' : ''}</div>
         <div class="m-email">${esc(m.email || '')}</div>
         ${expLabel}
       </div>

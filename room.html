@@ -25,7 +25,11 @@
       Zpět
     </a>
     <span class="room-title" id="roomTitle">Načítám...</span>
+    <div id="presenceBar" class="presence-bar" title="Online"></div>
     <div class="room-nav-right">
+      <button id="searchBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Hledat v poznámkách">
+        🔍 Hledat
+      </button>
       <a id="flashcardsBtn" href="#" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         Flash Cards
@@ -454,6 +458,18 @@
         💾 Zálohovat teď
       </button>
       <div id="backupsList" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: Hledání -->
+  <div class="modal-overlay" id="searchModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>🔍 Hledat v poznámkách</h3>
+        <button class="modal-close" data-close="searchModal">✕</button>
+      </div>
+      <input id="searchInput" class="input" placeholder="Hledej v názvech i obsahu…" style="width:100%;" autocomplete="off">
+      <div id="searchResults" style="max-height:420px;overflow-y:auto;margin-top:12px;"></div>
     </div>
   </div>
 
