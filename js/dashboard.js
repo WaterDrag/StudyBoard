@@ -614,26 +614,29 @@ function setupAddFriend(user) {
         btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
       }
 
-      // One deterministic doc per pair (sorted "uidA_uidB"), so rules can look
-      // the friendship up directly for the editor gate.
+      // Deterministic doc per pair (sorted "uidA_uidB") for the rules gate.
+      // Don't .doc(pairId).get() to check existence — reading a NON-existent
+      // doc is denied by the rules (resource is null) → "Missing or
+      // insufficient permissions". Query both directions instead (the where
+      // clauses guarantee only readable docs, so it works even with 0 hits).
       const pairId = [user.uid, targetUid].sort().join('_');
-      const existing = await db.collection('friendRequests').doc(pairId).get();
-      if (existing.exists) {
-        const st = existing.data().status;
-        if (st === 'accepted') {
-          errEl.textContent = 'Tento uživatel je již tvůj přítel.';
-          errEl.style.display = 'block';
-          btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
-        }
-        if (st === 'pending') {
-          errEl.textContent = 'Žádost už byla odeslána.';
-          errEl.style.display = 'block';
-          btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
-        }
-        // Previously declined — delete the stale doc so a fresh request (which
-        // may flip the sender/recipient direction) can be created cleanly.
-        await existing.ref.delete().catch(() => {});
+      const [sentSnap, recvSnap] = await Promise.all([
+        db.collection('friendRequests').where('fromUid', '==', user.uid).where('toUid', '==', targetUid).get(),
+        db.collection('friendRequests').where('fromUid', '==', targetUid).where('toUid', '==', user.uid).get(),
+      ]);
+      const existingDocs = [...sentSnap.docs, ...recvSnap.docs];
+      if (existingDocs.some(d => d.data().status === 'accepted')) {
+        errEl.textContent = 'Tento uživatel je již tvůj přítel.';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
       }
+      if (existingDocs.some(d => d.data().status === 'pending')) {
+        errEl.textContent = 'Žádost už byla odeslána.';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Odeslat žádost'; return;
+      }
+      // Clear any leftover declined request(s) before re-sending.
+      await Promise.all(existingDocs.map(d => d.ref.delete().catch(() => {})));
 
       await db.collection('friendRequests').doc(pairId).set({
         fromUid:   user.uid,

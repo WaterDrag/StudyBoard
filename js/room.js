@@ -3090,12 +3090,11 @@ async function refreshMembersBadge() {
 
 async function sendFriendRequestTo(uid, member) {
   try {
-    // Deterministic pair id (sorted) — matches dashboard + the rules gate.
+    // Deterministic pair id (sorted) — matches dashboard + the rules gate. We
+    // set() straight onto it: reading a non-existent doc by id is denied by
+    // the rules, and the "➕ Přítel" button only shows when you're not already
+    // friends / pending anyway, so a plain set is safe here.
     const pairId = [ME.uid, uid].sort().join('_');
-    const existing = await db.collection('friendRequests').doc(pairId).get();
-    if (existing.exists && existing.data().status === 'declined') {
-      await existing.ref.delete().catch(() => {});
-    }
     await db.collection('friendRequests').doc(pairId).set({
       fromUid:   ME.uid,
       fromName:  ME.displayName || ME.email,
