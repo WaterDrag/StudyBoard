@@ -483,19 +483,17 @@
         <h3>⬇️ Export</h3>
         <button class="modal-close" data-close="exportModal">✕</button>
       </div>
-      <label class="label">Formát</label>
-      <select id="exportFormat" class="input" style="width:100%;margin-bottom:14px;">
-        <option value="html">Interaktivní stránka (HTML) — poznámky + funkční kartičky</option>
-        <option value="print">PDF / Tisk</option>
-        <option value="md">Markdown (.md)</option>
-      </select>
+      <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:14px;line-height:1.5;">
+        Stáhne se jedna HTML stránka, která funguje offline: všechny poznámky jako
+        přehledný dokument + funkční kartičky s kvízem. Tisk / PDF uděláš v ní přes Ctrl+P.
+      </p>
       <label class="label">Zahrnout</label>
       <div style="display:flex;flex-direction:column;gap:8px;margin:8px 0 16px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportConns" checked> Propojení mezi poznámkami</label>
         <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportComments"> Komentáře</label>
         <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportCards" checked> Flash Cards (kartičky)</label>
       </div>
-      <button id="exportRunBtn" class="btn btn-primary" style="width:100%;justify-content:center;">Exportovat</button>
+      <button id="exportRunBtn" class="btn btn-primary" style="width:100%;justify-content:center;">⬇️ Stáhnout HTML</button>
       <p class="hint" id="exportHint" style="text-align:center;margin-top:10px;"></p>
     </div>
   </div>

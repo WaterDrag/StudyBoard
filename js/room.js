@@ -183,6 +183,7 @@ auth.onAuthStateChanged(async user => {
     setupPresence();
     setupComments();
     setupExport();
+    setupNoteHistoryKeys();
     setupConnections();
     setupWhiteboards();
     setupBoardContextMenu();
@@ -1543,7 +1544,6 @@ async function gatherExportData(opts) {
 async function runExport() {
   const btn = document.getElementById('exportRunBtn');
   const hint = document.getElementById('exportHint');
-  const format = document.getElementById('exportFormat').value;
   const opts = {
     conns: document.getElementById('exportConns').checked,
     comments: document.getElementById('exportComments').checked,
@@ -1553,13 +1553,7 @@ async function runExport() {
   try {
     const data = await gatherExportData(opts);
     const safe = (ROOM.name || 'mistnost').replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60) || 'export';
-    if (format === 'md') {
-      downloadFile(safe + '.md', buildExportMarkdown(data, opts), 'text/markdown;charset=utf-8');
-    } else {
-      const html = buildExportHtml(data, opts);
-      if (format === 'print') printExportHtml(html);
-      else downloadFile(safe + '.html', html, 'text/html;charset=utf-8');
-    }
+    downloadFile(safe + '.html', buildExportHtml(data, opts), 'text/html;charset=utf-8');
     hint.textContent = 'Hotovo ✓';
     setTimeout(() => closeModal('exportModal'), 800);
   } catch (e) { hint.textContent = 'Chyba: ' + e.message; }
@@ -1575,61 +1569,53 @@ function downloadFile(filename, content, mime) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-function printExportHtml(html) {
-  const w = window.open('', '_blank');
-  if (!w) { toast('Povol vyskakovací okna pro tisk.'); return; }
-  w.document.write(html); w.document.close(); w.focus();
-  setTimeout(() => w.print(), 500);
-}
-
-function buildExportMarkdown(data, opts) {
-  let md = `# ${ROOM.name || 'Místnost'}\n\n`;
-  data.sections.forEach(sec => {
-    md += `## ${sec.title}\n\n`;
-    sec.notes.forEach(n => {
-      md += `### ${n.title || exportNoteTitle(n)}\n\n${noteToPlainText(n)}\n\n`;
-      if (opts.conns) { const c = exportNoteConns(n.id); if (c.length) md += `🔗 *Propojeno s: ${c.join(' · ')}*\n\n`; }
-      if (opts.comments) { const cm = data.commentsByNote[n.id] || []; if (cm.length) md += cm.map(x => `> **${x.authorName || 'Anon'}:** ${x.text}`).join('\n') + '\n\n'; }
-    });
-  });
-  if (opts.cards && data.decks.length) {
-    md += `## 🃏 Kartičky\n\n`;
-    data.decks.forEach(dk => {
-      md += `### ${dk.name}\n\n`;
-      dk.cards.forEach(c => { md += `- **Otázka:** ${c.front}\n  - **Odpověď:** ${c.back}\n`; });
-      md += '\n';
-    });
-  }
-  return md;
-}
-
-// Self-contained HTML: readable notes + click-to-flip cards and a per-deck
-// quiz. All CSS/JS inlined, so the file works offline on its own.
+// Self-contained study page: sticky header with live search + dark-mode
+// toggle, a table-of-contents sidebar, full note content grouped by folder,
+// and per-deck flash cards (3D flip) with a quiz mode incl. progress bar.
+// Everything is inlined so the single file works offline. Printing (Ctrl+P)
+// is styled too, so PDF is still one keystroke away.
+// NOTE: the embedded <script> must stay free of backticks and ${} — it lives
+// inside this outer template literal.
 function buildExportHtml(data, opts) {
-  const notesHtml = data.sections.map(sec => `
-    <section class="folder">
-      <h2>${esc(sec.title)}</h2>
+  const noteCount = data.sections.reduce((s, sec) => s + sec.notes.length, 0);
+  const cardCount = data.decks.reduce((s, dk) => s + dk.cards.length, 0);
+  const when = new Date().toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const tocHtml =
+    data.sections.map((sec, si) => `<a href="#sec-${si}">📁 ${esc(sec.title)} <span>${sec.notes.length}</span></a>`).join('') +
+    (data.decks.length ? `<div class="toc-sep"></div>` + data.decks.map((dk, di) => `<a href="#deck-${di}">🃏 ${esc(dk.name)} <span>${dk.cards.length}</span></a>`).join('') : '');
+
+  const notesHtml = data.sections.map((sec, si) => `
+    <section class="folder" id="sec-${si}">
+      <h2>📁 ${esc(sec.title)}</h2>
       ${sec.notes.map(n => {
         const title = esc(n.title || exportNoteTitle(n));
         const content = n.contentType === 'html' ? (n.content || '') : `<p>${esc(n.content || '')}</p>`;
         const conns = opts.conns ? exportNoteConns(n.id) : [];
-        const connsHtml = conns.length ? `<div class="meta">🔗 Propojeno s: ${conns.map(esc).join(' · ')}</div>` : '';
+        const connsHtml = conns.length ? `<div class="meta">🔗 ${conns.map(esc).join(' · ')}</div>` : '';
         const cmts = data.commentsByNote[n.id] || [];
         const cmtsHtml = (opts.comments && cmts.length)
-          ? `<div class="cmts"><div class="cmts-h">💬 Komentáře</div>${cmts.map(c => `<div class="cmt"><b>${esc(c.authorName || 'Anon')}:</b> ${esc(c.text || '')}</div>`).join('')}</div>` : '';
-        return `<article class="note" style="border-left-color:${esc(n.color || '#ccc')}"><h3>${title}</h3><div class="ncontent">${content}</div>${connsHtml}${cmtsHtml}</article>`;
+          ? `<div class="cmts"><div class="cmts-h">💬 Komentáře (${cmts.length})</div>${cmts.map(c => `<div class="cmt"><b>${esc(c.authorName || 'Anon')}</b> ${esc(c.text || '')}</div>`).join('')}</div>` : '';
+        const meta = `<div class="nmeta">${esc(n.authorName || '')}</div>`;
+        return `<article class="note" style="--nc:${esc(n.color || '#94a3b8')}"><h3>${title}</h3>${meta}<div class="ncontent">${content}</div>${connsHtml}${cmtsHtml}</article>`;
       }).join('')}
     </section>`).join('');
 
   const decksHtml = data.decks.length ? `
-    <section class="decks">
+    <section class="decks" id="decks">
       <h2>🃏 Kartičky</h2>
+      <p class="hint">Klikni na kartičku pro otočení, nebo spusť kvíz.</p>
       ${data.decks.map((dk, di) => `
-        <div class="deck">
-          <h3 style="color:${esc(dk.color)}">${esc(dk.name)} <span class="dc">(${dk.cards.length})</span></h3>
-          <button class="quizbtn" onclick="startQuiz(${di})">▶ Procvičovat kvíz</button>
+        <div class="deck" id="deck-${di}">
+          <div class="deck-hd">
+            <h3 style="--dk:${esc(dk.color)}">${esc(dk.name)} <span class="dc">${dk.cards.length} kartiček</span></h3>
+            <div class="deck-btns">
+              <button class="ghostbtn" onclick="flipAll(this)">↻ Otočit vše</button>
+              <button class="quizbtn" onclick="startQuiz(${di})">▶ Kvíz</button>
+            </div>
+          </div>
           <div class="cards">
-            ${dk.cards.map(c => `<div class="fc" onclick="this.classList.toggle('flip')"><div class="fc-face fc-front">${esc(c.front)}</div><div class="fc-face fc-back">${esc(c.back)}</div></div>`).join('')}
+            ${dk.cards.map(c => `<div class="fc" onclick="this.classList.toggle('flip')"><div class="fc-in"><div class="fc-face fc-front">${esc(c.front)}</div><div class="fc-face fc-back">${esc(c.back)}</div></div></div>`).join('')}
           </div>
         </div>`).join('')}
     </section>` : '';
@@ -1640,62 +1626,185 @@ function buildExportHtml(data, opts) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(ROOM.name || 'Export')}</title>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 860px; margin: 0 auto; padding: 28px 20px 80px; color: #1e293b; line-height: 1.5; }
-  h1 { font-size: 1.9rem; border-bottom: 3px solid #6366f1; padding-bottom: 10px; }
-  h2 { font-size: 1.3rem; margin-top: 34px; color: #334155; }
-  .note { border-left: 4px solid #ccc; background: #f8fafc; border-radius: 6px; padding: 12px 16px; margin: 14px 0; page-break-inside: avoid; }
-  .note h3 { margin: 0 0 8px; font-size: 1.05rem; }
-  .ncontent img { max-width: 100%; border-radius: 6px; }
-  .ncontent table { border-collapse: collapse; }
-  .ncontent td, .ncontent th { border: 1px solid #cbd5e1; padding: 4px 8px; }
-  .meta { font-size: 0.8rem; color: #64748b; margin-top: 8px; }
-  .cmts { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #cbd5e1; }
-  .cmts-h { font-size: 0.78rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
-  .cmt { font-size: 0.85rem; margin: 2px 0; }
-  .deck { margin: 18px 0; }
-  .dc { font-size: 0.85rem; color: #94a3b8; }
-  .quizbtn { background: #6366f1; color: #fff; border: none; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-bottom: 10px; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-  .fc { position: relative; min-height: 90px; border: 1px solid #cbd5e1; border-radius: 10px; cursor: pointer; background: #fff; }
-  .fc-face { padding: 12px; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 90px; }
-  .fc-back { display: none; color: #16a34a; font-weight: 600; }
-  .fc.flip .fc-front { display: none; }
-  .fc.flip .fc-back { display: flex; }
-  .fc::after { content: 'klikni ↻'; position: absolute; top: 4px; right: 8px; font-size: 0.62rem; color: #cbd5e1; }
-  #quizOv { position: fixed; inset: 0; background: rgba(15,23,42,0.75); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 99; }
-  #quizBox { background: #fff; border-radius: 14px; padding: 22px; max-width: 460px; width: 100%; }
-  #quizQ { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; min-height: 40px; }
-  .qopt { display: block; width: 100%; text-align: left; padding: 10px 14px; margin: 7px 0; border: 1px solid #cbd5e1; border-radius: 9px; background: #f8fafc; cursor: pointer; font-size: 0.92rem; }
-  .qopt.ok { background: #dcfce7; border-color: #22c55e; }
-  .qopt.bad { background: #fee2e2; border-color: #ef4444; }
-  #quizFoot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
-  #quizNext { background: #6366f1; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
-  @media print { .quizbtn, #quizOv, .fc::after { display: none !important; } body { max-width: none; } .fc-back { display: flex !important; } .fc-front { display: none !important; } .fc { break-inside: avoid; } }
+  :root {
+    --bg:#f4f6fb; --panel:#ffffff; --card:#ffffff; --text:#1e293b; --muted:#64748b;
+    --bd:#dbe2ee; --ac:#6366f1; --ok:#16a34a; --okbg:#dcfce7; --bad:#dc2626; --badbg:#fee2e2;
+    --shadow:0 1px 3px rgba(15,23,42,.07), 0 6px 20px rgba(15,23,42,.05);
+  }
+  [data-theme="dark"] {
+    --bg:#0f1420; --panel:#171e2e; --card:#1c2437; --text:#e2e8f0; --muted:#8b98ad;
+    --bd:#2b3650; --ac:#818cf8; --ok:#4ade80; --okbg:#14351f; --bad:#f87171; --badbg:#3b1515;
+    --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; scroll-padding-top:76px; }
+  body { margin:0; font-family:-apple-system,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.55; }
+  /* ── Top bar ── */
+  .topbar { position:sticky; top:0; z-index:50; background:var(--panel); border-bottom:1px solid var(--bd); box-shadow:var(--shadow); }
+  .tb-in { max-width:1100px; margin:0 auto; padding:10px 18px; display:flex; align-items:center; gap:14px; }
+  .tb-title { font-weight:700; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #q { flex:1; min-width:80px; padding:8px 13px; border:1px solid var(--bd); border-radius:10px; background:var(--bg); color:var(--text); font-size:.9rem; }
+  #q:focus { outline:none; border-color:var(--ac); }
+  #themeBtn { background:none; border:1px solid var(--bd); border-radius:10px; padding:7px 10px; cursor:pointer; font-size:.95rem; }
+  /* ── Layout ── */
+  .wrap { max-width:1100px; margin:0 auto; padding:26px 18px 90px; display:grid; grid-template-columns:230px 1fr; gap:28px; align-items:start; }
+  .toc { position:sticky; top:76px; background:var(--panel); border:1px solid var(--bd); border-radius:14px; padding:12px; max-height:calc(100vh - 100px); overflow-y:auto; }
+  .toc-h { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin:2px 6px 8px; }
+  .toc a { display:flex; justify-content:space-between; gap:8px; padding:6px 9px; border-radius:8px; color:var(--text); text-decoration:none; font-size:.84rem; }
+  .toc a span { color:var(--muted); font-size:.74rem; }
+  .toc a:hover { background:var(--bg); }
+  .toc-sep { height:1px; background:var(--bd); margin:8px 4px; }
+  @media (max-width:820px){ .wrap { grid-template-columns:1fr; } .toc { position:static; max-height:none; } }
+  /* ── Content ── */
+  h1 { font-size:1.85rem; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:.86rem; margin-bottom:26px; }
+  h2 { font-size:1.25rem; margin:36px 0 6px; padding-bottom:8px; border-bottom:2px solid var(--bd); }
+  .hint { color:var(--muted); font-size:.83rem; }
+  .note { background:var(--card); border:1px solid var(--bd); border-left:4px solid var(--nc,#94a3b8); border-radius:12px; padding:14px 18px; margin:14px 0; box-shadow:var(--shadow); page-break-inside:avoid; }
+  .note h3 { margin:0 0 2px; font-size:1.06rem; }
+  .nmeta { font-size:.74rem; color:var(--muted); margin-bottom:8px; }
+  .ncontent { font-size:.94rem; overflow-wrap:break-word; }
+  .ncontent img { max-width:100%; border-radius:8px; }
+  .ncontent table { border-collapse:collapse; max-width:100%; }
+  .ncontent td, .ncontent th { border:1px solid var(--bd); padding:4px 8px; }
+  .meta { font-size:.8rem; color:var(--muted); margin-top:10px; }
+  .cmts { margin-top:10px; padding-top:9px; border-top:1px dashed var(--bd); }
+  .cmts-h { font-size:.76rem; font-weight:600; color:var(--muted); margin-bottom:5px; }
+  .cmt { font-size:.85rem; margin:3px 0; } .cmt b { margin-right:5px; }
+  .nosearch { text-align:center; color:var(--muted); padding:30px 0; display:none; }
+  /* ── Decks / flip cards ── */
+  .deck { margin:20px 0 30px; }
+  .deck-hd { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .deck-hd h3 { margin:0; font-size:1.05rem; border-left:4px solid var(--dk,#6366f1); padding-left:10px; }
+  .dc { font-size:.8rem; color:var(--muted); font-weight:400; margin-left:6px; }
+  .deck-btns { display:flex; gap:8px; }
+  .quizbtn { background:var(--ac); color:#fff; border:none; padding:8px 16px; border-radius:9px; cursor:pointer; font-size:.86rem; font-weight:600; }
+  .ghostbtn { background:none; color:var(--muted); border:1px solid var(--bd); padding:8px 12px; border-radius:9px; cursor:pointer; font-size:.82rem; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
+  .fc { height:130px; perspective:900px; cursor:pointer; }
+  .fc-in { position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform .45s cubic-bezier(.2,.7,.3,1.1); }
+  .fc.flip .fc-in { transform:rotateY(180deg); }
+  .fc-face { position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; display:flex; align-items:center; justify-content:center; text-align:center; padding:12px; overflow:auto; background:var(--card); border:1px solid var(--bd); border-radius:12px; box-shadow:var(--shadow); font-size:.9rem; }
+  .fc-back { transform:rotateY(180deg); color:var(--ok); font-weight:600; border-color:var(--ok); }
+  /* ── Quiz ── */
+  #quizOv { position:fixed; inset:0; background:rgba(10,14,25,.72); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; padding:20px; z-index:99; }
+  #quizBox { background:var(--panel); color:var(--text); border-radius:16px; padding:24px; max-width:480px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  #quizBarWrap { height:6px; background:var(--bd); border-radius:3px; overflow:hidden; margin-bottom:16px; }
+  #quizBar { height:100%; width:0%; background:var(--ac); transition:width .25s; }
+  #quizQ { font-size:1.12rem; font-weight:600; margin-bottom:16px; min-height:44px; }
+  .qopt { display:block; width:100%; text-align:left; padding:11px 15px; margin:7px 0; border:1px solid var(--bd); border-radius:10px; background:var(--bg); color:var(--text); cursor:pointer; font-size:.92rem; }
+  .qopt:hover { border-color:var(--ac); }
+  .qopt.ok { background:var(--okbg); border-color:var(--ok); }
+  .qopt.bad { background:var(--badbg); border-color:var(--bad); }
+  #quizFoot { display:flex; justify-content:space-between; align-items:center; margin-top:16px; }
+  #quizScore { color:var(--muted); font-size:.86rem; }
+  #quizNext { background:var(--ac); color:#fff; border:none; padding:9px 18px; border-radius:9px; cursor:pointer; font-weight:600; }
+  #quizClose { background:none; border:none; color:var(--muted); cursor:pointer; font-size:.8rem; }
+  footer { margin-top:50px; color:var(--muted); font-size:.78rem; text-align:center; }
+  /* ── Print ── */
+  @media print {
+    .topbar, .toc, .deck-btns, #quizOv { display:none !important; }
+    .wrap { grid-template-columns:1fr; max-width:none; padding:0; }
+    body { background:#fff; color:#000; }
+    .note, .fc-face { box-shadow:none; }
+    .fc { height:auto; perspective:none; }
+    .fc-in { transform:none !important; }
+    .fc-face { position:static; }
+    .fc-back { transform:none; }
+    .fc { break-inside:avoid; }
+  }
 </style></head><body>
-<h1>${esc(ROOM.name || 'Místnost')}</h1>
-${notesHtml || '<p>Žádné poznámky.</p>'}
-${decksHtml}
+<div class="topbar"><div class="tb-in">
+  <div class="tb-title">📋 ${esc(ROOM.name || 'Místnost')}</div>
+  <input id="q" placeholder="🔍 Hledat v poznámkách…" autocomplete="off">
+  <button id="themeBtn" title="Přepnout vzhled">🌙</button>
+</div></div>
+<div class="wrap">
+  <nav class="toc"><div class="toc-h">Obsah</div>${tocHtml || '<div class="hint" style="padding:4px 6px;">Prázdné</div>'}</nav>
+  <main>
+    <h1>${esc(ROOM.name || 'Místnost')}</h1>
+    <div class="sub">Exportováno ${esc(when)} · ${noteCount} poznámek${cardCount ? ` · ${cardCount} kartiček` : ''}</div>
+    ${notesHtml || '<p class="hint">Žádné poznámky.</p>'}
+    <div class="nosearch" id="noHits">Nic nenalezeno.</div>
+    ${decksHtml}
+    <footer>Vytvořeno ve StudyBoard</footer>
+  </main>
+</div>
 <div id="quizOv"><div id="quizBox">
+  <div id="quizBarWrap"><div id="quizBar"></div></div>
   <div id="quizQ"></div><div id="quizOpts"></div>
   <div id="quizFoot"><span id="quizScore"></span><button id="quizNext" onclick="quizNext()">Další →</button></div>
-  <div style="text-align:center;margin-top:8px;"><button onclick="document.getElementById('quizOv').style.display='none'" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:0.8rem;">Zavřít</button></div>
+  <div style="text-align:center;margin-top:10px;"><button id="quizClose" onclick="document.getElementById('quizOv').style.display='none'">Zavřít</button></div>
 </div></div>
 <script>
-const DECKS = ${decksJson};
-let Q = null;
-function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-function startQuiz(di){ const dk=DECKS[di]; if(!dk||!dk.cards.length)return; Q={di,order:shuffle(dk.cards.map((_,i)=>i)),i:-1,score:0}; document.getElementById('quizOv').style.display='flex'; quizNext(); }
-function quizNext(){ const dk=DECKS[Q.di]; Q.i++; if(Q.i>=Q.order.length){ document.getElementById('quizQ').textContent='Hotovo! Skóre '+Q.score+' / '+Q.order.length; document.getElementById('quizOpts').innerHTML=''; document.getElementById('quizScore').textContent=''; document.getElementById('quizNext').textContent='Znovu'; document.getElementById('quizNext').onclick=()=>startQuiz(Q.di); return; }
-  document.getElementById('quizNext').textContent='Další →'; document.getElementById('quizNext').onclick=quizNext;
-  const card=dk.cards[Q.order[Q.i]];
-  const others=dk.cards.filter(c=>c!==card).map(c=>c.back);
-  const pool=(card.distractors&&card.distractors.length)?card.distractors:others;
-  const opts=shuffle([card.back, ...shuffle(pool).slice(0,3)].filter((v,i,a)=>a.indexOf(v)===i));
-  document.getElementById('quizQ').textContent=card.front;
-  document.getElementById('quizScore').textContent='Skóre '+Q.score+' / '+Q.order.length;
-  const box=document.getElementById('quizOpts'); box.innerHTML='';
-  opts.forEach(o=>{ const b=document.createElement('button'); b.className='qopt'; b.textContent=o; b.onclick=()=>{ if(b.dataset.done)return; box.querySelectorAll('.qopt').forEach(x=>x.dataset.done='1'); if(o===card.back){ b.classList.add('ok'); Q.score++; } else { b.classList.add('bad'); box.querySelectorAll('.qopt').forEach(x=>{ if(x.textContent===card.back)x.classList.add('ok'); }); } document.getElementById('quizScore').textContent='Skóre '+Q.score+' / '+Q.order.length; }; box.appendChild(b); });
+var DECKS = ${decksJson};
+/* theme */
+var themeBtn = document.getElementById('themeBtn');
+function setTheme(t){ document.documentElement.dataset.theme = t; themeBtn.textContent = t === 'dark' ? '☀️' : '🌙'; try { localStorage.setItem('sbx_theme', t); } catch(e){} }
+setTheme((function(){ try { return localStorage.getItem('sbx_theme') || 'light'; } catch(e){ return 'light'; } })());
+themeBtn.onclick = function(){ setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); };
+/* live search over notes (diacritics-insensitive) */
+function norm(s){ return (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase(); }
+document.getElementById('q').addEventListener('input', function(){
+  var v = norm(this.value.trim()), any = false;
+  document.querySelectorAll('article.note').forEach(function(n){
+    var hit = !v || norm(n.textContent).indexOf(v) !== -1;
+    n.style.display = hit ? '' : 'none';
+    if (hit) any = true;
+  });
+  document.querySelectorAll('section.folder').forEach(function(s){
+    var vis = false;
+    s.querySelectorAll('article.note').forEach(function(n){ if (n.style.display !== 'none') vis = true; });
+    s.style.display = vis ? '' : 'none';
+  });
+  document.getElementById('noHits').style.display = any ? 'none' : 'block';
+});
+/* flip all cards in a deck */
+function flipAll(btn){
+  var deck = btn.closest('.deck'), cards = deck.querySelectorAll('.fc');
+  var anyUnflipped = false;
+  cards.forEach(function(c){ if (!c.classList.contains('flip')) anyUnflipped = true; });
+  cards.forEach(function(c){ c.classList.toggle('flip', anyUnflipped); });
+}
+/* quiz with progress bar */
+var Q = null;
+function shuffle(a){ a = a.slice(); for (var i = a.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+function startQuiz(di){
+  var dk = DECKS[di]; if (!dk || !dk.cards.length) return;
+  Q = { di: di, order: shuffle(dk.cards.map(function(_, i){ return i; })), i: -1, score: 0 };
+  document.getElementById('quizOv').style.display = 'flex';
+  quizNext();
+}
+function quizNext(){
+  var dk = DECKS[Q.di]; Q.i++;
+  document.getElementById('quizBar').style.width = Math.round(Q.i / Q.order.length * 100) + '%';
+  if (Q.i >= Q.order.length){
+    var pct = Math.round(Q.score / Q.order.length * 100);
+    document.getElementById('quizQ').textContent = (pct >= 80 ? '🎉 ' : pct >= 50 ? '👍 ' : '📖 ') + 'Hotovo! ' + Q.score + ' / ' + Q.order.length + ' (' + pct + ' %)';
+    document.getElementById('quizOpts').innerHTML = '';
+    document.getElementById('quizScore').textContent = '';
+    var nb = document.getElementById('quizNext'); nb.textContent = '↻ Znovu'; nb.onclick = function(){ startQuiz(Q.di); };
+    return;
+  }
+  var nb2 = document.getElementById('quizNext'); nb2.textContent = 'Další →'; nb2.onclick = quizNext;
+  var card = dk.cards[Q.order[Q.i]];
+  var others = dk.cards.filter(function(c){ return c !== card; }).map(function(c){ return c.back; });
+  var pool = (card.distractors && card.distractors.length) ? card.distractors : others;
+  var opts = shuffle([card.back].concat(shuffle(pool).slice(0, 3)).filter(function(v, i, a){ return a.indexOf(v) === i; }));
+  document.getElementById('quizQ').textContent = card.front;
+  document.getElementById('quizScore').textContent = 'Otázka ' + (Q.i + 1) + ' / ' + Q.order.length + ' · skóre ' + Q.score;
+  var box = document.getElementById('quizOpts'); box.innerHTML = '';
+  opts.forEach(function(o){
+    var b = document.createElement('button'); b.className = 'qopt'; b.textContent = o;
+    b.onclick = function(){
+      if (b.dataset.done) return;
+      box.querySelectorAll('.qopt').forEach(function(x){ x.dataset.done = '1'; });
+      if (o === card.back){ b.classList.add('ok'); Q.score++; }
+      else { b.classList.add('bad'); box.querySelectorAll('.qopt').forEach(function(x){ if (x.textContent === card.back) x.classList.add('ok'); }); }
+      document.getElementById('quizScore').textContent = 'Otázka ' + (Q.i + 1) + ' / ' + Q.order.length + ' · skóre ' + Q.score;
+    };
+    box.appendChild(b);
+  });
 }
 </script></body></html>`;
 }
@@ -1778,31 +1887,75 @@ function setupLightbox() {
 }
 
 // ── Delete note ───────────────────────────────────────────────
+// Undo/redo for note deletion. A deletion is reversible: we snapshot the note
+// doc, its connections, and which folders it was filed in, then can recreate
+// all of it (same ids). Stacks are in-memory per session; the restore itself
+// writes to Firestore so everyone sees it.
+const NOTE_UNDO = []; // records of deleted notes (newest last)
+const NOTE_REDO = []; // note ids that were undone and can be re-deleted
+
 async function deleteNote(id) {
   if (!confirm('Opravdu chceš smazat tuto poznámku?')) return;
-  const deleted = NOTES_MAP.get(id);
-  const label = deleted ? (deleted.title || noteToPlainText(deleted).slice(0, 40) || 'poznámku') : 'poznámku';
+  await doDeleteNote(id, false);
+}
+
+async function doDeleteNote(id, fromRedo) {
+  const note = NOTES_MAP.get(id);
+  if (!note) return;
+  const label = note.title || noteToPlainText(note).slice(0, 40) || 'poznámku';
+  const roomRef = db.collection('rooms').doc(ROOM_ID);
   try {
-    const batch = db.batch();
-    batch.delete(db.collection('rooms').doc(ROOM_ID).collection('notes').doc(id));
-    // Smaž i propojení napojená na tuto poznámku
+    // Snapshot everything the delete touches, so it can be rebuilt.
     const [s1, s2] = await Promise.all([
-      db.collection('rooms').doc(ROOM_ID).collection('connections').where('fromId', '==', id).get(),
-      db.collection('rooms').doc(ROOM_ID).collection('connections').where('toId',   '==', id).get(),
+      roomRef.collection('connections').where('fromId', '==', id).get(),
+      roomRef.collection('connections').where('toId', '==', id).get(),
     ]);
-    [...s1.docs, ...s2.docs].forEach(d => batch.delete(d.ref));
-    // Vyjmi ji i z případné složky
-    FOLDERS_MAP.forEach(f => {
-      if ((f.noteIds || []).includes(id)) {
-        batch.update(db.collection('rooms').doc(ROOM_ID).collection('folders').doc(f.id),
-          { noteIds: firebase.firestore.FieldValue.arrayRemove(id) });
-      }
-    });
+    const conns = [...s1.docs, ...s2.docs].map(d => ({ id: d.id, data: d.data() }));
+    const folderIds = [];
+    FOLDERS_MAP.forEach(f => { if ((f.noteIds || []).includes(id)) folderIds.push(f.id); });
+    const { id: _omit, ...noteData } = note;
+    const record = { id, noteData, conns, folderIds, label };
+
+    const batch = db.batch();
+    batch.delete(roomRef.collection('notes').doc(id));
+    conns.forEach(c => batch.delete(roomRef.collection('connections').doc(c.id)));
+    folderIds.forEach(fid => batch.update(roomRef.collection('folders').doc(fid),
+      { noteIds: firebase.firestore.FieldValue.arrayRemove(id) }));
     await batch.commit();
+
+    NOTE_UNDO.push(record);
+    if (!fromRedo) NOTE_REDO.length = 0; // a fresh delete invalidates redo
     logActivity('note', `smazal poznámku „${label}"`);
+    if (!fromRedo) toastAction('Poznámka smazána.', '↶ Vrátit', undoNoteDelete);
   } catch (e) {
     toast('Chyba: ' + e.message);
   }
+}
+
+async function undoNoteDelete() {
+  const rec = NOTE_UNDO.pop();
+  if (!rec) { toast('Není co vrátit.'); return; }
+  const roomRef = db.collection('rooms').doc(ROOM_ID);
+  try {
+    const batch = db.batch();
+    batch.set(roomRef.collection('notes').doc(rec.id), rec.noteData);
+    rec.conns.forEach(c => batch.set(roomRef.collection('connections').doc(c.id), c.data));
+    rec.folderIds.forEach(fid => {
+      if (FOLDERS_MAP.has(fid)) batch.update(roomRef.collection('folders').doc(fid),
+        { noteIds: firebase.firestore.FieldValue.arrayUnion(rec.id) });
+    });
+    await batch.commit();
+    NOTE_REDO.push(rec.id);
+    logActivity('note', `obnovil poznámku „${rec.label}"`);
+    toast('Poznámka obnovena.');
+  } catch (e) { toast('Chyba: ' + e.message); NOTE_UNDO.push(rec); }
+}
+
+async function redoNoteDelete() {
+  const id = NOTE_REDO.pop();
+  if (!id) { toast('Není co zopakovat.'); return; }
+  await doDeleteNote(id, true);
+  toast('Poznámka opět smazána.');
 }
 
 // ── Connections ───────────────────────────────────────────────
@@ -3856,6 +4009,32 @@ function toast(msg) {
   el.textContent = msg;
   wrap.appendChild(el);
   setTimeout(() => el.remove(), 2800);
+}
+
+// A toast with a clickable action (e.g. "Vrátit" after a delete). Stays a bit
+// longer so there's time to act.
+function toastAction(msg, label, fn) {
+  const wrap = document.getElementById('toastWrap');
+  const el   = document.createElement('div');
+  el.className = 'toast toast-with-action';
+  const span = document.createElement('span'); span.textContent = msg;
+  const btn  = document.createElement('button'); btn.className = 'toast-action'; btn.textContent = label;
+  btn.addEventListener('click', () => { el.remove(); fn(); });
+  el.append(span, btn);
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
+// Ctrl/Cmd+Z undoes the last note deletion, Ctrl+Shift+Z / Ctrl+Y redoes it.
+// Ignored while typing (so the browser's own text-undo still works there).
+function setupNoteHistoryKeys() {
+  document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.target.isContentEditable || (e.target.matches && e.target.matches('input, textarea, select'))) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); undoNoteDelete(); }
+    else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redoNoteDelete(); }
+  });
 }
 
 // ── Helpers ───────────────────────────────────────────────────
