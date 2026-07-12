@@ -181,6 +181,8 @@ auth.onAuthStateChanged(async user => {
     setupActivityLog();
     setupSearch();
     setupPresence();
+    setupComments();
+    setupExport();
     setupConnections();
     setupWhiteboards();
     setupBoardContextMenu();
@@ -1396,7 +1398,306 @@ function openNoteDetail(el, note) {
     contentEl.prepend(h);
   }
 
+  loadComments(note.id);
   openModal('noteDetailModal');
+}
+
+// ── Comments on notes ─────────────────────────────────────────
+// A discussion thread per note, live via a subcollection. Anyone in the room
+// (viewers included) can comment without touching the note's content. Only
+// the comment's author or the room owner can delete a comment.
+let COMMENTS_UNSUB = null;
+let DETAIL_NOTE_ID = null;
+
+function setupComments() {
+  const input = document.getElementById('commentInput');
+  const send = document.getElementById('commentSendBtn');
+  const submit = async () => {
+    const text = input.value.trim();
+    if (!text || !DETAIL_NOTE_ID) return;
+    send.disabled = true;
+    try {
+      await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(DETAIL_NOTE_ID)
+        .collection('comments').add({
+          text,
+          authorId: ME.uid,
+          authorName: ME.isAnonymous ? 'Host' : (ME.displayName || ME.email || 'Uživatel'),
+          authorPhoto: ME.photoURL || null,
+          at: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      input.value = '';
+    } catch (e) { toast('Chyba: ' + e.message); }
+    send.disabled = false;
+    input.focus();
+  };
+  send.addEventListener('click', submit);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+
+  // Stop listening when the detail modal closes (close button or backdrop).
+  document.querySelector('[data-close="noteDetailModal"]')?.addEventListener('click', stopComments);
+  document.getElementById('noteDetailModal')?.addEventListener('click', e => {
+    if (e.target.id === 'noteDetailModal') stopComments();
+  });
+}
+
+function stopComments() {
+  if (COMMENTS_UNSUB) { COMMENTS_UNSUB(); COMMENTS_UNSUB = null; }
+  DETAIL_NOTE_ID = null;
+}
+
+function loadComments(noteId) {
+  stopComments();
+  DETAIL_NOTE_ID = noteId;
+  const listEl = document.getElementById('commentsList');
+  listEl.innerHTML = '<div class="comments-empty">Načítám…</div>';
+  COMMENTS_UNSUB = db.collection('rooms').doc(ROOM_ID).collection('notes').doc(noteId)
+    .collection('comments').orderBy('at', 'asc')
+    .onSnapshot(snap => renderComments(snap.docs),
+      () => { listEl.innerHTML = '<div class="comments-empty">Komentáře se nepodařilo načíst.</div>'; });
+}
+
+function renderComments(docs) {
+  const listEl = document.getElementById('commentsList');
+  if (!listEl) return;
+  if (!docs.length) { listEl.innerHTML = '<div class="comments-empty">Zatím žádné komentáře. Buď první!</div>'; return; }
+  listEl.innerHTML = docs.map(d => {
+    const c = d.data();
+    const canDel = c.authorId === ME.uid || MY_ROLE === 'owner';
+    const when = c.at?.toDate ? c.at.toDate().toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    return `<div class="comment-row">
+      <div class="comment-av">${c.authorPhoto ? `<img src="${esc(c.authorPhoto)}" alt="">` : esc(initial(c.authorName || '?'))}</div>
+      <div class="comment-body">
+        <div class="comment-meta"><strong>${esc(c.authorName || 'Anon')}</strong><span>${esc(when)}</span></div>
+        <div class="comment-text">${esc(c.text || '')}</div>
+      </div>
+      ${canDel ? `<button class="comment-del" data-cid="${d.id}" title="Smazat">✕</button>` : ''}
+    </div>`;
+  }).join('');
+  listEl.querySelectorAll('.comment-del').forEach(b => b.addEventListener('click', async () => {
+    if (!DETAIL_NOTE_ID) return;
+    try { await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(DETAIL_NOTE_ID).collection('comments').doc(b.dataset.cid).delete(); }
+    catch (e) { toast('Chyba: ' + e.message); }
+  }));
+  listEl.scrollTop = listEl.scrollHeight;
+}
+
+// ── Export (document with functional flash cards) ─────────────
+function exportNoteTitle(n) { return n.title || noteToPlainText(n).slice(0, 60) || '(bez názvu)'; }
+function exportNoteConns(noteId) {
+  const names = [];
+  CONNS_MAP.forEach(c => {
+    let other = null;
+    if (c.fromId === noteId) other = NOTES_MAP.get(c.toId);
+    else if (c.toId === noteId) other = NOTES_MAP.get(c.fromId);
+    if (other) names.push(exportNoteTitle(other));
+  });
+  return names;
+}
+
+function setupExport() {
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    document.getElementById('exportHint').textContent = '';
+    openModal('exportModal');
+  });
+  document.getElementById('exportRunBtn').addEventListener('click', runExport);
+}
+
+async function gatherExportData(opts) {
+  // Notes grouped by folder (nested folders → path label), then unfiled.
+  const filedIds = new Set();
+  FOLDERS_MAP.forEach(f => (f.noteIds || []).forEach(id => filedIds.add(id)));
+  const sections = [...FOLDERS_MAP.values()]
+    .sort((a, b) => a.name.localeCompare(b.name, 'cs'))
+    .map(f => ({ title: folderPathLabel(f), notes: (f.noteIds || []).map(id => NOTES_MAP.get(id)).filter(Boolean) }))
+    .filter(s => s.notes.length);
+  const unfiled = [...NOTES_MAP.values()].filter(n => !filedIds.has(n.id)).sort((a, b) => noteRecency(b) - noteRecency(a));
+  if (unfiled.length) sections.push({ title: 'Nezařazené poznámky', notes: unfiled });
+
+  // Comments (optional; one read per note in parallel).
+  const commentsByNote = {};
+  if (opts.comments) {
+    await Promise.all([...NOTES_MAP.values()].map(async n => {
+      try {
+        const snap = await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(n.id).collection('comments').orderBy('at', 'asc').get();
+        if (!snap.empty) commentsByNote[n.id] = snap.docs.map(d => d.data());
+      } catch (_) {}
+    }));
+  }
+
+  // Room flash-card decks + their cards.
+  let decks = [];
+  if (opts.cards) {
+    try {
+      const deckSnap = await db.collection('decks').where('roomId', '==', ROOM_ID).get();
+      decks = (await Promise.all(deckSnap.docs.map(async d => {
+        const cardsSnap = await db.collection('decks').doc(d.id).collection('cards').get();
+        return { name: d.data().name || 'Balíček', color: d.data().color || '#6366f1',
+                 cards: cardsSnap.docs.map(c => c.data()).filter(c => c.front || c.back)
+                        .map(c => ({ front: c.front || '', back: c.back || '', distractors: c.distractors || [] })) };
+      }))).filter(dk => dk.cards.length);
+    } catch (_) {}
+  }
+  return { sections, commentsByNote, decks };
+}
+
+async function runExport() {
+  const btn = document.getElementById('exportRunBtn');
+  const hint = document.getElementById('exportHint');
+  const format = document.getElementById('exportFormat').value;
+  const opts = {
+    conns: document.getElementById('exportConns').checked,
+    comments: document.getElementById('exportComments').checked,
+    cards: document.getElementById('exportCards').checked,
+  };
+  btn.disabled = true; hint.textContent = 'Připravuji…';
+  try {
+    const data = await gatherExportData(opts);
+    const safe = (ROOM.name || 'mistnost').replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60) || 'export';
+    if (format === 'md') {
+      downloadFile(safe + '.md', buildExportMarkdown(data, opts), 'text/markdown;charset=utf-8');
+    } else {
+      const html = buildExportHtml(data, opts);
+      if (format === 'print') printExportHtml(html);
+      else downloadFile(safe + '.html', html, 'text/html;charset=utf-8');
+    }
+    hint.textContent = 'Hotovo ✓';
+    setTimeout(() => closeModal('exportModal'), 800);
+  } catch (e) { hint.textContent = 'Chyba: ' + e.message; }
+  btn.disabled = false;
+}
+
+function downloadFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function printExportHtml(html) {
+  const w = window.open('', '_blank');
+  if (!w) { toast('Povol vyskakovací okna pro tisk.'); return; }
+  w.document.write(html); w.document.close(); w.focus();
+  setTimeout(() => w.print(), 500);
+}
+
+function buildExportMarkdown(data, opts) {
+  let md = `# ${ROOM.name || 'Místnost'}\n\n`;
+  data.sections.forEach(sec => {
+    md += `## ${sec.title}\n\n`;
+    sec.notes.forEach(n => {
+      md += `### ${n.title || exportNoteTitle(n)}\n\n${noteToPlainText(n)}\n\n`;
+      if (opts.conns) { const c = exportNoteConns(n.id); if (c.length) md += `🔗 *Propojeno s: ${c.join(' · ')}*\n\n`; }
+      if (opts.comments) { const cm = data.commentsByNote[n.id] || []; if (cm.length) md += cm.map(x => `> **${x.authorName || 'Anon'}:** ${x.text}`).join('\n') + '\n\n'; }
+    });
+  });
+  if (opts.cards && data.decks.length) {
+    md += `## 🃏 Kartičky\n\n`;
+    data.decks.forEach(dk => {
+      md += `### ${dk.name}\n\n`;
+      dk.cards.forEach(c => { md += `- **Otázka:** ${c.front}\n  - **Odpověď:** ${c.back}\n`; });
+      md += '\n';
+    });
+  }
+  return md;
+}
+
+// Self-contained HTML: readable notes + click-to-flip cards and a per-deck
+// quiz. All CSS/JS inlined, so the file works offline on its own.
+function buildExportHtml(data, opts) {
+  const notesHtml = data.sections.map(sec => `
+    <section class="folder">
+      <h2>${esc(sec.title)}</h2>
+      ${sec.notes.map(n => {
+        const title = esc(n.title || exportNoteTitle(n));
+        const content = n.contentType === 'html' ? (n.content || '') : `<p>${esc(n.content || '')}</p>`;
+        const conns = opts.conns ? exportNoteConns(n.id) : [];
+        const connsHtml = conns.length ? `<div class="meta">🔗 Propojeno s: ${conns.map(esc).join(' · ')}</div>` : '';
+        const cmts = data.commentsByNote[n.id] || [];
+        const cmtsHtml = (opts.comments && cmts.length)
+          ? `<div class="cmts"><div class="cmts-h">💬 Komentáře</div>${cmts.map(c => `<div class="cmt"><b>${esc(c.authorName || 'Anon')}:</b> ${esc(c.text || '')}</div>`).join('')}</div>` : '';
+        return `<article class="note" style="border-left-color:${esc(n.color || '#ccc')}"><h3>${title}</h3><div class="ncontent">${content}</div>${connsHtml}${cmtsHtml}</article>`;
+      }).join('')}
+    </section>`).join('');
+
+  const decksHtml = data.decks.length ? `
+    <section class="decks">
+      <h2>🃏 Kartičky</h2>
+      ${data.decks.map((dk, di) => `
+        <div class="deck">
+          <h3 style="color:${esc(dk.color)}">${esc(dk.name)} <span class="dc">(${dk.cards.length})</span></h3>
+          <button class="quizbtn" onclick="startQuiz(${di})">▶ Procvičovat kvíz</button>
+          <div class="cards">
+            ${dk.cards.map(c => `<div class="fc" onclick="this.classList.toggle('flip')"><div class="fc-face fc-front">${esc(c.front)}</div><div class="fc-face fc-back">${esc(c.back)}</div></div>`).join('')}
+          </div>
+        </div>`).join('')}
+    </section>` : '';
+
+  const decksJson = JSON.stringify(data.decks).replace(/</g, '\\u003c');
+
+  return `<!DOCTYPE html><html lang="cs"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(ROOM.name || 'Export')}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 860px; margin: 0 auto; padding: 28px 20px 80px; color: #1e293b; line-height: 1.5; }
+  h1 { font-size: 1.9rem; border-bottom: 3px solid #6366f1; padding-bottom: 10px; }
+  h2 { font-size: 1.3rem; margin-top: 34px; color: #334155; }
+  .note { border-left: 4px solid #ccc; background: #f8fafc; border-radius: 6px; padding: 12px 16px; margin: 14px 0; page-break-inside: avoid; }
+  .note h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .ncontent img { max-width: 100%; border-radius: 6px; }
+  .ncontent table { border-collapse: collapse; }
+  .ncontent td, .ncontent th { border: 1px solid #cbd5e1; padding: 4px 8px; }
+  .meta { font-size: 0.8rem; color: #64748b; margin-top: 8px; }
+  .cmts { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #cbd5e1; }
+  .cmts-h { font-size: 0.78rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+  .cmt { font-size: 0.85rem; margin: 2px 0; }
+  .deck { margin: 18px 0; }
+  .dc { font-size: 0.85rem; color: #94a3b8; }
+  .quizbtn { background: #6366f1; color: #fff; border: none; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-bottom: 10px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .fc { position: relative; min-height: 90px; border: 1px solid #cbd5e1; border-radius: 10px; cursor: pointer; background: #fff; }
+  .fc-face { padding: 12px; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 90px; }
+  .fc-back { display: none; color: #16a34a; font-weight: 600; }
+  .fc.flip .fc-front { display: none; }
+  .fc.flip .fc-back { display: flex; }
+  .fc::after { content: 'klikni ↻'; position: absolute; top: 4px; right: 8px; font-size: 0.62rem; color: #cbd5e1; }
+  #quizOv { position: fixed; inset: 0; background: rgba(15,23,42,0.75); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 99; }
+  #quizBox { background: #fff; border-radius: 14px; padding: 22px; max-width: 460px; width: 100%; }
+  #quizQ { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; min-height: 40px; }
+  .qopt { display: block; width: 100%; text-align: left; padding: 10px 14px; margin: 7px 0; border: 1px solid #cbd5e1; border-radius: 9px; background: #f8fafc; cursor: pointer; font-size: 0.92rem; }
+  .qopt.ok { background: #dcfce7; border-color: #22c55e; }
+  .qopt.bad { background: #fee2e2; border-color: #ef4444; }
+  #quizFoot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+  #quizNext { background: #6366f1; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
+  @media print { .quizbtn, #quizOv, .fc::after { display: none !important; } body { max-width: none; } .fc-back { display: flex !important; } .fc-front { display: none !important; } .fc { break-inside: avoid; } }
+</style></head><body>
+<h1>${esc(ROOM.name || 'Místnost')}</h1>
+${notesHtml || '<p>Žádné poznámky.</p>'}
+${decksHtml}
+<div id="quizOv"><div id="quizBox">
+  <div id="quizQ"></div><div id="quizOpts"></div>
+  <div id="quizFoot"><span id="quizScore"></span><button id="quizNext" onclick="quizNext()">Další →</button></div>
+  <div style="text-align:center;margin-top:8px;"><button onclick="document.getElementById('quizOv').style.display='none'" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:0.8rem;">Zavřít</button></div>
+</div></div>
+<script>
+const DECKS = ${decksJson};
+let Q = null;
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function startQuiz(di){ const dk=DECKS[di]; if(!dk||!dk.cards.length)return; Q={di,order:shuffle(dk.cards.map((_,i)=>i)),i:-1,score:0}; document.getElementById('quizOv').style.display='flex'; quizNext(); }
+function quizNext(){ const dk=DECKS[Q.di]; Q.i++; if(Q.i>=Q.order.length){ document.getElementById('quizQ').textContent='Hotovo! Skóre '+Q.score+' / '+Q.order.length; document.getElementById('quizOpts').innerHTML=''; document.getElementById('quizScore').textContent=''; document.getElementById('quizNext').textContent='Znovu'; document.getElementById('quizNext').onclick=()=>startQuiz(Q.di); return; }
+  document.getElementById('quizNext').textContent='Další →'; document.getElementById('quizNext').onclick=quizNext;
+  const card=dk.cards[Q.order[Q.i]];
+  const others=dk.cards.filter(c=>c!==card).map(c=>c.back);
+  const pool=(card.distractors&&card.distractors.length)?card.distractors:others;
+  const opts=shuffle([card.back, ...shuffle(pool).slice(0,3)].filter((v,i,a)=>a.indexOf(v)===i));
+  document.getElementById('quizQ').textContent=card.front;
+  document.getElementById('quizScore').textContent='Skóre '+Q.score+' / '+Q.order.length;
+  const box=document.getElementById('quizOpts'); box.innerHTML='';
+  opts.forEach(o=>{ const b=document.createElement('button'); b.className='qopt'; b.textContent=o; b.onclick=()=>{ if(b.dataset.done)return; box.querySelectorAll('.qopt').forEach(x=>x.dataset.done='1'); if(o===card.back){ b.classList.add('ok'); Q.score++; } else { b.classList.add('bad'); box.querySelectorAll('.qopt').forEach(x=>{ if(x.textContent===card.back)x.classList.add('ok'); }); } document.getElementById('quizScore').textContent='Skóre '+Q.score+' / '+Q.order.length; }; box.appendChild(b); });
+}
+</script></body></html>`;
 }
 
 // ── Lightbox ──────────────────────────────────────────────────

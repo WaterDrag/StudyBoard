@@ -122,6 +122,16 @@ service cloud.firestore {
           isRoomOwner(roomId) ||
           (roomRole(roomId) == 'editor' && resource.data.authorId == request.auth.uid)
         );
+
+        // Discussion thread on a note. ANY member (viewers included) may read
+        // and post under their own name; comments are immutable; author or
+        // owner may delete.
+        match /comments/{commentId} {
+          allow read:   if isMember(roomId);
+          allow create: if isMember(roomId) && request.resource.data.authorId == request.auth.uid;
+          allow update: if false;
+          allow delete: if isAuth() && (isRoomOwner(roomId) || resource.data.authorId == request.auth.uid);
+        }
       }
 
       // Windows-Explorer-style folders for organizing notes in the list

@@ -30,6 +30,9 @@
       <button id="searchBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Hledat v poznámkách">
         🔍 Hledat
       </button>
+      <button id="exportBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Exportovat poznámky a kartičky">
+        ⬇️ Export
+      </button>
       <a id="flashcardsBtn" href="#" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         Flash Cards
@@ -473,6 +476,30 @@
     </div>
   </div>
 
+  <!-- MODAL: Export -->
+  <div class="modal-overlay" id="exportModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>⬇️ Export</h3>
+        <button class="modal-close" data-close="exportModal">✕</button>
+      </div>
+      <label class="label">Formát</label>
+      <select id="exportFormat" class="input" style="width:100%;margin-bottom:14px;">
+        <option value="html">Interaktivní stránka (HTML) — poznámky + funkční kartičky</option>
+        <option value="print">PDF / Tisk</option>
+        <option value="md">Markdown (.md)</option>
+      </select>
+      <label class="label">Zahrnout</label>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:8px 0 16px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportConns" checked> Propojení mezi poznámkami</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportComments"> Komentáře</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportCards" checked> Flash Cards (kartičky)</label>
+      </div>
+      <button id="exportRunBtn" class="btn btn-primary" style="width:100%;justify-content:center;">Exportovat</button>
+      <p class="hint" id="exportHint" style="text-align:center;margin-top:10px;"></p>
+    </div>
+  </div>
+
   <!-- MODAL: Historie místnosti -->
   <div class="modal-overlay" id="activityModal">
     <div class="modal">
@@ -513,6 +540,14 @@
       </div>
       <div id="detailContent" class="note-detail-content"></div>
       <div id="detailTime" class="note-detail-time"></div>
+      <div class="note-comments">
+        <div class="note-comments-title">💬 Komentáře</div>
+        <div id="commentsList" class="comments-list"></div>
+        <div class="comment-input-row">
+          <input id="commentInput" class="comment-input" placeholder="Napiš komentář…" maxlength="500" autocomplete="off">
+          <button id="commentSendBtn" class="btn btn-primary" style="padding:6px 14px;font-size:0.82rem;flex-shrink:0;">Odeslat</button>
+        </div>
+      </div>
     </div>
   </div>
 
