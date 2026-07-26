@@ -1,6 +1,7 @@
 const params  = new URLSearchParams(window.location.search);
 const DECK_ID = params.get('deck');
 const ROOM_ID = params.get('room');
+const SMART   = params.get('smart') === '1';   // spaced-repetition practice mode
 
 
 let ME       = null;
@@ -11,6 +12,64 @@ let SCORE      = 0;
 let STREAK     = 0;
 let MAX_STREAK = 0;
 let WRONG_IDS  = new Set();
+
+// ── Spaced repetition (Leitner boxes) ─────────────────────────
+// Per-user, per-deck progress in users/{uid}.learn[deckId]:
+//   cards: { cardId: { box: 1..5, due: ms } }   — correct → box+1, wrong → 1
+//   stats: { answered, correct, days: { 'YYYY-MM-DD': { a, c } } }
+// EVERY quiz answer feeds it (smart or classic mode); the smart mode then
+// only asks what's due, lowest box first.
+const LEARN_INTERVALS = { 1: 10 * 60e3, 2: 24 * 3600e3, 3: 3 * 24 * 3600e3, 4: 7 * 24 * 3600e3, 5: 16 * 24 * 3600e3 };
+let LEARN = { cards: {}, stats: { answered: 0, correct: 0, days: {} } };
+let _learnSaveTimer = null;
+
+async function loadLearn() {
+  try {
+    const snap = await db.collection('users').doc(ME.uid).get();
+    const l = snap.exists ? (snap.data().learn || {})[DECK_ID] : null;
+    if (l) LEARN = {
+      cards: l.cards || {},
+      stats: { answered: l.stats?.answered || 0, correct: l.stats?.correct || 0, days: l.stats?.days || {} },
+    };
+  } catch (_) { /* fresh start */ }
+}
+
+function persistLearn() {
+  clearTimeout(_learnSaveTimer);
+  _learnSaveTimer = setTimeout(async () => {
+    // Keep only the last 30 day buckets so the doc doesn't grow forever.
+    const keys = Object.keys(LEARN.stats.days).sort();
+    while (keys.length > 30) delete LEARN.stats.days[keys.shift()];
+    try {
+      // Field-path update REPLACES the per-deck object (so pruning sticks).
+      await db.collection('users').doc(ME.uid).update({ [`learn.${DECK_ID}`]: LEARN });
+    } catch {
+      try { await db.collection('users').doc(ME.uid).set({ learn: { [DECK_ID]: LEARN } }, { merge: true }); } catch {}
+    }
+  }, 800);
+}
+
+function recordAnswer(cardId, correct) {
+  const e = LEARN.cards[cardId] || { box: 0, due: 0 };
+  e.box = correct ? Math.min(5, (e.box || 0) + 1) : 1;
+  e.due = Date.now() + LEARN_INTERVALS[e.box];
+  LEARN.cards[cardId] = e;
+  LEARN.stats.answered++;
+  if (correct) LEARN.stats.correct++;
+  const day = new Date().toISOString().slice(0, 10);
+  const d = LEARN.stats.days[day] || { a: 0, c: 0 };
+  d.a++; if (correct) d.c++;
+  LEARN.stats.days[day] = d;
+  persistLearn();
+}
+
+// Cards worth asking right now: never-seen first (box 0), then lowest box.
+function dueCards() {
+  const now = Date.now();
+  return ALL_CARDS
+    .filter(c => { const e = LEARN.cards[c.id]; return !e || e.due <= now; })
+    .sort((a, b) => ((LEARN.cards[a.id]?.box) || 0) - ((LEARN.cards[b.id]?.box) || 0));
+}
 
 // ── Auth guard ────────────────────────────────────────────────
 auth.onAuthStateChanged(user => {
@@ -50,6 +109,33 @@ async function loadDeck() {
     if (ALL_CARDS.length < 2) {
       document.getElementById('quizLoading').innerHTML =
         '<p style="color:var(--text-muted);text-align:center;padding:40px 20px;">Balíček musí mít alespoň 2 karty pro kvíz.</p>';
+      return;
+    }
+
+    await loadLearn();
+
+    if (SMART) {
+      document.getElementById('navTitle').textContent = `🧠 Chytré procvičování – ${deck.name}`;
+      const due = dueCards();
+      if (!due.length) {
+        const dues = Object.values(LEARN.cards).map(e => e.due);
+        const next = dues.length ? Math.min(...dues) : 0;
+        const when = next ? new Date(next).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        document.getElementById('quizLoading').innerHTML = `
+          <div style="text-align:center;padding:40px 20px;">
+            <div style="font-size:2.2rem;margin-bottom:10px;">🎉</div>
+            <p style="font-weight:600;margin-bottom:6px;">Vše zopakováno!</p>
+            <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:16px;">${when ? 'Další opakování: ' + when + '.' : 'Zatím tu nejsou žádné karty k opakování.'}</p>
+            <button class="btn btn-secondary" id="practiceAnywayBtn">Procvičovat i tak</button>
+          </div>`;
+        document.getElementById('practiceAnywayBtn').addEventListener('click', () => {
+          document.getElementById('quizLoading').style.display = 'none';
+          startQuiz(ALL_CARDS);
+        });
+        return;
+      }
+      document.getElementById('quizLoading').style.display = 'none';
+      startQuiz(due);
       return;
     }
 
@@ -149,6 +235,8 @@ function pick(btn, correct, card) {
       if (b.textContent === card.back) b.classList.add('quiz-answer-correct');
     });
   }
+
+  recordAnswer(card.id, correct);   // feed the Leitner boxes + stats
 
   updateStreak();
   updateScoreNav();

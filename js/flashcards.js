@@ -277,6 +277,34 @@ async function loadDeck() {
     quizBtn.href        = `quiz.html?deck=${DECK_ID}${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
     studyBtn.insertAdjacentElement('afterend', quizBtn);
 
+    // Smart practice = spaced repetition (Leitner): asks only what's due.
+    const smartBtn = document.createElement('a');
+    smartBtn.className = 'btn btn-secondary';
+    smartBtn.style.cssText = 'padding:7px 14px;font-size:0.82rem;';
+    smartBtn.textContent = '🧠 Chytře';
+    smartBtn.title = 'Chytré procvičování — opakuje hlavně to, co ti nejde';
+    smartBtn.href = `quiz.html?deck=${DECK_ID}&smart=1${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
+    quizBtn.insertAdjacentElement('afterend', smartBtn);
+
+    const statsBtn = document.createElement('button');
+    statsBtn.className = 'btn btn-ghost';
+    statsBtn.style.cssText = 'padding:7px 14px;font-size:0.82rem;';
+    statsBtn.textContent = '📊 Statistiky';
+    statsBtn.addEventListener('click', openLearnStats);
+    smartBtn.insertAdjacentElement('afterend', statsBtn);
+
+    // One-click: let the AI write wrong answers for every card that has none.
+    if (canAddCards()) {
+      const bulkBtn = document.createElement('button');
+      bulkBtn.className = 'btn btn-ghost';
+      bulkBtn.id = 'bulkDistractorsBtn';
+      bulkBtn.style.cssText = 'padding:7px 14px;font-size:0.82rem;';
+      bulkBtn.textContent = '🤖 AI odpovědi ke všem';
+      bulkBtn.title = 'Vygeneruje špatné odpovědi (možnosti do kvízu) ke všem kartám, které je ještě nemají';
+      bulkBtn.addEventListener('click', bulkGenerateDistractors);
+      statsBtn.insertAdjacentElement('afterend', bulkBtn);
+    }
+
     // Survival is started from the room's lobby list (loadSurvivalLobbies
     // below), whose deck picker already covers any deck — personal or
     // room-linked, one or several at once — so a per-deck shortcut here is
@@ -442,6 +470,53 @@ Return ONLY a JSON array of ${count} strings: ["d1","d2",...]`;
       throw new Error('parse');
     },
   });
+}
+
+// ── Bulk AI distractors ───────────────────────────────────────
+// Fills in the wrong answers (quiz options) for every card that has none,
+// one request per card so each one is tailored to its own question. Saves
+// as it goes, so a mid-way failure still keeps whatever succeeded.
+async function bulkGenerateDistractors() {
+  const btn = document.getElementById('bulkDistractorsBtn');
+  const mine = ALL_CARDS.filter(c => canManageCard(c) && c.front && c.back && !c.tableData);
+  let targets = mine.filter(c => !(c.distractors && c.distractors.length));
+  let regenerate = false;
+
+  if (!mine.length) { toast('Žádné karty, které bys mohl upravit.'); return; }
+  if (!targets.length) {
+    if (!confirm('Všechny karty už možnosti mají. Vygenerovat je znovu (přepsat)?')) return;
+    targets = mine;
+    regenerate = true;
+  } else if (!confirm(`Vygenerovat AI špatné odpovědi pro ${targets.length} karet?`)) {
+    return;
+  }
+
+  btn.disabled = true;
+  let done = 0, failed = 0;
+  for (const card of targets) {
+    btn.textContent = `⏳ ${done + failed + 1}/${targets.length}`;
+    try {
+      const need = Math.max(1, (card.answerCount || 4) - 1);
+      const suggestions = await geminiSuggestDistractors(card.front, card.back, need);
+      const clean = [...new Set(suggestions.map(s => String(s).trim()).filter(Boolean))]
+        .filter(s => s.toLowerCase() !== String(card.back).toLowerCase())
+        .slice(0, need);
+      if (!clean.length) throw new Error('empty');
+      await db.collection('decks').doc(DECK_ID).collection('cards').doc(card.id).update({
+        distractors: regenerate ? clean : [...(card.distractors || []), ...clean].slice(0, need),
+        answerCount: card.answerCount || 4,
+      });
+      done++;
+    } catch (_) {
+      failed++;
+    }
+    // Small gap between calls — free AI tiers rate-limit bursts.
+    if (done + failed < targets.length) await new Promise(r => setTimeout(r, 700));
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🤖 AI odpovědi ke všem';
+  toast(failed ? `Hotovo: ${done} karet ✓, ${failed} se nepovedlo.` : `Hotovo! Možnosti doplněny k ${done} kartám ✓`);
 }
 
 function setupEditCardModal() {
@@ -710,6 +785,108 @@ function loadSurvivalLobbies() {
     }, () => { section.style.display = 'none'; });
 
   createBtn.addEventListener('click', createSurvivalLobby);
+}
+
+// ── Learning stats (spaced repetition) ─────────────────────────
+// Reads users/{uid}.learn[deckId] written by quiz.js and shows: totals,
+// due-now count, Leitner box distribution, last-7-days activity and the
+// cards that need the most work.
+async function openLearnStats() {
+  let ov = document.getElementById('learnStatsOv');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'learnStatsOv';
+    ov.className = 'modal-overlay';
+    ov.innerHTML = `<div class="modal" style="max-width:480px;">
+      <div class="modal-header"><h3>📊 Statistiky učení</h3><button class="modal-close" id="learnStatsClose">✕</button></div>
+      <div id="learnStatsBody"></div>
+    </div>`;
+    document.body.appendChild(ov);
+    document.getElementById('learnStatsClose').addEventListener('click', () => ov.classList.remove('open'));
+    ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+  }
+  const body = document.getElementById('learnStatsBody');
+  body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Načítám…</div>';
+  ov.classList.add('open');
+
+  let l = null;
+  try {
+    const snap = await db.collection('users').doc(ME.uid).get();
+    l = snap.exists ? (snap.data().learn || {})[DECK_ID] : null;
+  } catch (_) {}
+
+  const cards = (l && l.cards) || {};
+  const stats = (l && l.stats) || { answered: 0, correct: 0, days: {} };
+  if (!stats.answered) {
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.88rem;padding:6px 0;">
+      Zatím žádná data — spusť 🎮 Kvíz nebo 🧠 Chytré procvičování a statistiky se začnou sbírat.</p>`;
+    return;
+  }
+
+  const now = Date.now();
+  const pct = Math.round(stats.correct / stats.answered * 100);
+  const dueNow = ALL_CARDS.filter(c => { const e = cards[c.id]; return !e || e.due <= now; }).length;
+
+  // Box distribution 1–5 over cards that have an entry
+  const boxes = [0, 0, 0, 0, 0];
+  ALL_CARDS.forEach(c => { const e = cards[c.id]; if (e && e.box >= 1) boxes[Math.min(5, e.box) - 1]++; });
+  const boxMax = Math.max(1, ...boxes);
+  const boxHtml = boxes.map((n, i) => `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="width:100%;height:56px;display:flex;align-items:flex-end;">
+        <div style="width:100%;height:${Math.round(n / boxMax * 100)}%;min-height:${n ? 4 : 0}px;background:${['#ef4444','#f59e0b','#eab308','#84cc16','#22c55e'][i]};border-radius:4px 4px 0 0;"></div>
+      </div>
+      <span style="font-size:0.66rem;color:var(--text-muted);">${i + 1}</span>
+      <span style="font-size:0.72rem;font-weight:600;">${n}</span>
+    </div>`).join('');
+
+  // Last 7 days
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now - i * 86400e3);
+    const key = d.toISOString().slice(0, 10);
+    days.push({ label: d.toLocaleDateString('cs-CZ', { weekday: 'short' }), ...(stats.days[key] || { a: 0, c: 0 }) });
+  }
+  const dayMax = Math.max(1, ...days.map(d => d.a));
+  const daysHtml = days.map(d => `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;" title="${d.c}/${d.a} správně">
+      <div style="width:100%;height:48px;display:flex;align-items:flex-end;">
+        <div style="width:100%;height:${Math.round(d.a / dayMax * 100)}%;min-height:${d.a ? 4 : 0}px;background:var(--accent);opacity:${d.a ? 1 : 0.15};border-radius:4px 4px 0 0;"></div>
+      </div>
+      <span style="font-size:0.64rem;color:var(--text-muted);">${d.label}</span>
+    </div>`).join('');
+
+  // Worst cards: lowest box among attempted
+  const worst = ALL_CARDS
+    .filter(c => cards[c.id])
+    .sort((a, b) => (cards[a.id].box || 0) - (cards[b.id].box || 0))
+    .slice(0, 5);
+  const worstHtml = worst.length ? worst.map(c => `
+    <div style="display:flex;justify-content:space-between;gap:10px;font-size:0.8rem;padding:5px 0;border-bottom:1px solid var(--border);">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(c.front)}</span>
+      <span style="flex-shrink:0;color:${(cards[c.id].box || 1) <= 2 ? '#ef4444' : 'var(--text-muted)'};">box ${cards[c.id].box || 1}/5</span>
+    </div>`).join('') : '';
+
+  body.innerHTML = `
+    <div style="display:flex;gap:10px;margin-bottom:16px;">
+      <div style="flex:1;background:var(--bg-3);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:1.25rem;font-weight:700;">${stats.answered}</div>
+        <div style="font-size:0.68rem;color:var(--text-muted);">odpovědí</div>
+      </div>
+      <div style="flex:1;background:var(--bg-3);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:1.25rem;font-weight:700;color:${pct >= 70 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444'};">${pct}%</div>
+        <div style="font-size:0.68rem;color:var(--text-muted);">úspěšnost</div>
+      </div>
+      <div style="flex:1;background:var(--bg-3);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:1.25rem;font-weight:700;">${dueNow}</div>
+        <div style="font-size:0.68rem;color:var(--text-muted);">k opakování</div>
+      </div>
+    </div>
+    <label class="label">Krabičky (1 = neumím · 5 = umím)</label>
+    <div style="display:flex;gap:6px;margin:6px 0 16px;">${boxHtml}</div>
+    <label class="label">Posledních 7 dní</label>
+    <div style="display:flex;gap:6px;margin:6px 0 16px;">${daysHtml}</div>
+    ${worst.length ? `<label class="label">Nejvíc potřebují procvičit</label><div style="margin-top:6px;">${worstHtml}</div>` : ''}`;
 }
 
 async function createSurvivalLobby() {

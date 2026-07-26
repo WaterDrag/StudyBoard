@@ -1135,7 +1135,37 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   width: 100%; height: 100%;
   pointer-events: none;       /* click-through until draw mode is on */
   touch-action: none;
+  position: relative;
+  z-index: 1;                 /* strokes paint OVER the image layer below */
 }
+
+/* Image layer — pictures behind the strokes; grips float above the canvas */
+.wb-img { position: absolute; z-index: 0; pointer-events: none; }
+.wb-img img { width: 100%; height: 100%; object-fit: fill; border-radius: 4px; user-select: none; }
+.wb-img-move, .wb-img-del {
+  position: absolute; top: -15px;
+  display: none; z-index: 4; pointer-events: auto;
+  height: 15px; padding: 0 5px;
+  font-size: 10px; line-height: 15px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 4px; cursor: pointer;
+}
+.wb-img-move { left: 0; cursor: grab; }
+.wb-img-del  { right: 0; }
+.wb-img-rz {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 13px; height: 13px; display: none; z-index: 4; pointer-events: auto;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--accent) 50%);
+}
+/* The image body stays click-through (so you can draw over it); the grips
+   are shown while drawing mode is on and take their own pointer events. */
+.whiteboard.drawing .wb-img-move,
+.whiteboard.drawing .wb-img-del,
+.whiteboard.drawing .wb-img-rz { display: block; opacity: 0.75; }
+.whiteboard.drawing .wb-img-move:hover,
+.whiteboard.drawing .wb-img-del:hover,
+.whiteboard.drawing .wb-img-rz:hover { opacity: 1; }
 .whiteboard.drawing { outline: 2px solid var(--accent); outline-offset: -2px; }
 .whiteboard.drawing .wb-canvas { pointer-events: auto; cursor: crosshair; }
 
@@ -1942,6 +1972,96 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   font-size: 0.85rem;
 }
 .comment-input:focus { outline: none; border-color: var(--accent); }
+
+/* 💬 comment-count badges: floating bubble on board notes, inline chip in list */
+.note-cbadge {
+  position: absolute;
+  bottom: -9px; right: -7px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.note-cbadge.unread { background: var(--accent); border-color: var(--accent); color: #fff; }
+.row-cbadge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--bg-3);
+  border-radius: 9px;
+  padding: 2px 7px;
+}
+.row-cbadge.unread { background: var(--accent); color: #fff; }
+.mention { color: var(--accent); font-weight: 600; }
+.mention-me { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 4px; padding: 0 3px; }
+
+/* Board minimap (bottom-right corner) */
+#boardMinimap {
+  position: fixed;
+  right: 16px; bottom: 16px;
+  z-index: 80;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-2);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  opacity: 0.88;
+  transition: opacity 0.15s;
+}
+#boardMinimap:hover { opacity: 1; }
+@media (max-width: 700px) { #boardMinimap { display: none !important; } }
+
+/* Multi-select: rubber band, selected outline, floating action bar */
+#selRect {
+  position: fixed;
+  z-index: 200;
+  border: 1.5px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  pointer-events: none;
+  border-radius: 4px;
+}
+.note.msel { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+#mselBar {
+  position: fixed;
+  left: 50%; bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 210;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 8px 14px;
+  box-shadow: var(--shadow);
+}
+#mselCount { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
+
+/* Live cursors of other members (board coordinate space) */
+.live-cursor {
+  position: absolute;
+  z-index: 95;
+  pointer-events: none;
+  transition: left 0.09s linear, top 0.09s linear;
+}
+.lc-dot {
+  width: 10px; height: 10px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--lc, #818cf8);
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,0.85);
+}
+.lc-name {
+  margin-top: 3px; margin-left: 6px;
+  background: var(--lc, #818cf8);
+  color: #fff;
+  font-size: 0.62rem; font-weight: 600;
+  padding: 1px 6px; border-radius: 7px;
+  white-space: nowrap;
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ===== LIGHTBOX ===== */
 #lightbox {

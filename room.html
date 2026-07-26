@@ -80,6 +80,16 @@
       <!-- Notes injected by JS -->
     </div>
   </div>
+  <canvas id="boardMinimap" width="176" height="124" title="Minimapa — klikni pro přesun"></canvas>
+
+  <!-- Floating toolbar for multi-selection (Shift+tažení) -->
+  <div id="mselBar" style="display:none;">
+    <span id="mselCount"></span>
+    <button id="mselColor"  class="btn btn-ghost"  style="padding:5px 11px;font-size:0.8rem;">🎨 Barva</button>
+    <button id="mselFolder" class="btn btn-ghost"  style="padding:5px 11px;font-size:0.8rem;">📁 Složka</button>
+    <button id="mselDelete" class="btn btn-danger" style="padding:5px 11px;font-size:0.8rem;">🗑️ Smazat</button>
+    <button id="mselClear"  class="btn btn-ghost"  style="padding:5px 9px;font-size:0.8rem;">✕</button>
+  </div>
 
   <!-- LIST VIEW -->
   <div class="notes-list-view" id="notesListView" style="display:none;">
@@ -346,8 +356,10 @@
         </div>
       </div>
       <div id="aiCardsPreview"></div>
+      <div id="aiExamArea" style="display:none;"></div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close="aiCardsModal">Zrušit</button>
+        <button id="aiExamBtn" class="btn btn-secondary" title="AI tě vyzkouší z vybraných poznámek — nic se neukládá">🎓 Vyzkoušej mě</button>
         <button id="aiGenerateBtn" class="btn btn-primary">✨ Vygenerovat</button>
         <button id="aiSaveBtn" class="btn btn-primary" style="display:none;">💾 Uložit vybrané</button>
       </div>
@@ -573,6 +585,18 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="js/config.js"></script>
   <script>document.write('<script src="js/ai.js?v='+APP_VERSION+'"><\/script>');</script>
-  <script>(function(){var s=document.createElement('script');s.src='js/room.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+  <script>(function(){
+    // room.js je rozdělený na moduly (klasické skripty sdílející globály).
+    // async=false drží pořadí spouštění; room-init.js MUSÍ být poslední —
+    // registruje auth callback, který volá funkce ze všech ostatních souborů.
+    var files = ['room-core.js','room-list.js','room-notes.js','room-export.js',
+                 'room-board.js','room-whiteboard.js','room-ai.js','room-social.js','room-init.js'];
+    files.forEach(function(f){
+      var s = document.createElement('script');
+      s.src = 'js/' + f + '?v=' + APP_VERSION;
+      s.async = false;
+      document.head.appendChild(s);
+    });
+  })();</script>
 </body>
 </html>
