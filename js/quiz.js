@@ -221,7 +221,11 @@ function buildQuizOptions(card) {
   // How many correct answers to show: at least one, never all-but-none.
   const nCorrect = uniqCorrect.length > 1 ? randInt(1, Math.min(uniqCorrect.length, 3)) : 1;
   // How many wrong ones: varies too, so the total option count moves around.
-  const wantWrong = uniqCorrect.length > 1 ? randInt(2, 5) : (card.answerCount || 4) - 1;
+  // A single-answer card only gets to vary once its pool is big enough —
+  // older cards with just three stored distractors keep their fixed layout.
+  const wantWrong = uniqCorrect.length > 1
+    ? randInt(2, 5)
+    : (wrongPool.length >= 4 ? randInt(3, Math.min(5, wrongPool.length)) : (card.answerCount || 4) - 1);
   const nWrong = Math.max(1, Math.min(wantWrong, wrongPool.length));
 
   const chosenCorrect = shuffle(uniqCorrect).slice(0, nCorrect);

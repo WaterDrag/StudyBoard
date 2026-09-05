@@ -740,7 +740,8 @@ function optionsFor(card, allCards){
   }
   pool = pool.filter(function(v,i,a){ return v && a.indexOf(v) === i && corr.indexOf(v) === -1; });
   var nC = corr.length > 1 ? rnd(1, Math.min(corr.length, 3)) : 1;
-  var nW = Math.max(1, Math.min(corr.length > 1 ? rnd(2, 5) : 3, pool.length));
+  var want = corr.length > 1 ? rnd(2, 5) : (pool.length >= 4 ? rnd(3, Math.min(5, pool.length)) : 3);
+  var nW = Math.max(1, Math.min(want, pool.length));
   return shuffle(
     shuffle(corr).slice(0, nC).map(function(t){ return { text:t, correct:true }; })
       .concat(shuffle(pool).slice(0, nW).map(function(t){ return { text:t, correct:false }; })));

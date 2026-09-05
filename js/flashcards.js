@@ -501,40 +501,98 @@ Return ONLY a JSON array of ${count} strings: ["d1","d2",...]`;
   });
 }
 
-// ── Bulk AI distractors ───────────────────────────────────────
-// Fills in the wrong answers (quiz options) for every card that has none,
-// one request per card so each one is tailored to its own question. Saves
-// as it goes, so a mid-way failure still keeps whatever succeeded.
+// ── Bulk AI answer pools ──────────────────────────────────────
+// One request per card, so every set of options is tailored to its own
+// question. The point is a POOL, not a fixed set: the quiz picks a random
+// subset each time, so a card with six wrong answers stops looking the same
+// on the second run. Saves as it goes, so a mid-way failure keeps whatever
+// already succeeded.
+const POOL_WRONG = 6;   // wrong answers to aim for per card
+const POOL_ALSO  = 3;   // extra genuinely-correct answers, when they exist
+
+// Asks for both pools at once. Returns { wrong: [...], alsoCorrect: [...] }.
+async function geminiSuggestPool(front, back, existing) {
+  const already = (existing || []).length
+    ? `\nAlready used, do NOT repeat these: ${JSON.stringify(existing)}`
+    : '';
+  const prompt = `You are building multiple-choice options for one flashcard.
+Question: ${JSON.stringify(front)}
+Correct answer: ${JSON.stringify(back)}${already}
+
+Return JSON with two arrays, in the SAME language as the card:
+- "wrong": ${POOL_WRONG} plausible but clearly WRONG answers. Same format, length and style as the correct answer. They must NOT be variations of each other, and none of them may actually be correct.
+- "alsoCorrect": up to ${POOL_ALSO} OTHER answers that are ALSO fully correct for this exact question (different true facts, valid alternatives, other members of the same set). Use an EMPTY array when the question genuinely has only one correct answer — never pad it with half-truths.
+
+Return ONLY this JSON, nothing else: {"wrong":["..."],"alsoCorrect":["..."]}`;
+
+  return aiGenerate(prompt, {
+    maxOutputTokens: 900,
+    parse(text) {
+      const cleaned = text.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+      const start = cleaned.indexOf('{'), end = cleaned.lastIndexOf('}');
+      if (start === -1 || end <= start) throw new Error('parse');
+      const o = JSON.parse(repairAiJson(cleaned.slice(start, end + 1)));
+      const arr = v => (Array.isArray(v) ? v : []).map(x => String(x).trim()).filter(Boolean);
+      const wrong = arr(o.wrong), also = arr(o.alsoCorrect);
+      if (!wrong.length) throw new Error('empty');
+      return { wrong, alsoCorrect: also };
+    },
+  });
+}
+
 async function bulkGenerateDistractors() {
   const btn = document.getElementById('bulkDistractorsBtn');
   const mine = ALL_CARDS.filter(c => canManageCard(c) && c.front && c.back && !c.tableData);
-  let targets = mine.filter(c => !(c.distractors && c.distractors.length));
-  let regenerate = false;
-
   if (!mine.length) { toast('Žádné karty, které bys mohl upravit.'); return; }
+
+  // A card is "thin" when its pool is too small for the quiz to vary options.
+  let targets = mine.filter(c => (c.distractors || []).length < POOL_WRONG);
+  let topUp = true;
   if (!targets.length) {
-    if (!confirm('Všechny karty už možnosti mají. Vygenerovat je znovu (přepsat)?')) return;
+    if (!confirm(`Všechny karty už mají plnou zásobu (${POOL_WRONG} špatných odpovědí).
+Vygenerovat je znovu a ty staré přepsat?`)) return;
     targets = mine;
-    regenerate = true;
-  } else if (!confirm(`Vygenerovat AI špatné odpovědi pro ${targets.length} karet?`)) {
+    topUp = false;
+  } else if (!confirm(
+      `Doplnit AI odpovědi u ${targets.length} z ${mine.length} karet?
+
+` +
+      `Ke každé kartě vznikne až ${POOL_WRONG} špatných odpovědí — kvíz z nich pak pokaždé
+` +
+      `vybere jinou sadu, takže se otázky neokoukají. Kde to dává smysl, přidá i další
+` +
+      `správné odpovědi (pak se zaškrtává víc možností).`)) {
     return;
   }
 
   btn.disabled = true;
-  let done = 0, failed = 0;
+  let done = 0, failed = 0, added = 0, multi = 0;
   for (const card of targets) {
     btn.textContent = `⏳ ${done + failed + 1}/${targets.length}`;
+    const keep = topUp ? (card.distractors || []) : [];
     try {
-      const need = Math.max(1, (card.answerCount || 4) - 1);
-      const suggestions = await geminiSuggestDistractors(card.front, card.back, need);
-      const clean = [...new Set(suggestions.map(s => String(s).trim()).filter(Boolean))]
-        .filter(s => s.toLowerCase() !== String(card.back).toLowerCase())
-        .slice(0, need);
-      if (!clean.length) throw new Error('empty');
-      await db.collection('decks').doc(DECK_ID).collection('cards').doc(card.id).update({
-        distractors: regenerate ? clean : [...(card.distractors || []), ...clean].slice(0, need),
-        answerCount: card.answerCount || 4,
-      });
+      const res = await geminiSuggestPool(card.front, card.back, keep);
+      const lower = new Set([String(card.back).toLowerCase()]);
+
+      // Extra correct answers first — they define what a distractor may NOT be.
+      const corrects = [...new Set([...(topUp ? (card.corrects || []) : []), ...res.alsoCorrect])]
+        .filter(x => x && !lower.has(x.toLowerCase()))
+        .slice(0, POOL_ALSO);
+      corrects.forEach(c => lower.add(c.toLowerCase()));
+
+      // Anything "wrong" that is actually a correct answer would punish the
+      // right choice, so it never makes it into the pool.
+      const wrong = [...new Set([...keep, ...res.wrong])]
+        .filter(x => x && !lower.has(x.toLowerCase()))
+        .slice(0, POOL_WRONG);
+      if (!wrong.length) throw new Error('empty');
+
+      const patch = { distractors: wrong };
+      if (corrects.length) patch.corrects = corrects;
+      await db.collection('decks').doc(DECK_ID).collection('cards').doc(card.id).update(patch);
+
+      added += wrong.length - keep.length;
+      if (corrects.length) multi++;
       done++;
     } catch (_) {
       failed++;
@@ -545,7 +603,11 @@ async function bulkGenerateDistractors() {
 
   btn.disabled = false;
   btn.textContent = '🤖 AI odpovědi ke všem';
-  toast(failed ? `Hotovo: ${done} karet ✓, ${failed} se nepovedlo.` : `Hotovo! Možnosti doplněny k ${done} kartám ✓`);
+  const bits = [`${done} karet ✓`];
+  if (added > 0) bits.push(`+${added} špatných odpovědí`);
+  if (multi) bits.push(`${multi}× víc správných`);
+  if (failed) bits.push(`${failed} se nepovedlo`);
+  toast('Hotovo: ' + bits.join(' · '));
 }
 
 // Extra correct answers for a card — same chip UI as the distractors.
@@ -599,8 +661,9 @@ function setupEditCardModal() {
     suggestEl.innerHTML = '<span style="font-size:0.8rem;color:var(--text-muted);" id="aiStatusMsg">Generuji…</span>';
     suggestEl.style.display = 'block';
     try {
-      const need = (parseInt(document.getElementById('editAnswerCount').value) || 4) - 1;
-      const suggestions = await geminiSuggestDistractors(front, back, need);
+      // Offer a whole pool to pick from, not just enough for one layout —
+      // the quiz draws a random subset, so more stored options = more variety.
+      const suggestions = await geminiSuggestDistractors(front, back, POOL_WRONG);
       suggestEl.innerHTML = '<span style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Klikni pro přidání:</span>';
       suggestions.forEach(s => {
         const chip = document.createElement('button');
