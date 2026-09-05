@@ -364,6 +364,134 @@ async function uploadToImgBB(file) {
 }
 
 // ── Rich toolbar setup ────────────────────────────────────────
+// ── Images inside the note editor ─────────────────────────────
+// Defaults to a modest inline width instead of a full-width block, so a
+// pasted screenshot doesn't swallow the note. Clicking one opens a small
+// toolbar: size, how the text flows around it, and delete.
+const IMG_SIZES = { s: '150px', m: '240px', l: '380px', full: '100%' };
+
+function imgHtml(url, width) {
+  return `<img src="${url}" alt="" style="width:${width || IMG_SIZES.m};max-width:100%;border-radius:6px;` +
+         `float:left;margin:4px 12px 6px 0;">`;
+}
+
+function setupEditorImages(editor) {
+  if (!editor || editor._imgWired) return;
+  editor._imgWired = true;
+
+  // Ctrl+V of an image: the browser would otherwise inline a multi-megabyte
+  // base64 data URL straight into the note — too big for a Firestore document
+  // and impossible to resize sensibly. Upload it and insert a real <img>.
+  editor.addEventListener('paste', async e => {
+    const items = [...(e.clipboardData?.items || [])];
+    const imgItem = items.find(i => i.type && i.type.startsWith('image/'));
+    if (!imgItem) {
+      // Pasted rich text can still carry oversized images — normalise them
+      // after the browser has done its insertion.
+      setTimeout(() => normalizeEditorImages(editor), 0);
+      return;
+    }
+    e.preventDefault();
+    const file = imgItem.getAsFile();
+    if (!file) return;
+    const sel = window.getSelection();
+    const range = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+    toast('Nahrávám obrázek…');
+    try {
+      const url = await uploadToImgBB(file);
+      editor.focus();
+      if (range) { sel.removeAllRanges(); sel.addRange(range); }
+      document.execCommand('insertHTML', false, imgHtml(url));
+      toast('Obrázek vložen ✓');
+    } catch (err) { toast('Chyba uploadu: ' + err.message); }
+  });
+
+  // Drag & drop from the file system / another tab
+  editor.addEventListener('drop', async e => {
+    const file = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('image/'));
+    if (!file) return;
+    e.preventDefault();
+    toast('Nahrávám obrázek…');
+    try {
+      const url = await uploadToImgBB(file);
+      editor.focus();
+      document.execCommand('insertHTML', false, imgHtml(url));
+    } catch (err) { toast('Chyba uploadu: ' + err.message); }
+  });
+
+  editor.addEventListener('click', e => {
+    if (e.target.tagName === 'IMG') { e.stopPropagation(); openImgToolbar(e.target, editor); }
+    else closeImgToolbar();
+  });
+}
+
+// Anything that arrived by other means (old notes, pasted HTML) still gets a
+// sane width so it can't blow the layout apart.
+function normalizeEditorImages(editor) {
+  editor.querySelectorAll('img').forEach(img => {
+    if (/^data:/i.test(img.src) && img.src.length > 200000) { img.remove(); return; }
+    if (!img.style.width) { img.style.width = IMG_SIZES.m; img.style.maxWidth = '100%'; }
+  });
+}
+
+function closeImgToolbar() { document.getElementById('imgToolbar')?.remove(); }
+
+function openImgToolbar(img, editor) {
+  closeImgToolbar();
+  const bar = document.createElement('div');
+  bar.id = 'imgToolbar';
+  bar.className = 'img-toolbar';
+  bar.innerHTML = `
+    <span class="it-lbl">Velikost</span>
+    <button data-size="s" title="Malý">S</button>
+    <button data-size="m" title="Střední">M</button>
+    <button data-size="l" title="Velký">L</button>
+    <button data-size="full" title="Přes celou šířku">⤢</button>
+    <span class="it-sep"></span>
+    <span class="it-lbl">Obtékání</span>
+    <button data-align="left"   title="Vlevo — text teče vpravo vedle">⬅️</button>
+    <button data-align="center" title="Na střed — samostatně na řádku">⬛</button>
+    <button data-align="right"  title="Vpravo — text teče vlevo vedle">➡️</button>
+    <span class="it-sep"></span>
+    <button data-del="1" class="it-del" title="Odstranit obrázek">🗑</button>`;
+  document.body.appendChild(bar);
+
+  const place = () => {
+    const r = img.getBoundingClientRect();
+    bar.style.left = Math.max(8, Math.min(window.innerWidth - bar.offsetWidth - 8, r.left)) + 'px';
+    bar.style.top  = Math.max(8, r.top - bar.offsetHeight - 8) + 'px';
+  };
+  place();
+
+  const mark = () => {
+    const w = img.style.width || '';
+    bar.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', IMG_SIZES[b.dataset.size] === w));
+    const f = img.style.float || 'none';
+    const cur = f === 'left' ? 'left' : f === 'right' ? 'right' : 'center';
+    bar.querySelectorAll('[data-align]').forEach(b => b.classList.toggle('on', b.dataset.align === cur));
+  };
+  mark();
+
+  bar.addEventListener('mousedown', e => e.preventDefault()); // keep the caret
+  bar.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    e.stopPropagation();
+    if (b.dataset.del) { img.remove(); closeImgToolbar(); editor.focus(); return; }
+    if (b.dataset.size) { img.style.width = IMG_SIZES[b.dataset.size]; img.style.maxWidth = '100%'; }
+    if (b.dataset.align === 'left')  { img.style.cssFloat = 'left';  img.style.display = ''; img.style.margin = '4px 12px 6px 0'; }
+    if (b.dataset.align === 'right') { img.style.cssFloat = 'right'; img.style.display = ''; img.style.margin = '4px 0 6px 12px'; }
+    if (b.dataset.align === 'center'){ img.style.cssFloat = 'none';  img.style.display = 'block'; img.style.margin = '8px auto'; }
+    mark(); place();
+  });
+
+  // Close when clicking elsewhere / scrolling away
+  setTimeout(() => document.addEventListener('click', function once(ev) {
+    if (ev.target.closest('#imgToolbar') || ev.target === img) { document.addEventListener('click', once, { once: true }); return; }
+    closeImgToolbar();
+  }, { once: true }), 0);
+}
+
 function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
   const editor      = document.getElementById(editorId);
   const toolbar     = document.getElementById(toolbarId);
@@ -419,6 +547,8 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
     });
   }
 
+  setupEditorImages(editor);
+
   // Image upload
   const imgLabel = toolbar.querySelector('.rt-img-label');
   const fileInput = toolbar.querySelector('.rt-img-input');
@@ -432,9 +562,7 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
       try {
         const url = await uploadToImgBB(file);
         restoreRange();
-        document.execCommand('insertHTML', false,
-          `<img src="${url}" style="max-width:100%;border-radius:6px;margin:4px 0;display:block;" alt="">`
-        );
+        document.execCommand('insertHTML', false, imgHtml(url));
         editor.focus();
         toast('Obrázek vložen!');
       } catch (e) {
@@ -641,19 +769,56 @@ let DETAIL_NOTE_ID = null;
 // live in LIST_PREFS.commentSeen). Counts load once per room open; opening a
 // note refreshes its count live.
 const COMMENT_COUNTS = new Map();
-let _commentCountsLoaded = false;
+let _commentBackfillDone = false;
+
+// The count is denormalised onto the note itself (`commentCount`), so it
+// arrives with the notes snapshot we already pay for — no extra reads. It's
+// kept accurate by increment()/decrement() when commenting and reconciled
+// exactly whenever someone opens the thread.
+//
+// Notes created before 9.10 have no counter yet. Backfilling costs one read
+// per note, so it only runs in small rooms and only once; bigger rooms just
+// light their badges up as threads get opened.
+const COMMENT_BACKFILL_MAX_NOTES = 25;
+
+function syncCommentCountsFromNotes() {
+  NOTES_MAP.forEach((n, id) => {
+    if (typeof n.commentCount === 'number') COMMENT_COUNTS.set(id, n.commentCount);
+  });
+}
 
 async function loadCommentCounts() {
-  if (_commentCountsLoaded) return;
-  _commentCountsLoaded = true;
-  await Promise.all([...NOTES_MAP.keys()].map(async id => {
+  syncCommentCountsFromNotes();
+  applyCommentBadges();
+  if (_commentBackfillDone) return;
+  _commentBackfillDone = true;
+
+  const missing = [...NOTES_MAP.values()].filter(n => typeof n.commentCount !== 'number');
+  if (!missing.length || NOTES_MAP.size > COMMENT_BACKFILL_MAX_NOTES) return;
+  await Promise.all(missing.map(async n => {
     try {
-      const snap = await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(id).collection('comments').get();
-      if (snap.size) COMMENT_COUNTS.set(id, snap.size);
+      const snap = await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(n.id).collection('comments').get();
+      COMMENT_COUNTS.set(n.id, snap.size);
+      if (snap.size) await setNoteCommentCount(n.id, snap.size);
     } catch (_) { /* rules not published yet → no badges, no harm */ }
   }));
   applyCommentBadges();
   if (VIEW_MODE === 'list') renderNotesListView();
+}
+
+// Write the authoritative count back onto the note. Any member may do this
+// (the rules allow a commentCount-only update), so viewers keep it honest too.
+async function setNoteCommentCount(noteId, count) {
+  try { await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(noteId).update({ commentCount: count }); }
+  catch (_) { /* not permitted / offline — badge just stays stale */ }
+}
+
+async function bumpNoteCommentCount(noteId, delta) {
+  COMMENT_COUNTS.set(noteId, Math.max(0, (COMMENT_COUNTS.get(noteId) || 0) + delta));
+  try {
+    await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(noteId)
+      .update({ commentCount: firebase.firestore.FieldValue.increment(delta) });
+  } catch (_) {}
 }
 
 // Escape, then highlight @mentions. A mention of MY name (diacritics- and
@@ -707,6 +872,7 @@ function setupComments() {
           authorPhoto: ME.photoURL || null,
           at: firebase.firestore.FieldValue.serverTimestamp(),
         });
+      bumpNoteCommentCount(DETAIL_NOTE_ID, 1);
       input.value = '';
     } catch (e) { toast('Chyba: ' + e.message); }
     send.disabled = false;
@@ -762,11 +928,14 @@ function renderComments(docs) {
   }));
   listEl.scrollTop = listEl.scrollHeight;
 
-  // Viewing the thread marks it read (and keeps the live count fresh).
+  // Viewing the thread marks it read, and is our chance to reconcile the
+  // denormalised counter against the real number of comments.
   if (DETAIL_NOTE_ID) {
-    COMMENT_COUNTS.set(DETAIL_NOTE_ID, docs.length);
-    if ((LIST_PREFS.commentSeen || {})[DETAIL_NOTE_ID] !== docs.length) {
-      LIST_PREFS.commentSeen[DETAIL_NOTE_ID] = docs.length;
+    const nid = DETAIL_NOTE_ID;
+    COMMENT_COUNTS.set(nid, docs.length);
+    if (NOTES_MAP.get(nid)?.commentCount !== docs.length) setNoteCommentCount(nid, docs.length);
+    if ((LIST_PREFS.commentSeen || {})[nid] !== docs.length) {
+      LIST_PREFS.commentSeen[nid] = docs.length;
       persistListPrefs();
     }
     applyCommentBadges();

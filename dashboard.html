@@ -8,6 +8,10 @@
   <meta http-equiv="Expires" content="0">
   <title>StudyBoard</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%93%8B</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyBoard">
   <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,6 +55,15 @@
 
     <!-- TAB: Místnosti -->
     <div class="tab-panel active" id="tab-rooms">
+      <!-- Nepřečtené komentáře a zmínky napříč místnostmi -->
+      <div id="inboxWrap" style="display:none;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <h3 style="font-size:0.95rem;font-weight:700;">🔔 Nové pro tebe <span id="inboxCount" class="inbox-count"></span></h3>
+          <button id="inboxMarkAll" class="btn btn-ghost" style="font-size:0.75rem;padding:5px 11px;">Označit vše jako přečtené</button>
+        </div>
+        <div id="inboxList" class="inbox-list"></div>
+      </div>
+
       <div class="dashboard-header">
         <div>
           <h2>Moje místnosti</h2>

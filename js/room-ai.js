@@ -17,7 +17,44 @@ function noteToPlainText(note) {
     );
     table.replaceWith(document.createTextNode('\n' + rows.join('\n') + '\n'));
   });
-  return d.textContent.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  // textContent alone glues block elements together ("}public class...") and
+  // the old blanket [ \t]+ squeeze flattened indentation. Both are fatal once
+  // notes contain source code, so line breaks are materialised first and
+  // only runs of spaces INSIDE a line get collapsed.
+  d.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+  d.querySelectorAll('div, p, li, h1, h2, h3, h4, pre, blockquote').forEach(b => b.append('\n'));
+  return (d.textContent || '')
+    .replace(/\u00a0/g, ' ')            // &nbsp; — how contenteditable stores indents
+    .replace(/(\S)[^\S\n]{2,}/g, '$1 ') // squeeze mid-line runs, keep indentation
+    .replace(/[^\S\n]+$/gm, '')         // trailing spaces
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Models routinely put REAL newlines/tabs inside JSON string values when the
+// value is source code — which is invalid JSON, so JSON.parse would throw and
+// lose the whole batch. Re-escape control characters that sit inside a string
+// literal before parsing. (Escapes already written as \n are left alone.)
+function repairAiJson(txt) {
+  let out = '', inStr = false, esc = false;
+  for (const ch of txt) {
+    if (esc) { out += ch; esc = false; continue; }
+    if (ch === '\\') { out += ch; esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; out += ch; continue; }
+    if (inStr && (ch === '\n' || ch === '\r' || ch === '\t')) {
+      out += ch === '\n' ? '\\n' : (ch === '\r' ? '\\r' : '\\t');
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+// Render a snippet as a real code block: monospace, indentation preserved,
+// horizontally scrollable. Shared by the AI preview, the exam and (via the
+// same markup/CSS) the flash-card pages.
+function codeBlockHtml(code, lang) {
+  return `<pre class="code-block"${lang ? ` data-lang="${esc(lang)}"` : ''}><code>${esc(code || '')}</code></pre>`;
 }
 
 function setupAiCards() {
@@ -57,8 +94,9 @@ async function runAiExam() {
 
     const prompt = `You are examining a student on the notes below. Keep the SAME language as the notes (they may be in Czech).
 Create exactly ${count} multiple-choice questions covering the key facts and concepts.
-Each question: "q" is the question, "correct" is the right answer, "wrong" is an array of exactly 3 plausible but clearly wrong answers (same format/length as the correct one).
-Return ONLY a JSON array like this, nothing else: [{"q":"...","correct":"...","wrong":["...","...","..."]}, ...]
+Each question: "q" is the question, "correct" is the best right answer, "alsoCorrect" is an array of 0-4 OTHER answers that are ALSO fully correct (leave it empty when the question truly has one answer), and "wrong" is an array of 4-6 plausible but clearly wrong answers (same format/length as the correct one, never accidentally correct). Treat these as POOLS — a random subset of each is shown per attempt.
+If the notes contain programming code, also ask real code questions ("what does this print?", "find the bug", "complete the loop"). Put the properly indented code straight into "q" (no markdown fences) and add "lang" with the language id (java, python, sql...). If the ANSWERS are code, add "answersAreCode": true.
+Return ONLY a JSON array like this, nothing else: [{"q":"...","correct":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"lang":"java"}, ...]
 
 NOTES:
 """
@@ -70,10 +108,14 @@ ${combinedText.slice(0, 8000)}
       parse(text) {
         const m = text.match(/\[[\s\S]*\]/);
         if (!m) throw new Error('no-json');
-        const arr = JSON.parse(m[0]);
+        const arr = JSON.parse(repairAiJson(m[0]));
         const clean = arr
           .filter(x => x && x.q && x.correct && Array.isArray(x.wrong) && x.wrong.length)
-          .map(x => ({ q: String(x.q).trim(), correct: String(x.correct).trim(), wrong: x.wrong.map(w => String(w).trim()).slice(0, 3) }));
+          .map(x => ({ q: String(x.q).trim(), correct: String(x.correct).trim(),
+                       alsoCorrect: examCorrects(x),
+                       wrong: examWrongs(x),
+                       lang: String(x.lang || '').trim().toLowerCase().replace(/[^a-z+#]/g, '').slice(0, 12) || null,
+                       answersAreCode: !!x.answersAreCode }));
         if (!clean.length) throw new Error('empty');
         return clean;
       },
@@ -84,6 +126,39 @@ ${combinedText.slice(0, 8000)}
     area.innerHTML = `<div style="color:#fca5a5;font-size:.85rem;padding:10px 0;">${aiErrorMessage(e)}</div>`;
   }
   btn.disabled = false; btn.textContent = '🎓 Vyzkoušej mě';
+}
+
+// Shared sanitisation for exam questions: strip duplicates, and drop any
+// answer the model listed as both correct and wrong.
+function examConflict(x) {
+  const also = (Array.isArray(x.alsoCorrect) ? x.alsoCorrect : []).map(w => String(w).trim()).filter(Boolean);
+  const wrong = (Array.isArray(x.wrong) ? x.wrong : []).map(w => String(w).trim()).filter(Boolean);
+  return { also, wrong, conflict: new Set(also.filter(w => wrong.includes(w))) };
+}
+function examCorrects(x) {
+  const { also, conflict } = examConflict(x);
+  const correct = String(x.correct).trim();
+  return [...new Set(also.filter(w => w !== correct && !conflict.has(w)))].slice(0, 4);
+}
+function examWrongs(x) {
+  const { wrong, conflict } = examConflict(x);
+  const ok = new Set([String(x.correct).trim(), ...examCorrects(x)]);
+  return [...new Set(wrong.filter(w => !ok.has(w) && !conflict.has(w)))].slice(0, 6);
+}
+
+// Same idea as the quiz page: the model supplies pools, we pick a random
+// subset of each so no two attempts look alike.
+function examOptions(q) {
+  const correctPool = [q.correct, ...(q.alsoCorrect || [])].filter(Boolean);
+  const uniqCorrect = [...new Set(correctPool)];
+  const wrongPool = [...new Set((q.wrong || []).filter(w => w && !uniqCorrect.includes(w)))];
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const nCorrect = uniqCorrect.length > 1 ? rnd(1, Math.min(uniqCorrect.length, 3)) : 1;
+  const nWrong = Math.max(1, Math.min(uniqCorrect.length > 1 ? rnd(2, 5) : 3, wrongPool.length));
+  return shuffleArr([
+    ...shuffleArr(uniqCorrect).slice(0, nCorrect).map(text => ({ text, correct: true })),
+    ...shuffleArr(wrongPool).slice(0, nWrong).map(text => ({ text, correct: false })),
+  ]);
 }
 
 function startAiExam(questions) {
@@ -105,33 +180,51 @@ function startAiExam(questions) {
       return;
     }
     const q = questions[order[idx]];
-    const opts = shuffleArr([q.correct, ...q.wrong]);
+    const opts = examOptions(q);
+    const multi = questions.some(x => (x.alsoCorrect || []).length > 0);
     area.innerHTML = `
       <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
         <div style="display:flex;justify-content:space-between;font-size:0.74rem;color:var(--text-muted);margin-bottom:8px;">
           <span>Otázka ${idx + 1} / ${order.length}</span><span>Skóre ${score}</span>
         </div>
-        <div style="font-weight:600;margin-bottom:10px;">${esc(q.q)}</div>
+        <div style="font-weight:600;margin-bottom:10px;">${q.lang ? codeBlockHtml(q.q, q.lang) : esc(q.q)}</div>
+        ${multi ? '<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:8px;">☑️ Zaškrtni <b>všechny</b> správné — může jich být i víc.</div>' : ''}
         <div id="aiExamOpts"></div>
+        ${multi ? '<button class="btn btn-primary" id="aiExamConfirm" style="margin-top:8px;font-size:0.82rem;" disabled>Potvrdit</button>' : ''}
       </div>`;
     const box = document.getElementById('aiExamOpts');
+    const confirmBtn = document.getElementById('aiExamConfirm');
     let answered = false;
-    opts.forEach(o => {
+    const reveal = ok => {
+      answered = true;
+      [...box.children].forEach((x, i) => {
+        x.disabled = true;
+        if (opts[i].correct) x.style.background = 'rgba(34,197,94,0.25)';
+        else if (x.dataset.sel) x.style.background = 'rgba(239,68,68,0.25)';
+      });
+      if (ok) score++;
+      if (confirmBtn) confirmBtn.disabled = true;
+      setTimeout(next, ok ? 1100 : 1700);
+    };
+    opts.forEach((o, i) => {
       const b = document.createElement('button');
       b.className = 'btn btn-ghost';
-      b.style.cssText = 'display:block;width:100%;text-align:left;margin:5px 0;font-size:0.86rem;';
-      b.textContent = o;
+      b.style.cssText = 'display:block;width:100%;text-align:left;margin:5px 0;font-size:0.86rem;'
+        + (q.answersAreCode ? "font-family:'SF Mono',Consolas,monospace;white-space:pre-wrap;" : '');
+      b.textContent = (multi ? '☐  ' : '') + o.text;
       b.addEventListener('click', () => {
         if (answered) return;
-        answered = true;
-        if (o === q.correct) { b.style.background = 'rgba(34,197,94,0.25)'; score++; }
-        else {
-          b.style.background = 'rgba(239,68,68,0.25)';
-          [...box.children].forEach(x => { if (x.textContent === q.correct) x.style.background = 'rgba(34,197,94,0.25)'; });
-        }
-        setTimeout(next, 1100);
+        if (!multi) { reveal(o.correct); return; }
+        b.dataset.sel = b.dataset.sel ? '' : '1';
+        b.textContent = (b.dataset.sel ? '☑  ' : '☐  ') + o.text;
+        confirmBtn.disabled = ![...box.children].some(x => x.dataset.sel);
       });
       box.appendChild(b);
+    });
+    if (confirmBtn) confirmBtn.addEventListener('click', () => {
+      if (answered) return;
+      const ok = opts.every((o, i) => !!box.children[i].dataset.sel === !!o.correct);
+      reveal(ok);
     });
   };
   next();
@@ -216,10 +309,16 @@ async function generateAiCards() {
 Create exactly ${count} flashcards covering the key facts, terms, and concepts.
 Each flashcard:
 - "front": a short question or term
-- "back": the concise, correct answer or definition
-- "wrong": an array of plausible but clearly wrong answers (same format/length/language as "back", not variations of each other)
-YOU decide how many answer options each question deserves: binary facts (yes/no, either/or) get 1 wrong answer, typical questions get 3, questions with many confusable alternatives (dates, names, terms) may get 4. So "wrong" has 1–4 items depending on the question.
-Return ONLY a JSON array like this, nothing else: [{"front":"...","back":"...","wrong":["..."]}, ...]
+- "back": the single best correct answer or definition
+- "alsoCorrect": an array of OTHER answers that are ALSO fully correct for this question — different true facts, valid alternatives, other members of the same set (e.g. for "Which are OSI layers?" list several real layers; for "Which keywords declare a variable in JS?" list let, const, var). Give 0-4 of them: 0 when the question genuinely has one single answer, more when it honestly has several. Never pad it with half-truths.
+- "wrong": an array of 4-6 plausible but clearly WRONG answers, in the same format/length/language as "back", not variations of each other and not accidentally correct.
+Write these as POOLS — the app picks a random subset of each for every attempt, so more is better as long as every entry is honestly right (or honestly wrong).
+
+SOURCE CODE: if the notes contain programming code, make proper code cards too, and mark them so they render as code:
+- "frontLang": language id (java, python, c, cpp, csharp, js, php, sql, html, css, bash...) when the QUESTION itself is code — e.g. "What does this print?", "Find the bug", "What is the complexity?". Put the real, correctly indented code in "front".
+- "codeLang": same idea when the ANSWER is code — e.g. "Write a for-each loop over a List". Put the code in "back", and make "wrong" plausible but genuinely broken/incorrect code in the same language.
+Keep code short (max ~12 lines), keep the original indentation using real newlines, and never wrap it in markdown fences. Use the language actually used in the notes. Mix code cards with normal ones when the notes mix theory and code.
+Return ONLY a JSON array like this, nothing else: [{"front":"...","back":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"codeLang":"java"}, ...]
 
 NOTES:
 """
@@ -231,15 +330,34 @@ ${combinedText.slice(0, 8000)}
       parse(text) {
         const m = text.match(/\[[\s\S]*\]/);
         if (!m) throw new Error('no-json');
-        const arr = JSON.parse(m[0]);
+        const arr = JSON.parse(repairAiJson(m[0]));
         const clean = arr
           .filter(c => c && c.front && c.back)
           .map(c => {
-            const distractors = (Array.isArray(c.wrong) ? c.wrong : [])
-              .map(w => String(w).trim()).filter(Boolean).slice(0, 4);
+            const back = String(c.back).trim();
+            const rawWrong = (Array.isArray(c.wrong) ? c.wrong : []).map(w => String(w).trim()).filter(Boolean);
+            // Extra correct answers — the quiz shows a random subset of them.
+            // Anything the model listed as correct AND wrong is contradictory,
+            // so it is dropped from both rather than trusted either way.
+            const rawAlso = (Array.isArray(c.alsoCorrect) ? c.alsoCorrect : []).map(w => String(w).trim()).filter(Boolean);
+            // Listed as correct AND wrong = the model contradicted itself.
+            // Drop it from both: being marked wrong for picking a genuinely
+            // correct answer is the worse failure, so never risk it.
+            const conflict = new Set(rawAlso.filter(w => rawWrong.includes(w)));
+            const corrects = [...new Set(rawAlso.filter(w => w !== back && !conflict.has(w)))].slice(0, 4);
+            const correctSet = new Set([back, ...corrects]);
+            const distractors = [...new Set(rawWrong.filter(w => !correctSet.has(w) && !conflict.has(w)))].slice(0, 6);
+            // Only accept a language we can plausibly render as code.
+            const lang = v => {
+              const t = String(v || '').trim().toLowerCase().replace(/[^a-z+#]/g, '');
+              return t && t.length <= 12 ? t : null;
+            };
             return {
               front: String(c.front).trim(),
-              back: String(c.back).trim(),
+              back,
+              corrects,
+              frontLang: lang(c.frontLang),
+              codeLang: lang(c.codeLang),
               distractors,
               // The AI's chosen option count = its distractors + the answer.
               // No distractors sent → classic 4 options (the quiz pads with
@@ -269,9 +387,12 @@ function renderAiCardsPreview(cards) {
     cards.map((c, i) => `
       <label class="ai-card-row">
         <input type="checkbox" class="ai-card-check" data-i="${i}" checked>
-        <span><b>${esc(c.front)}</b><br><span style="color:var(--text-muted);">${esc(c.back)}</span>
+        <span>${c.frontLang ? `<b>Kód (${esc(c.frontLang)}):</b>${codeBlockHtml(c.front, c.frontLang)}` : `<b>${esc(c.front)}</b>`}<br><span style="color:var(--text-muted);">${c.codeLang ? codeBlockHtml(c.back, c.codeLang) : esc(c.back)}</span>
+          ${(c.corrects && c.corrects.length)
+            ? `<br><span style="font-size:0.74rem;color:#86efac;">✔ také správně: ${c.corrects.map(esc).join(' · ')}</span>`
+            : ''}
           ${(c.distractors && c.distractors.length)
-            ? `<br><span style="font-size:0.74rem;color:var(--text-muted);">❌ ${c.distractors.map(esc).join(' · ')} <span style="opacity:0.7;">(${c.answerCount} možností)</span></span>`
+            ? `<br><span style="font-size:0.74rem;color:var(--text-muted);">❌ ${c.distractors.map(esc).join(' · ')} <span style="opacity:0.7;">(kvíz vybere náhodně)</span></span>`
             : ''}
         </span>
       </label>`).join('') +
@@ -304,6 +425,9 @@ async function saveAiCards() {
       batch.set(cardsCol.doc(), {
         front: c.front,
         back: c.back,
+        corrects: c.corrects || [],       // further answers that are also right
+        frontLang: c.frontLang || null,   // question is code, in this language
+        codeLang: c.codeLang || null,     // answer is code, in this language
         distractors: c.distractors || [],
         answerCount: c.answerCount || 4,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),

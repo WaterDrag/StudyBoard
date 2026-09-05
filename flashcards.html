@@ -8,6 +8,10 @@
   <meta http-equiv="Expires" content="0">
   <title>Flash Cards – StudyBoard</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%93%8B</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyBoard">
   <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -257,6 +261,35 @@
         <textarea id="editCardBack" class="input" style="min-height:70px;resize:vertical;"></textarea>
       </div>
       <div class="form-group">
+        <label class="label">Kód na kartě</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <select id="editFrontLang" class="input" style="max-width:210px;" title="Přední strana je kód">
+            <option value="">Přední strana: text</option>
+            <option value="java">Přední: kód — Java</option>
+            <option value="python">Přední: kód — Python</option>
+            <option value="js">Přední: kód — JavaScript</option>
+            <option value="cpp">Přední: kód — C/C++</option>
+            <option value="csharp">Přední: kód — C#</option>
+            <option value="php">Přední: kód — PHP</option>
+            <option value="sql">Přední: kód — SQL</option>
+            <option value="html">Přední: kód — HTML/CSS</option>
+            <option value="bash">Přední: kód — Bash</option>
+          </select>
+          <select id="editCodeLang" class="input" style="max-width:210px;" title="Zadní strana je kód">
+            <option value="">Zadní strana: text</option>
+            <option value="java">Zadní: kód — Java</option>
+            <option value="python">Zadní: kód — Python</option>
+            <option value="js">Zadní: kód — JavaScript</option>
+            <option value="cpp">Zadní: kód — C/C++</option>
+            <option value="csharp">Zadní: kód — C#</option>
+            <option value="php">Zadní: kód — PHP</option>
+            <option value="sql">Zadní: kód — SQL</option>
+            <option value="html">Zadní: kód — HTML/CSS</option>
+            <option value="bash">Zadní: kód — Bash</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
         <label class="label">Počet odpovědí v kvízu</label>
         <select id="editAnswerCount" class="input" style="max-width:160px;">
           <option value="2">2 (1 špatná)</option>
@@ -264,6 +297,15 @@
           <option value="4" selected>4 (3 špatné)</option>
           <option value="5">5 (4 špatné)</option>
         </select>
+      </div>
+      <!-- Další správné odpovědi -->
+      <div class="form-group">
+        <label class="label">Další správné odpovědi <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">— kvíz z nich vybírá náhodně, může jich ukázat víc naráz</span></label>
+        <div id="editCorrectsList" style="display:flex;flex-wrap:wrap;gap:5px;min-height:24px;margin-bottom:6px;"></div>
+        <div style="display:flex;gap:6px;">
+          <input id="editCorrectInput" class="input" type="text" placeholder="Další správná odpověď…" style="flex:1;padding:6px 10px;font-size:0.85rem;" maxlength="120">
+          <button class="btn btn-secondary" id="editCorrectAdd" style="padding:6px 12px;">+</button>
+        </div>
       </div>
       <!-- Špatné odpovědi -->
       <div class="form-group">

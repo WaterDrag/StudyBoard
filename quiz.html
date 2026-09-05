@@ -8,6 +8,10 @@
   <meta http-equiv="Expires" content="0">
   <title>Kvíz – StudyBoard</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%93%8B</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyBoard">
   <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -59,7 +63,15 @@
         <span>Generuji možnosti pomocí AI…</span>
       </div>
 
+      <div class="quiz-multi-hint" id="quizMultiHint" style="display:none;">
+        ☑️ Zaškrtni <b>všechny</b> správné odpovědi — může jich být i víc (nebo jen jedna).
+      </div>
+
       <div class="quiz-answers" id="quizAnswers" style="display:none;"></div>
+
+      <div style="text-align:center;margin-top:14px;">
+        <button id="quizConfirmBtn" class="btn btn-primary" style="display:none;" disabled>Potvrdit odpověď</button>
+      </div>
 
     </div>
 

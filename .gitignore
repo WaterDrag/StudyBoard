@@ -1,0 +1,20 @@
+# Windows / editor smeti
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*~
+
+# Docasne soubory z testovani (vznikaji v korenu jako _neco.html)
+_*.html
+
+# Zalohy
+*.bak
+js/*.bak
+
+# Logy a zavislosti (kdyby se sem nekdy dostaly)
+*.log
+node_modules/
+
+# Lokalni pomucky editoru
+.claude/

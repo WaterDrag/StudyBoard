@@ -172,6 +172,21 @@ auth.onAuthStateChanged(async user => {
     wrap.scrollLeft = BOARD_PAD - 280;
     wrap.scrollTop  = BOARD_PAD - 220;
 
+    // Deep link from the dashboard inbox (?note=ID): centre on that note and
+    // open its detail once the first notes snapshot has landed.
+    const wantNote = new URLSearchParams(window.location.search).get('note');
+    if (wantNote) {
+      let tries = 0;
+      const openWhenReady = setInterval(() => {
+        const note = NOTES_MAP.get(wantNote);
+        if (note) {
+          clearInterval(openWhenReady);
+          centerOnNote(note);
+          openNoteDetail(document.getElementById('n-' + wantNote), note);
+        } else if (++tries > 40) clearInterval(openWhenReady); // ~8 s, then give up
+      }, 200);
+    }
+
   } catch (e) {
     toast('Chyba: ' + e.message);
     setTimeout(() => (window.location.href = 'dashboard.html'), 1800);

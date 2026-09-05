@@ -331,7 +331,32 @@ async function loadDeck() {
   setupModalClose();
 }
 
+// Models routinely put REAL newlines/tabs inside JSON string values when the
+// value is source code — which is invalid JSON, so JSON.parse would throw and
+// lose the whole batch. Re-escape control characters that sit inside a string
+// literal before parsing. (Escapes already written as \n are left alone.)
+function repairAiJson(txt) {
+  let out = '', inStr = false, esc = false;
+  for (const ch of txt) {
+    if (esc) { out += ch; esc = false; continue; }
+    if (ch === '\\') { out += ch; esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; out += ch; continue; }
+    if (inStr && (ch === '\n' || ch === '\r' || ch === '\t')) {
+      out += ch === '\n' ? '\\n' : (ch === '\r' ? '\\r' : '\\t');
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+// Monospace block with the indentation kept — the whole point of a code card.
+function codeBlockHtml(code, lang) {
+  return `<pre class="code-block"${lang ? ` data-lang="${esc(lang)}"` : ''}><code>${esc(code || '')}</code></pre>`;
+}
+
 function renderCardContent(card) {
+  if (card.codeLang) return codeBlockHtml(card.back, card.codeLang);
   if (card.tableData) {
     const { headers = [], rows = [] } = card.tableData;
     let html = '<div class="card-table-wrap"><table class="card-table"><thead><tr>';
@@ -365,7 +390,7 @@ function renderCardsList() {
       <div class="card-sides">
         <div>
           <div class="card-side-lbl">Přední</div>
-          <div class="card-side-txt">${esc(card.front)}</div>
+          ${card.frontLang ? codeBlockHtml(card.front, card.frontLang) : `<div class="card-side-txt">${esc(card.front)}</div>`}
         </div>
         <div>
           <div class="card-side-lbl">Zadní</div>
@@ -408,6 +433,10 @@ function openEditCard(card) {
   document.getElementById('editCardFront').value   = card.front || '';
   document.getElementById('editCardBack').value    = card.back  || '';
   document.getElementById('editAnswerCount').value = String(card.answerCount || 4);
+  editCorrects = [...(card.corrects || [])];
+  renderEditCorrects();
+  document.getElementById('editFrontLang').value   = card.frontLang || '';
+  document.getElementById('editCodeLang').value    = card.codeLang  || '';
   document.getElementById('editAISuggestions').style.display = 'none';
   renderEditDistractors();
   openModal('editCardModal');
@@ -459,7 +488,7 @@ Return ONLY a JSON array of ${count} strings: ["d1","d2",...]`;
       const end   = cleaned.lastIndexOf(']');
       if (start !== -1 && end > start) {
         try {
-          const arr = JSON.parse(cleaned.slice(start, end + 1));
+          const arr = JSON.parse(repairAiJson(cleaned.slice(start, end + 1)));
           if (Array.isArray(arr) && arr.length >= count) return arr.slice(0, count).map(String);
         } catch (_) { /* malformed — fall through to line-based parsing below */ }
       }
@@ -519,7 +548,36 @@ async function bulkGenerateDistractors() {
   toast(failed ? `Hotovo: ${done} karet ✓, ${failed} se nepovedlo.` : `Hotovo! Možnosti doplněny k ${done} kartám ✓`);
 }
 
+// Extra correct answers for a card — same chip UI as the distractors.
+let editCorrects = [];
+
+function renderEditCorrects() {
+  const list = document.getElementById('editCorrectsList');
+  if (!list) return;
+  list.innerHTML = '';
+  editCorrects.forEach((d, i) => {
+    const tag = document.createElement('span');
+    tag.className = 'distractor-tag is-correct';
+    tag.innerHTML = `<span class="distractor-text">${esc(d)}</span><button class="distractor-rm">×</button>`;
+    tag.querySelector('.distractor-rm').addEventListener('click', () => { editCorrects.splice(i, 1); renderEditCorrects(); });
+    list.appendChild(tag);
+  });
+}
+
 function setupEditCardModal() {
+  const addCorrect = () => {
+    const inp = document.getElementById('editCorrectInput');
+    const val = inp.value.trim();
+    if (!val || editCorrects.includes(val)) { inp.value = ''; return; }
+    editCorrects.push(val);
+    inp.value = '';
+    renderEditCorrects();
+  };
+  document.getElementById('editCorrectAdd').addEventListener('click', addCorrect);
+  document.getElementById('editCorrectInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addCorrect(); }
+  });
+
   document.getElementById('editDistractorAdd').addEventListener('click', () => {
     const inp = document.getElementById('editDistractorInput');
     const val = inp.value.trim();
@@ -573,6 +631,9 @@ function setupEditCardModal() {
       const answerCount = parseInt(document.getElementById('editAnswerCount').value) || 4;
       await db.collection('decks').doc(DECK_ID).collection('cards').doc(EDIT_CARD_ID).update({
         front, back,
+        corrects: editCorrects,
+        frontLang: document.getElementById('editFrontLang').value || null,
+        codeLang:  document.getElementById('editCodeLang').value  || null,
         distractors: editDistractors,
         answerCount,
       });
@@ -672,8 +733,11 @@ function showStudyCard() {
   inner.classList.remove('flipped');
 
   const card = STUDY_QUEUE[STUDY_IDX];
-  document.getElementById('studyFront').textContent = card.front;
-  document.getElementById('studyBack').textContent  = card.back;
+  const fEl = document.getElementById('studyFront'), bEl = document.getElementById('studyBack');
+  if (card.frontLang) fEl.innerHTML = codeBlockHtml(card.front, card.frontLang);
+  else fEl.textContent = card.front;
+  if (card.codeLang)  bEl.innerHTML = codeBlockHtml(card.back, card.codeLang);
+  else bEl.textContent = card.back;
   document.getElementById('studyIdx').textContent   = STUDY_IDX + 1;
   document.getElementById('studyTotal').textContent = STUDY_QUEUE.length;
   document.getElementById('studyProgFill').style.width = (STUDY_IDX / STUDY_QUEUE.length * 100) + '%';

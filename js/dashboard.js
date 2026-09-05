@@ -100,6 +100,7 @@ function loadRooms(user) {
         const role = (r.roles || {})[user.uid] || 'viewer';
         grid.appendChild(buildRoomCard(doc.id, r, role));
       });
+      loadInbox(user, sorted.map(d => ({ id: d.id, name: d.data().name, color: d.data().color })));
     }, err => {
       if (err.code === 'permission-denied') {
         grid.innerHTML = `<div style="grid-column:1/-1;color:var(--text-muted);padding:40px;text-align:center;">⏳ Firestore pravidla se aktivují… Obnovte stránku za chvíli.</div>`;
@@ -107,6 +108,102 @@ function loadRooms(user) {
         grid.innerHTML = `<div style="grid-column:1/-1;color:var(--text-muted);padding:40px;text-align:center;">Chyba: ${err.message}</div>`;
       }
     });
+}
+
+// ── Inbox: unread comments across all rooms ───────────────────
+// Cheap by design: notes carry a denormalised `commentCount`, and how many
+// the user has already seen lives in their own roomPrefs. So "is there
+// anything new" costs one filtered query per room (only notes that actually
+// have comments come back) — no reading of comment threads. Only the few
+// unread notes then fetch their newest comment, for the preview and to spot
+// an @mention of you.
+const INBOX_MAX_ROWS = 12;
+let _inboxRan = false;
+
+async function loadInbox(user, rooms) {
+  if (_inboxRan || !rooms.length) return;
+  _inboxRan = true;
+  const wrap = document.getElementById('inboxWrap');
+  if (!wrap) return;
+
+  try {
+    const prefsSnap = await db.collection('users').doc(user.uid).get();
+    const roomPrefs = (prefsSnap.exists && prefsSnap.data().roomPrefs) || {};
+
+    const perRoom = await Promise.all(rooms.map(async room => {
+      const seen = (roomPrefs[room.id] || {}).commentSeen || {};
+      try {
+        const snap = await db.collection('rooms').doc(room.id).collection('notes')
+          .where('commentCount', '>', 0).get();
+        return snap.docs
+          .map(d => ({ room, noteId: d.id, note: d.data() }))
+          .filter(x => x.note.commentCount > (seen[x.noteId] || 0));
+      } catch (_) { return []; }   // rules not published yet / no index
+    }));
+
+    const unread = perRoom.flat().slice(0, INBOX_MAX_ROWS);
+    if (!unread.length) { wrap.style.display = 'none'; return; }
+
+    // Newest comment of each unread note → preview + mention detection.
+    const myNames = [user.displayName, (user.email || '').split('@')[0]]
+      .filter(Boolean).flatMap(n => n.split(/\s+/)).map(inboxNorm).filter(Boolean);
+    await Promise.all(unread.map(async x => {
+      try {
+        const c = await db.collection('rooms').doc(x.room.id).collection('notes').doc(x.noteId)
+          .collection('comments').orderBy('at', 'desc').limit(1).get();
+        if (!c.empty) {
+          const d = c.docs[0].data();
+          x.preview = d.text || '';
+          x.author = d.authorName || 'Někdo';
+          x.mentioned = /@([\p{L}\p{N}_.-]+)/gu.test(x.preview) &&
+            (x.preview.match(/@([\p{L}\p{N}_.-]+)/gu) || [])
+              .some(m => myNames.some(n => inboxNorm(m.slice(1)).startsWith(n)));
+        }
+      } catch (_) {}
+    }));
+
+    renderInbox(unread, user);
+  } catch (_) { wrap.style.display = 'none'; }
+}
+
+function inboxNorm(s) {
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function renderInbox(items, user) {
+  const wrap = document.getElementById('inboxWrap');
+  const list = document.getElementById('inboxList');
+  const count = document.getElementById('inboxCount');
+  wrap.style.display = 'block';
+  count.textContent = items.length;
+
+  list.innerHTML = items.map(x => {
+    const n = x.note;
+    const title = n.title || stripHtml(n.content || '').slice(0, 60) || '(bez názvu)';
+    const unread = n.commentCount - 0;
+    return `<a class="inbox-row${x.mentioned ? ' mentioned' : ''}" href="room.html?id=${x.room.id}&note=${x.noteId}"
+              style="--row-color:${esc(n.color || '#6366f1')}">
+        <div class="inbox-main">
+          <div class="inbox-title">${x.mentioned ? '<span class="inbox-at">@</span> ' : ''}${esc(title)}</div>
+          <div class="inbox-sub">${esc(x.room.name || 'Místnost')}${x.preview ? ' · ' + esc(x.author) + ': ' + esc(x.preview.slice(0, 70)) : ''}</div>
+        </div>
+        <span class="inbox-badge">💬 ${unread}</span>
+      </a>`;
+  }).join('');
+
+  document.getElementById('inboxMarkAll').onclick = async () => {
+    // Mark everything shown as seen, in the user's own prefs.
+    const updates = {};
+    items.forEach(x => { updates[`roomPrefs.${x.room.id}.commentSeen.${x.noteId}`] = x.note.commentCount; });
+    try { await db.collection('users').doc(user.uid).update(updates); } catch (_) {}
+    wrap.style.display = 'none';
+  };
+}
+
+function stripHtml(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  return d.textContent || '';
 }
 
 function buildRoomCard(id, room, role) {

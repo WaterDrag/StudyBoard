@@ -1996,6 +1996,45 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   padding: 2px 7px;
 }
 .row-cbadge.unread { background: var(--accent); color: #fff; }
+/* ===== DASHBOARD INBOX (unread comments across rooms) ===== */
+.inbox-count {
+  background: var(--accent); color: #fff;
+  font-size: 0.7rem; font-weight: 700;
+  padding: 1px 7px; border-radius: 10px; margin-left: 4px;
+}
+.inbox-list { display: flex; flex-direction: column; gap: 8px; }
+.inbox-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--row-color, var(--accent));
+  border-radius: var(--radius-sm);
+  text-decoration: none; color: var(--text);
+  transition: var(--transition);
+}
+.inbox-row:hover { border-color: var(--accent); transform: translateX(3px); }
+.inbox-row.mentioned { background: color-mix(in srgb, var(--accent) 10%, var(--bg-2)); }
+.inbox-main { flex: 1; min-width: 0; }
+.inbox-title {
+  font-size: 0.88rem; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.inbox-at {
+  display: inline-block; background: var(--accent); color: #fff;
+  width: 17px; height: 17px; line-height: 17px; text-align: center;
+  border-radius: 50%; font-size: 0.7rem; font-weight: 700;
+}
+.inbox-sub {
+  font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.inbox-badge {
+  flex-shrink: 0; font-size: 0.72rem;
+  background: var(--accent); color: #fff;
+  padding: 2px 8px; border-radius: 10px;
+}
+
 .mention { color: var(--accent); font-weight: 600; }
 .mention-me { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 4px; padding: 0 3px; }
 
@@ -3110,4 +3149,121 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   .room-nav { overflow-x: auto; }
   .room-nav-right { flex-shrink: 0; }
   .room-title { min-width: 70px; }
+}
+
+/* ===== CODE FLASH CARDS ===== */
+/* Indentation is the whole point, so `white-space: pre` + horizontal scroll
+   rather than wrapping. Used on the deck list, study card, quiz and the AI
+   preview/exam. */
+.code-block {
+  margin: 6px 0 0;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  overflow-x: auto;
+  text-align: left;
+  position: relative;
+}
+.code-block code {
+  font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre;
+  color: var(--text);
+  display: block;
+}
+.code-block[data-lang]::after {
+  content: attr(data-lang);
+  position: absolute; top: 4px; right: 8px;
+  font-size: 0.58rem; letter-spacing: 0.4px; text-transform: uppercase;
+  color: var(--text-muted); opacity: 0.7; pointer-events: none;
+}
+/* Study card: code needs the full face, not a centred single line */
+.flashcard-face:has(.code-block) { align-items: flex-start; justify-content: flex-start; }
+.flashcard-face .code-block { width: 100%; max-height: 100%; overflow: auto; }
+/* Quiz: the question block and code answers */
+.quiz-q-text .code-block { margin-top: 0; }
+.quiz-answer-btn.is-code {
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  font-size: 0.84rem;
+  white-space: pre-wrap;
+  text-align: left;
+}
+/* Card list rows keep code from stretching the row */
+.card-row .code-block { max-height: 220px; overflow: auto; }
+
+/* ===== IMAGES IN NOTES ===== */
+/* Floated images let text run alongside; every container that renders note
+   HTML needs to clear them, or the float escapes its card. */
+.note-content::after, .rich-editor::after,
+#detailContent::after, .note-detail-content::after {
+  content: ''; display: table; clear: both;
+}
+.note-content img, #detailContent img, .rich-editor img, .note-detail-content img {
+  max-width: 100%; height: auto; border-radius: 6px;
+}
+/* Legacy notes (pre-9.11) stored no width — keep them from filling the card */
+.note-content img:not([style*="width"]) { max-width: 240px; }
+
+.img-toolbar {
+  position: fixed; z-index: 3000;
+  display: flex; align-items: center; gap: 3px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 5px 8px;
+  box-shadow: var(--shadow);
+}
+.img-toolbar button {
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text); cursor: pointer;
+  font-size: 0.78rem; padding: 3px 8px; line-height: 1.4;
+}
+.img-toolbar button:hover { background: var(--bg-3); }
+.img-toolbar button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.img-toolbar .it-del:hover { background: #ef4444; color: #fff; }
+.img-toolbar .it-lbl { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+.img-toolbar .it-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+/* Clicking an image in the editor selects it for the toolbar */
+.rich-editor img { cursor: pointer; }
+.rich-editor img:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ===== MULTI-ANSWER QUIZ ===== */
+.quiz-multi-hint {
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: var(--bg-2);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+}
+/* Checkbox affordance — shown for every option in multi mode, so the number
+   of correct answers is never leaked by the UI. */
+.quiz-answer-btn.is-multi { position: relative; padding-left: 42px; }
+.quiz-answer-btn.is-multi::before {
+  content: '';
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  width: 17px; height: 17px;
+  border: 2px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-3);
+  transition: var(--transition);
+}
+.quiz-answer-btn.is-multi.selected::before {
+  content: '✓';
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  font-size: 0.72rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.quiz-answer-btn.is-multi.selected { border-color: var(--accent); }
+.quiz-answer-btn.is-multi.quiz-answer-correct::before { content: '✓'; background: #22c55e; border-color: #22c55e; color: #fff;
+  font-size: 0.72rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.quiz-answer-btn.is-multi.quiz-answer-wrong::before { content: '✕'; background: #ef4444; border-color: #ef4444; color: #fff;
+  font-size: 0.72rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.distractor-tag.is-correct {
+  border-color: #22c55e;
+  background: color-mix(in srgb, #22c55e 14%, transparent);
 }

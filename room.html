@@ -8,6 +8,10 @@
   <meta http-equiv="Expires" content="0">
   <title>StudyBoard</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%93%8B</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyBoard">
   <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -496,14 +500,17 @@
         <button class="modal-close" data-close="exportModal">✕</button>
       </div>
       <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:14px;line-height:1.5;">
-        Stáhne se jedna HTML stránka, která funguje offline: všechny poznámky jako
-        přehledný dokument + funkční kartičky s kvízem. Tisk / PDF uděláš v ní přes Ctrl+P.
+        Stáhne se <b>jedna HTML stránka</b>, která je celá offline: poznámky ve stromu složek,
+        vykreslené tabule, kartičky se čtyřmi režimy učení (učení s opakováním, kvíz, psaní,
+        párování), zkouškový režim a statistiky pokroku. Tisk / PDF uděláš v ní přes Ctrl+P.
       </p>
       <label class="label">Zahrnout</label>
       <div style="display:flex;flex-direction:column;gap:8px;margin:8px 0 16px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportConns" checked> Propojení mezi poznámkami</label>
         <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportComments"> Komentáře</label>
         <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportCards" checked> Flash Cards (kartičky)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportBoards" checked> Tabule (kresby)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportEmbed" checked> Vložit obrázky do souboru <span style="color:var(--text-muted);font-size:0.76rem;">(větší soubor, ale funguje úplně bez internetu)</span></label>
       </div>
       <button id="exportRunBtn" class="btn btn-primary" style="width:100%;justify-content:center;">⬇️ Stáhnout HTML</button>
       <p class="hint" id="exportHint" style="text-align:center;margin-top:10px;"></p>

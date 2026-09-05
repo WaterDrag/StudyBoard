@@ -116,7 +116,12 @@ service cloud.firestore {
                          (canEditRoom(roomId) && request.resource.data.authorId == request.auth.uid));
         allow update: if isAuth() && (
           isRoomOwner(roomId) ||
-          (roomRole(roomId) == 'editor' && resource.data.authorId == request.auth.uid)
+          (roomRole(roomId) == 'editor' && resource.data.authorId == request.auth.uid) ||
+          // Any member may touch ONLY the denormalised comment counter — it's
+          // what lets the 💬 badge work without re-reading every thread, and
+          // viewers can comment, so viewers must be able to bump it too.
+          (isMember(roomId) &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount']))
         );
         allow delete: if isAuth() && (
           isRoomOwner(roomId) ||
@@ -157,6 +162,15 @@ service cloud.firestore {
         allow update: if isAuth() && canEditRoom(roomId);
         allow delete: if isAuth() && (isRoomOwner(roomId) ||
                          resource.data.authorId == request.auth.uid);
+
+        // One doc per stroke (an array field would hit the 1 MB document cap
+        // and re-download the whole board on every stroke). Drawing is a
+        // shared activity, so any editor may write here; undo/redo deletes
+        // and re-creates by the stroke's own id.
+        match /strokes/{strokeId} {
+          allow read:  if isMember(roomId);
+          allow write: if isAuth() && canEditRoom(roomId);
+        }
       }
 
       // Owner-only durable snapshots of the whole room (notes + connections

@@ -12,6 +12,8 @@ let SCORE      = 0;
 let STREAK     = 0;
 let MAX_STREAK = 0;
 let WRONG_IDS  = new Set();
+let QUIZ_MULTI = false;     // whole-quiz tick-and-confirm mode
+let CURRENT_OPTS = [];      // options shown for the current question
 
 // ── Spaced repetition (Leitner boxes) ─────────────────────────
 // Per-user, per-deck progress in users/{uid}.learn[deckId]:
@@ -150,6 +152,10 @@ async function loadDeck() {
 // ── Start / restart ───────────────────────────────────────────
 function startQuiz(cards) {
   QUIZ_QUEUE = shuffle([...cards]).slice(0, Math.min(20, cards.length));
+  // If ANY card in this run can have several correct answers, the whole quiz
+  // uses the tick-and-confirm UI. Mixing single-click and multi-select would
+  // give the answer away — seeing checkboxes would mean "more than one".
+  QUIZ_MULTI = QUIZ_QUEUE.some(c => (c.corrects || []).length > 0);
   QUIZ_IDX   = 0;
   SCORE      = 0;
   STREAK     = 0;
@@ -176,72 +182,142 @@ function showQuestion() {
   document.getElementById('quizProgressTxt').textContent = `${QUIZ_IDX + 1} / ${total}`;
 
   // Question text
-  document.getElementById('quizQText').textContent = card.front;
+  const qEl = document.getElementById('quizQText');
+  if (card.frontLang) qEl.innerHTML = `<pre class="code-block" data-lang="${esc(card.frontLang)}"><code>${esc(card.front)}</code></pre>`;
+  else qEl.textContent = card.front;
 
   // Reset card visuals
   const cardEl = document.getElementById('quizCard');
   cardEl.classList.remove('quiz-card-correct', 'quiz-card-wrong', 'quiz-card-enter');
+  const cb = document.getElementById('quizConfirmBtn');
+  if (cb) cb.disabled = true;
   void cardEl.offsetWidth; // force reflow to retrigger animation
   cardEl.classList.add('quiz-card-enter');
 
   document.getElementById('quizGenLoading').style.display = 'none';
-  renderAnswers(card, getLocalDistractors(card));
+  renderAnswers(card, buildQuizOptions(card));
 }
 
-function getLocalDistractors(card) {
-  const n = (card.answerCount || 4) - 1;
-  if (card.distractors && card.distractors.length >= n) return shuffle(card.distractors).slice(0, n);
-  const extra = shuffle(ALL_CARDS.filter(c => c.id !== card.id && c.back)).slice(0, n).map(c => c.back);
-  return shuffle([...(card.distractors || []), ...extra]).slice(0, n);
+const randInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+
+// The AI only supplies POOLS — several correct answers and several wrong
+// ones. How many of each actually show up is decided here, per question, at
+// random, so the same card never looks the same twice and the option count
+// itself carries no hint.
+function buildQuizOptions(card) {
+  const correctPool = [card.back, ...(card.corrects || [])].map(x => String(x || '').trim()).filter(Boolean);
+  const uniqCorrect = [...new Set(correctPool)];
+
+  let wrongPool = [...new Set((card.distractors || []).map(x => String(x || '').trim()).filter(Boolean))]
+    .filter(w => !uniqCorrect.includes(w));
+  // Top up from other cards when the pool is thin (old cards, no AI wrongs).
+  if (wrongPool.length < 3) {
+    const extra = shuffle(ALL_CARDS.filter(c => c.id !== card.id && c.back))
+      .map(c => String(c.back).trim())
+      .filter(b => b && !uniqCorrect.includes(b) && !wrongPool.includes(b));
+    wrongPool = wrongPool.concat(extra);
+  }
+
+  // How many correct answers to show: at least one, never all-but-none.
+  const nCorrect = uniqCorrect.length > 1 ? randInt(1, Math.min(uniqCorrect.length, 3)) : 1;
+  // How many wrong ones: varies too, so the total option count moves around.
+  const wantWrong = uniqCorrect.length > 1 ? randInt(2, 5) : (card.answerCount || 4) - 1;
+  const nWrong = Math.max(1, Math.min(wantWrong, wrongPool.length));
+
+  const chosenCorrect = shuffle(uniqCorrect).slice(0, nCorrect);
+  const chosenWrong   = shuffle(wrongPool).slice(0, nWrong);
+  return shuffle([
+    ...chosenCorrect.map(text => ({ text, correct: true })),
+    ...chosenWrong.map(text => ({ text, correct: false })),
+  ]);
 }
 
-function renderAnswers(card, distractors) {
+function renderAnswers(card, opts) {
   document.getElementById('quizGenLoading').style.display = 'none';
+  CURRENT_OPTS = opts;
 
   const wrap = document.getElementById('quizAnswers');
   wrap.innerHTML    = '';
   wrap.style.display = 'grid';
 
-  const opts = shuffle([card.back, ...distractors]);
+  const hint = document.getElementById('quizMultiHint');
+  const confirmBtn = document.getElementById('quizConfirmBtn');
+  if (hint)       hint.style.display = QUIZ_MULTI ? 'block' : 'none';
+  if (confirmBtn) {
+    confirmBtn.style.display = QUIZ_MULTI ? 'inline-flex' : 'none';
+    confirmBtn.disabled = true;
+    confirmBtn.onclick = () => submitMulti(card);
+  }
+
   opts.forEach((opt, i) => {
     const btn = document.createElement('button');
-    btn.className = 'quiz-answer-btn';
-    btn.textContent = opt;
+    btn.className = 'quiz-answer-btn' + (card.codeLang ? ' is-code' : '') + (QUIZ_MULTI ? ' is-multi' : '');
+    btn.textContent = opt.text;   // textContent — options are never trusted HTML
     btn.style.animationDelay = `${i * 55}ms`;
-    btn.addEventListener('click', () => pick(btn, opt === card.back, card));
+    btn.dataset.i = String(i);
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      if (!QUIZ_MULTI) { pick(btn, opt.correct, card); return; }
+      btn.classList.toggle('selected');
+      confirmBtn.disabled = !wrap.querySelector('.quiz-answer-btn.selected');
+    });
     wrap.appendChild(btn);
   });
+}
+
+// Tick-and-confirm scoring: the answer counts only when the ticked set is
+// EXACTLY the correct set — no partial credit, since guessing everything
+// would otherwise always win.
+function submitMulti(card) {
+  const btns = [...document.querySelectorAll('.quiz-answer-btn')];
+  const picked  = new Set(btns.filter(b => b.classList.contains('selected')).map(b => +b.dataset.i));
+  const correct = new Set(CURRENT_OPTS.map((o, i) => (o.correct ? i : -1)).filter(i => i >= 0));
+  const ok = picked.size === correct.size && [...picked].every(i => correct.has(i));
+
+  btns.forEach(b => {
+    b.disabled = true;
+    const i = +b.dataset.i;
+    if (correct.has(i)) b.classList.add('quiz-answer-correct');
+    else if (picked.has(i)) b.classList.add('quiz-answer-wrong');
+  });
+  const confirmBtn = document.getElementById('quizConfirmBtn');
+  if (confirmBtn) confirmBtn.disabled = true;
+
+  finishAnswer(ok, card);
+}
+
+// Shared tail of both modes: card flash, score, streak, Leitner, next.
+function finishAnswer(ok, card) {
+  const cardEl = document.getElementById('quizCard');
+  cardEl.classList.add(ok ? 'quiz-card-correct' : 'quiz-card-wrong');
+  if (ok) {
+    SCORE++;
+    STREAK++;
+    if (STREAK > MAX_STREAK) MAX_STREAK = STREAK;
+  } else {
+    WRONG_IDS.add(card.id);
+    STREAK = 0;
+  }
+  recordAnswer(card.id, ok);   // feed the Leitner boxes + stats
+  updateStreak();
+  updateScoreNav();
+  QUIZ_IDX++;
+  setTimeout(showQuestion, ok ? 1200 : 1900);
 }
 
 // ── Handle answer pick ────────────────────────────────────────
 function pick(btn, correct, card) {
   document.querySelectorAll('.quiz-answer-btn').forEach(b => (b.disabled = true));
-
-  const cardEl = document.getElementById('quizCard');
-
   if (correct) {
     btn.classList.add('quiz-answer-correct');
-    cardEl.classList.add('quiz-card-correct');
-    SCORE++;
-    STREAK++;
-    if (STREAK > MAX_STREAK) MAX_STREAK = STREAK;
   } else {
     btn.classList.add('quiz-answer-wrong');
-    cardEl.classList.add('quiz-card-wrong');
-    WRONG_IDS.add(card.id);
-    STREAK = 0;
-    // Reveal the correct answer
+    // Reveal whichever option was the right one
     document.querySelectorAll('.quiz-answer-btn').forEach(b => {
-      if (b.textContent === card.back) b.classList.add('quiz-answer-correct');
+      if (CURRENT_OPTS[+b.dataset.i]?.correct) b.classList.add('quiz-answer-correct');
     });
   }
-
-  recordAnswer(card.id, correct);   // feed the Leitner boxes + stats
-
-  updateStreak();
-  updateScoreNav();
-  QUIZ_IDX++;
-  setTimeout(showQuestion, 1500);
+  finishAnswer(correct, card);
 }
 
 // ── Results ───────────────────────────────────────────────────

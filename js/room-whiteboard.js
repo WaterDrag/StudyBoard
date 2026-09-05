@@ -83,17 +83,81 @@ function wbSeed(str) {
 function canDrawWb() { return MY_ROLE === 'owner' || MY_ROLE === 'editor'; }
 function wbId() { return (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)); }
 
+// ── Stroke storage ────────────────────────────────────────────
+// Strokes live in a SUBCOLLECTION (one doc per stroke, doc id = stroke id),
+// not in an array field on the whiteboard doc. A single array would hit the
+// 1 MB document cap after a long drawing session, and every stroke would
+// re-download the whole document to every viewer. Ordering comes from `seq`
+// (fills replay in order, so it matters).
+//
+// In memory each whiteboard still exposes a flat `wb.strokes` array, so all
+// the rendering / resize / flood-fill code stays untouched. Pre-9.10 boards
+// keep their strokes in the old field until an editor opens them, at which
+// point they're migrated across and the field is cleared.
+function wbStrokesCol(id) { return wbCol().doc(id).collection('strokes'); }
+const WB_STROKE_UNSUBS = new Map();
+const WB_MIGRATED = new Set();
+
+function wbSyncStrokes(wb) {
+  wb.strokes = [...(wb._legacy || []), ...(wb._sub || [])];
+}
+
+function subscribeStrokes(id) {
+  if (WB_STROKE_UNSUBS.has(id)) return;
+  const unsub = wbStrokesCol(id).orderBy('seq', 'asc').onSnapshot(snap => {
+    const wb = WHITEBOARDS_MAP.get(id);
+    if (!wb) return;
+    wb._sub = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    wbSyncStrokes(wb);
+    renderWhiteboard(wb);
+    updateMinimap();
+  }, () => {});
+  WB_STROKE_UNSUBS.set(id, unsub);
+}
+
+// One-time move of a legacy strokes[] field into the subcollection. Writing
+// with the stroke's own id makes it idempotent, so two clients racing is
+// harmless.
+async function maybeMigrateStrokes(id) {
+  const wb = WHITEBOARDS_MAP.get(id);
+  if (!wb || !canDrawWb() || WB_MIGRATED.has(id)) return;
+  const legacy = wb._legacy || [];
+  if (!legacy.length) return;
+  WB_MIGRATED.add(id);
+  try {
+    const base = Date.now() - legacy.length; // keep their original order
+    for (let i = 0; i < legacy.length; i += 400) {
+      const batch = db.batch();
+      legacy.slice(i, i + 400).forEach((s, j) => {
+        const sid = s.id || wbId();
+        batch.set(wbStrokesCol(id).doc(sid), { ...s, id: sid, seq: base + i + j });
+      });
+      await batch.commit();
+    }
+    await wbCol().doc(id).update({ strokes: [] });
+  } catch (_) { WB_MIGRATED.delete(id); /* retry on next snapshot */ }
+}
+
 function setupWhiteboards() {
   wbCol().onSnapshot(snap => {
     snap.docChanges().forEach(ch => {
       if (ch.type === 'removed') {
+        WB_STROKE_UNSUBS.get(ch.doc.id)?.();
+        WB_STROKE_UNSUBS.delete(ch.doc.id);
         WHITEBOARDS_MAP.delete(ch.doc.id);
         document.getElementById('wb-' + ch.doc.id)?.remove();
         return;
       }
-      const data = { id: ch.doc.id, ...ch.doc.data() };
+      const prev = WHITEBOARDS_MAP.get(ch.doc.id);
+      const raw = ch.doc.data();
+      const data = { id: ch.doc.id, ...raw };
+      data._legacy = raw.strokes || [];        // pre-9.10 boards
+      data._sub    = prev ? (prev._sub || []) : [];
+      wbSyncStrokes(data);
       WHITEBOARDS_MAP.set(ch.doc.id, data);
       renderWhiteboard(data);
+      subscribeStrokes(ch.doc.id);
+      maybeMigrateStrokes(ch.doc.id);
     });
     updateMinimap();
   }, () => {});
@@ -106,11 +170,23 @@ async function createWhiteboard(storeX, storeY) {
       x: Math.round(storeX), y: Math.round(storeY),
       w: 460, h: 320,
       authorId: ME.uid, authorName: ME.displayName || ME.email,
-      strokes: [],
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     logActivity('board', 'přidal tabuli');
   } catch (e) { toast('Chyba: ' + e.message); }
+}
+
+// Add / remove a single stroke. `remove` handles both storage generations so
+// undo keeps working on a board that hasn't been migrated yet.
+async function wbAddStroke(id, s) {
+  const sid = s.id || wbId();
+  await wbStrokesCol(id).doc(sid).set({ ...s, id: sid, seq: Date.now() });
+}
+async function wbRemoveStroke(id, s) {
+  const wb = WHITEBOARDS_MAP.get(id);
+  const isLegacy = (wb?._legacy || []).some(x => x.id === s.id);
+  if (isLegacy) await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayRemove(s) });
+  else await wbStrokesCol(id).doc(s.id).delete();
 }
 
 function drawOneStroke(ctx, s) {
@@ -486,7 +562,7 @@ function wireWhiteboard(el, id) {
   // Commit a one-shot stroke (fill bucket, text) that needs no drag.
   const commitStroke = async s => {
     WB_REDO.delete(id); // a genuinely new stroke invalidates the redo stack
-    try { await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayUnion(s) }); }
+    try { await wbAddStroke(id, s); }
     catch (e) { toast('Chyba: ' + e.message); }
   };
 
@@ -609,7 +685,7 @@ function wireWhiteboard(el, id) {
       if (MY_ROLE === 'owner' || strokes[i].by === ME.uid) {
         const removed = strokes[i];
         try {
-          await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayRemove(removed) });
+          await wbRemoveStroke(id, removed);
           const stack = WB_REDO.get(id) || []; stack.push(removed); WB_REDO.set(id, stack);
         } catch (e) { toast('Chyba: ' + e.message); }
         return;
@@ -623,7 +699,7 @@ function wireWhiteboard(el, id) {
     const stack = WB_REDO.get(id) || [];
     if (!stack.length) { toast('Není co opakovat.'); return; }
     const s = stack.pop(); WB_REDO.set(id, stack);
-    try { await wbCol().doc(id).update({ strokes: firebase.firestore.FieldValue.arrayUnion(s) }); }
+    try { await wbAddStroke(id, s); }
     catch (e) { toast('Chyba: ' + e.message); stack.push(s); }
   });
 
@@ -716,12 +792,26 @@ function wireWhiteboard(el, id) {
       const up = async () => {
         window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up);
         const upd = { x: Math.round(toStoreX(newLeft)), y: Math.round(toStoreY(newTop)), w: newW, h: newH };
+        const shift = s => ({ ...s, pts: s.pts.map((v, i) => i % 2 === 0 ? v - shiftX : v - shiftY) });
         if (shiftX || shiftY) {
-          upd.strokes = (wb.strokes || []).map(s => ({ ...s, pts: s.pts.map((v, i) => i % 2 === 0 ? v - shiftX : v - shiftY) }));
-          if ((wb.texts || []).length) upd.texts = wb.texts.map(t => ({ ...t, x: t.x - shiftX, y: t.y - shiftY }));
+          // Legacy strokes still on the doc move with it…
+          if ((wb._legacy || []).length) upd.strokes = wb._legacy.map(shift);
+          if ((wb.texts || []).length)  upd.texts  = wb.texts.map(t => ({ ...t, x: t.x - shiftX, y: t.y - shiftY }));
           if ((wb.images || []).length) upd.images = wb.images.map(im => ({ ...im, x: im.x - shiftX, y: im.y - shiftY }));
         }
-        try { await wbCol().doc(id).update(upd); } catch (_) {}
+        try {
+          await wbCol().doc(id).update(upd);
+          // …and the subcollection ones are rewritten in chunked batches
+          // (Firestore caps a batch at 500 writes).
+          if (shiftX || shiftY) {
+            const subs = wb._sub || [];
+            for (let i = 0; i < subs.length; i += 400) {
+              const batch = db.batch();
+              subs.slice(i, i + 400).forEach(s => batch.set(wbStrokesCol(id).doc(s.id), shift(s)));
+              await batch.commit();
+            }
+          }
+        } catch (_) {}
       };
       window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
     });
