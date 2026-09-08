@@ -166,6 +166,326 @@ function setupFlashCards() {
 // appended with arrayUnion so concurrent drawing merges and removed with
 // arrayRemove for undo. A tabule can be grown but never shrunk below the
 // bounding box of what's already drawn on it.
+
+// ── Travel agent: rozcestník po celé aplikaci ─────────────────
+// Not just panning around one board — this is the way to get ANYWHERE:
+// the dashboard, a note on this board, a different room, a deck of cards.
+// Left half lists destinations, right half previews whatever is highlighted,
+// so you can tell two similarly-named notes apart before jumping.
+// Right-click the board → 🧭 Travel agent, or Ctrl+K.
+const TRAVEL_RECENT = [];   // {kind,id} of recent jumps, newest first
+let TRAVEL_RETURN = null;   // scroll position before the last in-board jump
+let TRAVEL_CACHE = null;    // rooms + decks, fetched once per session
+
+function travelScroll(wrap, left, top) {
+  // Deliberately instant: scrollTo({behavior:'smooth'}) and rAF tweens both
+  // silently do nothing when the page isn't painting (hidden pane, background
+  // tab, reduced-motion), which would leave the agent not travelling at all.
+  wrap.scrollLeft = Math.max(0, Math.min(left, wrap.scrollWidth - wrap.clientWidth));
+  wrap.scrollTop  = Math.max(0, Math.min(top,  wrap.scrollHeight - wrap.clientHeight));
+}
+
+// Rooms and decks live outside this board, so they cost a read — fetched once
+// when the palette is first opened and kept for the rest of the session.
+async function travelLoadRemote() {
+  if (TRAVEL_CACHE) return TRAVEL_CACHE;
+  const rooms = [], decks = [];
+  try {
+    const rs = await db.collection('rooms').where('memberIds', 'array-contains', ME.uid).get();
+    rs.docs.forEach(d => {
+      const r = d.data();
+      rooms.push({ id: d.id, name: r.name || 'Místnost', color: r.color,
+                   members: (r.memberIds || []).length, role: (r.roles || {})[ME.uid] || 'viewer' });
+    });
+  } catch (_) {}
+  try {
+    const [roomDecks, myDecks] = await Promise.all([
+      db.collection('decks').where('roomId', '==', ROOM_ID).get().catch(() => ({ docs: [] })),
+      db.collection('decks').where('ownerUid', '==', ME.uid).get().catch(() => ({ docs: [] })),
+    ]);
+    const seen = new Set();
+    [...roomDecks.docs, ...myDecks.docs].forEach(d => {
+      if (seen.has(d.id)) return;
+      seen.add(d.id);
+      const k = d.data();
+      decks.push({ id: d.id, name: k.name || 'Balíček', color: k.color,
+                   count: k.cardCount || 0, roomId: k.roomId || null });
+    });
+  } catch (_) {}
+  TRAVEL_CACHE = { rooms, decks };
+  return TRAVEL_CACHE;
+}
+
+function travelDestinations(remote) {
+  const out = [];
+  const folderOf = id => {
+    const f = [...FOLDERS_MAP.values()].find(x => (x.noteIds || []).includes(id));
+    return f ? f.name : '';
+  };
+
+  out.push({ kind: 'action', id: 'dash',  icon: '🏠', group: 'Kam jinam',
+             title: 'Hlavní obrazovka', sub: 'místnosti, kartičky, přátelé' });
+  out.push({ kind: 'action', id: 'cards', icon: '🃏', group: 'Kam jinam',
+             title: 'Flash Cards této místnosti', sub: 'všechny balíčky' });
+  out.push({ kind: 'action', id: 'fit',   icon: '🔭', group: 'Na této nástěnce',
+             title: 'Zobrazit celou nástěnku', sub: 'oddálí tak, aby bylo vidět vše' });
+  out.push({ kind: 'action', id: 'back',  icon: '↩︎', group: 'Na této nástěnce',
+             title: 'Zpět, kde jsem byl', sub: 'vrátí předchozí výřez' });
+
+  NOTES_MAP.forEach((n, id) => out.push({
+    kind: 'note', id, icon: '📝', group: 'Poznámky',
+    title: n.title || noteToPlainText(n).slice(0, 50) || '(bez názvu)',
+    sub: folderOf(id) || (pagesOf(n).length ? 'návod' : ''),
+    x: n.x, y: n.y, color: n.color, note: n,
+  }));
+
+  WHITEBOARDS_MAP.forEach((wb, id) => out.push({
+    kind: 'board', id, icon: '🎨', group: 'Tabule',
+    title: 'Tabule' + (wb.authorName ? ' — ' + wb.authorName : ''),
+    sub: `${Math.round(wb.w)}×${Math.round(wb.h)} px`,
+    x: wb.x, y: wb.y, w: wb.w, h: wb.h, wb,
+  }));
+
+  FOLDERS_MAP.forEach(f => {
+    const first = (f.noteIds || []).map(i => NOTES_MAP.get(i)).find(Boolean);
+    if (first) out.push({
+      kind: 'folder', id: f.id, icon: '📁', group: 'Složky',
+      title: f.name || 'Složka', sub: `${(f.noteIds || []).length} poznámek`,
+      x: first.x, y: first.y, color: f.color, folder: f,
+    });
+  });
+
+  (remote?.rooms || []).forEach(r => {
+    if (r.id === ROOM_ID) return;                 // already here
+    out.push({ kind: 'room', id: r.id, icon: '🚪', group: 'Jiné místnosti',
+               title: r.name, sub: `${r.members} členů · ${roleLabel(r.role)}`, color: r.color, room: r });
+  });
+
+  (remote?.decks || []).forEach(k => out.push({
+    kind: 'deck', id: k.id, icon: '🃏', group: 'Balíčky kartiček',
+    title: k.name, sub: `${k.count} karet${k.roomId === ROOM_ID ? ' · tato místnost' : ''}`,
+    color: k.color, deck: k,
+  }));
+
+  return out;
+}
+
+function contentBounds() {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const add = (x, y, w, h) => {
+    minX = Math.min(minX, x); minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+  };
+  NOTES_MAP.forEach(n => add(toRenderX(n.x), toRenderY(n.y), 240, 170));
+  WHITEBOARDS_MAP.forEach(wb => add(toRenderX(wb.x), toRenderY(wb.y), wb.w || 460, wb.h || 320));
+  return minX === Infinity ? null : { minX, minY, maxX, maxY };
+}
+
+function travelFitAll() {
+  const b = contentBounds();
+  if (!b) { toast('Na nástěnce zatím nic není.'); return; }
+  const wrap = document.getElementById('boardWrap');
+  const pad = 80;
+  const z = Math.min(
+    wrap.clientWidth  / (b.maxX - b.minX + pad * 2),
+    wrap.clientHeight / (b.maxY - b.minY + pad * 2), 1.2);
+  rememberReturn();
+  setBoardZoom(Math.max(0.15, z));
+  travelScroll(wrap, (b.minX - pad) * BOARD_ZOOM, (b.minY - pad) * BOARD_ZOOM);
+  updateMinimap();
+}
+
+function rememberReturn() {
+  const wrap = document.getElementById('boardWrap');
+  TRAVEL_RETURN = { left: wrap.scrollLeft, top: wrap.scrollTop, zoom: BOARD_ZOOM };
+}
+
+function travelBack() {
+  if (!TRAVEL_RETURN) { toast('Není kam se vracet.'); return; }
+  const wrap = document.getElementById('boardWrap');
+  const t = TRAVEL_RETURN;
+  rememberReturn();                        // Back toggles between two spots
+  setBoardZoom(t.zoom);
+  travelScroll(wrap, t.left, t.top);
+  updateMinimap();
+}
+
+// One dispatcher for every kind of destination — in-board jump or page change.
+function travelGo(dest) {
+  if (dest.kind === 'action') {
+    if (dest.id === 'dash')  { window.location.href = 'dashboard.html'; return; }
+    if (dest.id === 'cards') { window.location.href = `flashcards.html?room=${ROOM_ID}`; return; }
+    if (dest.id === 'fit')   { travelFitAll(); return; }
+    if (dest.id === 'back')  { travelBack(); return; }
+    return;
+  }
+  if (dest.kind === 'room') { window.location.href = `room.html?id=${dest.id}`; return; }
+  if (dest.kind === 'deck') {
+    window.location.href = `flashcards.html?deck=${dest.id}` + (dest.deck?.roomId ? `&room=${dest.deck.roomId}` : '');
+    return;
+  }
+
+  // Everything else lives on this board.
+  const wrap = document.getElementById('boardWrap');
+  rememberReturn();
+  if (VIEW_MODE !== 'board') goToBoard();
+  const w = dest.w || 240, h = dest.h || 170;
+  travelScroll(wrap,
+    (toRenderX(dest.x) + w / 2) * BOARD_ZOOM - wrap.clientWidth / 2,
+    (toRenderY(dest.y) + h / 2) * BOARD_ZOOM - wrap.clientHeight / 2);
+  updateMinimap();
+
+  const el = document.getElementById((dest.kind === 'board' ? 'wb-' : 'n-') + dest.id);
+  if (el) {
+    el.classList.remove('travel-flash');
+    void el.offsetWidth;                   // restart the animation
+    el.classList.add('travel-flash');
+    setTimeout(() => el.classList.remove('travel-flash'), 1600);
+  }
+
+  const i = TRAVEL_RECENT.findIndex(r => r.id === dest.id && r.kind === dest.kind);
+  if (i >= 0) TRAVEL_RECENT.splice(i, 1);
+  TRAVEL_RECENT.unshift({ id: dest.id, kind: dest.kind });
+  TRAVEL_RECENT.length = Math.min(TRAVEL_RECENT.length, 6);
+}
+
+// ── Preview pane ──────────────────────────────────────────────
+function travelPreview(d) {
+  if (!d) return '<div class="tp-empty">Vyber cíl vlevo</div>';
+  const head = `<div class="tp-head"><span class="tp-icon" style="--c:${esc(d.color || '#94a3b8')}">${d.icon}</span>
+    <div><b>${esc(d.title)}</b>${d.sub ? `<span>${esc(d.sub)}</span>` : ''}</div></div>`;
+
+  let body = '';
+  if (d.kind === 'note') {
+    const n = d.note;
+    const pages = pagesOf(n);
+    const text = noteToPlainText(n).slice(0, 400);
+    body = `
+      ${pages.length ? `<div class="tp-tag">📖 Návod · ${pages.length} kapitol</div>` : ''}
+      <div class="tp-body">${text ? esc(text) : '<i>Prázdná poznámka</i>'}</div>
+      <div class="tp-meta">Autor: ${esc(n.authorName || '—')}${n.commentCount ? ` · 💬 ${n.commentCount}` : ''}</div>`;
+  } else if (d.kind === 'board') {
+    const wb = d.wb;
+    body = `<div class="tp-meta">Tahů: ${(wb.strokes || []).length} · textů: ${(wb.texts || []).length} · obrázků: ${(wb.images || []).length}</div>`;
+  } else if (d.kind === 'folder') {
+    const notes = (d.folder.noteIds || []).map(i => NOTES_MAP.get(i)).filter(Boolean).slice(0, 8);
+    body = `<div class="tp-list">${notes.map(n =>
+      `<div>📝 ${esc(n.title || noteToPlainText(n).slice(0, 40) || '(bez názvu)')}</div>`).join('') || '<i>Prázdná složka</i>'}</div>`;
+  } else if (d.kind === 'room') {
+    body = `<div class="tp-body">Přejde do jiné místnosti.</div>
+            <div class="tp-meta">Tvoje role: ${esc(roleLabel(d.room.role))}</div>`;
+  } else if (d.kind === 'deck') {
+    body = `<div class="tp-body">Otevře balíček kartiček — učení, kvíz, psaní i párování.</div>
+            <div class="tp-meta">${d.deck.count} karet</div>`;
+  } else {
+    body = `<div class="tp-body">${esc(d.sub || '')}</div>`;
+  }
+  return head + body + '<div class="tp-go">Enter — přejít</div>';
+}
+
+// ── The palette ───────────────────────────────────────────────
+function closeTravelAgent() { document.getElementById('travelAgent')?.remove(); }
+
+async function openTravelAgent() {
+  closeTravelAgent();
+  const box = document.createElement('div');
+  box.id = 'travelAgent';
+  box.innerHTML = `
+    <div class="ta-head">
+      <span class="ta-icon">🧭</span>
+      <input id="taInput" placeholder="Kam chceš? Poznámka, tabule, místnost, kartičky…" autocomplete="off">
+      <kbd>Esc</kbd>
+    </div>
+    <div class="ta-cols">
+      <div id="taList" class="ta-list"></div>
+      <div id="taPrev" class="ta-prev"></div>
+    </div>`;
+  document.body.appendChild(box);
+
+  const input = document.getElementById('taInput');
+  const list  = document.getElementById('taList');
+  const prev  = document.getElementById('taPrev');
+  setTimeout(() => input.focus(), 20);
+
+  let all = travelDestinations(null);   // show the local stuff instantly
+  let shown = [], sel = 0;
+
+  const paint = () => {
+    prev.innerHTML = travelPreview(shown[sel]);
+    list.querySelectorAll('.ta-item').forEach((b, i) => b.classList.toggle('on', i === sel));
+    list.querySelector('.ta-item.on')?.scrollIntoView({ block: 'nearest' });
+  };
+
+  const render = q => {
+    const n = searchNormalize(q.trim());
+    let items;
+    if (!n) {
+      const recent = TRAVEL_RECENT
+        .map(r => all.find(d => d.id === r.id && d.kind === r.kind))
+        .filter(Boolean).map(d => ({ ...d, group: 'Nedávno' }));
+      const rest = all.filter(d => !recent.some(r => r.id === d.id && r.kind === d.kind));
+      items = [...recent, ...rest];
+    } else {
+      items = all.filter(d => searchNormalize(d.title + ' ' + d.sub + ' ' + d.group).includes(n));
+    }
+    shown = items.slice(0, 60);
+    sel = 0;
+
+    let html = '', lastGroup = null;
+    shown.forEach((d, i) => {
+      if (d.group !== lastGroup) { html += `<div class="ta-group">${esc(d.group)}</div>`; lastGroup = d.group; }
+      html += `<button class="ta-item" data-i="${i}">
+          <span class="ta-kind" style="--c:${esc(d.color || '#94a3b8')}">${d.icon}</span>
+          <span class="ta-txt"><b>${esc(d.title)}</b>${d.sub ? `<span>${esc(d.sub)}</span>` : ''}</span>
+        </button>`;
+    });
+    list.innerHTML = html || '<div class="ta-empty">Nic takového tu není.</div>';
+    list.querySelectorAll('.ta-item').forEach(b => {
+      b.addEventListener('mouseenter', () => { sel = +b.dataset.i; paint(); });
+      b.addEventListener('click', () => { const d = shown[+b.dataset.i]; closeTravelAgent(); travelGo(d); });
+    });
+    paint();
+  };
+
+  const move = d => {
+    if (!shown.length) return;
+    sel = (sel + d + shown.length) % shown.length;
+    paint();
+  };
+
+  input.addEventListener('input', () => render(input.value));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+    else if (e.key === 'Enter') { e.preventDefault(); const d = shown[sel]; if (d) { closeTravelAgent(); travelGo(d); } }
+    else if (e.key === 'Escape') { e.preventDefault(); closeTravelAgent(); }
+  });
+
+  render('');
+
+  // Rooms and decks arrive a moment later — merge them in without disturbing
+  // whatever the user has already typed.
+  travelLoadRemote().then(remote => {
+    if (!document.getElementById('travelAgent')) return;
+    all = travelDestinations(remote);
+    render(input.value);
+  });
+
+  setTimeout(() => document.addEventListener('click', function once(ev) {
+    if (ev.target.closest('#travelAgent')) { document.addEventListener('click', once, { once: true }); return; }
+    closeTravelAgent();
+  }, { once: true }), 0);
+}
+
+function setupTravelAgent() {
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      document.getElementById('travelAgent') ? closeTravelAgent() : openTravelAgent();
+    }
+  });
+}
+
 function setupBoardContextMenu() {
   const wrap = document.getElementById('boardWrap');
   let downX = 0, downY = 0;
@@ -194,6 +514,8 @@ function openBoardMenu(clientX, clientY) {
   menu.className = 'context-menu';
   menu.id = 'boardCtxMenu';
   menu.innerHTML = `
+    <button class="context-menu-item" data-act="travel">🧭 Travel agent <span style="opacity:.55;font-size:.72rem;margin-left:6px;">Ctrl+K</span></button>
+    <div class="context-menu-sep"></div>
     <button class="context-menu-item" data-act="note">➕ Přidat poznámku</button>
     <button class="context-menu-item" data-act="board">🖊️ Přidat tabuli</button>`;
   document.body.appendChild(menu);
@@ -202,6 +524,7 @@ function openBoardMenu(clientX, clientY) {
   if (r.right > window.innerWidth)  menu.style.left = (window.innerWidth - r.width - 8) + 'px';
   if (r.bottom > window.innerHeight) menu.style.top = (clientY - r.height) + 'px';
 
+  menu.querySelector('[data-act="travel"]').addEventListener('click', () => { closeBoardMenu(); openTravelAgent(); });
   menu.querySelector('[data-act="note"]').addEventListener('click', () => { closeBoardMenu(); PENDING_ADD_POS = { x: sx, y: sy }; openAddNote(); });
   menu.querySelector('[data-act="board"]').addEventListener('click', () => { closeBoardMenu(); createWhiteboard(sx, sy); });
   setTimeout(() => document.addEventListener('click', closeBoardMenu, { once: true }), 0);

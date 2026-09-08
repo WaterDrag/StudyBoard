@@ -163,6 +163,7 @@ auth.onAuthStateChanged(async user => {
     setupMultiSelect();
     setupLightbox();
     setupGuide();
+    setupTravelAgent();
     setupModalClose();
     updateMemberCount();
     refreshMembersBadge(); // pending friend-request badge on the members button
