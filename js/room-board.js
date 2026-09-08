@@ -216,6 +216,8 @@ async function travelLoadRemote() {
   return TRAVEL_CACHE;
 }
 
+// Every destination, flat. Used for searching — typing a deck or room name
+// finds it directly, without going through its category first.
 function travelDestinations(remote) {
   const out = [];
   const folderOf = id => {
@@ -223,13 +225,11 @@ function travelDestinations(remote) {
     return f ? f.name : '';
   };
 
-  out.push({ kind: 'action', id: 'dash',  icon: '🏠', group: 'Kam jinam',
+  out.push({ kind: 'action', id: 'dash', icon: '🏠', group: 'Kam jinam',
              title: 'Hlavní obrazovka', sub: 'místnosti, kartičky, přátelé' });
-  out.push({ kind: 'action', id: 'cards', icon: '🃏', group: 'Kam jinam',
-             title: 'Flash Cards této místnosti', sub: 'všechny balíčky' });
-  out.push({ kind: 'action', id: 'fit',   icon: '🔭', group: 'Na této nástěnce',
+  out.push({ kind: 'action', id: 'fit', icon: '🔭', group: 'Na této nástěnce',
              title: 'Zobrazit celou nástěnku', sub: 'oddálí tak, aby bylo vidět vše' });
-  out.push({ kind: 'action', id: 'back',  icon: '↩︎', group: 'Na této nástěnce',
+  out.push({ kind: 'action', id: 'back', icon: '↩︎', group: 'Na této nástěnce',
              title: 'Zpět, kde jsem byl', sub: 'vrátí předchozí výřez' });
 
   NOTES_MAP.forEach((n, id) => out.push({
@@ -269,6 +269,50 @@ function travelDestinations(remote) {
 
   return out;
 }
+
+// What the palette shows with an EMPTY search box. Long families (rooms,
+// decks — and notes once there are many) collapse into a single row whose
+// contents open in the right-hand pane, instead of one endless column.
+const TRAVEL_INLINE_MAX = 8;
+function travelBrowse(all, remote) {
+  const of = kind => all.filter(d => d.kind === kind);
+  const out = [];
+
+  out.push(all.find(d => d.id === 'dash'));
+
+  const decks = of('deck');
+  out.push({ kind: 'cat', id: 'decks', icon: '🃏', group: 'Kam jinam',
+             title: 'Flash Cards', sub: decks.length ? `${decks.length} balíčků` : 'zatím žádné balíčky',
+             items: decks, empty: 'Žádné balíčky.',
+             extra: { kind: 'action', id: 'cards', icon: '🃏',
+                      title: 'Otevřít Flash Cards této místnosti', sub: 'přehled všech balíčků' } });
+
+  const rooms = of('room');
+  out.push({ kind: 'cat', id: 'rooms', icon: '🚪', group: 'Kam jinam',
+             title: 'Jiné místnosti', sub: rooms.length ? `${rooms.length} místností` : 'jsi jen tady',
+             items: rooms, empty: 'Nejsi v žádné další místnosti.' });
+
+  out.push(all.find(d => d.id === 'fit'));
+  out.push(all.find(d => d.id === 'back'));
+
+  // Things on THIS board stay listed one by one while there aren't too many —
+  // that's what you usually came for.
+  const groups = [
+    ['note',   'Poznámky', '📝', 'Poznámky na této nástěnce'],
+    ['board',  'Tabule',   '🎨', 'Tabule na této nástěnce'],
+    ['folder', 'Složky',   '📁', 'Složky'],
+  ];
+  groups.forEach(([kind, group, icon, catTitle]) => {
+    const items = of(kind);
+    if (!items.length) return;
+    if (items.length <= TRAVEL_INLINE_MAX) out.push(...items);
+    else out.push({ kind: 'cat', id: kind + 's', icon, group,
+                    title: catTitle, sub: `${items.length}`, items, empty: '' });
+  });
+
+  return out.filter(Boolean);
+}
+
 
 function contentBounds() {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -312,6 +356,7 @@ function travelBack() {
 
 // One dispatcher for every kind of destination — in-board jump or page change.
 function travelGo(dest) {
+  if (!dest) return;
   if (dest.kind === 'action') {
     if (dest.id === 'dash')  { window.location.href = 'dashboard.html'; return; }
     if (dest.id === 'cards') { window.location.href = `flashcards.html?room=${ROOM_ID}`; return; }
@@ -324,6 +369,7 @@ function travelGo(dest) {
     window.location.href = `flashcards.html?deck=${dest.id}` + (dest.deck?.roomId ? `&room=${dest.deck.roomId}` : '');
     return;
   }
+  if (dest.kind === 'cat') return;         // a category is opened, not travelled to
 
   // Everything else lives on this board.
   const wrap = document.getElementById('boardWrap');
@@ -349,9 +395,26 @@ function travelGo(dest) {
   TRAVEL_RECENT.length = Math.min(TRAVEL_RECENT.length, 6);
 }
 
-// ── Preview pane ──────────────────────────────────────────────
 function travelPreview(d) {
   if (!d) return '<div class="tp-empty">Vyber cíl vlevo</div>';
+
+  // A category shows its contents right here — click one, or step in with →
+  if (d.kind === 'cat') {
+    const rows = [];
+    if (d.extra) rows.push(d.extra);
+    rows.push(...d.items);
+    return `<div class="tp-head"><span class="tp-icon">${d.icon}</span>
+        <div><b>${esc(d.title)}</b><span>${esc(d.sub)}</span></div></div>` +
+      (rows.length
+        ? `<div class="tp-grid">${rows.map((it, i) => `
+            <button class="tp-card" data-sub="${i}" style="--c:${esc(it.color || '#94a3b8')}">
+              <span class="tp-card-ico">${it.icon}</span>
+              <span class="tp-card-txt"><b>${esc(it.title)}</b><span>${esc(it.sub || '')}</span></span>
+            </button>`).join('')}</div>`
+        : `<div class="tp-body"><i>${esc(d.empty || 'Nic tu není.')}</i></div>`) +
+      '<div class="tp-go">→ vstoupit · Enter přejít</div>';
+  }
+
   const head = `<div class="tp-head"><span class="tp-icon" style="--c:${esc(d.color || '#94a3b8')}">${d.icon}</span>
     <div><b>${esc(d.title)}</b>${d.sub ? `<span>${esc(d.sub)}</span>` : ''}</div></div>`;
 
@@ -407,29 +470,38 @@ async function openTravelAgent() {
   const prev  = document.getElementById('taPrev');
   setTimeout(() => input.focus(), 20);
 
-  let all = travelDestinations(null);   // show the local stuff instantly
-  let shown = [], sel = 0;
+  let all = travelDestinations(null);
+  let shown = [], sel = 0, sub = -1;    // sub >= 0 → selection is in the right pane
+
+  const subRows = d => (d && d.kind === 'cat') ? [...(d.extra ? [d.extra] : []), ...d.items] : [];
 
   const paint = () => {
-    prev.innerHTML = travelPreview(shown[sel]);
-    list.querySelectorAll('.ta-item').forEach((b, i) => b.classList.toggle('on', i === sel));
+    const d = shown[sel];
+    prev.innerHTML = travelPreview(d);
+    list.querySelectorAll('.ta-item').forEach((b, i) => b.classList.toggle('on', i === sel && sub < 0));
     list.querySelector('.ta-item.on')?.scrollIntoView({ block: 'nearest' });
+    const cards = prev.querySelectorAll('.tp-card');
+    cards.forEach((c, i) => {
+      c.classList.toggle('on', i === sub);
+      c.addEventListener('mouseenter', () => { sub = i; paint(); });
+      c.addEventListener('click', () => { closeTravelAgent(); travelGo(subRows(d)[i]); });
+    });
+    if (sub >= 0) prev.querySelector('.tp-card.on')?.scrollIntoView({ block: 'nearest' });
   };
 
   const render = q => {
     const n = searchNormalize(q.trim());
-    let items;
     if (!n) {
       const recent = TRAVEL_RECENT
         .map(r => all.find(d => d.id === r.id && d.kind === r.kind))
         .filter(Boolean).map(d => ({ ...d, group: 'Nedávno' }));
-      const rest = all.filter(d => !recent.some(r => r.id === d.id && r.kind === d.kind));
-      items = [...recent, ...rest];
+      const browse = travelBrowse(all).filter(d =>
+        !recent.some(r => r.id === d.id && r.kind === d.kind));
+      shown = [...recent, ...browse];
     } else {
-      items = all.filter(d => searchNormalize(d.title + ' ' + d.sub + ' ' + d.group).includes(n));
+      shown = all.filter(d => searchNormalize(d.title + ' ' + d.sub + ' ' + d.group).includes(n)).slice(0, 60);
     }
-    shown = items.slice(0, 60);
-    sel = 0;
+    sel = 0; sub = -1;
 
     let html = '', lastGroup = null;
     shown.forEach((d, i) => {
@@ -437,28 +509,53 @@ async function openTravelAgent() {
       html += `<button class="ta-item" data-i="${i}">
           <span class="ta-kind" style="--c:${esc(d.color || '#94a3b8')}">${d.icon}</span>
           <span class="ta-txt"><b>${esc(d.title)}</b>${d.sub ? `<span>${esc(d.sub)}</span>` : ''}</span>
+          ${d.kind === 'cat' ? '<span class="ta-more">›</span>' : ''}
         </button>`;
     });
     list.innerHTML = html || '<div class="ta-empty">Nic takového tu není.</div>';
     list.querySelectorAll('.ta-item').forEach(b => {
-      b.addEventListener('mouseenter', () => { sel = +b.dataset.i; paint(); });
-      b.addEventListener('click', () => { const d = shown[+b.dataset.i]; closeTravelAgent(); travelGo(d); });
+      b.addEventListener('mouseenter', () => { sel = +b.dataset.i; sub = -1; paint(); });
+      b.addEventListener('click', () => {
+        const d = shown[+b.dataset.i];
+        if (d.kind === 'cat') { sel = +b.dataset.i; sub = 0; paint(); return; }
+        closeTravelAgent(); travelGo(d);
+      });
     });
     paint();
   };
 
-  const move = d => {
-    if (!shown.length) return;
-    sel = (sel + d + shown.length) % shown.length;
+  const move = step => {
+    if (sub >= 0) {
+      const rows = subRows(shown[sel]);
+      if (!rows.length) return;
+      sub = (sub + step + rows.length) % rows.length;
+    } else {
+      if (!shown.length) return;
+      sel = (sel + step + shown.length) % shown.length;
+    }
     paint();
   };
 
   input.addEventListener('input', () => render(input.value));
   input.addEventListener('keydown', e => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
-    else if (e.key === 'Enter') { e.preventDefault(); const d = shown[sel]; if (d) { closeTravelAgent(); travelGo(d); } }
-    else if (e.key === 'Escape') { e.preventDefault(); closeTravelAgent(); }
+    const d = shown[sel];
+    if (e.key === 'ArrowDown')      { e.preventDefault(); move(1); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); move(-1); }
+    else if (e.key === 'ArrowRight' && d?.kind === 'cat' && sub < 0 && subRows(d).length) {
+      e.preventDefault(); sub = 0; paint();
+    }
+    else if (e.key === 'ArrowLeft' && sub >= 0) { e.preventDefault(); sub = -1; paint(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (sub >= 0) { const t = subRows(d)[sub]; if (t) { closeTravelAgent(); travelGo(t); } return; }
+      if (d?.kind === 'cat') { if (subRows(d).length) { sub = 0; paint(); } return; }
+      if (d) { closeTravelAgent(); travelGo(d); }
+    }
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      if (sub >= 0) { sub = -1; paint(); return; }   // step out of the pane first
+      closeTravelAgent();
+    }
   });
 
   render('');
