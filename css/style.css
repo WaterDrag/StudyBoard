@@ -3579,6 +3579,24 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .tp-card-txt b { font-size: 0.84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tp-card-txt span { font-size: 0.7rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ta-more { color: var(--text-muted); font-size: 1rem; flex-shrink: 0; }
+
+/* Notes of the room currently highlighted — click one to open that room
+   with the note already showing. */
+.tp-sub {
+  display: flex; flex-direction: column; gap: 3px;
+  margin: -2px 0 6px 34px; padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+.tp-note {
+  background: none; border: none; text-align: left; cursor: pointer;
+  color: var(--text-muted); font-size: 0.76rem; padding: 4px 7px; border-radius: 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tp-note:hover { background: var(--bg-3); color: var(--text); }
+.tp-sub-load, .tp-sub-more {
+  font-size: 0.72rem; color: var(--text-muted);
+  margin: 0 0 6px 44px; font-style: italic;
+}
 @media (max-width: 720px) {
   .ta-cols { grid-template-columns: 1fr; }
   .ta-prev { display: none; }

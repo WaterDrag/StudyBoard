@@ -280,10 +280,12 @@ function travelBrowse(all, remote) {
 
   out.push(all.find(d => d.id === 'dash'));
 
-  const decks = of('deck');
+  // Only the decks belonging to THIS room — personal ones live on the
+  // dashboard and would just be noise here (typing still finds them).
+  const decks = of('deck').filter(d => d.deck?.roomId === ROOM_ID);
   out.push({ kind: 'cat', id: 'decks', icon: '🃏', group: 'Kam jinam',
-             title: 'Flash Cards', sub: decks.length ? `${decks.length} balíčků` : 'zatím žádné balíčky',
-             items: decks, empty: 'Žádné balíčky.',
+             title: 'Flash Cards', sub: decks.length ? `${decks.length} balíčků v místnosti` : 'zatím žádné balíčky',
+             items: decks, empty: 'V této místnosti zatím nejsou žádné balíčky.',
              extra: { kind: 'action', id: 'cards', icon: '🃏',
                       title: 'Otevřít Flash Cards této místnosti', sub: 'přehled všech balíčků' } });
 
@@ -395,6 +397,45 @@ function travelGo(dest) {
   TRAVEL_RECENT.length = Math.min(TRAVEL_RECENT.length, 6);
 }
 
+// Notes of ANOTHER room, fetched only when you actually look at that room in
+// the palette, then cached. Lets you pick the note before leaving this page —
+// room.html?id=…&note=… opens it straight away.
+const TRAVEL_ROOM_NOTES = new Map();   // roomId → [{id,title}] | 'loading'
+async function travelRoomNotes(roomId, onLoaded) {
+  if (TRAVEL_ROOM_NOTES.has(roomId)) return TRAVEL_ROOM_NOTES.get(roomId);
+  TRAVEL_ROOM_NOTES.set(roomId, 'loading');
+  try {
+    const snap = await db.collection('rooms').doc(roomId).collection('notes')
+      .orderBy('createdAt', 'desc').limit(30).get();
+    const notes = snap.docs.map(d => {
+      const n = d.data();
+      const plain = (n.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      return { id: d.id, title: n.title || plain.slice(0, 44) || '(bez názvu)',
+               pages: Array.isArray(n.pages) ? n.pages.length : 0 };
+    });
+    TRAVEL_ROOM_NOTES.set(roomId, notes);
+  } catch (_) {
+    TRAVEL_ROOM_NOTES.set(roomId, []);
+  }
+  if (onLoaded) onLoaded();
+  return TRAVEL_ROOM_NOTES.get(roomId);
+}
+
+// Notes of the room currently highlighted in the right pane. Clicking one
+// opens that room WITH the note already open.
+function roomNotesHtml(it) {
+  if (it.kind !== 'room') return '';
+  const notes = TRAVEL_ROOM_NOTES.get(it.id);
+  if (notes === 'loading' || notes === undefined) return '<div class="tp-sub-load">Načítám poznámky…</div>';
+  if (!notes.length) return '<div class="tp-sub-load">V této místnosti zatím nejsou poznámky.</div>';
+  const shown = notes.slice(0, 8);
+  return `<div class="tp-sub">
+      ${shown.map(n => `<button class="tp-note" data-room="${esc(it.id)}" data-note="${esc(n.id)}">
+          ${n.pages ? '📖' : '📝'} ${esc(n.title)}</button>`).join('')}
+      ${notes.length > shown.length ? `<div class="tp-sub-more">a další ${notes.length - shown.length}…</div>` : ''}
+    </div>`;
+}
+
 function travelPreview(d) {
   if (!d) return '<div class="tp-empty">Vyber cíl vlevo</div>';
 
@@ -407,10 +448,11 @@ function travelPreview(d) {
         <div><b>${esc(d.title)}</b><span>${esc(d.sub)}</span></div></div>` +
       (rows.length
         ? `<div class="tp-grid">${rows.map((it, i) => `
-            <button class="tp-card" data-sub="${i}" style="--c:${esc(it.color || '#94a3b8')}">
+            <button class="tp-card${i === d._sub ? ' on' : ''}" data-sub="${i}" style="--c:${esc(it.color || '#94a3b8')}">
               <span class="tp-card-ico">${it.icon}</span>
               <span class="tp-card-txt"><b>${esc(it.title)}</b><span>${esc(it.sub || '')}</span></span>
-            </button>`).join('')}</div>`
+            </button>
+            ${i === d._sub ? roomNotesHtml(it) : ''}`).join('')}</div>`
         : `<div class="tp-body"><i>${esc(d.empty || 'Nic tu není.')}</i></div>`) +
       '<div class="tp-go">→ vstoupit · Enter přejít</div>';
   }
@@ -477,16 +519,31 @@ async function openTravelAgent() {
 
   const paint = () => {
     const d = shown[sel];
+    if (d) d._sub = sub;                    // the preview draws the open card's notes
     prev.innerHTML = travelPreview(d);
     list.querySelectorAll('.ta-item').forEach((b, i) => b.classList.toggle('on', i === sel && sub < 0));
     list.querySelector('.ta-item.on')?.scrollIntoView({ block: 'nearest' });
-    const cards = prev.querySelectorAll('.tp-card');
-    cards.forEach((c, i) => {
-      c.classList.toggle('on', i === sub);
+
+    const rows = subRows(d);
+    prev.querySelectorAll('.tp-card').forEach((c, i) => {
       c.addEventListener('mouseenter', () => { sub = i; paint(); });
-      c.addEventListener('click', () => { closeTravelAgent(); travelGo(subRows(d)[i]); });
+      c.addEventListener('click', () => { closeTravelAgent(); travelGo(rows[i]); });
     });
+    // Jump straight to a specific note in another room.
+    prev.querySelectorAll('.tp-note').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      closeTravelAgent();
+      window.location.href = `room.html?id=${b.dataset.room}&note=${b.dataset.note}`;
+    }));
     if (sub >= 0) prev.querySelector('.tp-card.on')?.scrollIntoView({ block: 'nearest' });
+
+    // A highlighted room loads its notes, then repaints once they're in.
+    const cur = rows[sub];
+    if (cur && cur.kind === 'room' && !TRAVEL_ROOM_NOTES.has(cur.id)) {
+      travelRoomNotes(cur.id, () => {
+        if (document.getElementById('travelAgent') && shown[sel] === d && sub >= 0) paint();
+      });
+    }
   };
 
   const render = q => {
