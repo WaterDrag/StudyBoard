@@ -39,6 +39,13 @@ function setNoteContent(contentEl, note) {
 // board). Falls back to the full content when no title was given, same as
 // before titles existed.
 function setNoteCardContent(contentEl, note) {
+  const n = pagesOf(note).length;
+  if (n) {
+    contentEl.innerHTML =
+      `<div class="note-card-title">${esc(note.title || pagesOf(note)[0].title || 'Návod')}</div>` +
+      `<div class="note-guide-badge">📖 ${n} ${n === 1 ? 'kapitola' : n < 5 ? 'kapitoly' : 'kapitol'}</div>`;
+    return;
+  }
   if (note.title) {
     contentEl.innerHTML = `<div class="note-card-title">${esc(note.title)}</div>`;
   } else {
@@ -48,6 +55,9 @@ function setNoteCardContent(contentEl, note) {
 
 function addImageClickHandlers(contentEl) {
   contentEl.querySelectorAll('img').forEach(img => {
+    // An image wrapped in a chapter link is a BUTTON, not a picture to zoom —
+    // leave the click to the link handler.
+    if (img.closest('[data-page]') || img.hasAttribute('data-spots')) { img.style.cursor = 'pointer'; return; }
     img.style.cursor = 'zoom-in';
     img.addEventListener('click', e => {
       e.stopPropagation();
@@ -116,6 +126,7 @@ function openNoteMenu(x, y, noteId) {
   if (canEdit(note))  items.push(`<button class="context-menu-item" data-act="edit">✏️ Upravit</button>`);
   if (canWrite)       items.push(`<button class="context-menu-item" data-act="dup">📄 Duplikovat</button>`);
   if (canWrite)       items.push(`<button class="context-menu-item" data-act="move">📁 Přesunout do složky</button>`);
+  items.push(`<button class="context-menu-item" data-act="fact">🔎 Ověřit fakta</button>`);
   if (canEdit(note))  items.push(`<button class="context-menu-item" data-act="del" style="color:#fca5a5;">🗑️ Smazat</button>`);
 
   const menu = document.createElement('div');
@@ -136,6 +147,7 @@ function openNoteMenu(x, y, noteId) {
     else if (act === 'edit') openEdit(noteId, note);
     else if (act === 'dup')  duplicateNote(noteId);
     else if (act === 'move') openMoveToFolderModal(noteId);
+    else if (act === 'fact') factCheckNote(noteId);
     else if (act === 'del')  deleteNote(noteId);
   });
   setTimeout(() => document.addEventListener('click', closeNoteMenu, { once: true }), 0);
@@ -453,6 +465,8 @@ function openImgToolbar(img, editor) {
     <button data-align="center" title="Na střed — samostatně na řádku">⬛</button>
     <button data-align="right"  title="Vpravo — text teče vlevo vedle">➡️</button>
     <span class="it-sep"></span>
+    <button data-spots="1" title="Klikací oblasti — víc odkazů na jednom obrázku">🎯 Oblasti</button>
+    <span class="it-sep"></span>
     <button data-del="1" class="it-del" title="Odstranit obrázek">🗑</button>`;
   document.body.appendChild(bar);
 
@@ -478,6 +492,7 @@ function openImgToolbar(img, editor) {
     if (!b) return;
     e.stopPropagation();
     if (b.dataset.del) { img.remove(); closeImgToolbar(); editor.focus(); return; }
+    if (b.dataset.spots) { closeImgToolbar(); openHotspotEditor(img); return; }
     if (b.dataset.size) { img.style.width = IMG_SIZES[b.dataset.size]; img.style.maxWidth = '100%'; }
     if (b.dataset.align === 'left')  { img.style.cssFloat = 'left';  img.style.display = ''; img.style.margin = '4px 12px 6px 0'; }
     if (b.dataset.align === 'right') { img.style.cssFloat = 'right'; img.style.display = ''; img.style.margin = '4px 0 6px 12px'; }
@@ -491,6 +506,642 @@ function openImgToolbar(img, editor) {
     closeImgToolbar();
   }, { once: true }), 0);
 }
+
+
+
+
+// ── Image hotspots: several clickable areas on ONE picture ────
+// The areas live on the <img> itself as data-spots JSON, so they travel with
+// the image through copy/paste, saving and export. Coordinates are PERCENT of
+// the image box, which keeps them correct at any rendered size.
+//   [{ x, y, w, h, page, label }]
+let HS = null;   // { img, spots } while the editor modal is open
+
+function hotspotsOf(img) {
+  try {
+    const raw = img.getAttribute('data-spots');
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter(s => s && s.page) : [];
+  } catch (_) { return []; }
+}
+
+// ── Viewing: lay the areas over the picture ───────────────────
+// The wrapper is built at render time, so the stored HTML stays a plain <img>.
+function renderHotspots(root, note, onGo) {
+  root.querySelectorAll('img[data-spots]').forEach(img => {
+    if (img.parentElement?.classList.contains('hs-wrap')) return;   // already done
+    const spots = hotspotsOf(img);
+    if (!spots.length) return;
+
+    const wrap = document.createElement('span');
+    wrap.className = 'hs-wrap';
+    img.replaceWith(wrap);
+    wrap.appendChild(img);
+
+    spots.forEach(sp => {
+      const target = note ? pageById(note, sp.page) : null;
+      const a = document.createElement('button');
+      a.className = 'hs-area';
+      a.style.cssText = `left:${sp.x}%;top:${sp.y}%;width:${sp.w}%;height:${sp.h}%;`;
+      a.title = (sp.label || target?.title || 'Kapitola');
+      a.innerHTML = `<span class="hs-tip">${esc(sp.label || target?.title || 'Kapitola')}</span>`;
+      a.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        onGo(sp.page);
+      });
+      wrap.appendChild(a);
+    });
+  });
+}
+
+// ── Editing ───────────────────────────────────────────────────
+function openHotspotEditor(img) {
+  const note = NOTES_MAP.get(EDIT_ID || GUIDE?.noteId);
+  if (!note || !pagesOf(note).length) {
+    toast('Nejdřív z poznámky udělej návod (📖 v detailu) — oblasti vedou na kapitoly.');
+    return;
+  }
+  HS = { img, spots: hotspotsOf(img) };
+
+  const stage = document.getElementById('hsStage');
+  stage.innerHTML = `<img id="hsImg" src="${esc(img.getAttribute('src'))}" alt="" draggable="false">`;
+  openModal('hotspotModal');
+  drawHotspotBoxes();
+
+  const stageImg = document.getElementById('hsImg');
+  let box = null, start = null;
+
+  stage.onmousedown = e => {
+    if (e.target.closest('.hs-edit-del')) return;
+    const r = stageImg.getBoundingClientRect();
+    if (!r.width) return;
+    start = { x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100 };
+    box = document.createElement('div');
+    box.className = 'hs-draw';
+    stage.appendChild(box);
+    e.preventDefault();
+  };
+  stage.onmousemove = e => {
+    if (!box) return;
+    const r = stageImg.getBoundingClientRect();
+    const cur = { x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100 };
+    const x = Math.max(0, Math.min(start.x, cur.x)), y = Math.max(0, Math.min(start.y, cur.y));
+    const w = Math.min(100 - x, Math.abs(cur.x - start.x)), h = Math.min(100 - y, Math.abs(cur.y - start.y));
+    box.style.cssText = `left:${x}%;top:${y}%;width:${w}%;height:${h}%;`;
+    box._rect = { x, y, w, h };
+  };
+  stage.onmouseup = () => {
+    if (!box) return;
+    const rect = box._rect;
+    box.remove(); box = null;
+    // A stray click shouldn't create an invisible area.
+    if (!rect || rect.w < 2 || rect.h < 2) return;
+    pickHotspotTarget(note, rect);
+  };
+  stage.onmouseleave = () => { if (box) { box.remove(); box = null; } };
+
+  document.getElementById('hsSave').onclick = saveHotspots;
+}
+
+// Chapter picker shown right after an area is drawn.
+function pickHotspotTarget(note, rect) {
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'hsPick';
+  const build = (parentId, depth) => childPages(note, parentId).map(p =>
+    `<button class="context-menu-item" data-p="${esc(p.id)}" style="padding-left:${10 + depth * 14}px;">
+       <span class="crumb-no">${esc(pageLabel(note, p.id))}</span> ${esc(p.title || 'Kapitola')}
+     </button>` + build(p.id, depth + 1)).join('');
+  menu.innerHTML = `<div class="hs-pick-h">Kam má oblast vést?</div>` + build(null, 0);
+  document.body.appendChild(menu);
+
+  const stage = document.getElementById('hsStage').getBoundingClientRect();
+  menu.style.left = Math.min(window.innerWidth - menu.offsetWidth - 8, stage.left + 20) + 'px';
+  menu.style.top  = Math.min(window.innerHeight - menu.offsetHeight - 8, stage.top + 40) + 'px';
+
+  const close = () => menu.remove();
+  menu.addEventListener('click', e => {
+    const id = e.target.closest('[data-p]')?.dataset.p;
+    if (!id) return;
+    const page = pageById(note, id);
+    HS.spots.push({ ...rect, page: id, label: page?.title || 'Kapitola' });
+    close();
+    drawHotspotBoxes();
+  });
+  setTimeout(() => document.addEventListener('click', function once(ev) {
+    if (ev.target.closest('#hsPick')) { document.addEventListener('click', once, { once: true }); return; }
+    close();
+  }, { once: true }), 0);
+}
+
+function drawHotspotBoxes() {
+  const stage = document.getElementById('hsStage');
+  stage.querySelectorAll('.hs-edit').forEach(n => n.remove());
+  HS.spots.forEach((sp, i) => {
+    const b = document.createElement('div');
+    b.className = 'hs-edit';
+    b.style.cssText = `left:${sp.x}%;top:${sp.y}%;width:${sp.w}%;height:${sp.h}%;`;
+    b.innerHTML = `<span class="hs-edit-label">${esc(sp.label || '')}</span>` +
+                  `<button class="hs-edit-del" data-i="${i}" title="Odebrat oblast">✕</button>`;
+    b.querySelector('.hs-edit-del').addEventListener('click', e => {
+      e.stopPropagation();
+      HS.spots.splice(i, 1);
+      drawHotspotBoxes();
+    });
+    stage.appendChild(b);
+  });
+
+  const list = document.getElementById('hsList');
+  list.innerHTML = HS.spots.length
+    ? `<div class="hs-list-h">${HS.spots.length} ${HS.spots.length === 1 ? 'oblast' : HS.spots.length < 5 ? 'oblasti' : 'oblastí'}</div>` +
+      HS.spots.map((s, i) => `<div class="hs-row"><span>${esc(s.label || 'Kapitola')}</span>
+        <button class="hs-row-del" data-i="${i}">Odebrat</button></div>`).join('')
+    : '<div class="hs-list-h">Zatím žádná oblast — nakresli ji tažením přes obrázek.</div>';
+  list.querySelectorAll('.hs-row-del').forEach(b => b.addEventListener('click', () => {
+    HS.spots.splice(+b.dataset.i, 1);
+    drawHotspotBoxes();
+  }));
+}
+
+function saveHotspots() {
+  if (!HS) return;
+  if (HS.spots.length) {
+    HS.img.setAttribute('data-spots', JSON.stringify(HS.spots.map(s => ({
+      x: +s.x.toFixed(2), y: +s.y.toFixed(2), w: +s.w.toFixed(2), h: +s.h.toFixed(2),
+      page: s.page, label: s.label || '',
+    }))));
+  } else {
+    HS.img.removeAttribute('data-spots');
+  }
+  closeModal('hotspotModal');
+  toast(HS.spots.length ? `Uloženo ${HS.spots.length} oblastí — nezapomeň uložit kapitolu.` : 'Oblasti odebrány.');
+  HS = null;
+}
+
+// ── Guides: a tree of chapters inside ONE note ────────────────
+// A note may carry `pages: [{id, title, parentId, content}]`. Without that
+// field it is an ordinary note and behaves exactly as before — nothing to
+// migrate. Chapters nest to any depth and link to each other from the text
+// (or from an image), which is what makes a click-through guide possible:
+//   1  Role serveru
+//     1.a  Web Server (IIS)   <- reached by clicking "IIS" in chapter 1
+//     1.b  DNS
+//       1.b.a  Zóny
+let GUIDE = null;   // { noteId, pageId, history: [] } while a guide is open
+
+const pagesOf = note => (Array.isArray(note?.pages) ? note.pages : []);
+const pageById = (note, id) => pagesOf(note).find(p => p.id === id) || null;
+const childPages = (note, parentId) => pagesOf(note).filter(p => (p.parentId || null) === (parentId || null));
+const rootPages = note => childPages(note, null);
+
+function newPageId() {
+  return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// "1.b.a" style label, built from the chapter's position in the tree.
+function pageLabel(note, pageId) {
+  const path = pagePath(note, pageId);
+  return path.map((p, depth) => {
+    const sibs = childPages(note, p.parentId || null);
+    const i = sibs.findIndex(x => x.id === p.id);
+    return depth === 0 ? String(i + 1) : String.fromCharCode(97 + (i % 26));
+  }).join('.');
+}
+
+// Chain from the root chapter down to this one (guards a broken parent link).
+function pagePath(note, pageId) {
+  const out = [];
+  const seen = new Set();
+  let p = pageById(note, pageId);
+  while (p && !seen.has(p.id)) {
+    seen.add(p.id);
+    out.unshift(p);
+    p = p.parentId ? pageById(note, p.parentId) : null;
+  }
+  return out;
+}
+
+async function savePages(noteId, pages) {
+  await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(noteId).update({
+    pages,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+// Turn a plain note into a guide: its current content becomes chapter 1.
+async function convertToGuide(noteId) {
+  const note = NOTES_MAP.get(noteId);
+  if (!note || pagesOf(note).length) return;
+  const first = { id: newPageId(), title: note.title || 'Úvod', parentId: null, content: note.content || '' };
+  try {
+    await savePages(noteId, [first]);
+    toast('Z poznámky je návod — přidej podkapitoly ＋');
+    GUIDE = { noteId, pageId: first.id, history: [] };
+    renderGuide();
+  } catch (e) { toast('Chyba: ' + e.message); }
+}
+
+// ── Rendering ─────────────────────────────────────────────────
+function renderGuide() {
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  const pages = pagesOf(note);
+  if (!pages.length) return;
+  if (!pageById(note, GUIDE.pageId)) GUIDE.pageId = pages[0].id;
+  const page = pageById(note, GUIDE.pageId);
+
+  document.getElementById('guideBar').style.display = 'flex';
+  document.getElementById('guideBack').style.visibility = GUIDE.history.length ? 'visible' : 'hidden';
+
+  // Breadcrumbs: 1 > 1.b > 1.b.a — every step clickable
+  const crumbs = document.getElementById('guideCrumbs');
+  crumbs.innerHTML = pagePath(note, page.id).map(p =>
+    `<button class="crumb" data-go="${esc(p.id)}"><span class="crumb-no">${esc(pageLabel(note, p.id))}</span> ${esc(p.title || 'Kapitola')}</button>`
+  ).join('<span class="crumb-sep">›</span>');
+
+  renderGuideTree(note);
+
+  const contentEl = document.getElementById('detailContent');
+  contentEl.innerHTML = page.content || '<p style="color:var(--text-muted);">Zatím prázdná kapitola.</p>';
+  const h = document.createElement('h4');
+  h.className = 'note-detail-title';
+  h.textContent = (pageLabel(note, page.id) + '  ' + (page.title || 'Kapitola')).trim();
+  contentEl.prepend(h);
+  addImageClickHandlers(contentEl);
+  wirePageLinks(contentEl);
+  renderHotspots(contentEl, note, goToPage);
+
+  // Chapters directly below this one, as ready-made buttons — so a guide is
+  // click-through even before any links are written into the text.
+  const kids = childPages(note, page.id);
+  if (kids.length) {
+    const box = document.createElement('div');
+    box.className = 'guide-kids';
+    box.innerHTML = '<div class="guide-kids-h">Podkapitoly</div>' + kids.map(k =>
+      `<button class="guide-kid" data-go="${esc(k.id)}">
+         <span class="crumb-no">${esc(pageLabel(note, k.id))}</span>
+         <span>${esc(k.title || 'Kapitola')}</span><span class="guide-kid-arrow">›</span>
+       </button>`).join('');
+    contentEl.appendChild(box);
+  }
+  contentEl.querySelectorAll('[data-go]').forEach(b =>
+    b.addEventListener('click', () => goToPage(b.dataset.go)));
+  crumbs.querySelectorAll('[data-go]').forEach(b =>
+    b.addEventListener('click', () => goToPage(b.dataset.go, true)));
+}
+
+function renderGuideTree(note) {
+  const tree = document.getElementById('guideTree');
+  const build = (parentId, depth) => childPages(note, parentId).map(p => {
+    const kids = build(p.id, depth + 1);
+    return `<button class="gt-item${p.id === GUIDE.pageId ? ' on' : ''}" data-go="${esc(p.id)}" style="--d:${depth}">
+        <span class="crumb-no">${esc(pageLabel(note, p.id))}</span> ${esc(p.title || 'Kapitola')}
+      </button>` + kids;
+  }).join('');
+  tree.innerHTML = build(null, 0);
+  tree.querySelectorAll('[data-go]').forEach(b =>
+    b.addEventListener('click', () => goToPage(b.dataset.go)));
+}
+
+function goToPage(pageId, viaCrumb) {
+  if (!GUIDE || pageId === GUIDE.pageId) return;
+  if (viaCrumb) {
+    // stepping back up the path — trim the trail instead of growing it
+    const i = GUIDE.history.indexOf(pageId);
+    GUIDE.history = i >= 0 ? GUIDE.history.slice(0, i) : [];
+  } else {
+    GUIDE.history.push(GUIDE.pageId);
+  }
+  GUIDE.pageId = pageId;
+  renderGuide();
+  document.getElementById('detailContent').scrollTop = 0;
+}
+
+// Links written into the text: <a data-page="ID">…</a>
+function wirePageLinks(root) {
+  root.querySelectorAll('[data-page]').forEach(a => {
+    a.classList.add('page-link');
+    a.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      goToPage(a.dataset.page);
+    });
+  });
+}
+
+// ── Editing ───────────────────────────────────────────────────
+async function addSubChapter() {
+  if (!GUIDE) return;
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  if (!canEdit(note)) { toast('Upravit může jen autor nebo vlastník.'); return; }
+  const title = prompt('Název podkapitoly:');
+  if (title === null) return;
+  const page = { id: newPageId(), title: (title || 'Nová kapitola').trim(), parentId: GUIDE.pageId, content: '' };
+  try {
+    await savePages(GUIDE.noteId, [...pagesOf(note), page]);
+    goToPage(page.id);
+  } catch (e) { toast('Chyba: ' + e.message); }
+}
+
+function editCurrentChapter() {
+  if (!GUIDE) return;
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  if (!canEdit(note)) { toast('Upravit může jen autor nebo vlastník.'); return; }
+  const page = pageById(note, GUIDE.pageId);
+  if (!page) return;
+  EDIT_ID = note.id;
+  EDIT_PAGE_ID = page.id;                       // edit modal saves into this chapter
+  document.getElementById('noteTitleInputEdit').value = page.title || '';
+  document.getElementById('noteEditorEdit').innerHTML = page.content || '';
+  document.getElementById('editModalTitle').textContent = 'Upravit kapitolu';
+  openModal('editModal');
+}
+
+// ── Chapter link picker (🔗📖 in the editor toolbar) ──────────
+function setupPageLinkButton(editor, toolbar) {
+  const btn = toolbar.querySelector('.rt-pagelink');
+  if (!btn || btn._wired) return;
+  btn._wired = true;
+  let saved = null;
+  btn.addEventListener('mousedown', () => {
+    const sel = window.getSelection();
+    saved = (sel && sel.rangeCount) ? sel.getRangeAt(0).cloneRange() : null;
+  });
+  btn.addEventListener('click', e => {
+    e.preventDefault();
+    const note = NOTES_MAP.get(EDIT_ID || GUIDE?.noteId);
+    const pages = pagesOf(note);
+    if (!pages.length) { toast('Nejdřív z poznámky udělej návod (📖 v detailu).'); return; }
+    openPageLinkPicker(btn, note, editor, saved);
+  });
+}
+
+function closePageLinkPicker() { document.getElementById('pageLinkMenu')?.remove(); }
+
+function openPageLinkPicker(anchor, note, editor, savedRange) {
+  closePageLinkPicker();
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'pageLinkMenu';
+  const build = (parentId, depth) => childPages(note, parentId).map(p =>
+    `<button class="context-menu-item" data-p="${esc(p.id)}" style="padding-left:${10 + depth * 14}px;">
+       <span class="crumb-no">${esc(pageLabel(note, p.id))}</span> ${esc(p.title || 'Kapitola')}
+     </button>` + build(p.id, depth + 1)).join('');
+  menu.innerHTML = build(null, 0);
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.left = r.left + 'px';
+  menu.style.top  = (r.bottom + 4) + 'px';
+  const m = menu.getBoundingClientRect();
+  if (m.right > window.innerWidth)  menu.style.left = (window.innerWidth - m.width - 8) + 'px';
+  if (m.bottom > window.innerHeight) menu.style.top = (r.top - m.height - 4) + 'px';
+
+  menu.addEventListener('mousedown', e => e.preventDefault());
+  menu.addEventListener('click', e => {
+    const id = e.target.closest('[data-p]')?.dataset.p;
+    if (!id) return;
+    const page = pageById(note, id);
+    closePageLinkPicker();
+    editor.focus();
+    if (savedRange) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(savedRange); }
+    const sel = window.getSelection();
+    // Take the selection's CONTENTS, not its text: sel.toString() is empty for
+    // an image, which would have replaced the picture with a text link instead
+    // of wrapping it. cloneContents keeps the <img> (and any formatting).
+    let inner = '';
+    if (sel && sel.rangeCount && !sel.isCollapsed) {
+      const tmp = document.createElement('div');
+      tmp.appendChild(sel.getRangeAt(0).cloneContents());
+      inner = tmp.innerHTML;
+    }
+    if (!inner) inner = '📖 ' + esc(page.title || 'Kapitola');
+    document.execCommand('insertHTML', false,
+      `<a href="#" data-page="${esc(id)}" class="page-link">${inner}</a>`);
+  });
+  setTimeout(() => document.addEventListener('click', closePageLinkPicker, { once: true }), 0);
+}
+
+// ── Wiring ────────────────────────────────────────────────────
+function setupGuide() {
+  document.getElementById('guideToggle').addEventListener('click', () => {
+    const t = document.getElementById('guideTree');
+    t.style.display = t.style.display === 'none' ? 'block' : 'none';
+  });
+  document.getElementById('guideBack').addEventListener('click', () => {
+    if (!GUIDE?.history.length) return;
+    GUIDE.pageId = GUIDE.history.pop();
+    renderGuide();
+  });
+  document.getElementById('guideAddSub').addEventListener('click', addSubChapter);
+  document.getElementById('guideEdit').addEventListener('click', editCurrentChapter);
+}
+
+// ── Rich-text: lists, nesting, checklists ─────────────────────
+// execCommand is deprecated but it is what this editor is built on, so the
+// additions below stay in the same idiom rather than half-migrating.
+
+// Bullet/number styles offered by the ▾ picker. The value goes straight into
+// list-style-type on the nearest <ul>/<ol>, so it survives in the saved HTML.
+const LIST_STYLES = [
+  { v: 'disc',                 label: '• Kolečko',      ol: false },
+  { v: 'circle',               label: '◦ Kroužek',      ol: false },
+  { v: 'square',               label: '▪ Čtvereček',    ol: false },
+  { v: '"–  "',                label: '– Pomlčka',      ol: false },
+  { v: '"✓  "',                label: '✓ Fajfka',       ol: false },
+  { v: '"→  "',                label: '→ Šipka',        ol: false },
+  { v: 'decimal',              label: '1. Čísla',       ol: true  },
+  { v: 'lower-alpha',          label: 'a. Písmena',     ol: true  },
+  { v: 'upper-alpha',          label: 'A. Velká písm.', ol: true  },
+  { v: 'lower-roman',          label: 'i. Římské',      ol: true  },
+];
+
+// The <li> the caret currently sits in (if any).
+function currentListItem(editor) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  let n = sel.getRangeAt(0).startContainer;
+  if (n.nodeType === 3) n = n.parentNode;
+  const li = n.closest ? n.closest('li') : null;
+  return (li && editor.contains(li)) ? li : null;
+}
+
+function currentList(editor) {
+  const li = currentListItem(editor);
+  return li ? li.parentElement : null;
+}
+
+function setupListTools(editor, toolbar) {
+  if (!editor || editor._listWired) return;
+  editor._listWired = true;
+
+  // ── Tab / Shift+Tab ──
+  // Inside a list this nests and un-nests, which is the whole point. Outside
+  // one, Tab used to jump out of the editor entirely — now it indents.
+  editor.addEventListener('keydown', e => {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    const li = currentListItem(editor);
+    if (li) {
+      document.execCommand(e.shiftKey ? 'outdent' : 'indent');
+      // A freshly nested level inherits its parent's style otherwise.
+      applyNestedDefaults(editor);
+    } else if (e.shiftKey) {
+      document.execCommand('outdent');
+    } else {
+      document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+    }
+  });
+
+  // Nested lists get the level-appropriate marker unless one was chosen by
+  // hand (data-fixed marks a list the user styled deliberately).
+  const applyNestedDefaults = () => {
+    editor.querySelectorAll('ul').forEach(ul => {
+      if (ul.dataset.fixed) return;
+      const depth = depthOf(ul, editor);
+      ul.style.listStyleType = ['disc', 'circle', 'square'][Math.min(depth, 2)];
+    });
+    editor.querySelectorAll('ol').forEach(ol => {
+      if (ol.dataset.fixed) return;
+      const depth = depthOf(ol, editor);
+      ol.style.listStyleType = ['decimal', 'lower-alpha', 'lower-roman'][Math.min(depth, 2)];
+    });
+  };
+  const depthOf = (el, root) => {
+    let d = 0, p = el.parentElement;
+    while (p && p !== root) { if (p.tagName === 'UL' || p.tagName === 'OL') d++; p = p.parentElement; }
+    return d;
+  };
+
+  // ── ▾ bullet style picker ──
+  const styleBtn = toolbar.querySelector('.rt-liststyle');
+  if (styleBtn) {
+    styleBtn.addEventListener('mousedown', e => e.preventDefault()); // keep the caret
+    styleBtn.addEventListener('click', e => {
+      e.preventDefault();
+      const list = currentList(editor);
+      if (!list) { toast('Nejdřív klikni do seznamu.'); return; }
+      openListStylePicker(styleBtn, list, list.tagName === 'OL');
+    });
+  }
+
+  // ── ☑ checklist ──
+  const checkBtn = toolbar.querySelector('.rt-checklist');
+  if (checkBtn) {
+    checkBtn.addEventListener('mousedown', e => e.preventDefault());
+    checkBtn.addEventListener('click', e => {
+      e.preventDefault();
+      editor.focus();
+      const li = currentListItem(editor);
+      if (li && li.parentElement.classList.contains('checklist')) {
+        // already a checklist — turn it back into a plain one
+        li.parentElement.classList.remove('checklist');
+        li.parentElement.querySelectorAll('li').forEach(x => { delete x.dataset.done; });
+        return;
+      }
+      if (!li) document.execCommand('insertUnorderedList');
+      const list = currentList(editor);
+      if (list) { list.classList.add('checklist'); list.dataset.fixed = '1'; list.style.listStyleType = 'none'; }
+    });
+  }
+
+  // Clicking a checklist box toggles it while editing.
+  editor.addEventListener('click', e => {
+    const li = e.target.closest('li');
+    if (!li || !li.parentElement.classList.contains('checklist')) return;
+    // only the marker area on the left, so text stays selectable
+    if (e.clientX - li.getBoundingClientRect().left > 22) return;
+    li.dataset.done = li.dataset.done ? '' : '1';
+  });
+
+  applyNestedDefaults();
+}
+
+function closeListStylePicker() { document.getElementById('listStyleMenu')?.remove(); }
+
+function openListStylePicker(anchor, list, isOl) {
+  closeListStylePicker();
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'listStyleMenu';
+  menu.innerHTML = LIST_STYLES.filter(s => s.ol === isOl)
+    .map(s => `<button class="context-menu-item" data-v='${esc(s.v)}'>${esc(s.label)}</button>`).join('');
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.left = r.left + 'px';
+  menu.style.top  = (r.bottom + 4) + 'px';
+  const m = menu.getBoundingClientRect();
+  if (m.right > window.innerWidth) menu.style.left = (window.innerWidth - m.width - 8) + 'px';
+  if (m.bottom > window.innerHeight) menu.style.top = (r.top - m.height - 4) + 'px';
+
+  menu.addEventListener('mousedown', e => e.preventDefault());
+  menu.addEventListener('click', e => {
+    const v = e.target.closest('[data-v]')?.dataset.v;
+    if (!v) return;
+    list.style.listStyleType = v;
+    list.dataset.fixed = '1';        // hand-picked — nesting must not override
+    list.classList.remove('checklist');
+    closeListStylePicker();
+  });
+  setTimeout(() => document.addEventListener('click', closeListStylePicker, { once: true }), 0);
+}
+
+// ── Highlight pen ─────────────────────────────────────────────
+function setupHighlighter(editor, toolbar) {
+  const input = toolbar.querySelector('.rt-hilite');
+  if (!input || input._wired) return;
+  input._wired = true;
+  let saved = null;
+  const wrap = input.closest('.rt-hi-wrap');
+  wrap?.addEventListener('mousedown', () => {
+    const sel = window.getSelection();
+    saved = (sel && sel.rangeCount) ? sel.getRangeAt(0).cloneRange() : null;
+  });
+  input.addEventListener('input', () => {
+    editor.focus();
+    if (saved) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(saved); }
+    // hiliteColor is the standard name; some engines only know backColor.
+    if (!document.execCommand('hiliteColor', false, input.value)) {
+      document.execCommand('backColor', false, input.value);
+    }
+    const a = wrap?.querySelector('.rt-hi-a');
+    if (a) a.style.borderBottomColor = input.value;
+  });
+}
+
+// ── Cleanup ───────────────────────────────────────────────────
+// execCommand leaves <font> tags, empty spans and stray attributes behind.
+// Left alone they pile up, bloat the stored HTML and look wrong in the
+// export, so the content is tidied on the way OUT of the editor.
+function cleanEditorHtml(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html || '';
+
+  // <font color/size> -> inline styles on a span
+  d.querySelectorAll('font').forEach(f => {
+    const span = document.createElement('span');
+    if (f.getAttribute('color')) span.style.color = f.getAttribute('color');
+    const sz = f.getAttribute('size');
+    if (sz) span.style.fontSize = ({ 1: '.75em', 2: '.85em', 3: '1em', 4: '1.1em', 5: '1.3em', 6: '1.5em', 7: '1.8em' })[sz] || '';
+    span.innerHTML = f.innerHTML;
+    f.replaceWith(span.getAttribute('style') ? span : document.createRange().createContextualFragment(f.innerHTML));
+  });
+
+  // spans that carry nothing
+  d.querySelectorAll('span').forEach(sp => {
+    if (!sp.getAttribute('style') && !sp.className) sp.replaceWith(...sp.childNodes);
+  });
+
+  // editing-only leftovers
+  d.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+  d.querySelectorAll('li').forEach(li => { if (li.dataset.done === '') delete li.dataset.done; });
+
+  // empty paragraphs at the very end
+  while (d.lastElementChild && /^(P|DIV)$/.test(d.lastElementChild.tagName) &&
+         !d.lastElementChild.textContent.trim() && !d.lastElementChild.querySelector('img,hr,table')) {
+    d.lastElementChild.remove();
+  }
+  return d.innerHTML;
+}
+
+let EDIT_PAGE_ID = null;   // when set, the edit modal writes into this chapter
 
 function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
   const editor      = document.getElementById(editorId);
@@ -548,6 +1199,9 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
   }
 
   setupEditorImages(editor);
+  setupListTools(editor, toolbar);
+  setupPageLinkButton(editor, toolbar);
+  setupHighlighter(editor, toolbar);
 
   // Image upload
   const imgLabel = toolbar.querySelector('.rt-img-label');
@@ -611,7 +1265,7 @@ function setupAdd() {
   setupRichToolbar('noteEditor', 'addToolbar', 'addTextColor', 'addColorA');
 
   document.getElementById('addSubmit').addEventListener('click', async () => {
-    const content = editor.innerHTML;
+    const content = cleanEditorHtml(editor.innerHTML);
     const title   = document.getElementById('noteTitleInput').value.trim();
     if (!editor.textContent.trim()) { toast('Poznámka nesmí být prázdná.'); return; }
 
@@ -677,7 +1331,7 @@ function setupEdit() {
   document.getElementById('editSubmit').addEventListener('click', async () => {
     if (!EDIT_ID) return;
     const editor  = document.getElementById('noteEditorEdit');
-    const content = editor.innerHTML;
+    const content = cleanEditorHtml(editor.innerHTML);
     const title   = document.getElementById('noteTitleInputEdit').value.trim();
     const colorSw = document.querySelector('#editColorPicker .color-swatch.selected');
     const color   = colorSw ? colorSw.dataset.color : '#fef9c3';
@@ -687,13 +1341,22 @@ function setupEdit() {
     btn.disabled = true;
 
     try {
-      await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(EDIT_ID).update({
-        content,
-        contentType: 'html',
-        title: title || null,
-        color,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
+      if (EDIT_PAGE_ID) {
+        // Editing one chapter of a guide — the note's own content is left alone.
+        const note = NOTES_MAP.get(EDIT_ID);
+        const pages = pagesOf(note).map(p =>
+          p.id === EDIT_PAGE_ID ? { ...p, title: title || p.title, content } : p);
+        await savePages(EDIT_ID, pages);
+        if (GUIDE && GUIDE.noteId === EDIT_ID) { NOTES_MAP.get(EDIT_ID).pages = pages; renderGuide(); }
+      } else {
+        await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(EDIT_ID).update({
+          content,
+          contentType: 'html',
+          title: title || null,
+          color,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
       closeModal('editModal');
     } catch (e) {
       toast('Chyba: ' + e.message);
@@ -704,6 +1367,8 @@ function setupEdit() {
 
 function openEdit(id, note) {
   EDIT_ID = id;
+  EDIT_PAGE_ID = null;          // plain note edit, not a chapter
+  document.getElementById('editModalTitle').textContent = 'Upravit poznámku';
   document.getElementById('noteTitleInputEdit').value = note.title || '';
   const editor = document.getElementById('noteEditorEdit');
   if (note.contentType === 'html') {
@@ -745,12 +1410,30 @@ function openNoteDetail(el, note) {
   document.getElementById('detailTime').textContent   = fmtTs(note.updatedAt || note.createdAt);
 
   const contentEl = document.getElementById('detailContent');
-  setNoteContent(contentEl, note);
-  if (note.title) {
-    const h = document.createElement('h4');
-    h.className = 'note-detail-title';
-    h.textContent = note.title;
-    contentEl.prepend(h);
+
+  if (pagesOf(note).length) {
+    // A guide — chapters, breadcrumbs and the tree take over the body.
+    GUIDE = { noteId: note.id, pageId: pagesOf(note)[0].id, history: [] };
+    renderGuide();
+  } else {
+    GUIDE = null;
+    document.getElementById('guideBar').style.display = 'none';
+    document.getElementById('guideTree').style.display = 'none';
+    setNoteContent(contentEl, note);
+    if (note.title) {
+      const h = document.createElement('h4');
+      h.className = 'note-detail-title';
+      h.textContent = note.title;
+      contentEl.prepend(h);
+    }
+    // Offer turning it into a guide — chapters with click-through links.
+    if (canEdit(note)) {
+      const b = document.createElement('button');
+      b.className = 'make-guide-btn';
+      b.textContent = '📖 Udělat z toho návod (kapitoly)';
+      b.addEventListener('click', () => convertToGuide(note.id));
+      contentEl.appendChild(b);
+    }
   }
 
   loadComments(note.id);

@@ -9,7 +9,14 @@
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/';
 // gemini-1.5-flash is retired — kept it out on purpose. Newest/cheapest first,
 // with older-generation fallbacks in case a key's account tier lacks the 2.5 line.
-const GEMINI_MODELS   = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'];
+// Static fallback, used only when listing models from the API fails.
+// Newest first, full flash before lite — same order the live sort produces.
+const GEMINI_MODELS   = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash',
+                         'gemini-3.5-flash', 'gemini-2.5-flash',
+                         'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'];
+// Fact-checking uses Google Search grounding, whose free allowance is far
+// bigger on 2.5 Flash (1500/day) than on the 3.x family (5000/month).
+const GEMINI_GROUNDED_MODEL = 'gemini-2.5-flash';
 const getGeminiKey    = () => localStorage.getItem('sb_gemini_key');
 
 const GROQ_ENDPOINT   = 'https://api.groq.com/openai/v1/';
@@ -31,10 +38,22 @@ async function listModelsFor(provider, key) {
       const names = (data.models || [])
         .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
         .map(m => m.name.replace(/^models\//, ''));
-      // Prefer fast/cheap "flash" models (quota-friendly) over "pro"; skip
-      // experimental/preview builds, which tend to be the least stable.
-      const rank = n => (/preview|exp/i.test(n) ? 2 : /flash/i.test(n) ? 0 : /pro/i.test(n) ? 1 : 1.5);
-      names.sort((a, b) => rank(a) - rank(b));
+      // Order matters: whatever lands first is what actually gets used.
+      // The old ranking only told flash/pro/preview apart and ignored the
+      // generation entirely, so the model in play was effectively whichever
+      // flash the API happened to list first. Sort properly:
+      //   stable before preview -> flash before pro -> full before lite
+      //   -> newest generation first
+      names.sort((a, b) => {
+        const s = n => ({
+          exp:  /preview|exp/i.test(n) ? 1 : 0,
+          kind: /flash/i.test(n) ? 0 : /pro/i.test(n) ? 1 : 2,
+          lite: /lite/i.test(n) ? 1 : 0,
+          ver:  (m => (m ? +m[1] * 100 + +m[2] : 0))(n.match(/(\d+)\.(\d+)/)),
+        });
+        const A = s(a), B = s(b);
+        return A.exp - B.exp || A.kind - B.kind || A.lite - B.lite || B.ver - A.ver;
+      });
       if (names.length) { _aiModelCache[cacheKey] = names; return names; }
     } else if (provider === 'groq') {
       const res = await fetch(`${GROQ_ENDPOINT}models`, { headers: { Authorization: `Bearer ${key}` } });
@@ -79,6 +98,38 @@ async function callAiProvider(provider, model, key, prompt, { temperature, maxOu
 // instead of being mislabeled as a rate limit; the real last error is what
 // surfaces to the caller. An invalid key only disables THAT provider's
 // remaining candidates — Groq still gets tried if Gemini's key is bad, etc.
+// ── Grounded generation (Google Search) ───────────────────────
+// Separate from aiGenerate on purpose: this one must run on a specific model
+// (the free search allowance is far bigger on 2.5 Flash), Groq cannot do it
+// at all, and the caller wants the SOURCES back, not just text.
+// Returns { text, sources: [{uri, title}], queries: [] }.
+async function aiGenerateGrounded(prompt, { temperature = 0.2, maxOutputTokens = 2000 } = {}) {
+  const key = getGeminiKey();
+  if (!key) throw new Error('no-gemini-key');
+
+  const res = await fetch(`${GEMINI_ENDPOINT}${GEMINI_GROUNDED_MODEL}:generateContent?key=${key}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature, maxOutputTokens },
+    }),
+  });
+  if (res.status === 401 || res.status === 403) throw new Error('invalid-key');
+  if (res.status === 429) throw new Error('rate-limit');
+  if (!res.ok) throw new Error('http-' + res.status);
+
+  const data = await res.json();
+  const cand = data.candidates?.[0] || {};
+  // With a tool enabled the answer can arrive split across several parts.
+  const text = (cand.content?.parts || []).map(p => p.text || '').join('');
+  const meta = cand.groundingMetadata || {};
+  const sources = (meta.groundingChunks || [])
+    .map(c => ({ uri: c.web?.uri || '', title: c.web?.title || '' }))
+    .filter(x => x.uri);
+  return { text, sources, queries: meta.webSearchQueries || [] };
+}
+
 async function aiGenerate(prompt, { temperature = 0.9, maxOutputTokens = 1600, parse } = {}) {
   const gKey = getGeminiKey(), qKey = getGroqKey();
   if (!gKey && !qKey) throw new Error('no-key');

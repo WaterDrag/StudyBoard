@@ -8,9 +8,17 @@ let AI_GENERATED_CARDS = [];
 // converted to "cell | cell" rows (not just mashed together) since notes can
 // contain them; images/formatting are irrelevant for text-based extraction.
 function noteToPlainText(note) {
-  if (note.contentType !== 'html') return (note.content || '').trim();
+  const pages = Array.isArray(note.pages) ? note.pages : [];
+  if (note.contentType !== 'html' && !pages.length) return (note.content || '').trim();
   const d = document.createElement('div');
   d.innerHTML = note.content || '';
+  // A guide keeps its text in chapters — fold them in, so search, AI cards
+  // and fact-checking see the whole thing and not the (often empty) body.
+  pages.forEach(pg => {
+    const sec = document.createElement('div');
+    sec.innerHTML = `<p>${pg.title || ''}</p>` + (pg.content || '');
+    d.appendChild(sec);
+  });
   d.querySelectorAll('table').forEach(table => {
     const rows = [...table.querySelectorAll('tr')].map(tr =>
       [...tr.querySelectorAll('th,td')].map(c => c.textContent.trim()).join(' | ')
@@ -443,3 +451,185 @@ async function saveAiCards() {
   btn.disabled = false; btn.textContent = '💾 Uložit vybrané';
 }
 
+
+// ── Fact check (Google Search grounded) ───────────────────────
+// Pulls the claims out of one note and checks each against the live web,
+// then shows the verdicts with clickable sources. It NEVER edits the note —
+// it flags, you decide. Expect false alarms on wording, on subjects taught a
+// particular way, and on anything specific to your class; the source links
+// are there so you can settle it yourself.
+function factVerdictMeta(v) {
+  return ({
+    ok:           { icon: '✅', label: 'Sedí',          cls: 'fc-ok' },
+    suspicious:   { icon: '⚠️', label: 'Podezřelé',     cls: 'fc-warn' },
+    wrong:        { icon: '❌', label: 'Nesedí',        cls: 'fc-bad' },
+    unverifiable: { icon: '❓', label: 'Nešlo ověřit',  cls: 'fc-unk' },
+  })[v] || { icon: '❓', label: 'Nešlo ověřit', cls: 'fc-unk' };
+}
+
+// Last result, kept so it can be turned into a note without re-asking.
+let FACT_RESULT = null;
+
+async function factCheckNote(noteId) {
+  const note = NOTES_MAP.get(noteId);
+  if (!note) return;
+  FACT_RESULT = null;
+  const text = noteToPlainText(note).trim();
+  if (text.length < 15) { toast('Poznámka je moc krátká na kontrolu.'); return; }
+
+  openModal('factCheckModal');
+  const body = document.getElementById('factCheckBody');
+  document.getElementById('factCheckTitle').textContent = exportNoteTitle(note);
+  body.innerHTML = '<div class="fc-loading"><div class="spinner"></div>' +
+    '<div>Ověřuji tvrzení na webu…<br><span style="font-size:0.78rem;color:var(--text-muted);">' +
+    'Prohledávám zdroje, chvilku to trvá.</span></div></div>';
+
+  const prompt = `You are checking a student's study notes for factual errors, using web search.
+Keep the SAME language as the notes (they are likely Czech).
+
+Pull out the individual factual CLAIMS from the notes below and verify each one.
+Skip anything that is not a checkable fact (headings, personal reminders, to-dos, opinions, task lists).
+Check at most 12 claims — pick the ones where being wrong would matter most.
+
+For each claim return:
+- "claim": the claim, quoted or closely paraphrased from the notes (short)
+- "verdict": "ok" (matches reliable sources), "wrong" (clearly contradicted), "suspicious" (imprecise, outdated, misleading or only partly true), or "unverifiable" (no reliable source found)
+- "note": one short sentence saying WHY — for anything other than "ok", say what the sources actually state
+- "fix": the corrected wording, ONLY for "wrong" or "suspicious"; otherwise an empty string
+
+Be conservative: if the notes are a simplification that a teacher would accept, that is "ok", not "wrong".
+Do not invent errors to seem useful. It is fine for every claim to be "ok".
+
+Return ONLY a JSON array, nothing else:
+[{"claim":"...","verdict":"ok","note":"...","fix":""}]
+
+NOTES:
+"""
+${text.slice(0, 6000)}
+"""`;
+
+  try {
+    const { text: out, sources, queries } = await aiGenerateGrounded(prompt);
+    const m = out.match(/\[[\s\S]*\]/);
+    if (!m) throw new Error('parse');
+    const items = JSON.parse(repairAiJson(m[0]))
+      .filter(x => x && x.claim)
+      .map(x => ({
+        claim: String(x.claim).trim(),
+        verdict: String(x.verdict || 'unverifiable').toLowerCase(),
+        note: String(x.note || '').trim(),
+        fix: String(x.fix || '').trim(),
+      }));
+    if (!items.length) throw new Error('empty');
+    FACT_RESULT = { noteId, items, sources, queries };
+    renderFactCheck(items, sources, queries);
+  } catch (e) {
+    const msg = e.message === 'no-gemini-key'
+      ? 'Kontrola faktů potřebuje Gemini klíč — nastav ho v AI kartách.'
+      : e.message === 'rate-limit'
+        ? 'Vyčerpaný denní limit vyhledávání (1500/den). Zkus to zítra.'
+        : e.message === 'invalid-key'
+          ? 'Gemini klíč neplatí.'
+          : 'Nepovedlo se ověřit: ' + e.message;
+    body.innerHTML = `<div style="color:#fca5a5;font-size:0.88rem;padding:14px 0;">${esc(msg)}</div>`;
+  }
+}
+
+function renderFactCheck(items, sources, queries) {
+  const body = document.getElementById('factCheckBody');
+  const bad = items.filter(i => i.verdict === 'wrong').length;
+  const warn = items.filter(i => i.verdict === 'suspicious').length;
+
+  const summary = bad || warn
+    ? `Našel jsem ${bad ? `<b>${bad}× nesedí</b>` : ''}${bad && warn ? ' a ' : ''}${warn ? `<b>${warn}× podezřelé</b>` : ''}.`
+    : 'Nic podezřelého jsem nenašel.';
+
+  body.innerHTML = `
+    <div class="fc-summary">${summary}
+      <span style="display:block;margin-top:4px;font-size:0.76rem;color:var(--text-muted);">
+        Ber to jako upozornění, ne rozsudek — u formulací a školních zjednodušení se AI plete.
+        Klikni na zdroj a rozhodni sám. Poznámku ti nic nepřepsalo.
+      </span>
+    </div>
+    <div class="fc-list">
+      ${items.map(i => {
+        const m = factVerdictMeta(i.verdict);
+        return `<div class="fc-item ${m.cls}">
+          <div class="fc-head"><span class="fc-icon">${m.icon}</span><span class="fc-claim">${esc(i.claim)}</span>
+            <span class="fc-badge">${m.label}</span></div>
+          ${i.note ? `<div class="fc-note">${esc(i.note)}</div>` : ''}
+          ${i.fix ? `<div class="fc-fix"><b>Správně:</b> ${esc(i.fix)}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    ${sources.length ? `
+      <div class="fc-sources">
+        <div class="fc-sources-h">📚 Zdroje, ze kterých se ověřovalo</div>
+        ${sources.map(s => `<a href="${esc(s.uri)}" target="_blank" rel="noopener noreferrer">${esc(s.title || s.uri)}</a>`).join('')}
+      </div>` : ''}
+    ${queries.length ? `<div class="fc-queries">Hledalo se: ${queries.map(esc).join(' · ')}</div>` : ''}
+    ${canWriteNotes() ? `
+      <div class="fc-actions">
+        <button class="btn btn-primary" id="factSaveBtn" style="font-size:0.84rem;">📝 Uložit jako novou poznámku</button>
+        <span style="font-size:0.74rem;color:var(--text-muted);">Původní poznámka zůstane nedotčená.</span>
+      </div>` : ''}`;
+
+  document.getElementById('factSaveBtn')?.addEventListener('click', saveFactCheckAsNote);
+}
+
+function canWriteNotes() {
+  return MY_ROLE !== 'viewer' && !(ME.isAnonymous && MY_ROLE !== 'owner');
+}
+
+// Turn the verdicts into a NEW note pinned beside the original. Nothing is
+// ever written back into the source note — that is the whole point: you keep
+// the original wording and get the findings, with their sources, next to it.
+async function saveFactCheckAsNote() {
+  if (!FACT_RESULT) return;
+  const btn = document.getElementById('factSaveBtn');
+  const src = NOTES_MAP.get(FACT_RESULT.noteId);
+  if (!src) { toast('Původní poznámka už neexistuje.'); return; }
+  btn.disabled = true; btn.textContent = '⏳ Ukládám…';
+
+  const { items, sources, queries } = FACT_RESULT;
+  const rows = items.map(i => {
+    const m = factVerdictMeta(i.verdict);
+    return `<li><b>${m.icon} ${esc(i.claim)}</b>` +
+      (i.note ? `<br><span style="color:#64748b;">${esc(i.note)}</span>` : '') +
+      (i.fix ? `<br>✔️ <b>Správně:</b> ${esc(i.fix)}` : '') +
+      `</li>`;
+  }).join('');
+
+  const srcList = sources.length
+    ? `<p><b>📚 Zdroje</b></p><ul>` +
+      sources.map(s => `<li><a href="${esc(s.uri)}" target="_blank" rel="noopener noreferrer">${esc(s.title || s.uri)}</a></li>`).join('') +
+      `</ul>`
+    : '';
+
+  const when = new Date().toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  const content =
+    `<p><i>Ověření poznámky „${esc(exportNoteTitle(src))}" ze dne ${esc(when)}. ` +
+    `Původní poznámka je beze změny — tohle je jen nález, rozhodni sám.</i></p>` +
+    `<ul>${rows}</ul>` + srcList +
+    (queries.length ? `<p style="color:#64748b;font-size:0.85em;">Hledalo se: ${queries.map(esc).join(' · ')}</p>` : '');
+
+  try {
+    await db.collection('rooms').doc(ROOM_ID).collection('notes').add({
+      title: 'Ověření: ' + exportNoteTitle(src).slice(0, 60),
+      content,
+      contentType: 'html',
+      color: '#e0f2fe',                       // distinct from a normal note
+      x: (src.x || 60) + 260, y: (src.y || 60), // beside the original
+      authorId: ME.uid,
+      authorName: ME.displayName || ME.email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    logActivity('note', `uložil ověření faktů k „${exportNoteTitle(src)}"`);
+    toast('Poznámka s ověřením vytvořena ✓');
+    closeModal('factCheckModal');
+  } catch (e) {
+    toast('Chyba: ' + e.message);
+    btn.disabled = false; btn.textContent = '📝 Uložit jako novou poznámku';
+  }
+}

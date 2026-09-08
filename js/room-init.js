@@ -162,6 +162,7 @@ auth.onAuthStateChanged(async user => {
     setupBoardMinimap();
     setupMultiSelect();
     setupLightbox();
+    setupGuide();
     setupModalClose();
     updateMemberCount();
     refreshMembersBadge(); // pending friend-request badge on the members button

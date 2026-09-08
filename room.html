@@ -138,13 +138,26 @@
             <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="5" title="Velký">L</button>
             <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="7" title="Velmi velký">XL</button>
             <div class="rt-sep"></div>
+            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<h2>" title="Nadpis">H1</button>
+            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<h3>" title="Podnadpis">H2</button>
+            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<blockquote>" title="Citace">❝</button>
+            <button type="button" class="rt-btn" data-cmd="insertHorizontalRule" title="Vodorovná čára">―</button>
+            <div class="rt-sep"></div>
             <label class="rt-color-wrap" title="Barva textu">
               <span class="rt-color-a" id="addColorA">A</span>
               <input type="color" id="addTextColor" value="#1a1a1a">
             </label>
+            <label class="rt-color-wrap rt-hi-wrap" title="Zvýraznit text">
+              <span class="rt-color-a rt-hi-a">🖍</span>
+              <input type="color" class="rt-hilite" value="#fde047">
+            </label>
             <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" style="font-size:0.72rem;opacity:.7;">✕fmt</button>
             <div class="rt-sep"></div>
-            <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky" style="font-size:0.9rem;">☰</button>
+            <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky (Tab = zanořit)" style="font-size:0.9rem;">•—</button>
+            <button type="button" class="rt-btn" data-cmd="insertOrderedList" title="Číslovaný seznam (Tab = zanořit)" style="font-size:0.9rem;">1.</button>
+            <button type="button" class="rt-btn rt-liststyle" title="Styl odrážky" style="font-size:0.9rem;">▾</button>
+            <button type="button" class="rt-btn rt-checklist" title="Zaškrtávací seznam" style="font-size:0.9rem;">☑</button>
+            <button type="button" class="rt-btn rt-pagelink" title="Odkaz na kapitolu (proklik)" style="font-size:0.9rem;">🔗📖</button>
             <div class="rt-sep"></div>
             <button type="button" class="rt-btn rt-table-btn" title="Vložit tabulku" style="font-size:0.85rem;">⊞</button>
             <div class="rt-sep"></div>
@@ -183,7 +196,7 @@
   <div class="modal-overlay" id="editModal" data-persist>
     <div class="modal modal-wide">
       <div class="modal-header">
-        <h3>Upravit poznámku</h3>
+        <h3 id="editModalTitle">Upravit poznámku</h3>
         <button class="modal-close" data-close="editModal">✕</button>
       </div>
       <div class="form-group">
@@ -203,13 +216,26 @@
             <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="5" title="Velký">L</button>
             <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="7" title="Velmi velký">XL</button>
             <div class="rt-sep"></div>
+            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<h2>" title="Nadpis">H1</button>
+            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<h3>" title="Podnadpis">H2</button>
+            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<blockquote>" title="Citace">❝</button>
+            <button type="button" class="rt-btn" data-cmd="insertHorizontalRule" title="Vodorovná čára">―</button>
+            <div class="rt-sep"></div>
             <label class="rt-color-wrap" title="Barva textu">
               <span class="rt-color-a" id="editColorA">A</span>
               <input type="color" id="editTextColor" value="#1a1a1a">
             </label>
+            <label class="rt-color-wrap rt-hi-wrap" title="Zvýraznit text">
+              <span class="rt-color-a rt-hi-a">🖍</span>
+              <input type="color" class="rt-hilite" value="#fde047">
+            </label>
             <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" style="font-size:0.72rem;opacity:.7;">✕fmt</button>
             <div class="rt-sep"></div>
-            <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky" style="font-size:0.9rem;">☰</button>
+            <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky (Tab = zanořit)" style="font-size:0.9rem;">•—</button>
+            <button type="button" class="rt-btn" data-cmd="insertOrderedList" title="Číslovaný seznam (Tab = zanořit)" style="font-size:0.9rem;">1.</button>
+            <button type="button" class="rt-btn rt-liststyle" title="Styl odrážky" style="font-size:0.9rem;">▾</button>
+            <button type="button" class="rt-btn rt-checklist" title="Zaškrtávací seznam" style="font-size:0.9rem;">☑</button>
+            <button type="button" class="rt-btn rt-pagelink" title="Odkaz na kapitolu (proklik)" style="font-size:0.9rem;">🔗📖</button>
             <div class="rt-sep"></div>
             <button type="button" class="rt-btn rt-table-btn" title="Vložit tabulku" style="font-size:0.85rem;">⊞</button>
             <div class="rt-sep"></div>
@@ -367,6 +393,37 @@
         <button id="aiGenerateBtn" class="btn btn-primary">✨ Vygenerovat</button>
         <button id="aiSaveBtn" class="btn btn-primary" style="display:none;">💾 Uložit vybrané</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Klikací oblasti na obrázku -->
+  <div class="modal-overlay" id="hotspotModal">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>🎯 Klikací oblasti na obrázku</h3>
+        <button class="modal-close" data-close="hotspotModal">✕</button>
+      </div>
+      <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:12px;line-height:1.5;">
+        <b>Tažením myši</b> nakresli obdélník přes tu část obrázku, která má být klikací —
+        pak vyber kapitolu, kam povede. Oblastí můžeš udělat kolik chceš.
+      </p>
+      <div id="hsStage" class="hs-stage"></div>
+      <div id="hsList" class="hs-list"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="hotspotModal">Zrušit</button>
+        <button id="hsSave" class="btn btn-primary">Uložit oblasti</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ověření faktů -->
+  <div class="modal-overlay" id="factCheckModal">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>🔎 Ověření faktů — <span id="factCheckTitle"></span></h3>
+        <button class="modal-close" data-close="factCheckModal">✕</button>
+      </div>
+      <div id="factCheckBody"></div>
     </div>
   </div>
 
@@ -555,7 +612,19 @@
         <span id="detailAuthor" style="font-weight:600;font-size:1rem;"></span>
         <button class="modal-close" data-close="noteDetailModal">✕</button>
       </div>
-      <div id="detailContent" class="note-detail-content"></div>
+      <!-- Návod: strom kapitol (zobrazí se jen když poznámka kapitoly má) -->
+      <div id="guideBar" class="guide-bar" style="display:none;">
+        <button class="guide-toggle" id="guideToggle" title="Seznam kapitol">📖</button>
+        <nav id="guideCrumbs" class="guide-crumbs"></nav>
+        <span style="flex:1;"></span>
+        <button class="guide-act" id="guideBack" title="Zpět">←</button>
+        <button class="guide-act" id="guideAddSub" title="Přidat podkapitolu">＋ Podkapitola</button>
+        <button class="guide-act" id="guideEdit" title="Upravit tuto kapitolu">✏️ Upravit</button>
+      </div>
+      <div class="guide-wrap">
+        <aside id="guideTree" class="guide-tree" style="display:none;"></aside>
+        <div id="detailContent" class="note-detail-content"></div>
+      </div>
       <div id="detailTime" class="note-detail-time"></div>
       <div class="note-comments">
         <div class="note-comments-title">💬 Komentáře</div>

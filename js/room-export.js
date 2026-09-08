@@ -116,6 +116,33 @@ async function renderWhiteboardExport(wb, onProgress) {
 // Flatten the folder TREE into an ordered list of sections carrying their
 // depth, so the export can render real nesting. Depth-first, siblings sorted
 // by name, so a parent always precedes its children.
+// Image hotspots become plain positioned anchors in the export, so several
+// clickable areas on one picture keep working with no JavaScript at all.
+function hotspotsToHtml(html, noteId) {
+  if (!html || !html.includes('data-spots')) return html;
+  const box = document.createElement('div');
+  box.innerHTML = html;
+  box.querySelectorAll('img[data-spots]').forEach(img => {
+    let spots = [];
+    try { spots = JSON.parse(img.getAttribute('data-spots')) || []; } catch (_) {}
+    img.removeAttribute('data-spots');
+    if (!spots.length) return;
+    const wrap = document.createElement('span');
+    wrap.className = 'hs-wrap';
+    img.replaceWith(wrap);
+    wrap.appendChild(img);
+    spots.forEach(sp => {
+      const a = document.createElement('a');
+      a.className = 'hs-area';
+      a.setAttribute('href', `#pg-${noteId}-${sp.page}`);
+      a.setAttribute('style', `left:${sp.x}%;top:${sp.y}%;width:${sp.w}%;height:${sp.h}%;`);
+      a.setAttribute('title', sp.label || 'Kapitola');
+      wrap.appendChild(a);
+    });
+  });
+  return box.innerHTML;
+}
+
 function buildFolderSections() {
   const byParent = new Map();
   FOLDERS_MAP.forEach(f => {
@@ -268,7 +295,23 @@ function buildExportHtml(data, opts) {
       <div class="fbody">
       ${sec.notes.map(n => {
         const title = esc(n.title || exportNoteTitle(n));
-        const content = n.contentType === 'html' ? (n.content || '') : `<p>${esc(n.content || '')}</p>`;
+        // A guide is flattened into nested chapter sections, and its
+        // click-through links become in-page anchors so they still work.
+        const guidePages = Array.isArray(n.pages) ? n.pages : [];
+        const chapterHtml = (parentId, depth) => guidePages
+          .filter(pg => (pg.parentId || null) === (parentId || null))
+          .map(pg => {
+            const body = hotspotsToHtml(
+              (pg.content || '').replace(/data-page="([^"]+)"/g, (m, id) => `href="#pg-${esc(n.id)}-${esc(id)}"`),
+              n.id);
+            return `<div class="gpage" id="pg-${esc(n.id)}-${esc(pg.id)}" style="--gd:${depth}">
+                <div class="gpage-h">${esc(pg.title || 'Kapitola')}</div>
+                <div class="gpage-b">${body}</div>
+              </div>` + chapterHtml(pg.id, depth + 1);
+          }).join('');
+        const content = guidePages.length
+          ? (n.content ? `<div>${n.content}</div>` : '') + chapterHtml(null, 0)
+          : (n.contentType === 'html' ? (n.content || '') : `<p>${esc(n.content || '')}</p>`);
         const conns = opts.conns ? exportNoteConns(n.id) : [];
         const connsHtml = conns.length ? `<div class="meta">🔗 ${conns.map(esc).join(' · ')}</div>` : '';
         const cmts = data.commentsByNote[n.id] || [];
@@ -419,6 +462,18 @@ function buildExportHtml(data, opts) {
   .ncontent table { border-collapse:collapse; max-width:100%; }
   .ncontent td, .ncontent th { border:1px solid var(--bd); padding:4px 8px; }
   .meta { font-size:.8rem; color:var(--muted); margin-top:10px; }
+  /* Guide chapters — indented by depth, linked from the text */
+  .gpage { margin:10px 0 0 calc(var(--gd,0) * 16px); padding-left:11px; border-left:2px solid var(--bd); }
+  .gpage-h { font-weight:700; font-size:calc(1rem - var(--gd,0) * 0.04rem); margin-bottom:3px; }
+  .gpage-b { font-size:.92rem; }
+  .gpage-b a[href^="#pg-"] { color:var(--ac); font-weight:600; text-decoration:none; border-bottom:1px dashed var(--ac); }
+  /* Clickable areas drawn over a picture */
+  .hs-wrap { position:relative; display:inline-block; max-width:100%; line-height:0; }
+  .hs-wrap img { display:block; max-width:100%; height:auto; margin:0 !important; float:none !important; }
+  .hs-area { position:absolute; border:1.5px solid rgba(99,102,241,.55); background:rgba(99,102,241,.14);
+             border-radius:4px; border-bottom-style:solid !important; }
+  .hs-area:hover { background:rgba(99,102,241,.32); border-color:var(--ac); }
+  @media print { .hs-area { border-style:dashed; background:none; } }
   .cmts { margin-top:10px; padding-top:9px; border-top:1px dashed var(--bd); }
   .cmts-h { font-size:.76rem; font-weight:600; color:var(--muted); margin-bottom:5px; }
   .cmt { font-size:.85rem; margin:3px 0; } .cmt b { margin-right:5px; }
