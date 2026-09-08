@@ -270,51 +270,6 @@ function travelDestinations(remote) {
   return out;
 }
 
-// What the palette shows with an EMPTY search box. Long families (rooms,
-// decks — and notes once there are many) collapse into a single row whose
-// contents open in the right-hand pane, instead of one endless column.
-const TRAVEL_INLINE_MAX = 8;
-function travelBrowse(all, remote) {
-  const of = kind => all.filter(d => d.kind === kind);
-  const out = [];
-
-  out.push(all.find(d => d.id === 'dash'));
-
-  // Only the decks belonging to THIS room — personal ones live on the
-  // dashboard and would just be noise here (typing still finds them).
-  const decks = of('deck').filter(d => d.deck?.roomId === ROOM_ID);
-  out.push({ kind: 'cat', id: 'decks', icon: '🃏', group: 'Kam jinam',
-             title: 'Flash Cards', sub: decks.length ? `${decks.length} balíčků v místnosti` : 'zatím žádné balíčky',
-             items: decks, empty: 'V této místnosti zatím nejsou žádné balíčky.',
-             extra: { kind: 'action', id: 'cards', icon: '🃏',
-                      title: 'Otevřít Flash Cards této místnosti', sub: 'přehled všech balíčků' } });
-
-  const rooms = of('room');
-  out.push({ kind: 'cat', id: 'rooms', icon: '🚪', group: 'Kam jinam',
-             title: 'Jiné místnosti', sub: rooms.length ? `${rooms.length} místností` : 'jsi jen tady',
-             items: rooms, empty: 'Nejsi v žádné další místnosti.' });
-
-  out.push(all.find(d => d.id === 'fit'));
-  out.push(all.find(d => d.id === 'back'));
-
-  // Things on THIS board stay listed one by one while there aren't too many —
-  // that's what you usually came for.
-  const groups = [
-    ['note',   'Poznámky', '📝', 'Poznámky na této nástěnce'],
-    ['board',  'Tabule',   '🎨', 'Tabule na této nástěnce'],
-    ['folder', 'Složky',   '📁', 'Složky'],
-  ];
-  groups.forEach(([kind, group, icon, catTitle]) => {
-    const items = of(kind);
-    if (!items.length) return;
-    if (items.length <= TRAVEL_INLINE_MAX) out.push(...items);
-    else out.push({ kind: 'cat', id: kind + 's', icon, group,
-                    title: catTitle, sub: `${items.length}`, items, empty: '' });
-  });
-
-  return out.filter(Boolean);
-}
-
 
 function contentBounds() {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -356,6 +311,28 @@ function travelBack() {
   updateMinimap();
 }
 
+// Notes of ANOTHER room, fetched the moment you step into that room in the
+// palette, then cached. Lets you pick the note before leaving this page.
+const TRAVEL_ROOM_NOTES = new Map();   // roomId → [{id,title,pages}] | 'loading'
+async function travelRoomNotes(roomId, onLoaded) {
+  if (TRAVEL_ROOM_NOTES.has(roomId)) return TRAVEL_ROOM_NOTES.get(roomId);
+  TRAVEL_ROOM_NOTES.set(roomId, 'loading');
+  try {
+    const snap = await db.collection('rooms').doc(roomId).collection('notes')
+      .orderBy('createdAt', 'desc').limit(30).get();
+    TRAVEL_ROOM_NOTES.set(roomId, snap.docs.map(d => {
+      const n = d.data();
+      const plain = (n.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      return { id: d.id, title: n.title || plain.slice(0, 44) || '(bez názvu)',
+               pages: Array.isArray(n.pages) ? n.pages.length : 0 };
+    }));
+  } catch (_) {
+    TRAVEL_ROOM_NOTES.set(roomId, []);
+  }
+  if (onLoaded) onLoaded();
+  return TRAVEL_ROOM_NOTES.get(roomId);
+}
+
 // One dispatcher for every kind of destination — in-board jump or page change.
 function travelGo(dest) {
   if (!dest) return;
@@ -367,11 +344,13 @@ function travelGo(dest) {
     return;
   }
   if (dest.kind === 'room') { window.location.href = `room.html?id=${dest.id}`; return; }
+  // A note inside ANOTHER room — open that room with the note already showing.
+  if (dest.kind === 'roomnote') { window.location.href = `room.html?id=${dest.roomId}&note=${dest.id}`; return; }
   if (dest.kind === 'deck') {
     window.location.href = `flashcards.html?deck=${dest.id}` + (dest.deck?.roomId ? `&room=${dest.deck.roomId}` : '');
     return;
   }
-  if (dest.kind === 'cat') return;         // a category is opened, not travelled to
+  if (dest.kind === 'cat') return;          // a category is opened, not travelled to
 
   // Everything else lives on this board.
   const wrap = document.getElementById('boardWrap');
@@ -386,7 +365,7 @@ function travelGo(dest) {
   const el = document.getElementById((dest.kind === 'board' ? 'wb-' : 'n-') + dest.id);
   if (el) {
     el.classList.remove('travel-flash');
-    void el.offsetWidth;                   // restart the animation
+    void el.offsetWidth;                    // restart the animation
     el.classList.add('travel-flash');
     setTimeout(() => el.classList.remove('travel-flash'), 1600);
   }
@@ -397,99 +376,62 @@ function travelGo(dest) {
   TRAVEL_RECENT.length = Math.min(TRAVEL_RECENT.length, 6);
 }
 
-// Notes of ANOTHER room, fetched only when you actually look at that room in
-// the palette, then cached. Lets you pick the note before leaving this page —
-// room.html?id=…&note=… opens it straight away.
-const TRAVEL_ROOM_NOTES = new Map();   // roomId → [{id,title}] | 'loading'
-async function travelRoomNotes(roomId, onLoaded) {
-  if (TRAVEL_ROOM_NOTES.has(roomId)) return TRAVEL_ROOM_NOTES.get(roomId);
-  TRAVEL_ROOM_NOTES.set(roomId, 'loading');
-  try {
-    const snap = await db.collection('rooms').doc(roomId).collection('notes')
-      .orderBy('createdAt', 'desc').limit(30).get();
-    const notes = snap.docs.map(d => {
-      const n = d.data();
-      const plain = (n.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-      return { id: d.id, title: n.title || plain.slice(0, 44) || '(bez názvu)',
-               pages: Array.isArray(n.pages) ? n.pages.length : 0 };
-    });
-    TRAVEL_ROOM_NOTES.set(roomId, notes);
-  } catch (_) {
-    TRAVEL_ROOM_NOTES.set(roomId, []);
-  }
-  if (onLoaded) onLoaded();
-  return TRAVEL_ROOM_NOTES.get(roomId);
-}
-
-// Notes of the room currently highlighted in the right pane. Clicking one
-// opens that room WITH the note already open.
-function roomNotesHtml(it) {
-  if (it.kind !== 'room') return '';
-  const notes = TRAVEL_ROOM_NOTES.get(it.id);
-  if (notes === 'loading' || notes === undefined) return '<div class="tp-sub-load">Načítám poznámky…</div>';
-  if (!notes.length) return '<div class="tp-sub-load">V této místnosti zatím nejsou poznámky.</div>';
-  const shown = notes.slice(0, 8);
-  return `<div class="tp-sub">
-      ${shown.map(n => `<button class="tp-note" data-room="${esc(it.id)}" data-note="${esc(n.id)}">
-          ${n.pages ? '📖' : '📝'} ${esc(n.title)}</button>`).join('')}
-      ${notes.length > shown.length ? `<div class="tp-sub-more">a další ${notes.length - shown.length}…</div>` : ''}
-    </div>`;
-}
-
-function travelPreview(d) {
-  if (!d) return '<div class="tp-empty">Vyber cíl vlevo</div>';
-
-  // A category shows its contents right here — click one, or step in with →
-  if (d.kind === 'cat') {
-    const rows = [];
-    if (d.extra) rows.push(d.extra);
-    rows.push(...d.items);
-    return `<div class="tp-head"><span class="tp-icon">${d.icon}</span>
-        <div><b>${esc(d.title)}</b><span>${esc(d.sub)}</span></div></div>` +
-      (rows.length
-        ? `<div class="tp-grid">${rows.map((it, i) => `
-            <button class="tp-card${i === d._sub ? ' on' : ''}" data-sub="${i}" style="--c:${esc(it.color || '#94a3b8')}">
-              <span class="tp-card-ico">${it.icon}</span>
-              <span class="tp-card-txt"><b>${esc(it.title)}</b><span>${esc(it.sub || '')}</span></span>
-            </button>
-            ${i === d._sub ? roomNotesHtml(it) : ''}`).join('')}</div>`
-        : `<div class="tp-body"><i>${esc(d.empty || 'Nic tu není.')}</i></div>`) +
-      '<div class="tp-go">→ vstoupit · Enter přejít</div>';
-  }
-
-  const head = `<div class="tp-head"><span class="tp-icon" style="--c:${esc(d.color || '#94a3b8')}">${d.icon}</span>
-    <div><b>${esc(d.title)}</b>${d.sub ? `<span>${esc(d.sub)}</span>` : ''}</div></div>`;
-
-  let body = '';
-  if (d.kind === 'note') {
-    const n = d.note;
-    const pages = pagesOf(n);
-    const text = noteToPlainText(n).slice(0, 400);
-    body = `
-      ${pages.length ? `<div class="tp-tag">📖 Návod · ${pages.length} kapitol</div>` : ''}
-      <div class="tp-body">${text ? esc(text) : '<i>Prázdná poznámka</i>'}</div>
-      <div class="tp-meta">Autor: ${esc(n.authorName || '—')}${n.commentCount ? ` · 💬 ${n.commentCount}` : ''}</div>`;
-  } else if (d.kind === 'board') {
-    const wb = d.wb;
-    body = `<div class="tp-meta">Tahů: ${(wb.strokes || []).length} · textů: ${(wb.texts || []).length} · obrázků: ${(wb.images || []).length}</div>`;
-  } else if (d.kind === 'folder') {
-    const notes = (d.folder.noteIds || []).map(i => NOTES_MAP.get(i)).filter(Boolean).slice(0, 8);
-    body = `<div class="tp-list">${notes.map(n =>
-      `<div>📝 ${esc(n.title || noteToPlainText(n).slice(0, 40) || '(bez názvu)')}</div>`).join('') || '<i>Prázdná složka</i>'}</div>`;
-  } else if (d.kind === 'room') {
-    body = `<div class="tp-body">Přejde do jiné místnosti.</div>
-            <div class="tp-meta">Tvoje role: ${esc(roleLabel(d.room.role))}</div>`;
-  } else if (d.kind === 'deck') {
-    body = `<div class="tp-body">Otevře balíček kartiček — učení, kvíz, psaní i párování.</div>
-            <div class="tp-meta">${d.deck.count} karet</div>`;
-  } else {
-    body = `<div class="tp-body">${esc(d.sub || '')}</div>`;
-  }
-  return head + body + '<div class="tp-go">Enter — přejít</div>';
-}
-
-// ── The palette ───────────────────────────────────────────────
+// ── The palette: cascading columns ────────────────────────────
+// Like a Finder column view: pick something on the left, its contents open in
+// a NEW column beside it. Nothing shifts around, and you can see the whole
+// path at once — Jiné místnosti › Čtenářské Deníky › Malý princ.
 function closeTravelAgent() { document.getElementById('travelAgent')?.remove(); }
+
+// Column 1. Families collapse into a row with a › when there are many, so the
+// first column stays short; small ones stay listed inline.
+const TRAVEL_INLINE_MAX = 8;
+function travelRoot(all) {
+  const of = k => all.filter(d => d.kind === k);
+  const out = [];
+
+  out.push({ ...all.find(d => d.id === 'dash'), group: 'Kam jinam' });
+
+  const decks = of('deck').filter(d => d.deck?.roomId === ROOM_ID);
+  out.push({ kind: 'cat', id: 'decks', icon: '🃏', group: 'Kam jinam',
+             title: 'Flash Cards',
+             sub: decks.length ? `${decks.length} balíčků v místnosti` : 'zatím žádné balíčky',
+             children: [{ kind: 'action', id: 'cards', icon: '🃏',
+                          title: 'Otevřít přehled balíčků', sub: 'Flash Cards této místnosti' }, ...decks],
+             empty: 'V této místnosti zatím nejsou balíčky.' });
+
+  const rooms = of('room');
+  out.push({ kind: 'cat', id: 'rooms', icon: '🚪', group: 'Kam jinam',
+             title: 'Jiné místnosti', sub: rooms.length ? `${rooms.length} místností` : 'jsi jen tady',
+             children: rooms, empty: 'Nejsi v žádné další místnosti.' });
+
+  out.push({ ...all.find(d => d.id === 'fit'),  group: 'Na této nástěnce' });
+  out.push({ ...all.find(d => d.id === 'back'), group: 'Na této nástěnce' });
+
+  [['note', '📝', 'Poznámky'], ['board', '🎨', 'Tabule'], ['folder', '📁', 'Složky']]
+    .forEach(([kind, icon, label]) => {
+      const items = of(kind);
+      if (!items.length) return;
+      if (items.length <= TRAVEL_INLINE_MAX) out.push(...items.map(i => ({ ...i, group: 'Na této nástěnce' })));
+      else out.push({ kind: 'cat', id: kind + 's', icon, group: 'Na této nástěnce',
+                      title: label, sub: `${items.length}`, children: items, empty: '' });
+    });
+
+  return out.filter(Boolean);
+}
+
+// A room's notes are its children — loaded the moment you step into it.
+function childrenOf(item) {
+  if (item.children) return item.children;
+  if (item.kind === 'room') {
+    const n = TRAVEL_ROOM_NOTES.get(item.id);
+    if (Array.isArray(n)) return n.map(x => ({
+      kind: 'roomnote', id: x.id, roomId: item.id,
+      icon: x.pages ? '📖' : '📝', title: x.title, sub: '',
+    }));
+    return n === 'loading' ? 'loading' : null;   // null → needs fetching
+  }
+  return null;
+}
 
 async function openTravelAgent() {
   closeTravelAgent();
@@ -501,124 +443,128 @@ async function openTravelAgent() {
       <input id="taInput" placeholder="Kam chceš? Poznámka, tabule, místnost, kartičky…" autocomplete="off">
       <kbd>Esc</kbd>
     </div>
-    <div class="ta-cols">
-      <div id="taList" class="ta-list"></div>
-      <div id="taPrev" class="ta-prev"></div>
-    </div>`;
+    <div id="taCols" class="ta-cols"></div>`;
   document.body.appendChild(box);
 
   const input = document.getElementById('taInput');
-  const list  = document.getElementById('taList');
-  const prev  = document.getElementById('taPrev');
+  const cols  = document.getElementById('taCols');
   setTimeout(() => input.focus(), 20);
 
   let all = travelDestinations(null);
-  let shown = [], sel = 0, sub = -1;    // sub >= 0 → selection is in the right pane
+  let root = travelRoot(all);
+  let path = [0];          // selected index per column
+  let searching = false;
+  let flat = [];           // results while searching
 
-  const subRows = d => (d && d.kind === 'cat') ? [...(d.extra ? [d.extra] : []), ...d.items] : [];
+  // Items of every column, derived from the current path.
+  const columns = () => {
+    if (searching) return [flat];
+    const out = [root];
+    for (let i = 0; i < path.length; i++) {
+      const item = out[i]?.[path[i]];
+      if (!item) break;
+      const kids = childrenOf(item);
+      if (Array.isArray(kids) && kids.length) out.push(kids);
+      else if (kids === 'loading') { out.push('loading'); break; }
+      else break;
+    }
+    return out;
+  };
 
   const paint = () => {
-    const d = shown[sel];
-    if (d) d._sub = sub;                    // the preview draws the open card's notes
-    prev.innerHTML = travelPreview(d);
-    list.querySelectorAll('.ta-item').forEach((b, i) => b.classList.toggle('on', i === sel && sub < 0));
-    list.querySelector('.ta-item.on')?.scrollIntoView({ block: 'nearest' });
-
-    const rows = subRows(d);
-    prev.querySelectorAll('.tp-card').forEach((c, i) => {
-      c.addEventListener('mouseenter', () => { sub = i; paint(); });
-      c.addEventListener('click', () => { closeTravelAgent(); travelGo(rows[i]); });
-    });
-    // Jump straight to a specific note in another room.
-    prev.querySelectorAll('.tp-note').forEach(b => b.addEventListener('click', e => {
-      e.stopPropagation();
-      closeTravelAgent();
-      window.location.href = `room.html?id=${b.dataset.room}&note=${b.dataset.note}`;
-    }));
-    if (sub >= 0) prev.querySelector('.tp-card.on')?.scrollIntoView({ block: 'nearest' });
-
-    // A highlighted room loads its notes, then repaints once they're in.
-    const cur = rows[sub];
-    if (cur && cur.kind === 'room' && !TRAVEL_ROOM_NOTES.has(cur.id)) {
-      travelRoomNotes(cur.id, () => {
-        if (document.getElementById('travelAgent') && shown[sel] === d && sub >= 0) paint();
+    const colsData = columns();
+    cols.innerHTML = colsData.map((items, ci) => {
+      if (items === 'loading') return '<div class="ta-col"><div class="ta-loading">Načítám…</div></div>';
+      let html = '', lastGroup = null;
+      items.forEach((d, i) => {
+        if (d.group && d.group !== lastGroup) { html += `<div class="ta-group">${esc(d.group)}</div>`; lastGroup = d.group; }
+        const kids = childrenOf(d);
+        const hasKids = d.kind === 'cat' || d.kind === 'room';
+        html += `<button class="ta-item${i === path[ci] ? ' on' : ''}" data-c="${ci}" data-i="${i}"
+              style="--c:${esc(d.color || '#94a3b8')}">
+            <span class="ta-kind">${d.icon}</span>
+            <span class="ta-txt"><b>${esc(d.title)}</b>${d.sub ? `<span>${esc(d.sub)}</span>` : ''}</span>
+            ${hasKids ? '<span class="ta-more">›</span>' : ''}
+          </button>`;
       });
+      return `<div class="ta-col">${html || '<div class="ta-empty">Nic tu není.</div>'}</div>`;
+    }).join('');
+
+    cols.querySelectorAll('.ta-item').forEach(b => {
+      const ci = +b.dataset.c, i = +b.dataset.i;
+      b.addEventListener('mouseenter', () => { select(ci, i); });
+      b.addEventListener('click', () => {
+        select(ci, i);
+        const d = columns()[ci]?.[i];
+        if (d && !['cat', 'room'].includes(d.kind)) { closeTravelAgent(); travelGo(d); }
+      });
+    });
+    cols.scrollLeft = cols.scrollWidth;                 // keep the newest column in view
+    cols.querySelector('.ta-item.on')?.scrollIntoView({ block: 'nearest' });
+  };
+
+  // Selecting in column ci drops every column to its right.
+  const select = (ci, i) => {
+    path = path.slice(0, ci);
+    path[ci] = i;
+    const d = columns()[ci]?.[i];
+    if (d && d.kind === 'room' && !TRAVEL_ROOM_NOTES.has(d.id)) {
+      travelRoomNotes(d.id, () => { if (document.getElementById('travelAgent')) paint(); });
     }
+    paint();
   };
 
   const render = q => {
     const n = searchNormalize(q.trim());
-    if (!n) {
-      const recent = TRAVEL_RECENT
-        .map(r => all.find(d => d.id === r.id && d.kind === r.kind))
-        .filter(Boolean).map(d => ({ ...d, group: 'Nedávno' }));
-      const browse = travelBrowse(all).filter(d =>
-        !recent.some(r => r.id === d.id && r.kind === d.kind));
-      shown = [...recent, ...browse];
+    searching = !!n;
+    if (searching) {
+      flat = all.filter(d => searchNormalize(d.title + ' ' + d.sub + ' ' + (d.group || '')).includes(n)).slice(0, 60);
+      path = [0];
     } else {
-      shown = all.filter(d => searchNormalize(d.title + ' ' + d.sub + ' ' + d.group).includes(n)).slice(0, 60);
-    }
-    sel = 0; sub = -1;
-
-    let html = '', lastGroup = null;
-    shown.forEach((d, i) => {
-      if (d.group !== lastGroup) { html += `<div class="ta-group">${esc(d.group)}</div>`; lastGroup = d.group; }
-      html += `<button class="ta-item" data-i="${i}">
-          <span class="ta-kind" style="--c:${esc(d.color || '#94a3b8')}">${d.icon}</span>
-          <span class="ta-txt"><b>${esc(d.title)}</b>${d.sub ? `<span>${esc(d.sub)}</span>` : ''}</span>
-          ${d.kind === 'cat' ? '<span class="ta-more">›</span>' : ''}
-        </button>`;
-    });
-    list.innerHTML = html || '<div class="ta-empty">Nic takového tu není.</div>';
-    list.querySelectorAll('.ta-item').forEach(b => {
-      b.addEventListener('mouseenter', () => { sel = +b.dataset.i; sub = -1; paint(); });
-      b.addEventListener('click', () => {
-        const d = shown[+b.dataset.i];
-        if (d.kind === 'cat') { sel = +b.dataset.i; sub = 0; paint(); return; }
-        closeTravelAgent(); travelGo(d);
-      });
-    });
-    paint();
-  };
-
-  const move = step => {
-    if (sub >= 0) {
-      const rows = subRows(shown[sel]);
-      if (!rows.length) return;
-      sub = (sub + step + rows.length) % rows.length;
-    } else {
-      if (!shown.length) return;
-      sel = (sel + step + shown.length) % shown.length;
+      root = travelRoot(all);
+      path = [0];
     }
     paint();
   };
 
   input.addEventListener('input', () => render(input.value));
   input.addEventListener('keydown', e => {
-    const d = shown[sel];
-    if (e.key === 'ArrowDown')      { e.preventDefault(); move(1); }
-    else if (e.key === 'ArrowUp')   { e.preventDefault(); move(-1); }
-    else if (e.key === 'ArrowRight' && d?.kind === 'cat' && sub < 0 && subRows(d).length) {
-      e.preventDefault(); sub = 0; paint();
-    }
-    else if (e.key === 'ArrowLeft' && sub >= 0) { e.preventDefault(); sub = -1; paint(); }
-    else if (e.key === 'Enter') {
+    const colsData = columns();
+    const ci = path.length - 1;
+    const items = colsData[ci];
+    if (!Array.isArray(items)) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
-      if (sub >= 0) { const t = subRows(d)[sub]; if (t) { closeTravelAgent(); travelGo(t); } return; }
-      if (d?.kind === 'cat') { if (subRows(d).length) { sub = 0; paint(); } return; }
-      if (d) { closeTravelAgent(); travelGo(d); }
-    }
-    else if (e.key === 'Escape') {
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      select(ci, ((path[ci] ?? 0) + step + items.length) % items.length);
+    } else if (e.key === 'ArrowRight') {
       e.preventDefault();
-      if (sub >= 0) { sub = -1; paint(); return; }   // step out of the pane first
+      const next = colsData[ci + 1];
+      if (Array.isArray(next) && next.length) { path[ci + 1] = 0; paint(); }
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (path.length > 1) { path = path.slice(0, -1); paint(); }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const d = items[path[ci]];
+      if (!d) return;
+      if (['cat', 'room'].includes(d.kind)) {
+        const next = colsData[ci + 1];
+        if (Array.isArray(next) && next.length) { path[ci + 1] = 0; paint(); }
+        return;
+      }
+      closeTravelAgent();
+      travelGo(d);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      if (!searching && path.length > 1) { path = path.slice(0, -1); paint(); return; }
       closeTravelAgent();
     }
   });
 
   render('');
 
-  // Rooms and decks arrive a moment later — merge them in without disturbing
-  // whatever the user has already typed.
   travelLoadRemote().then(remote => {
     if (!document.getElementById('travelAgent')) return;
     all = travelDestinations(remote);
