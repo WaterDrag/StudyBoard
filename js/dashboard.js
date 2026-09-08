@@ -22,13 +22,13 @@ async function init(user) {
   );
 
   // Aktualizuj profil – vygeneruj friendCode pokud ještě nemá
-  db.collection('users').doc(user.uid).get().then(snap => {
+  db.collection('users').doc(user.uid).get().then(async snap => {
     const existing = snap.exists ? snap.data().friendCode : null;
-    // Načti uložené AI klíče do localStorage
-    const savedKey = snap.exists ? snap.data().geminiKey : null;
-    if (savedKey) localStorage.setItem('sb_gemini_key', savedKey);
-    const savedGroqKey = snap.exists ? snap.data().groqKey : null;
-    if (savedGroqKey) localStorage.setItem('sb_groq_key', savedGroqKey);
+    // AI klíče: users/{uid} je čitelný pro KAŽDÉHO přihlášeného (kvůli
+    // profilům přátel a členů), takže klíče tam nesmí ležet — čtou se
+    // a ukládají do soukromé podkolekce, kam smí jen vlastník účtu.
+    await migrateAiKeys(user, snap);
+    await loadAiKeys(user);
     // Téma uložené na účtu (localStorage je jen rychlá cache pro version.js)
     const savedTheme = snap.exists ? snap.data().theme : null;
     if (savedTheme != null && savedTheme !== (localStorage.getItem('sb_theme') || '')) {
@@ -776,6 +776,40 @@ function markSelectedTheme(theme) {
 }
 
 // ── Settings (vzhled + Gemini/Groq klíče) ───────────────────────
+// ── AI keys live in a PRIVATE subcollection ───────────────────
+// users/{uid} has `allow read: if isAuth()` so that friend and member
+// profiles can be shown — which means anything stored there is visible to
+// every signed-in user, guests included. API keys therefore live in
+// users/{uid}/private/ai, readable only by their owner.
+function aiKeyDoc(uid) { return db.collection('users').doc(uid).collection('private').doc('ai'); }
+
+async function loadAiKeys(user) {
+  try {
+    const snap = await aiKeyDoc(user.uid).get();
+    const d = snap.exists ? snap.data() : {};
+    if (d.geminiKey) localStorage.setItem('sb_gemini_key', d.geminiKey);
+    if (d.groqKey)   localStorage.setItem('sb_groq_key', d.groqKey);
+  } catch (_) { /* offline or rules not published — localStorage still works */ }
+}
+
+// One-time move of keys that were stored on the public profile document,
+// plus deletion of the exposed copies.
+async function migrateAiKeys(user, snap) {
+  if (!snap.exists) return;
+  const d = snap.data();
+  if (!d.geminiKey && !d.groqKey) return;
+  try {
+    await aiKeyDoc(user.uid).set({
+      geminiKey: d.geminiKey || null,
+      groqKey:   d.groqKey || null,
+    }, { merge: true });
+    await db.collection('users').doc(user.uid).update({
+      geminiKey: firebase.firestore.FieldValue.delete(),
+      groqKey:   firebase.firestore.FieldValue.delete(),
+    });
+  } catch (_) { /* retried on the next load */ }
+}
+
 function setupSettings(user) {
   const btn      = document.getElementById('settingsBtn');
   const saveBtn  = document.getElementById('settingsSave');
@@ -820,10 +854,10 @@ function setupSettings(user) {
     try {
       if (gKey) localStorage.setItem('sb_gemini_key', gKey); else localStorage.removeItem('sb_gemini_key');
       if (qKey) localStorage.setItem('sb_groq_key', qKey);   else localStorage.removeItem('sb_groq_key');
-      await db.collection('users').doc(user.uid).update({
-        geminiKey: gKey || firebase.firestore.FieldValue.delete(),
-        groqKey:   qKey || firebase.firestore.FieldValue.delete(),
-      });
+      await aiKeyDoc(user.uid).set({
+        geminiKey: gKey || null,
+        groqKey:   qKey || null,
+      }, { merge: true });
       closeModal('settingsModal');
       toast('Klíče uloženy ✓');
     } catch(e) { toast('Chyba: ' + e.message); }

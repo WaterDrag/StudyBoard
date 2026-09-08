@@ -193,8 +193,17 @@ service cloud.firestore {
 
     // ── Uživatelské profily ────────────────────────────────────
     match /users/{uid} {
+      // The profile is readable by any signed-in user on purpose — friend
+      // lists and room member panels show other people's name and photo.
+      // NOTHING private may live on this document.
       allow read:  if isAuth();
       allow write: if isAuth() && request.auth.uid == uid;
+
+      // API keys and anything else that must stay the owner's business.
+      // Not readable by other members, and not by anonymous guests either.
+      match /private/{docId} {
+        allow read, write: if isAuth() && request.auth.uid == uid;
+      }
     }
 
     // ── Žádosti o přátelství ───────────────────────────────────
