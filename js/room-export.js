@@ -18,12 +18,89 @@ function exportNoteConns(noteId) {
   return names;
 }
 
+
+// ── Export scope: everything, the current selection, or a hand-picked set ──
+// EXPORT_ONLY is set when the export is opened from a note's context menu or
+// from the multi-select bar; otherwise the dropdown decides.
+let EXPORT_ONLY = null;
+
+function exportScopeSet() {
+  const scope = document.getElementById('exportScope')?.value || 'all';
+  if (scope === 'all') return null;
+  if (scope === 'selected') return new Set(EXPORT_ONLY || SELECTED);
+  return new Set([...document.querySelectorAll('.export-pick:checked')].map(c => c.dataset.id));
+}
+
+function renderExportPicker(preselect) {
+  const list = document.getElementById('exportPickList');
+  if (!list) return;
+  const pre = preselect instanceof Set ? preselect : null;
+  const folderOf = id => {
+    const f = [...FOLDERS_MAP.values()].find(x => (x.noteIds || []).includes(id));
+    return f ? f.name : '';
+  };
+  const notes = [...NOTES_MAP.values()].sort((a, b) => noteRecency(b) - noteRecency(a));
+  list.innerHTML = notes.map(n => `
+    <label class="ai-note-row">
+      <input type="checkbox" class="export-pick" data-id="${esc(n.id)}"${pre && pre.has(n.id) ? ' checked' : ''}>
+      <span>${esc(n.title || noteToPlainText(n).slice(0, 70) || '(bez názvu)')}${
+        folderOf(n.id) ? ` <i style="color:var(--text-muted);">· ${esc(folderOf(n.id))}</i>` : ''}</span>
+    </label>`).join('') || '<div style="color:var(--text-muted);font-size:0.82rem;padding:8px;">Žádné poznámky.</div>';
+  list.querySelectorAll('.export-pick').forEach(c => c.addEventListener('change', updateExportPickCount));
+  updateExportPickCount();
+}
+
+function updateExportPickCount() {
+  const n = document.querySelectorAll('.export-pick:checked').length;
+  const el = document.getElementById('exportPickCount');
+  if (el) el.textContent = n ? `vybráno ${n}` : 'nic nevybráno';
+}
+
+function applyExportScopeUi() {
+  const scope = document.getElementById('exportScope');
+  const wrap  = document.getElementById('exportPickWrap');
+  if (!scope || !wrap) return;
+  wrap.style.display = scope.value === 'pick' ? 'block' : 'none';
+  const hint = document.getElementById('exportHint');
+  if (scope.value === 'selected') {
+    const n = (EXPORT_ONLY || SELECTED).size;
+    hint.textContent = n
+      ? (n === 1 ? 'Vyexportuje se 1 poznámka.' : `Vyexportují se ${n} ${n < 5 ? 'poznámky' : 'poznámek'}.`)
+      : 'Nemáš nic vybrané.';
+  } else hint.textContent = '';
+}
+
+// Opened from the ⬇️ Export button — whole room unless something is selected.
+function openExportModal(only) {
+  EXPORT_ONLY = only instanceof Set ? new Set(only) : null;
+  const scope = document.getElementById('exportScope');
+  const hasSel = (EXPORT_ONLY || SELECTED).size > 0;
+  if (scope) scope.value = EXPORT_ONLY ? 'selected' : (hasSel ? 'selected' : 'all');
+  renderExportPicker(EXPORT_ONLY || SELECTED);
+  applyExportScopeUi();
+  document.getElementById('exportHint').textContent =
+    EXPORT_ONLY && EXPORT_ONLY.size === 1 ? 'Vyexportuje se jen tato poznámka.' : document.getElementById('exportHint').textContent;
+  openModal('exportModal');
+}
+
 function setupExport() {
   document.getElementById('exportBtn').addEventListener('click', () => {
     document.getElementById('exportHint').textContent = '';
-    openModal('exportModal');
+    openExportModal(null);
   });
   document.getElementById('exportRunBtn').addEventListener('click', runExport);
+  document.getElementById('exportScope')?.addEventListener('change', () => {
+    EXPORT_ONLY = null;                 // the dropdown takes over from here
+    applyExportScopeUi();
+  });
+  document.getElementById('exportPickAll')?.addEventListener('click', () => {
+    document.querySelectorAll('.export-pick').forEach(c => { c.checked = true; });
+    updateExportPickCount();
+  });
+  document.getElementById('exportPickNone')?.addEventListener('click', () => {
+    document.querySelectorAll('.export-pick').forEach(c => { c.checked = false; });
+    updateExportPickCount();
+  });
 }
 
 // ── Embedding images ──────────────────────────────────────────
@@ -172,11 +249,23 @@ function buildFolderSections() {
 
 async function gatherExportData(opts, onStep) {
   const step = onStep || (() => {});
+  const only = opts.only instanceof Set ? opts.only : null;   // null = the whole room
   const filedIds = new Set();
   FOLDERS_MAP.forEach(f => (f.noteIds || []).forEach(id => filedIds.add(id)));
-  const sections = buildFolderSections();
+  let sections = buildFolderSections();
   const unfiled = [...NOTES_MAP.values()].filter(n => !filedIds.has(n.id)).sort((a, b) => noteRecency(b) - noteRecency(a));
   if (unfiled.length) sections.push({ id: '_unfiled', title: 'Nezařazené poznámky', color: '#94a3b8', depth: 0, notes: unfiled });
+
+  // Exporting a selection: keep the folder structure, drop everything that
+  // wasn't picked, then drop the folders left with nothing under them.
+  if (only) {
+    sections = sections.map(sec => ({ ...sec, notes: sec.notes.filter(n => only.has(n.id)) }));
+    for (let i = sections.length - 1; i >= 0; i--) {
+      const hasDeeper = sections.slice(i + 1)
+        .some(s => s.depth > sections[i].depth && s.notes.length);
+      if (!sections[i].notes.length && !hasDeeper) sections.splice(i, 1);
+    }
+  }
 
   // Bake every picture into the file (notes first, whiteboards below).
   if (opts.embed) {
@@ -240,13 +329,16 @@ async function gatherExportData(opts, onStep) {
 async function runExport() {
   const btn  = document.getElementById('exportRunBtn');
   const hint = document.getElementById('exportHint');
+  const only = exportScopeSet();
   const opts = {
     conns:    document.getElementById('exportConns').checked,
     comments: document.getElementById('exportComments').checked,
     cards:    document.getElementById('exportCards').checked,
     boards:   (document.getElementById('exportBoards') || {}).checked !== false,
     embed:    (document.getElementById('exportEmbed')  || {}).checked !== false,
+    only,
   };
+  if (only && !only.size) { hint.textContent = 'Nevybral jsi žádnou poznámku.'; return; }
   btn.disabled = true;
   let done = 0;
   const step = () => { done++; hint.textContent = 'Připravuji… (' + done + ' hotovo)'; };
@@ -255,7 +347,11 @@ async function runExport() {
     const data = await gatherExportData(opts, step);
     hint.textContent = 'Sestavuji stránku…';
     const html = buildExportHtml(data, opts);
-    const safe = (ROOM.name || 'mistnost').replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60) || 'export';
+    // One note → name the file after it; a selection → say how many.
+    let base = ROOM.name || 'mistnost';
+    if (only && only.size === 1) base = exportNoteTitle(NOTES_MAP.get([...only][0]) || {});
+    else if (only) base = (ROOM.name || 'vyber') + '_' + only.size + '_poznamek';
+    const safe = base.replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60) || 'export';
     downloadFile(safe + '.html', html, 'text/html;charset=utf-8');
     hint.textContent = 'Hotovo ✓ (' + Math.round(html.length / 1024) + ' kB)';
     setTimeout(() => closeModal('exportModal'), 1400);

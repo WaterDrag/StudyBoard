@@ -763,6 +763,10 @@ function setupMultiSelect() {
   document.getElementById('mselDelete')?.addEventListener('click', deleteSelection);
   document.getElementById('mselFolder')?.addEventListener('click', openMoveSelectionToFolder);
   document.getElementById('mselColor')?.addEventListener('click', e => openSelectionColorPopup(e.clientX, e.clientY));
+  document.getElementById('mselExport')?.addEventListener('click', () => {
+    if (!SELECTED.size) return;
+    openExportModal(new Set(SELECTED));
+  });
 }
 
 function applySelectionRect(r, additive) {

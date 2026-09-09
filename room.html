@@ -91,6 +91,7 @@
     <span id="mselCount"></span>
     <button id="mselColor"  class="btn btn-ghost"  style="padding:5px 11px;font-size:0.8rem;">🎨 Barva</button>
     <button id="mselFolder" class="btn btn-ghost"  style="padding:5px 11px;font-size:0.8rem;">📁 Složka</button>
+    <button id="mselExport" class="btn btn-ghost" style="padding:5px 11px;font-size:0.8rem;">⬇️ Export</button>
     <button id="mselDelete" class="btn btn-danger" style="padding:5px 11px;font-size:0.8rem;">🗑️ Smazat</button>
     <button id="mselClear"  class="btn btn-ghost"  style="padding:5px 9px;font-size:0.8rem;">✕</button>
   </div>
@@ -561,6 +562,22 @@
         vykreslené tabule, kartičky se čtyřmi režimy učení (učení s opakováním, kvíz, psaní,
         párování), zkouškový režim a statistiky pokroku. Tisk / PDF uděláš v ní přes Ctrl+P.
       </p>
+      <label class="label">Co exportovat</label>
+      <div class="form-group" style="margin-bottom:14px;">
+        <select id="exportScope" class="input">
+          <option value="all">Celou místnost</option>
+          <option value="selected">Jen vybrané poznámky</option>
+          <option value="pick">Vybrat poznámky ze seznamu…</option>
+        </select>
+        <div id="exportPickWrap" style="display:none;margin-top:10px;">
+          <div style="display:flex;gap:8px;margin-bottom:6px;">
+            <button type="button" id="exportPickAll" class="btn btn-ghost" style="font-size:0.75rem;padding:4px 10px;">Vybrat vše</button>
+            <button type="button" id="exportPickNone" class="btn btn-ghost" style="font-size:0.75rem;padding:4px 10px;">Zrušit výběr</button>
+            <span id="exportPickCount" style="font-size:0.75rem;color:var(--text-muted);margin-left:auto;align-self:center;"></span>
+          </div>
+          <div id="exportPickList" class="ai-notes-list"></div>
+        </div>
+      </div>
       <label class="label">Zahrnout</label>
       <div style="display:flex;flex-direction:column;gap:8px;margin:8px 0 16px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportConns" checked> Propojení mezi poznámkami</label>

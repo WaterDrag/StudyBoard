@@ -127,6 +127,7 @@ function openNoteMenu(x, y, noteId) {
   if (canWrite)       items.push(`<button class="context-menu-item" data-act="dup">📄 Duplikovat</button>`);
   if (canWrite)       items.push(`<button class="context-menu-item" data-act="move">📁 Přesunout do složky</button>`);
   items.push(`<button class="context-menu-item" data-act="fact">🔎 Ověřit fakta</button>`);
+  items.push(`<button class="context-menu-item" data-act="export">⬇️ Exportovat tuhle poznámku</button>`);
   if (canEdit(note))  items.push(`<button class="context-menu-item" data-act="del" style="color:#fca5a5;">🗑️ Smazat</button>`);
 
   const menu = document.createElement('div');
@@ -148,6 +149,7 @@ function openNoteMenu(x, y, noteId) {
     else if (act === 'dup')  duplicateNote(noteId);
     else if (act === 'move') openMoveToFolderModal(noteId);
     else if (act === 'fact') factCheckNote(noteId);
+    else if (act === 'export') openExportModal(new Set([noteId]));
     else if (act === 'del')  deleteNote(noteId);
   });
   setTimeout(() => document.addEventListener('click', closeNoteMenu, { once: true }), 0);
