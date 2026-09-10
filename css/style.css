@@ -3563,8 +3563,16 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 /* ===== GUIDE MAP (visual chapter editor) ===== */
 .gmap-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .gmap-hint { font-size: 0.78rem; color: var(--text-muted); }
+/* The map is the workspace for building a guide, so it gets the screen. */
+.gmap-modal {
+  max-width: none !important;
+  width: 96vw; height: 92vh;
+  display: flex; flex-direction: column;
+}
+.gmap-modal .gmap-wrap { flex: 1; min-height: 0; }
+
 .gmap-wrap {
-  overflow: auto; max-height: 66vh;
+  overflow: auto; max-height: none;
   background: var(--bg-3); border: 1px solid var(--border); border-radius: 12px;
   background-image: radial-gradient(color-mix(in srgb, var(--text-muted) 22%, transparent) 1px, transparent 1px);
   background-size: 18px 18px;

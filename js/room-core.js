@@ -43,8 +43,26 @@ function setupModalClose() {
     btn.addEventListener('click', () => closeModal(btn.dataset.close));
   });
 }
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+// Modals stack. Overlays all share z-index 500, so a modal opened from
+// INSIDE another one (edit a chapter / the guide map, both of which live
+// earlier in the HTML than the note detail) rendered *behind* it and looked
+// like a dead button. Each modal opened on top of another gets lifted above.
+let MODAL_Z = 0;
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const stacked = document.querySelectorAll('.modal-overlay.open').length > 0;
+  el.style.zIndex = stacked ? String(500 + (++MODAL_Z)) : '';
+  if (!stacked) MODAL_Z = 0;
+  el.classList.add('open');
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('open');
+  el.style.zIndex = '';
+  if (!document.querySelector('.modal-overlay.open')) MODAL_Z = 0;
+}
 
 // ── Table insert modal (shared by add + edit rich toolbars) ────
 let PENDING_TABLE_RESTORE = null;
