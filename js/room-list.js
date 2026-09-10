@@ -657,11 +657,15 @@ function setupListDragDrop(body) {
 }
 
 function renderNoteListRow(note, marks, pins) {
-  const title = note.title || noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
+  const chapters = Array.isArray(note.pages) ? note.pages.length : 0;
+  const title = note.title || (chapters ? note.pages[0].title : '')
+    || noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
   const moveBtn = MY_ROLE !== 'viewer'
     ? `<button class="notes-move-btn" data-move-note="${note.id}" title="Přesunout do složky">📁</button>`
     : '';
   const cb = commentBadgeInfo(note.id);
+  const gBadge = chapters
+    ? `<span class="row-guide" title="Návod – ${chapters} kapitol">📖 ${chapters}</span>` : '';
   const cBadge = cb.count
     ? `<span class="row-cbadge${cb.unread ? ' unread' : ''}" title="${cb.unread ? cb.unread + ' nových komentářů' : cb.count + ' komentářů'}">💬 ${cb.count}</span>`
     : '';
@@ -672,7 +676,7 @@ function renderNoteListRow(note, marks, pins) {
         <div class="notes-list-title">${esc(title)}</div>
         <div class="notes-list-meta">${esc(note.authorName || 'Anon')} · ${fmtTs(note.updatedAt || note.createdAt)}</div>
       </div>
-      ${cBadge}
+      ${gBadge}${cBadge}
       ${moveBtn}
       ${markHtml(note.id, marks || {})}
     </div>`;

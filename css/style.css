@@ -3420,6 +3420,16 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 }
 .make-guide-btn:hover { border-color: var(--accent); color: var(--text); }
 
+/* A guide is its own kind of thing on the board — book spine down the side,
+   its own colour, its own header. Underneath it's still a note document, so
+   permissions, search, export and comments keep working unchanged. */
+.note.is-guide { border-left: 5px solid #7c3aed; }
+.note-guide-kind {
+  display: inline-block;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+  color: #fff; background: #7c3aed;
+  border-radius: 5px; padding: 1px 7px; margin-bottom: 5px;
+}
 .note-guide-badge {
   font-size: 0.7rem; color: #7c3aed; font-weight: 600; margin-top: 4px;
 }
@@ -3595,3 +3605,8 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
   color: var(--text); cursor: pointer; font-size: 0.7rem; padding: 1px 5px; line-height: 1.5;
 }
 .gmap-tools button:hover { border-color: var(--accent); }
+.row-guide {
+  font-size: 0.7rem; font-weight: 600; color: #7c3aed;
+  background: color-mix(in srgb, #7c3aed 14%, transparent);
+  border-radius: 9px; padding: 1px 7px; margin-right: 5px; white-space: nowrap;
+}

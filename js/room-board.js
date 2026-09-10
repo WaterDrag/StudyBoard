@@ -617,6 +617,7 @@ function openBoardMenu(clientX, clientY) {
     <button class="context-menu-item" data-act="travel">🧭 Travel agent <span style="opacity:.55;font-size:.72rem;margin-left:6px;">Ctrl+K</span></button>
     <div class="context-menu-sep"></div>
     <button class="context-menu-item" data-act="note">➕ Přidat poznámku</button>
+    <button class="context-menu-item" data-act="guide">📖 Přidat návod</button>
     <button class="context-menu-item" data-act="board">🖊️ Přidat tabuli</button>`;
   document.body.appendChild(menu);
   menu.style.left = clientX + 'px'; menu.style.top = clientY + 'px';
@@ -626,6 +627,7 @@ function openBoardMenu(clientX, clientY) {
 
   menu.querySelector('[data-act="travel"]').addEventListener('click', () => { closeBoardMenu(); openTravelAgent(); });
   menu.querySelector('[data-act="note"]').addEventListener('click', () => { closeBoardMenu(); PENDING_ADD_POS = { x: sx, y: sy }; openAddNote(); });
+  menu.querySelector('[data-act="guide"]').addEventListener('click', () => { closeBoardMenu(); createGuide(sx, sy); });
   menu.querySelector('[data-act="board"]').addEventListener('click', () => { closeBoardMenu(); createWhiteboard(sx, sy); });
   setTimeout(() => document.addEventListener('click', closeBoardMenu, { once: true }), 0);
 }

@@ -41,11 +41,16 @@ function setNoteContent(contentEl, note) {
 function setNoteCardContent(contentEl, note) {
   const n = pagesOf(note).length;
   if (n) {
+    const kids = pagesOf(note).filter(p => p.parentId).length;
     contentEl.innerHTML =
+      `<div class="note-guide-kind">📖 Návod</div>` +
       `<div class="note-card-title">${esc(note.title || pagesOf(note)[0].title || 'Návod')}</div>` +
-      `<div class="note-guide-badge">📖 ${n} ${n === 1 ? 'kapitola' : n < 5 ? 'kapitoly' : 'kapitol'}</div>`;
+      `<div class="note-guide-badge">${n} ${n === 1 ? 'kapitola' : n < 5 ? 'kapitoly' : 'kapitol'}` +
+      `${kids ? ` · ${kids} vnořených` : ''}</div>`;
+    contentEl.closest('.note')?.classList.add('is-guide');
     return;
   }
+  contentEl.closest('.note')?.classList.remove('is-guide');
   if (note.title) {
     contentEl.innerHTML = `<div class="note-card-title">${esc(note.title)}</div>`;
   } else {
@@ -734,6 +739,41 @@ async function savePages(noteId, pages) {
   // like they did nothing at all.
   const n = NOTES_MAP.get(noteId);
   if (n) n.pages = pages;
+}
+
+// Create a guide straight away — the board's own "add a guide" action, so
+// you don't have to make a note first and convert it. It IS still a note
+// document underneath (that's what keeps permissions, search, export, AI and
+// comments working without a second implementation), it just starts life
+// with chapters and shows up on the board as a guide.
+async function createGuide(storeX, storeY) {
+  const canWrite = MY_ROLE !== 'viewer' && !(ME.isAnonymous && MY_ROLE !== 'owner');
+  if (!canWrite) { toast('Návod může přidat jen editor.'); return; }
+  const title = prompt('Název návodu:', 'Nový návod');
+  if (title === null) return;
+  const first = { id: newPageId(), title: 'Úvod', parentId: null, content: '', links: [] };
+  const data = {
+    title: (title || 'Nový návod').trim(),
+    content: '', contentType: 'html',
+    color: '#ede9fe',                         // guides get their own colour
+    pages: [first],
+    x: Math.round(storeX), y: Math.round(storeY),
+    authorId: ME.uid, authorName: ME.displayName || ME.email,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    const ref = await db.collection('rooms').doc(ROOM_ID).collection('notes').add(data);
+    logActivity('note', `vytvořil návod „${data.title}"`);
+    // Seed the local map with what we just wrote instead of waiting on the
+    // snapshot — otherwise opening it here races the round-trip and silently
+    // does nothing (the same trap that broke "make this a guide").
+    const note = { id: ref.id, ...data };
+    NOTES_MAP.set(ref.id, note);
+    GUIDE = { noteId: ref.id, pageId: first.id, history: [] };
+    openNoteDetail(document.getElementById('n-' + ref.id), note);
+    openGuideMap();
+  } catch (e) { toast('Chyba: ' + e.message); }
 }
 
 // Turn a plain note into a guide: its current content becomes chapter 1.
