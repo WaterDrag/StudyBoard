@@ -3603,6 +3603,51 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
   box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 35%, transparent);
 }
 .gmap-card.main .gmap-no { background: #f59e0b; color: #1a1a1a; }
+/* Klikací zóny obrázku jako čipy na kartě kapitoly — pojmenuješ je na
+   obrázku, nasměruješ tady kliknutím na cílovou kapitolu. */
+.gmap-zones {
+  display: flex !important;
+  flex-wrap: nowrap;
+  gap: 4px; margin-top: 4px;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none;
+}
+.gmap-zones::-webkit-scrollbar { display: none; }
+.gmap-zone {
+  flex: 0 0 auto;
+  background: var(--bg-3); color: var(--text-muted);
+  border: 1px dashed var(--border); border-radius: 6px;
+  font-size: 0.63rem; font-family: inherit; line-height: 1.6;
+  padding: 1px 6px; cursor: pointer;
+  white-space: nowrap; max-width: 120px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.gmap-zone:hover { color: var(--text); border-color: var(--accent); }
+.gmap-zone.linked { border-style: solid; color: var(--text); border-color: #f59e0b; }
+.gmap-zone.picking {
+  background: var(--accent); color: #fff; border-color: var(--accent); border-style: solid;
+}
+/* Nepropojená zóna na obrázku: vidět, že tam je, ale nikam neklikne. */
+.hs-area.unlinked { cursor: default; border-style: dashed; }
+.hs-edit.unlinked { border-color: #a3a3a3; background: color-mix(in srgb, #a3a3a3 18%, transparent); }
+.hs-edit.unlinked .hs-edit-label { background: #a3a3a3; }
+
+/* Zónová šipka: jiná barva než mezi-kapitolová, ať je poznat, že tenhle
+   přechod je klikací oblast na obrázku, ne odkaz z textu. */
+.gmap-path.zone { stroke: #f59e0b; stroke-dasharray: 3 4; }
+.gmap-label.zone { fill: #f59e0b; }
+.gmap-path[data-zfrom], .gmap-label[data-zfrom] { cursor: pointer; }
+.gmap-path[data-zfrom] { pointer-events: stroke; stroke-width: 2.5; }
+.gmap-path[data-zfrom]:hover, .gmap-path[data-from]:hover { stroke: #ef4444; }
+.gmap-label[data-zfrom]:hover { fill: #ef4444; }
+/* Čerstvě vzniklý spoj blikne, ať je vidět CO se s ČÍM propojilo. */
+@keyframes gmapFlash {
+  0%, 100% { filter: none; }
+  35%      { filter: drop-shadow(0 0 8px #22c55e) brightness(1.25); }
+}
+.gmap-flash { animation: gmapFlash 0.45s ease-in-out 3; }
+.gmap-card.gmap-flash { border-color: #22c55e; }
+
 /* Šipka jde zrušit kliknutím — kurzor to musí prozradit. */
 .gmap-path[data-from], .gmap-label[data-from] { cursor: pointer; }
 .gmap-path[data-from] { pointer-events: stroke; stroke-width: 2.5; }
