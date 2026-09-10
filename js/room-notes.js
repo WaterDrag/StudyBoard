@@ -608,6 +608,7 @@ function openImageViewer(src) {
   if (!v || !src) return;
   const im = ivEl('ivImg'), stage = ivEl('ivStage');
   ivEl('ivOpen').href = src;
+  ivEl('ivErr').hidden = true;
   v.hidden = false;
   // Wire once — the viewer markup lives in the page, not in this function.
   if (!v._wired) {
@@ -635,7 +636,10 @@ function openImageViewer(src) {
       stage.scrollTop  = pan.t - (e.clientY - pan.y);
     });
     window.addEventListener('mouseup', () => { pan = null; stage.classList.remove('panning'); });
-    im.addEventListener('load', () => ivApply('fit'));
+    im.addEventListener('load', () => { ivEl('ivErr').hidden = true; ivApply('fit'); });
+    // Without this a picture that fails to load leaves a black void with no
+    // hint of what went wrong.
+    im.addEventListener('error', () => { ivEl('ivErr').hidden = false; });
   }
   document.addEventListener('keydown', ivKeys);
   if (im.src !== src) { im.src = src; }        // load handler will fit it
