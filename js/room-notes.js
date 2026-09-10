@@ -502,7 +502,7 @@ function openImgToolbar(img, editor) {
     e.stopPropagation();
     if (b.dataset.del) { img.remove(); closeImgToolbar(); editor.focus(); return; }
     if (b.dataset.spots) { closeImgToolbar(); openHotspotEditor(img); return; }
-    if (b.dataset.zoom)  { openImageViewer(img.currentSrc || img.src); return; }
+    if (b.dataset.zoom)  { openLightbox(img.currentSrc || img.src); return; }
     if (b.dataset.size) { img.style.width = IMG_SIZES[b.dataset.size]; img.style.maxWidth = '100%'; }
     if (b.dataset.align === 'left')  { img.style.cssFloat = 'left';  img.style.display = ''; img.style.margin = '4px 12px 6px 0'; }
     if (b.dataset.align === 'right') { img.style.cssFloat = 'right'; img.style.display = ''; img.style.margin = '4px 0 6px 12px'; }
@@ -564,100 +564,6 @@ function renderHotspots(root, note, onGo) {
       });
       wrap.appendChild(a);
     });
-  });
-}
-
-// ── Prohlížeč obrázku ─────────────────────────────────────────
-// A screenshot pasted into a note renders at note width — half size or less,
-// which makes its own UI text unreadable. This shows it at real pixels (or
-// bigger) with drag-to-pan, so you never have to leave the app to read it.
-let IV = { scale: 1, mode: 'fit' };
-
-function ivEl(id) { return document.getElementById(id); }
-
-function ivApply(z) {
-  const im = ivEl('ivImg'), stage = ivEl('ivStage');
-  if (!im || !stage || !im.naturalWidth) return;
-  let scale;
-  if (z === 'fit') {
-    scale = Math.min(1, (stage.clientWidth - 24) / im.naturalWidth,
-                        (stage.clientHeight - 24) / im.naturalHeight);
-    IV.mode = 'fit';
-  } else {
-    scale = Math.max(0.05, Math.min(10, z));
-    IV.mode = 'zoom';
-  }
-  IV.scale = scale;
-  im.style.width = Math.round(im.naturalWidth * scale) + 'px';
-  ivEl('ivVal').textContent = Math.round(scale * 100) + ' %';
-}
-
-function closeImageViewer() {
-  const v = ivEl('imgViewer');
-  if (v) v.hidden = true;
-  document.removeEventListener('keydown', ivKeys);
-}
-
-function ivKeys(e) {
-  if (e.key === 'Escape') { e.stopPropagation(); closeImageViewer(); }
-  else if (e.key === '+' || e.key === '=') ivApply(IV.scale * 1.25);
-  else if (e.key === '-') ivApply(IV.scale / 1.25);
-  else if (e.key === '0') ivApply('fit');
-  else if (e.key === '1') ivApply(1);
-}
-
-function openImageViewer(src) {
-  const v = ivEl('imgViewer');
-  if (!v || !src) return;
-  const im = ivEl('ivImg'), stage = ivEl('ivStage');
-  ivEl('ivOpen').href = src;
-  ivEl('ivErr').hidden = true;
-  v.hidden = false;
-  // Wire once — the viewer markup lives in the page, not in this function.
-  if (!v._wired) {
-    v._wired = true;
-    ivEl('ivIn').onclick    = () => ivApply(IV.scale * 1.25);
-    ivEl('ivOut').onclick   = () => ivApply(IV.scale / 1.25);
-    ivEl('ivFit').onclick   = () => ivApply('fit');
-    ivEl('iv1').onclick     = () => ivApply(1);
-    ivEl('ivClose').onclick = closeImageViewer;
-    stage.addEventListener('wheel', e => {
-      if (!e.ctrlKey) return;            // plain wheel still scrolls the image
-      e.preventDefault();
-      ivApply(IV.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
-    }, { passive: false });
-    // Drag to pan — with a 1:1 screenshot the scrollbars alone are painful.
-    let pan = null;
-    stage.addEventListener('mousedown', e => {
-      pan = { x: e.clientX, y: e.clientY, l: stage.scrollLeft, t: stage.scrollTop };
-      stage.classList.add('panning');
-      e.preventDefault();
-    });
-    window.addEventListener('mousemove', e => {
-      if (!pan) return;
-      stage.scrollLeft = pan.l - (e.clientX - pan.x);
-      stage.scrollTop  = pan.t - (e.clientY - pan.y);
-    });
-    window.addEventListener('mouseup', () => { pan = null; stage.classList.remove('panning'); });
-    im.addEventListener('load', () => { ivEl('ivErr').hidden = true; ivApply('fit'); });
-    // Without this a picture that fails to load leaves a black void with no
-    // hint of what went wrong.
-    im.addEventListener('error', () => { ivEl('ivErr').hidden = false; });
-  }
-  document.addEventListener('keydown', ivKeys);
-  if (im.src !== src) { im.src = src; }        // load handler will fit it
-  else ivApply('fit');
-}
-
-// Klik na obrázek v otevřené poznámce / návodu ho zvětší.
-function setupImageViewerClicks() {
-  document.addEventListener('click', e => {
-    const img = e.target.closest('#detailContent img, .note-detail-content img');
-    if (!img) return;
-    // Hotspots handle their own clicks — they navigate to a chapter.
-    if (img.closest('.hs-wrap') && img.closest('.hs-wrap').querySelector('.hs-area')) return;
-    e.preventDefault();
-    openImageViewer(img.currentSrc || img.src);
   });
 }
 
@@ -2316,13 +2222,43 @@ function updateLbCursor(img) {
   img.style.cursor = LB_DRAGGING ? 'grabbing' : (LB_SCALE > 1 ? 'grab' : 'default');
 }
 
+// CSS fits the picture into 92vw/90vh, so scale 1 is the SHRUNK size, not the
+// picture's own pixels. That is why a screenshot stayed unreadable however
+// much you zoomed by feel — this converts between the two so "100 %" really
+// means one image pixel per screen pixel.
+function lbFitScale(img) {
+  if (!img.naturalWidth) return 1;
+  const r = img.getBoundingClientRect();
+  const shown = r.width / (LB_SCALE || 1);          // width at scale 1
+  return shown / img.naturalWidth;                  // <1 when the image was shrunk
+}
+
+function lbShowPercent(img) {
+  const el = document.getElementById('lbVal');
+  if (el) el.textContent = Math.round(LB_SCALE * lbFitScale(img) * 100) + ' %';
+}
+
+// z = a real-pixel ratio (1 = 100 %), or 'fit'
+function lbZoom(z) {
+  const img = document.getElementById('lightboxImg');
+  const fit = lbFitScale(img);
+  LB_SCALE = z === 'fit' ? 1 : Math.min(8, Math.max(0.1, z / (fit || 1)));
+  if (z === 'fit') { LB_X = 0; LB_Y = 0; }
+  applyLbTransform(img);
+  updateLbCursor(img);
+  lbShowPercent(img);
+}
+
 function openLightbox(src) {
   LB_SCALE = 1; LB_X = 0; LB_Y = 0;
   const img = document.getElementById('lightboxImg');
   img.style.transform = '';
   img.style.cursor = 'default';
+  const open = document.getElementById('lbOpen');
+  if (open) open.href = src;
   img.src = src;
   document.getElementById('lightbox').classList.add('open');
+  if (img.complete && img.naturalWidth) lbShowPercent(img);
 }
 
 function setupLightbox() {
@@ -2341,7 +2277,21 @@ function setupLightbox() {
     if (e.target !== img) closeLb();
   });
   document.getElementById('lightboxClose').addEventListener('click', closeLb);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLb(); });
+  document.addEventListener('keydown', e => {
+    if (!lb.classList.contains('open')) return;
+    if (e.key === 'Escape') closeLb();
+    else if (e.key === '+' || e.key === '=') lbZoom(LB_SCALE * lbFitScale(img) * 1.25);
+    else if (e.key === '-') lbZoom(LB_SCALE * lbFitScale(img) / 1.25);
+    else if (e.key === '0') lbZoom('fit');
+    else if (e.key === '1') lbZoom(1);
+  });
+
+  img.addEventListener('load', () => lbShowPercent(img));
+  document.getElementById('lbIn') .addEventListener('click', e => { e.stopPropagation(); lbZoom(LB_SCALE * lbFitScale(img) * 1.25); });
+  document.getElementById('lbOut').addEventListener('click', e => { e.stopPropagation(); lbZoom(LB_SCALE * lbFitScale(img) / 1.25); });
+  document.getElementById('lbFit').addEventListener('click', e => { e.stopPropagation(); lbZoom('fit'); });
+  document.getElementById('lb1')  .addEventListener('click', e => { e.stopPropagation(); lbZoom(1); });
+  document.getElementById('lbOpen').addEventListener('click', e => e.stopPropagation());
 
   // Wheel zoom (centred on image)
   lb.addEventListener('wheel', e => {
@@ -2351,6 +2301,7 @@ function setupLightbox() {
     LB_SCALE = Math.min(8, Math.max(0.25, LB_SCALE));
     applyLbTransform(img);
     updateLbCursor(img);
+    lbShowPercent(img);
   }, { passive: false });
 
   // Pan drag

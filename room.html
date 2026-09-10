@@ -573,7 +573,7 @@
         <button class="modal-close" data-close="searchModal">✕</button>
       </div>
       <input id="searchInput" class="input" placeholder="Hledej v názvech i obsahu…" style="width:100%;" autocomplete="off">
-      <div id="searchResults" style="max-height:420px;overflow-y:auto;margin-top:12px;"></div>
+      <div id="searchResults" style="margin-top:12px;"></div>
     </div>
   </div>
 
@@ -628,7 +628,7 @@
       <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:12px;line-height:1.5;">
         Kdo co smazal, komu se změnila role, předání vlastnictví. Posledních 100 událostí.
       </p>
-      <div id="activityList" style="max-height:380px;overflow-y:auto;"></div>
+      <div id="activityList"></div>
     </div>
   </div>
 
@@ -650,21 +650,6 @@
   </div>
 
   <!-- DETAIL poznámky -->
-  <!-- Prohlížeč obrázku přes celou obrazovku (screenshot se jinak nedá přečíst) -->
-  <div id="imgViewer" hidden>
-    <div class="iv-bar">
-      <button type="button" class="iv-btn" id="ivOut" title="Oddálit (−)">−</button>
-      <span class="iv-val" id="ivVal">100 %</span>
-      <button type="button" class="iv-btn" id="ivIn" title="Přiblížit (+)">+</button>
-      <button type="button" class="iv-btn" id="ivFit">Přizpůsobit</button>
-      <button type="button" class="iv-btn" id="iv1">100 %</button>
-      <a class="iv-btn" id="ivOpen" target="_blank" rel="noopener">Otevřít originál ↗</a>
-      <button type="button" class="iv-btn iv-close" id="ivClose" title="Zavřít (Esc)">✕</button>
-    </div>
-    <div class="iv-stage" id="ivStage"><img id="ivImg" alt="" draggable="false"></div>
-    <div class="iv-err" id="ivErr" hidden>Obrázek se nepodařilo načíst. Zkus „Otevřít originál ↗".</div>
-  </div>
-
   <div class="modal-overlay" id="noteDetailModal">
     <div class="modal modal-detail" id="noteDetailBox">
       <div class="modal-header">
@@ -710,6 +695,14 @@
 
   <!-- LIGHTBOX -->
   <div id="lightbox">
+    <div class="lb-bar">
+      <button type="button" class="lb-btn" id="lbOut" title="Oddálit (−)">−</button>
+      <span class="lb-val" id="lbVal">100 %</span>
+      <button type="button" class="lb-btn" id="lbIn" title="Přiblížit (+)">+</button>
+      <button type="button" class="lb-btn" id="lbFit" title="Vejít se na obrazovku (0)">Přizpůsobit</button>
+      <button type="button" class="lb-btn" id="lb1" title="Skutečné pixely obrázku (1)">100 %</button>
+      <a class="lb-btn" id="lbOpen" target="_blank" rel="noopener">Otevřít originál ↗</a>
+    </div>
     <button id="lightboxClose" title="Zavřít">✕</button>
     <img id="lightboxImg" src="" alt="">
   </div>
