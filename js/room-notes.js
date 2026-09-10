@@ -768,7 +768,11 @@ async function createGuide(storeX, storeY) {
     // Seed the local map with what we just wrote instead of waiting on the
     // snapshot — otherwise opening it here races the round-trip and silently
     // does nothing (the same trap that broke "make this a guide").
-    const note = { id: ref.id, ...data };
+    // serverTimestamp() is a sentinel with no value yet — swap in a local
+    // date for the seeded copy, or the detail shows "Invalid Date" until the
+    // snapshot arrives.
+    const now = new Date();
+    const note = { id: ref.id, ...data, createdAt: now, updatedAt: now };
     NOTES_MAP.set(ref.id, note);
     GUIDE = { noteId: ref.id, pageId: first.id, history: [] };
     openNoteDetail(document.getElementById('n-' + ref.id), note);
@@ -1056,6 +1060,10 @@ function wireGuideMap(note, editable) {
 
     card.addEventListener('click', e => {
       if (e.target.closest('[data-act]')) return;
+      // A drag ends with mouseup AND a click on the same card; without this
+      // the click opened the chapter and closed the map every time you moved
+      // a card. (The flag was being set below but never read.)
+      if (card._dragged) { card._dragged = false; return; }
       if (GMAP_LINK_FROM) { finishGuideLink(id); return; }
       goToPage(id);
       closeModal('guideMapModal');
@@ -1101,8 +1109,7 @@ function wireGuideMap(note, editable) {
         window.removeEventListener('mousemove', mv);
         window.removeEventListener('mouseup', up);
         if (!moved) return;
-        card._dragged = true;                       // suppress the click that follows
-        setTimeout(() => { card._dragged = false; }, 0);
+        card._dragged = true;   // cleared by the click handler that follows
         const mx = parseInt(card.style.left), my = parseInt(card.style.top);
         await savePages(GUIDE.noteId, pagesOf(note).map(p => p.id === id ? { ...p, mx, my } : p));
         renderGuideMap();

@@ -209,6 +209,9 @@ function initial(str) { return (str || '?')[0].toUpperCase(); }
 function roleLabel(r) { return { owner: 'Vlastník', editor: 'Editor', viewer: 'Prohlížeč' }[r] || r; }
 function fmtTs(ts) {
   if (!ts) return '';
+  // A freshly written serverTimestamp() is a sentinel with no value yet, so
+  // guard against it rather than printing "Invalid Date".
   const d = ts.toDate ? ts.toDate() : new Date(ts);
+  if (isNaN(d.getTime())) return '';
   return d.toLocaleString('cs-CZ', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
