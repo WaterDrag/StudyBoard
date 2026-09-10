@@ -41,12 +41,12 @@ function setNoteContent(contentEl, note) {
 function setNoteCardContent(contentEl, note) {
   const n = pagesOf(note).length;
   if (n) {
-    const kids = pagesOf(note).filter(p => p.parentId).length;
+    const wired = pagesOf(note).reduce((n, p) => n + outLinks(note, p).length, 0);
     contentEl.innerHTML =
       `<div class="note-guide-kind">📖 Návod</div>` +
       `<div class="note-card-title">${esc(note.title || pagesOf(note)[0].title || 'Návod')}</div>` +
       `<div class="note-guide-badge">${n} ${n === 1 ? 'kapitola' : n < 5 ? 'kapitoly' : 'kapitol'}` +
-      `${kids ? ` · ${kids} vnořených` : ''}</div>`;
+      `${wired ? ` · ${wired} propojení` : ''}</div>`;
     contentEl.closest('.note')?.classList.add('is-guide');
     return;
   }
@@ -531,7 +531,9 @@ function hotspotsOf(img) {
   try {
     const raw = img.getAttribute('data-spots');
     const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr.filter(s => s && s.page) : [];
+    // A zone with no target yet is still a zone — you name it here and point
+    // it at a chapter later, in the map.
+    return Array.isArray(arr) ? arr.filter(s => s && (s.page || s.label)) : [];
   } catch (_) { return []; }
 }
 
@@ -550,12 +552,13 @@ function renderHotspots(root, note, onGo) {
 
     spots.forEach(sp => {
       const target = note ? pageById(note, sp.page) : null;
+      const name = sp.label || target?.title || 'Oblast';
       const a = document.createElement('button');
-      a.className = 'hs-area';
+      a.className = 'hs-area' + (target ? '' : ' unlinked');
       a.style.cssText = `left:${sp.x}%;top:${sp.y}%;width:${sp.w}%;height:${sp.h}%;`;
-      a.title = (sp.label || target?.title || 'Kapitola');
-      a.innerHTML = `<span class="hs-tip">${esc(sp.label || target?.title || 'Kapitola')}</span>`;
-      a.addEventListener('click', e => {
+      a.title = target ? name : name + ' — zatím nikam nevede (propoj v mapě)';
+      a.innerHTML = `<span class="hs-tip">${esc(name)}${target ? '' : ' · nepropojeno'}</span>`;
+      if (target) a.addEventListener('click', e => {
         e.preventDefault(); e.stopPropagation();
         onGo(sp.page);
       });
@@ -746,46 +749,26 @@ function openHotspotEditor(img) {
     box.remove(); box = null;
     // A stray click shouldn't create an invisible area.
     if (!rect || rect.w < 2 || rect.h < 2) return;
-    pickHotspotTarget(note, rect, { x: e.clientX, y: e.clientY });
+    // Just a name here. Where it leads is drawn in the map, the same way
+    // chapters are wired to each other — one place for all the connecting.
+    const label = prompt('Jak se ta oblast jmenuje?', '');
+    if (label === null) return;
+    HS.spots.push({ ...rect, label: label.trim() || 'Oblast', page: null });
+    drawHotspotBoxes();
   };
   stage.onmouseleave = () => { if (box) { box.remove(); box = null; } };
 
   document.getElementById('hsSave').onclick = saveHotspots;
 }
 
-// Chapter picker shown right after an area is drawn.
-function pickHotspotTarget(note, rect, at) {
-  const menu = document.createElement('div');
-  menu.className = 'context-menu';
-  menu.id = 'hsPick';
-  const build = (parentId, depth) => childPages(note, parentId).map(p =>
-    `<button class="context-menu-item" data-p="${esc(p.id)}" style="padding-left:${10 + depth * 14}px;">
-       <span class="crumb-no">${esc(pageLabel(note, p.id))}</span> ${esc(p.title || 'Kapitola')}
-     </button>` + build(p.id, depth + 1)).join('');
-  menu.innerHTML = `<div class="hs-pick-h">Kam má oblast vést?</div>` + build(null, 0);
-  document.body.appendChild(menu);
-
-  // Anchor to where the drag ended — the stage can now be far bigger than the
-  // screen, so its top-left corner is no longer anywhere near the new area.
-  const stage = document.getElementById('hsStage').getBoundingClientRect();
-  const ax = at ? at.x + 8 : stage.left + 20;
-  const ay = at ? at.y + 8 : stage.top + 40;
-  menu.style.left = Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, ax)) + 'px';
-  menu.style.top  = Math.max(8, Math.min(window.innerHeight - menu.offsetHeight - 8, ay)) + 'px';
-
-  const close = () => menu.remove();
-  menu.addEventListener('click', e => {
-    const id = e.target.closest('[data-p]')?.dataset.p;
-    if (!id) return;
-    const page = pageById(note, id);
-    HS.spots.push({ ...rect, page: id, label: page?.title || 'Kapitola' });
-    close();
-    drawHotspotBoxes();
-  });
-  setTimeout(() => document.addEventListener('click', function once(ev) {
-    if (ev.target.closest('#hsPick')) { document.addEventListener('click', once, { once: true }); return; }
-    close();
-  }, { once: true }), 0);
+// Flat list of every chapter, for the two "pick a chapter" menus. No
+// indentation any more — chapters aren't nested, so there is nothing to indent.
+function pageMenuList(note) {
+  const main = mainPage(note);
+  return pagesOf(note).map(p =>
+    `<button class="context-menu-item" data-p="${esc(p.id)}">
+       <span class="crumb-no">${p.id === main?.id ? '★' : esc(pageLabel(note, p.id))}</span> ${esc(p.title || 'Kapitola')}
+     </button>`).join('');
 }
 
 function drawHotspotBoxes() {
@@ -795,7 +778,11 @@ function drawHotspotBoxes() {
     const b = document.createElement('div');
     b.className = 'hs-edit';
     b.style.cssText = `left:${sp.x}%;top:${sp.y}%;width:${sp.w}%;height:${sp.h}%;`;
-    b.innerHTML = `<span class="hs-edit-label">${esc(sp.label || '')}</span>` +
+    const note = NOTES_MAP.get(EDIT_ID || GUIDE?.noteId);
+    const target = sp.page && note ? pageById(note, sp.page) : null;
+    b.className = 'hs-edit' + (target ? '' : ' unlinked');
+    b.innerHTML = `<span class="hs-edit-label">${esc(sp.label || 'Oblast')}` +
+                  `${target ? ' → ' + esc(target.title || 'Kapitola') : ' · nepropojeno'}</span>` +
                   `<button class="hs-edit-del" data-i="${i}" title="Odebrat oblast">✕</button>`;
     b.querySelector('.hs-edit-del').addEventListener('click', e => {
       e.stopPropagation();
@@ -822,57 +809,94 @@ function saveHotspots() {
   if (HS.spots.length) {
     HS.img.setAttribute('data-spots', JSON.stringify(HS.spots.map(s => ({
       x: +s.x.toFixed(2), y: +s.y.toFixed(2), w: +s.w.toFixed(2), h: +s.h.toFixed(2),
-      page: s.page, label: s.label || '',
+      page: s.page || null, label: s.label || 'Oblast',
     }))));
   } else {
     HS.img.removeAttribute('data-spots');
   }
   closeModal('hotspotModal');
-  toast(HS.spots.length ? `Uloženo ${HS.spots.length} oblastí — nezapomeň uložit kapitolu.` : 'Oblasti odebrány.');
+  const loose = HS.spots.filter(s => !s.page).length;
+  toast(HS.spots.length
+    ? `Uloženo ${HS.spots.length} oblastí — ulož kapitolu` +
+      (loose ? `, pak je v 🗺️ mapě propoj (${loose} zatím nikam nevede).` : '.')
+    : 'Oblasti odebrány.');
   HS = null;
 }
 
-// ── Guides: a tree of chapters inside ONE note ────────────────
-// A note may carry `pages: [{id, title, parentId, content}]`. Without that
-// field it is an ordinary note and behaves exactly as before — nothing to
-// migrate. Chapters nest to any depth and link to each other from the text
-// (or from an image), which is what makes a click-through guide possible:
-//   1  Role serveru
-//     1.a  Web Server (IIS)   <- reached by clicking "IIS" in chapter 1
-//     1.b  DNS
-//       1.b.a  Zóny
+// ── Guides: chapters wired up by hand ─────────────────────────
+// A note may carry `pages: [{id, title, content, links, main}]`. Without that
+// field it is an ordinary note and behaves exactly as before.
+//
+// Chapters are a FLAT set — they are not a tree and none of them owns
+// another. What makes a guide is the arrows YOU draw between them in the map:
+//   links: [{ to, label }]   ("z téhle kapitoly se pokračuje sem")
+// and one chapter marked `main: true` as the place a reader starts. That's the
+// whole model, so a chapter can branch into several directions, several
+// chapters can lead into the same one, and a branch can rejoin the main line
+// — none of which a parent/child tree could express.
+//
+// Before 9.35 the flow was implied by `parentId`, which forced every chapter
+// to be a "sub-chapter" of exactly one other. Those guides still read
+// correctly (see outLinks) and are converted to real arrows the first time an
+// editor opens the map.
 let GUIDE = null;   // { noteId, pageId, history: [] } while a guide is open
 
 const pagesOf = note => (Array.isArray(note?.pages) ? note.pages : []);
 const pageById = (note, id) => pagesOf(note).find(p => p.id === id) || null;
 const childPages = (note, parentId) => pagesOf(note).filter(p => (p.parentId || null) === (parentId || null));
-const rootPages = note => childPages(note, null);
 
 function newPageId() {
   return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-// "1.b.a" style label, built from the chapter's position in the tree.
-function pageLabel(note, pageId) {
-  const path = pagePath(note, pageId);
-  return path.map((p, depth) => {
-    const sibs = childPages(note, p.parentId || null);
-    const i = sibs.findIndex(x => x.id === p.id);
-    return depth === 0 ? String(i + 1) : String.fromCharCode(97 + (i % 26));
-  }).join('.');
+// Where a reader starts. Falls back to the first chapter so a guide always
+// has an entry point, even before anyone marks one.
+function mainPage(note) {
+  const pages = pagesOf(note);
+  return pages.find(p => p.main) || pages[0] || null;
 }
 
-// Chain from the root chapter down to this one (guards a broken parent link).
-function pagePath(note, pageId) {
-  const out = [];
-  const seen = new Set();
-  let p = pageById(note, pageId);
-  while (p && !seen.has(p.id)) {
-    seen.add(p.id);
-    out.unshift(p);
-    p = p.parentId ? pageById(note, p.parentId) : null;
-  }
-  return out;
+// Plain 1..n, by position in the array — a free graph has no "1.b.a" to
+// compute, and a number is still handy for pointing at a card in the map.
+function pageLabel(note, pageId) {
+  const i = pagesOf(note).findIndex(p => p.id === pageId);
+  return i < 0 ? '' : String(i + 1);
+}
+
+// Everywhere this chapter leads. Legacy parentId children are reported as
+// links too, so a guide made before 9.35 still works for a viewer who can't
+// write the migration.
+function outLinks(note, page) {
+  if (!page) return [];
+  const explicit = linksOf(page).filter(l => pageById(note, l.to));
+  const seen = new Set(explicit.map(l => l.to));
+  const legacy = pagesOf(note)
+    .filter(p => p.parentId === page.id && !seen.has(p.id))
+    .map(p => ({ to: p.id, label: p.title || 'Kapitola' }));
+  return [...explicit, ...legacy];
+}
+
+// Chapters that lead HERE — shown so you can see what a chapter hangs off of.
+function inLinks(note, pageId) {
+  return pagesOf(note).filter(p => outLinks(note, p).some(l => l.to === pageId));
+}
+
+// One-shot conversion of the old parentId tree into real arrows.
+function migrateGuideLinks(pages) {
+  if (!pages.some(p => p.parentId)) return null;
+  const byId = new Map(pages.map(p => [p.id, p]));
+  const extra = new Map();          // parentId -> [{to,label}]
+  pages.forEach(p => {
+    if (!p.parentId || !byId.has(p.parentId)) return;
+    const cur = extra.get(p.parentId) || [];
+    cur.push({ to: p.id, label: p.title || 'Kapitola' });
+    extra.set(p.parentId, cur);
+  });
+  return pages.map(p => {
+    const add = (extra.get(p.id) || []).filter(l => !linksOf(p).some(x => x.to === l.to));
+    const { parentId, ...rest } = p;
+    return { ...rest, links: [...linksOf(p), ...add] };
+  });
 }
 
 async function savePages(noteId, pages) {
@@ -898,7 +922,7 @@ async function createGuide(storeX, storeY) {
   if (!canWrite) { toast('Návod může přidat jen editor.'); return; }
   const title = prompt('Název návodu:', 'Nový návod');
   if (title === null) return;
-  const first = { id: newPageId(), title: 'Úvod', parentId: null, content: '', links: [] };
+  const first = { id: newPageId(), title: 'Úvod', content: '', links: [], main: true };
   const data = {
     title: (title || 'Nový návod').trim(),
     content: '', contentType: 'html',
@@ -931,7 +955,7 @@ async function createGuide(storeX, storeY) {
 async function convertToGuide(noteId) {
   const note = NOTES_MAP.get(noteId);
   if (!note || pagesOf(note).length) return;
-  const first = { id: newPageId(), title: note.title || 'Úvod', parentId: null, content: note.content || '' };
+  const first = { id: newPageId(), title: note.title || 'Úvod', content: note.content || '', links: [], main: true };
   try {
     await savePages(noteId, [first]);
     toast('Z poznámky je návod — přidej podkapitoly ＋');
@@ -951,11 +975,17 @@ function renderGuide() {
   document.getElementById('guideBar').style.display = 'flex';
   document.getElementById('guideBack').style.visibility = GUIDE.history.length ? 'visible' : 'hidden';
 
-  // Breadcrumbs: 1 > 1.b > 1.b.a — every step clickable
+  // The trail is where you actually WENT, not a position in a tree — with a
+  // free graph there is no single path down to a chapter.
   const crumbs = document.getElementById('guideCrumbs');
-  crumbs.innerHTML = pagePath(note, page.id).map(p =>
-    `<button class="crumb" data-go="${esc(p.id)}"><span class="crumb-no">${esc(pageLabel(note, p.id))}</span> ${esc(p.title || 'Kapitola')}</button>`
-  ).join('<span class="crumb-sep">›</span>');
+  const trail = [...GUIDE.history, page.id]
+    .filter((id, i, a) => a.indexOf(id) === i && pageById(note, id))
+    .slice(-4);
+  crumbs.innerHTML = trail.map(id => {
+    const p = pageById(note, id);
+    return `<button class="crumb${id === page.id ? ' on' : ''}" data-go="${esc(id)}">` +
+      `<span class="crumb-no">${esc(pageLabel(note, id))}</span> ${esc(p.title || 'Kapitola')}</button>`;
+  }).join('<span class="crumb-sep">›</span>');
 
   renderGuideTree(note);
 
@@ -963,37 +993,43 @@ function renderGuide() {
   contentEl.innerHTML = page.content || '<p style="color:var(--text-muted);">Zatím prázdná kapitola.</p>';
   const h = document.createElement('h4');
   h.className = 'note-detail-title';
-  h.textContent = (pageLabel(note, page.id) + '  ' + (page.title || 'Kapitola')).trim();
+  const isMain = mainPage(note)?.id === page.id;
+  h.textContent = ((isMain ? '★ ' : '') + pageLabel(note, page.id) + '  ' + (page.title || 'Kapitola')).trim();
   contentEl.prepend(h);
   addImageClickHandlers(contentEl);
   wirePageLinks(contentEl);
   renderHotspots(contentEl, note, goToPage);
 
-  // Named links first — these are the ones drawn in the map editor.
-  const named = linksOf(page);
-  if (named.length) {
+  // Every arrow leaving this chapter, as a button. These are the branches you
+  // drew in the map — one chapter can offer several, and they can lead
+  // anywhere, including back into the main line.
+  const out = outLinks(note, page);
+  if (out.length) {
     const box = document.createElement('div');
     box.className = 'guide-kids';
-    box.innerHTML = '<div class="guide-kids-h">Odkazy</div>' + named.map(l => {
-      const t = pageById(note, l.to);
-      return t ? `<button class="guide-kid" data-go="${esc(l.to)}">
+    const cesty = out.length === 1 ? 'dál'
+      : `${out.length} ${out.length < 5 ? 'cesty' : 'cest'}`;
+    box.innerHTML = `<div class="guide-kids-h">Odsud vede ${cesty}</div>` +
+      out.map(l => {
+        const t = pageById(note, l.to);
+        return `<button class="guide-kid" data-go="${esc(l.to)}">
           <span class="crumb-no">${esc(pageLabel(note, l.to))}</span>
-          <span>🔗 ${esc(l.label || t.title || 'Odkaz')}</span><span class="guide-kid-arrow">›</span>
-        </button>` : '';
-    }).join('');
+          <span>${esc(l.label || t.title || 'Kapitola')}</span><span class="guide-kid-arrow">›</span>
+        </button>`;
+      }).join('');
     contentEl.appendChild(box);
   }
 
-  // Chapters directly below this one, as ready-made buttons — so a guide is
-  // click-through even before any links are written into the text.
-  const kids = childPages(note, page.id);
-  if (kids.length) {
+  // What leads here — the answer to "kde jsem a na co tohle navazuje", which
+  // a tree used to give for free through the breadcrumb.
+  const back = inLinks(note, page.id);
+  if (back.length) {
     const box = document.createElement('div');
-    box.className = 'guide-kids';
-    box.innerHTML = '<div class="guide-kids-h">Podkapitoly</div>' + kids.map(k =>
-      `<button class="guide-kid" data-go="${esc(k.id)}">
-         <span class="crumb-no">${esc(pageLabel(note, k.id))}</span>
-         <span>${esc(k.title || 'Kapitola')}</span><span class="guide-kid-arrow">›</span>
+    box.className = 'guide-kids guide-kids-back';
+    box.innerHTML = '<div class="guide-kids-h">Sem vede</div>' + back.map(p =>
+      `<button class="guide-kid" data-go="${esc(p.id)}">
+         <span class="crumb-no">${esc(pageLabel(note, p.id))}</span>
+         <span>${esc(p.title || 'Kapitola')}</span><span class="guide-kid-arrow">↑</span>
        </button>`).join('');
     contentEl.appendChild(box);
   }
@@ -1005,13 +1041,15 @@ function renderGuide() {
 
 function renderGuideTree(note) {
   const tree = document.getElementById('guideTree');
-  const build = (parentId, depth) => childPages(note, parentId).map(p => {
-    const kids = build(p.id, depth + 1);
-    return `<button class="gt-item${p.id === GUIDE.pageId ? ' on' : ''}" data-go="${esc(p.id)}" style="--d:${depth}">
-        <span class="crumb-no">${esc(pageLabel(note, p.id))}</span> ${esc(p.title || 'Kapitola')}
-      </button>` + kids;
-  }).join('');
-  tree.innerHTML = build(null, 0);
+  // A flat list — the chapters have no nesting to indent any more. The main
+  // one is pulled to the top and starred so the entry point stays obvious.
+  const main = mainPage(note);
+  const ordered = pagesOf(note).slice().sort((a, b) =>
+    (b.id === main?.id ? 1 : 0) - (a.id === main?.id ? 1 : 0));
+  tree.innerHTML = ordered.map(p =>
+    `<button class="gt-item${p.id === GUIDE.pageId ? ' on' : ''}" data-go="${esc(p.id)}" style="--d:0">
+        <span class="crumb-no">${esc(pageLabel(note, p.id))}</span> ${p.id === main?.id ? '★ ' : ''}${esc(p.title || 'Kapitola')}
+      </button>`).join('');
   tree.querySelectorAll('[data-go]').forEach(b =>
     b.addEventListener('click', () => goToPage(b.dataset.go)));
 }
@@ -1042,25 +1080,52 @@ function wirePageLinks(root) {
 }
 
 // ── Editing ───────────────────────────────────────────────────
-// Add a chapter under `parentId` (null = a new top-level chapter).
-async function addChapter(parentId, title) {
+// Every chapter is created standalone. Pass `fromId` only when the gesture
+// was "pokračuj odsud" — then it also gets an arrow from that chapter, which
+// is the one thing that makes it part of a flow.
+async function addChapter(title, fromId) {
   if (!GUIDE) return null;
   const note = NOTES_MAP.get(GUIDE.noteId);
   if (!canEdit(note)) { toast('Upravit může jen autor nebo vlastník.'); return null; }
-  const page = { id: newPageId(), title: (title || 'Nová kapitola').trim(),
-                 parentId: parentId || null, content: '', links: [] };
+  const page = { id: newPageId(), title: (title || 'Nová kapitola').trim(), content: '', links: [] };
+  const pages = [...pagesOf(note), page];
+  if (!pages.some(p => p.main)) page.main = true;   // the very first one starts the guide
+  const withLink = fromId
+    ? pages.map(p => p.id === fromId
+        ? { ...p, links: [...linksOf(p), { to: page.id, label: page.title }] } : p)
+    : pages;
   try {
-    await savePages(GUIDE.noteId, [...pagesOf(note), page]);
+    await savePages(GUIDE.noteId, withLink);
     return page;
   } catch (e) { toast('Chyba: ' + e.message); return null; }
 }
 
+// The "＋ Kapitola" button in the open guide: a new chapter this one leads to.
 async function addSubChapter() {
   if (!GUIDE) return;
-  const title = prompt('Název podkapitoly:');
+  const title = prompt('Název navazující kapitoly:');
   if (title === null) return;
-  const page = await addChapter(GUIDE.pageId, title);
+  const page = await addChapter(title, GUIDE.pageId);
   if (page) goToPage(page.id);
+}
+
+// Which chapter a reader starts at.
+async function setMainChapter(id) {
+  if (!GUIDE) return;
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  if (!canEdit(note)) { toast('Upravit může jen autor nebo vlastník.'); return; }
+  await savePages(GUIDE.noteId, pagesOf(note).map(p =>
+    p.id === id ? { ...p, main: true } : (p.main ? { ...p, main: false } : p)));
+  toast('Hlavní kapitola nastavena ★');
+}
+
+// Remove one arrow. Legacy parentId arrows are migrated away on map open, so
+// by the time you can click one it is a real link.
+async function removeGuideLink(fromId, toId) {
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  if (!canEdit(note)) return;
+  await savePages(GUIDE.noteId, pagesOf(note).map(p =>
+    p.id === fromId ? { ...p, links: linksOf(p).filter(l => l.to !== toId) } : p));
 }
 
 function editCurrentChapter() {
@@ -1087,44 +1152,105 @@ function editCurrentChapter() {
 // Named links live on the page as `links: [{to, label}]`, which keeps them
 // editable here without touching the chapter's HTML. Inline <a data-page>
 // links written into the text keep working alongside them.
-const GMAP_W = 210, GMAP_H = 76;          // card size
+const GMAP_W = 210, GMAP_H = 102;         // card size (room for the zone chips)
 const GMAP_GAP_X = 110, GMAP_GAP_Y = 26;  // spacing between columns / rows
 let GMAP_LINK_FROM = null;                // id of the card a new link starts at
+let GMAP_ZONE_FROM = null;                // {pageId, img, spot} of a zone being pointed somewhere
 
 function linksOf(page) { return Array.isArray(page?.links) ? page.links : []; }
 
-// Auto-layout: one column per depth, children stacked beside their parent.
-// A page may override with its own x/y (dragged by hand).
-function gmapLayout(note) {
-  const pos = new Map();
-  let cursorY = 0;
-  const place = (parentId, depth) => {
-    childPages(note, parentId).forEach(p => {
-      const top = cursorY;
-      place(p.id, depth + 1);
-      // centre a parent against the block of its children
-      const kids = childPages(note, p.id);
-      const y = kids.length
-        ? (pos.get(kids[0].id).y + pos.get(kids[kids.length - 1].id).y) / 2
-        : (cursorY = Math.max(cursorY, top) , top);
-      pos.set(p.id, {
-        x: p.mx != null ? p.mx : depth * (GMAP_W + GMAP_GAP_X),
-        y: p.my != null ? p.my : y,
-        auto: p.mx == null,
-      });
-      if (!kids.length) cursorY = top + GMAP_H + GMAP_GAP_Y;
+// ── Clickable zones on a chapter's pictures ───────────────────
+// A zone is drawn and NAMED on the picture; where it leads is decided here in
+// the map, like everything else. It lives in the chapter's HTML as
+// img[data-spots], so these helpers read and write that attribute in place —
+// the surrounding content is untouched.
+function zonesOfPage(page) {
+  const out = [];
+  if (!page?.content) return out;
+  const d = document.createElement('div');
+  d.innerHTML = page.content;
+  d.querySelectorAll('img[data-spots]').forEach((img, ii) => {
+    let arr = [];
+    try { arr = JSON.parse(img.getAttribute('data-spots')) || []; } catch (_) { return; }
+    arr.forEach((sp, si) => {
+      if (sp && (sp.page || sp.label)) out.push({ img: ii, spot: si, label: sp.label || 'Oblast', to: sp.page || null });
     });
-  };
-  place(null, 0);
+  });
+  return out;
+}
+
+// Point one zone at a chapter (or, with targetId null, unhook it).
+async function setZoneTarget(pageId, imgIndex, spotIndex, targetId) {
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  const page = pageById(note, pageId);
+  if (!page || !canEdit(note)) return;
+  const d = document.createElement('div');
+  d.innerHTML = page.content || '';
+  const img = d.querySelectorAll('img[data-spots]')[imgIndex];
+  if (!img) return;
+  let arr = [];
+  try { arr = JSON.parse(img.getAttribute('data-spots')) || []; } catch (_) { return; }
+  if (!arr[spotIndex]) return;
+  arr[spotIndex] = { ...arr[spotIndex], page: targetId };
+  img.setAttribute('data-spots', JSON.stringify(arr));
+  await savePages(GUIDE.noteId, pagesOf(note).map(p =>
+    p.id === pageId ? { ...p, content: d.innerHTML } : p));
+}
+
+// Auto-layout for a graph, not a tree: column = how many arrows away from the
+// main chapter, so the flow reads left to right. Chapters nothing points at
+// yet get their own column on the right instead of being hidden. A card
+// dragged by hand keeps its own x/y and is left alone.
+function gmapLayout(note) {
+  const pages = pagesOf(note);
+  const depth = new Map();
+  const start = mainPage(note);
+  if (start) {
+    const q = [[start.id, 0]];
+    while (q.length) {
+      const [id, d] = q.shift();
+      if (depth.has(id)) continue;
+      depth.set(id, d);
+      outLinks(note, pageById(note, id)).forEach(l => { if (!depth.has(l.to)) q.push([l.to, d + 1]); });
+    }
+  }
+  // Unreachable chapters sit one column past everything else.
+  const maxD = depth.size ? Math.max(...depth.values()) : 0;
+  pages.forEach(p => { if (!depth.has(p.id)) depth.set(p.id, maxD + 1); });
+
+  const byCol = new Map();
+  pages.forEach(p => {
+    const d = depth.get(p.id);
+    byCol.set(d, [...(byCol.get(d) || []), p]);
+  });
+
+  const pos = new Map();
+  byCol.forEach((col, d) => col.forEach((p, i) => pos.set(p.id, {
+    x: p.mx != null ? p.mx : d * (GMAP_W + GMAP_GAP_X),
+    y: p.my != null ? p.my : i * (GMAP_H + GMAP_GAP_Y),
+    auto: p.mx == null,
+  })));
   return pos;
 }
 
-function openGuideMap() {
+async function openGuideMap() {
   if (!GUIDE) return;
   const note = NOTES_MAP.get(GUIDE.noteId);
   if (!note) return;
   GMAP_LINK_FROM = null;
+  GMAP_ZONE_FROM = null;
   openModal('guideMapModal');
+  // Turn an old parentId tree into real arrows once, so what you see in the
+  // map is exactly what is stored — no invisible structure left over.
+  if (canEdit(note)) {
+    const migrated = migrateGuideLinks(pagesOf(note));
+    if (migrated) {
+      try {
+        await savePages(GUIDE.noteId, migrated);
+        toast('Návod převeden na volné propojení — šipky si teď řídíš sám.');
+      } catch (e) { /* read-only or offline: outLinks still renders it right */ }
+    }
+  }
   renderGuideMap();
 }
 
@@ -1135,6 +1261,7 @@ function renderGuideMap() {
   const pages = pagesOf(note);
   const pos = gmapLayout(note);
   const editable = canEdit(note);
+  const main = mainPage(note);
 
   let maxX = 0, maxY = 0;
   pos.forEach(p => { maxX = Math.max(maxX, p.x + GMAP_W); maxY = Math.max(maxY, p.y + GMAP_H); });
@@ -1144,12 +1271,9 @@ function renderGuideMap() {
   pages.forEach(p => {
     const a = pos.get(p.id);
     if (!a) return;
-    if (p.parentId && pos.get(p.parentId)) {
-      arrows.push(gmapArrow(pos.get(p.parentId), a, '', 'struct'));
-    }
-    linksOf(p).forEach(l => {
+    outLinks(note, p).forEach(l => {
       const b = pos.get(l.to);
-      if (b) arrows.push(gmapArrow(a, b, l.label || 'odkaz', 'link'));
+      if (b) arrows.push(gmapArrow(a, b, l.label || '', 'link', p.id, l.to));
     });
   });
 
@@ -1165,15 +1289,29 @@ function renderGuideMap() {
     pages.map(p => {
       const a = pos.get(p.id);
       if (!a) return '';
-      const kids = childPages(note, p.id).length;
-      return `<div class="gmap-card${p.id === GUIDE.pageId ? ' on' : ''}${GMAP_LINK_FROM === p.id ? ' linking' : ''}"
+      const outs = outLinks(note, p).length, ins = inLinks(note, p.id).length;
+      const isMain = main?.id === p.id;
+      const meta = [outs ? `${outs}× ven` : '', ins ? `${ins}× sem` : '']
+        .filter(Boolean).join(' · ') || 'zatím nepropojená';
+      return `<div class="gmap-card${p.id === GUIDE.pageId ? ' on' : ''}${GMAP_LINK_FROM === p.id ? ' linking' : ''}${isMain ? ' main' : ''}"
             data-id="${esc(p.id)}" style="left:${a.x}px;top:${a.y}px;width:${GMAP_W}px;height:${GMAP_H}px;">
-          <div class="gmap-no">${esc(pageLabel(note, p.id))}</div>
+          <div class="gmap-no">${isMain ? '★' : esc(pageLabel(note, p.id))}</div>
           <div class="gmap-title">${esc(p.title || 'Kapitola')}</div>
-          <div class="gmap-meta">${kids ? `${kids} podkapitol` : 'kapitola'}${linksOf(p).length ? ` · ${linksOf(p).length} odkazů` : ''}</div>
+          <div class="gmap-meta">${esc(meta)}</div>
+          <div class="gmap-zones">${zonesOfPage(p).map(z => {
+            const t = z.to ? pageById(note, z.to) : null;
+            const picked = GMAP_ZONE_FROM && GMAP_ZONE_FROM.pageId === p.id &&
+                           GMAP_ZONE_FROM.img === z.img && GMAP_ZONE_FROM.spot === z.spot;
+            return `<button class="gmap-zone${t ? ' linked' : ''}${picked ? ' picking' : ''}"
+              data-zone="${z.img}:${z.spot}"
+              title="${t ? 'Vede na: ' + esc(t.title || 'Kapitola') + ' — klikni pro přepojení'
+                        : 'Zatím nikam nevede — klikni a pak vyber kapitolu'}">
+              🎯 ${esc(z.label)}${t ? ' →' : ''}</button>`;
+          }).join('')}</div>
           ${editable ? `<div class="gmap-tools">
-            <button data-act="sub"  title="Přidat podkapitolu">＋</button>
-            <button data-act="link" title="Vytvořit pojmenovaný odkaz na jinou kapitolu">🔗</button>
+            <button data-act="sub"  title="Nová kapitola, na kterou tahle povede">＋</button>
+            <button data-act="link" title="Šipka odsud na jinou kapitolu">🔗</button>
+            <button data-act="main" title="Označit jako hlavní kapitolu (odsud se začíná)">★</button>
             <button data-act="ren"  title="Přejmenovat">✏️</button>
             <button data-act="del"  title="Smazat kapitolu">🗑</button>
           </div>` : ''}
@@ -1181,13 +1319,17 @@ function renderGuideMap() {
     }).join('');
 
   wireGuideMap(note, editable);
-  document.getElementById('gmapHint').textContent = GMAP_LINK_FROM
-    ? 'Klikni na kapitolu, kam má odkaz vést (Esc zruší).'
-    : (pages.length ? 'Klikni na kartu = otevřít kapitolu. 🔗 = pojmenovaný odkaz jinam.' : 'Zatím žádná kapitola.');
+  document.getElementById('gmapHint').textContent = GMAP_ZONE_FROM
+    ? 'Klikni na kapitolu, na kterou má ta oblast vést (Esc zruší).'
+    : GMAP_LINK_FROM
+    ? 'Klikni na kapitolu, kam má šipka vést (Esc zruší).'
+    : (pages.length
+        ? 'Karty jsou samostatné kapitoly — 🔗 mezi ně natáhne šipku, ★ určí, kde se začíná. Klik na popisek šipky ji smaže.'
+        : 'Zatím žádná kapitola — přidej první tlačítkem vlevo nahoře.');
 }
 
 // One arrow between two cards, with an optional label in the middle.
-function gmapArrow(from, to, label, kind) {
+function gmapArrow(from, to, label, kind, fromId, toId) {
   const x1 = from.x + GMAP_W, y1 = from.y + GMAP_H / 2;
   const x2 = to.x, y2 = to.y + GMAP_H / 2;
   // Route backwards links around instead of through the cards.
@@ -1195,12 +1337,26 @@ function gmapArrow(from, to, label, kind) {
   const mx = back ? (x1 + 40) : (x1 + x2) / 2;
   const d = `M ${x1} ${y1} C ${mx} ${y1}, ${back ? x2 - 40 : mx} ${y2}, ${x2} ${y2}`;
   const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2 - 8;
-  return `<path d="${d}" class="gmap-path ${kind}" marker-end="url(#gmapHead)"></path>` +
-    (label ? `<text x="${cx}" y="${cy}" class="gmap-label">${esc(label)}</text>` : '');
+  const tag = fromId ? ` data-from="${esc(fromId)}" data-to="${esc(toId)}"` : '';
+  return `<path d="${d}" class="gmap-path ${kind}"${tag} marker-end="url(#gmapHead)"></path>` +
+    (label ? `<text x="${cx}" y="${cy}" class="gmap-label"${tag}>${esc(label)}</text>` : '');
 }
 
 function wireGuideMap(note, editable) {
   const stage = document.getElementById('gmapStage');
+
+  // Click an arrow (or its label) to remove that connection — without this the
+  // only way to unpick a wrong link would be to delete the whole chapter.
+  if (editable) stage.querySelectorAll('[data-from]').forEach(el => {
+    el.addEventListener('click', async e => {
+      e.stopPropagation();
+      const from = pageById(note, el.dataset.from), to = pageById(note, el.dataset.to);
+      if (!from || !to) return;
+      if (!confirm('Zrušit šipku „' + (from.title || 'Kapitola') + '" → „' + (to.title || 'Kapitola') + '"?')) return;
+      await removeGuideLink(el.dataset.from, el.dataset.to);
+      renderGuideMap();
+    });
+  });
 
   stage.querySelectorAll('.gmap-card').forEach(card => {
     const id = card.dataset.id;
@@ -1211,19 +1367,36 @@ function wireGuideMap(note, editable) {
       // the click opened the chapter and closed the map every time you moved
       // a card. (The flag was being set below but never read.)
       if (card._dragged) { card._dragged = false; return; }
+      if (GMAP_ZONE_FROM) { finishZoneLink(id); return; }
       if (GMAP_LINK_FROM) { finishGuideLink(id); return; }
       goToPage(id);
       closeModal('guideMapModal');
     });
 
+    card.querySelectorAll('[data-zone]').forEach(z => z.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!editable) return;
+      const [img, spot] = z.dataset.zone.split(':').map(Number);
+      // Clicking the armed zone again disarms it.
+      GMAP_ZONE_FROM = (GMAP_ZONE_FROM && GMAP_ZONE_FROM.pageId === id &&
+                        GMAP_ZONE_FROM.img === img && GMAP_ZONE_FROM.spot === spot)
+        ? null : { pageId: id, img, spot };
+      GMAP_LINK_FROM = null;
+      renderGuideMap();
+    }));
+
     card.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', async e => {
       e.stopPropagation();
       const act = b.dataset.act;
       if (act === 'sub') {
-        const t = prompt('Název podkapitoly:');
+        const t = prompt('Název navazující kapitoly:');
         if (t === null) return;
-        await addChapter(id, t);
+        await addChapter(t, id);
         renderGuideMap();
+      } else if (act === 'main') {
+        await setMainChapter(id);
+        renderGuideMap();
+        renderGuide();
       } else if (act === 'link') {
         GMAP_LINK_FROM = id;
         renderGuideMap();
@@ -1242,7 +1415,8 @@ function wireGuideMap(note, editable) {
     // Dragging a card fixes its position; the rest stays auto-arranged.
     if (!editable) return;
     card.addEventListener('mousedown', e => {
-      if (e.target.closest('[data-act]') || GMAP_LINK_FROM) return;
+      if (e.target.closest('[data-act]') || e.target.closest('[data-zone]')) return;
+      if (GMAP_LINK_FROM || GMAP_ZONE_FROM) return;
       const sx = e.clientX, sy = e.clientY;
       const x0 = parseInt(card.style.left), y0 = parseInt(card.style.top);
       let moved = false;
@@ -1268,6 +1442,17 @@ function wireGuideMap(note, editable) {
   });
 }
 
+// Second half of pointing a zone: the chapter you clicked becomes its target.
+async function finishZoneLink(toId) {
+  const z = GMAP_ZONE_FROM;
+  GMAP_ZONE_FROM = null;
+  if (!z) { renderGuideMap(); return; }
+  await setZoneTarget(z.pageId, z.img, z.spot, toId);
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  toast('Oblast vede na „' + (pageById(note, toId)?.title || 'Kapitola') + '".');
+  renderGuideMap();
+}
+
 // Second half of "make a link": pick the target, then name it.
 async function finishGuideLink(toId) {
   const from = GMAP_LINK_FROM;
@@ -1284,39 +1469,49 @@ async function finishGuideLink(toId) {
   renderGuideMap();
 }
 
-// Removing a chapter re-parents its children, so nothing is orphaned, and
-// clears any links that pointed at it.
+// Chapters don't own each other any more, so deleting one orphans nothing —
+// it just removes the card and every arrow touching it.
 async function deleteChapter(id) {
   const note = NOTES_MAP.get(GUIDE.noteId);
   const page = pageById(note, id);
   if (!page) return;
-  if (!confirm(`Smazat kapitolu „${page.title || 'Kapitola'}"?\n\nPodkapitoly se přesunou o úroveň výš, text kapitoly se ztratí.`)) return;
-  const pages = pagesOf(note)
+  const arrows = outLinks(note, page).length + inLinks(note, id).length;
+  const msg = 'Smazat kapitolu „' + (page.title || 'Kapitola') + '"?' + '\n' + '\n' +
+    (arrows ? 'Zruší se ' + arrows + ' šipek, které do ní vedou nebo z ní vychází. ' : '') +
+    'Text kapitoly se ztratí.';
+  if (!confirm(msg)) return;
+  let pages = pagesOf(note)
     .filter(p => p.id !== id)
     .map(p => ({
       ...p,
-      parentId: p.parentId === id ? (page.parentId || null) : p.parentId,
+      parentId: p.parentId === id ? null : p.parentId,
       links: linksOf(p).filter(l => l.to !== id),
     }));
+  // A guide always needs somewhere to start.
+  if (page.main && pages.length && !pages.some(p => p.main)) {
+    pages = pages.map((p, i) => i === 0 ? { ...p, main: true } : p);
+  }
   await savePages(GUIDE.noteId, pages);
-  if (GUIDE.pageId === id) GUIDE.pageId = pages[0]?.id || null;
+  if (GUIDE.pageId === id) GUIDE.pageId = mainPage(NOTES_MAP.get(GUIDE.noteId))?.id || null;
   if (!pages.length) closeModal('guideMapModal');
   renderGuide();
 }
 
 function setupGuideMap() {
   document.getElementById('gmapAddRoot')?.addEventListener('click', async () => {
-    const t = prompt('Název nové hlavní kapitoly:');
+    const t = prompt('Název nové kapitoly:');
     if (t === null) return;
-    await addChapter(null, t);
+    await addChapter(t);            // standalone — you wire it up yourself
     renderGuideMap();
   });
   document.getElementById('gmapCancelLink')?.addEventListener('click', () => {
-    GMAP_LINK_FROM = null;
+    GMAP_LINK_FROM = null; GMAP_ZONE_FROM = null;
     renderGuideMap();
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && GMAP_LINK_FROM) { GMAP_LINK_FROM = null; renderGuideMap(); }
+    if (e.key !== 'Escape' || !(GMAP_LINK_FROM || GMAP_ZONE_FROM)) return;
+    GMAP_LINK_FROM = null; GMAP_ZONE_FROM = null;
+    renderGuideMap();
   });
 }
 
@@ -1346,11 +1541,7 @@ function openPageLinkPicker(anchor, note, editor, savedRange) {
   const menu = document.createElement('div');
   menu.className = 'context-menu';
   menu.id = 'pageLinkMenu';
-  const build = (parentId, depth) => childPages(note, parentId).map(p =>
-    `<button class="context-menu-item" data-p="${esc(p.id)}" style="padding-left:${10 + depth * 14}px;">
-       <span class="crumb-no">${esc(pageLabel(note, p.id))}</span> ${esc(p.title || 'Kapitola')}
-     </button>` + build(p.id, depth + 1)).join('');
-  menu.innerHTML = build(null, 0);
+  menu.innerHTML = pageMenuList(note);
   document.body.appendChild(menu);
   const r = anchor.getBoundingClientRect();
   menu.style.left = r.left + 'px';

@@ -391,29 +391,46 @@ function buildExportHtml(data, opts) {
       <div class="fbody">
       ${sec.notes.map(n => {
         const title = esc(n.title || exportNoteTitle(n));
-        // A guide is flattened into nested chapter sections, and its
-        // click-through links become in-page anchors so they still work.
+        // A guide is a graph of chapters, not a tree: they are written out in
+        // reading order (main chapter first, then whatever it leads to) and
+        // every arrow becomes an in-page anchor, so the offline copy walks the
+        // same way the app does.
         const guidePages = Array.isArray(n.pages) ? n.pages : [];
-        const chapterHtml = (parentId, depth) => guidePages
-          .filter(pg => (pg.parentId || null) === (parentId || null))
-          .map(pg => {
+        const linksOfPg = pg => {
+          const explicit = (Array.isArray(pg.links) ? pg.links : [])
+            .filter(l => guidePages.some(x => x.id === l.to));
+          const seen = new Set(explicit.map(l => l.to));
+          // Guides saved before 9.35 still carry parentId — read it as a link.
+          const legacy = guidePages.filter(x => x.parentId === pg.id && !seen.has(x.id))
+            .map(x => ({ to: x.id, label: x.title || 'Kapitola' }));
+          return [...explicit, ...legacy];
+        };
+        const order = [];
+        const seenPg = new Set();
+        const walk = (pg, depth) => {
+          if (!pg || seenPg.has(pg.id)) return;
+          seenPg.add(pg.id);
+          order.push([pg, depth]);
+          linksOfPg(pg).forEach(l => walk(guidePages.find(x => x.id === l.to), depth + 1));
+        };
+        walk(guidePages.find(pg => pg.main) || guidePages[0], 0);
+        guidePages.forEach(pg => walk(pg, 0));      // nothing links to these yet
+        const chapterHtml = order.map(([pg, depth]) => {
             const body = hotspotsToHtml(
               (pg.content || '').replace(/data-page="([^"]+)"/g, (m, id) => `href="#pg-${esc(n.id)}-${esc(id)}"`),
               n.id);
-            // Named links drawn in the map become anchors here too.
-            const named = (Array.isArray(pg.links) ? pg.links : [])
-              .map(l => {
+            const named = linksOfPg(pg).map(l => {
                 const t = guidePages.find(x => x.id === l.to);
-                return t ? `<a class="gpage-link" href="#pg-${esc(n.id)}-${esc(l.to)}">🔗 ${esc(l.label || t.title || 'Odkaz')}</a>` : '';
-              }).filter(Boolean).join('');
-            return `<div class="gpage" id="pg-${esc(n.id)}-${esc(pg.id)}" style="--gd:${depth}">
-                <div class="gpage-h">${esc(pg.title || 'Kapitola')}</div>
+                return `<a class="gpage-link" href="#pg-${esc(n.id)}-${esc(l.to)}">→ ${esc(l.label || t.title || 'Kapitola')}</a>`;
+              }).join('');
+            return `<div class="gpage" id="pg-${esc(n.id)}-${esc(pg.id)}" style="--gd:${Math.min(depth, 4)}">
+                <div class="gpage-h">${pg.main ? '★ ' : ''}${esc(pg.title || 'Kapitola')}</div>
                 <div class="gpage-b">${body}</div>
                 ${named ? `<div class="gpage-links">${named}</div>` : ''}
-              </div>` + chapterHtml(pg.id, depth + 1);
+              </div>`;
           }).join('');
         const content = guidePages.length
-          ? (n.content ? `<div>${n.content}</div>` : '') + chapterHtml(null, 0)
+          ? (n.content ? `<div>${n.content}</div>` : '') + chapterHtml
           : (n.contentType === 'html' ? (n.content || '') : `<p>${esc(n.content || '')}</p>`);
         const conns = opts.conns ? exportNoteConns(n.id) : [];
         const connsHtml = conns.length ? `<div class="meta">🔗 ${conns.map(esc).join(' · ')}</div>` : '';
