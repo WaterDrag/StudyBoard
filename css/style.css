@@ -553,6 +553,43 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .modal-overlay.open .modal { transform: scale(1) translateY(0); }
 .modal-wide { max-width: 560px; }
 
+/* Psaní poznámky je práce, ne dialog — editor dostane skoro celou obrazovku.
+   Modal je flex sloupec: hlavička, název, barvy a tlačítka si drží svou výšku
+   a .rich-editor spolkne všechno, co zbude (proto max-height: none — jinak by
+   ho 280px z .rich-editor stropovalo bez ohledu na velikost okna). */
+.modal-editor {
+  max-width: 980px;
+  /* Musí to být height, ne max-height: flex rozdává jen PŘEBYTEK místa, a
+     dokud je výška modalu daná obsahem, žádný přebytek nevznikne a editor
+     zůstane na svém min-height. */
+  height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+}
+.modal-editor > .modal-header,
+.modal-editor > .modal-footer,
+.modal-editor > .form-group { flex-shrink: 0; }
+.modal-editor .form-group-grow {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.modal-editor .form-group-grow .rich-editor-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.modal-editor .form-group-grow .rich-editor {
+  flex: 1 1 auto;
+  min-height: 220px;
+  max-height: none;
+}
+@media (max-width: 700px) {
+  .modal-editor .form-group-grow .rich-editor { min-height: 160px; }
+}
+
 .modal-header {
   display: flex;
   align-items: center;

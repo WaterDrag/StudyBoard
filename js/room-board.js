@@ -234,7 +234,7 @@ function travelDestinations(remote) {
 
   NOTES_MAP.forEach((n, id) => out.push({
     kind: 'note', id, icon: '📝', group: 'Poznámky',
-    title: n.title || noteToPlainText(n).slice(0, 50) || '(bez názvu)',
+    title: n.title || noteToPlainText(n).slice(0, 50) || noteBlankLabel(n) || '(bez názvu)',
     sub: folderOf(id) || (pagesOf(n).length ? 'návod' : ''),
     x: n.x, y: n.y, color: n.color, note: n,
   }));

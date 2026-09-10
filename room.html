@@ -117,7 +117,7 @@
 
   <!-- MODAL: Přidat poznámku -->
   <div class="modal-overlay" id="addModal" data-persist>
-    <div class="modal modal-wide">
+    <div class="modal modal-wide modal-editor">
       <div class="modal-header">
         <h3>Nová poznámka</h3>
         <button class="modal-close" data-close="addModal">✕</button>
@@ -126,7 +126,7 @@
         <label class="label">Název (nepovinné)</label>
         <input type="text" id="noteTitleInput" class="input" placeholder="Necháš prázdné → na lístečku se zobrazí celý obsah" maxlength="80">
       </div>
-      <div class="form-group">
+      <div class="form-group form-group-grow">
         <label class="label">Obsah</label>
         <div class="rich-editor-wrap">
           <div class="rich-toolbar" id="addToolbar">
@@ -195,7 +195,7 @@
 
   <!-- MODAL: Upravit poznámku -->
   <div class="modal-overlay" id="editModal" data-persist>
-    <div class="modal modal-wide">
+    <div class="modal modal-wide modal-editor">
       <div class="modal-header">
         <h3 id="editModalTitle">Upravit poznámku</h3>
         <button class="modal-close" data-close="editModal">✕</button>
@@ -204,7 +204,7 @@
         <label class="label">Název (nepovinné)</label>
         <input type="text" id="noteTitleInputEdit" class="input" placeholder="Necháš prázdné → na lístečku se zobrazí celý obsah" maxlength="80">
       </div>
-      <div class="form-group">
+      <div class="form-group form-group-grow">
         <label class="label">Obsah</label>
         <div class="rich-editor-wrap">
           <div class="rich-toolbar" id="editToolbar">

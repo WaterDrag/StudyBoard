@@ -659,7 +659,7 @@ function setupListDragDrop(body) {
 function renderNoteListRow(note, marks, pins) {
   const chapters = Array.isArray(note.pages) ? note.pages.length : 0;
   const title = note.title || (chapters ? note.pages[0].title : '')
-    || noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
+    || noteToPlainText(note).slice(0, 90) || noteBlankLabel(note) || '(prázdná poznámka)';
   const moveBtn = MY_ROLE !== 'viewer'
     ? `<button class="notes-move-btn" data-move-note="${note.id}" title="Přesunout do složky">📁</button>`
     : '';

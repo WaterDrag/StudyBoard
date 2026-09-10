@@ -1430,6 +1430,25 @@ function setupHighlighter(editor, toolbar) {
 // execCommand leaves <font> tags, empty spans and stray attributes behind.
 // Left alone they pile up, bloat the stored HTML and look wrong in the
 // export, so the content is tidied on the way OUT of the editor.
+// A note holding only an image (or a table / divider / embed) has no text at
+// all, so a textContent check called it empty and refused to save it.
+function editorIsEmpty(editor) {
+  if (!editor) return true;
+  if (editor.textContent.trim()) return false;
+  return !editor.querySelector('img, table, hr, iframe, video, canvas, .hs-wrap');
+}
+
+// Popisek pro poznámku bez názvu a bez textu. Od chvíle, kdy jde uložit
+// poznámka jen s obrázkem, by se jinak v seznamu jmenovala "(prázdná poznámka)".
+function noteBlankLabel(note) {
+  const d = document.createElement('div');
+  d.innerHTML = (note.content || '') +
+    (Array.isArray(note.pages) ? note.pages.map(p => p.content || '').join('') : '');
+  if (d.querySelector('img')) return '🖼️ Obrázek';
+  if (d.querySelector('table')) return '📊 Tabulka';
+  return '';
+}
+
 function cleanEditorHtml(html) {
   const d = document.createElement('div');
   d.innerHTML = html || '';
@@ -1587,7 +1606,7 @@ function setupAdd() {
   document.getElementById('addSubmit').addEventListener('click', async () => {
     const content = cleanEditorHtml(editor.innerHTML);
     const title   = document.getElementById('noteTitleInput').value.trim();
-    if (!editor.textContent.trim()) { toast('Poznámka nesmí být prázdná.'); return; }
+    if (editorIsEmpty(editor)) { toast('Poznámka nesmí být prázdná.'); return; }
 
     const btn = document.getElementById('addSubmit');
     btn.disabled = true;
@@ -1655,7 +1674,7 @@ function setupEdit() {
     const title   = document.getElementById('noteTitleInputEdit').value.trim();
     const colorSw = document.querySelector('#editColorPicker .color-swatch.selected');
     const color   = colorSw ? colorSw.dataset.color : '#fef9c3';
-    if (!editor.textContent.trim()) { toast('Poznámka nesmí být prázdná.'); return; }
+    if (editorIsEmpty(editor)) { toast('Poznámka nesmí být prázdná.'); return; }
 
     const btn = document.getElementById('editSubmit');
     btn.disabled = true;
