@@ -415,16 +415,27 @@
 
   <!-- MODAL: Klikací oblasti na obrázku -->
   <div class="modal-overlay" id="hotspotModal">
-    <div class="modal modal-wide">
+    <div class="modal modal-wide modal-hotspot">
       <div class="modal-header">
         <h3>🎯 Klikací oblasti na obrázku</h3>
         <button class="modal-close" data-close="hotspotModal">✕</button>
       </div>
-      <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:12px;line-height:1.5;">
+      <p class="hs-hint">
         <b>Tažením myši</b> nakresli obdélník přes tu část obrázku, která má být klikací —
         pak vyber kapitolu, kam povede. Oblastí můžeš udělat kolik chceš.
       </p>
-      <div id="hsStage" class="hs-stage"></div>
+      <div class="hs-toolbar">
+        <button type="button" class="btn btn-secondary btn-sm" id="hsZoomOut" title="Oddálit (Ctrl + kolečko)">−</button>
+        <span class="hs-zoom-val" id="hsZoomVal">100 %</span>
+        <button type="button" class="btn btn-secondary btn-sm" id="hsZoomIn" title="Přiblížit (Ctrl + kolečko)">+</button>
+        <div class="rt-sep"></div>
+        <button type="button" class="btn btn-secondary btn-sm" id="hsZoomFit">Přizpůsobit</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="hsZoom1">Skutečná velikost</button>
+        <span class="hs-toolbar-note">Při přiblížení plochou posouvej scrollem.</span>
+      </div>
+      <div id="hsScroll" class="hs-scroll">
+        <div id="hsStage" class="hs-stage"></div>
+      </div>
       <div id="hsList" class="hs-list"></div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close="hotspotModal">Zrušit</button>
@@ -639,6 +650,20 @@
   </div>
 
   <!-- DETAIL poznámky -->
+  <!-- Prohlížeč obrázku přes celou obrazovku (screenshot se jinak nedá přečíst) -->
+  <div id="imgViewer" hidden>
+    <div class="iv-bar">
+      <button type="button" class="iv-btn" id="ivOut" title="Oddálit (−)">−</button>
+      <span class="iv-val" id="ivVal">100 %</span>
+      <button type="button" class="iv-btn" id="ivIn" title="Přiblížit (+)">+</button>
+      <button type="button" class="iv-btn" id="ivFit">Přizpůsobit</button>
+      <button type="button" class="iv-btn" id="iv1">100 %</button>
+      <a class="iv-btn" id="ivOpen" target="_blank" rel="noopener">Otevřít originál ↗</a>
+      <button type="button" class="iv-btn iv-close" id="ivClose" title="Zavřít (Esc)">✕</button>
+    </div>
+    <div class="iv-stage" id="ivStage"><img id="ivImg" alt="" draggable="false"></div>
+  </div>
+
   <div class="modal-overlay" id="noteDetailModal">
     <div class="modal modal-detail" id="noteDetailBox">
       <div class="modal-header">

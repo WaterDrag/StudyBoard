@@ -474,6 +474,8 @@ function openImgToolbar(img, editor) {
     <span class="it-sep"></span>
     <button data-spots="1" title="Klikací oblasti — víc odkazů na jednom obrázku">🎯 Oblasti</button>
     <span class="it-sep"></span>
+    <button data-zoom="1" title="Zvětšit na celou obrazovku — screenshot se dá přečíst">🔍 Zvětšit</button>
+    <span class="it-sep"></span>
     <button data-del="1" class="it-del" title="Odstranit obrázek">🗑</button>`;
   document.body.appendChild(bar);
 
@@ -500,6 +502,7 @@ function openImgToolbar(img, editor) {
     e.stopPropagation();
     if (b.dataset.del) { img.remove(); closeImgToolbar(); editor.focus(); return; }
     if (b.dataset.spots) { closeImgToolbar(); openHotspotEditor(img); return; }
+    if (b.dataset.zoom)  { openImageViewer(img.currentSrc || img.src); return; }
     if (b.dataset.size) { img.style.width = IMG_SIZES[b.dataset.size]; img.style.maxWidth = '100%'; }
     if (b.dataset.align === 'left')  { img.style.cssFloat = 'left';  img.style.display = ''; img.style.margin = '4px 12px 6px 0'; }
     if (b.dataset.align === 'right') { img.style.cssFloat = 'right'; img.style.display = ''; img.style.margin = '4px 0 6px 12px'; }
@@ -561,7 +564,124 @@ function renderHotspots(root, note, onGo) {
   });
 }
 
+// ── Prohlížeč obrázku ─────────────────────────────────────────
+// A screenshot pasted into a note renders at note width — half size or less,
+// which makes its own UI text unreadable. This shows it at real pixels (or
+// bigger) with drag-to-pan, so you never have to leave the app to read it.
+let IV = { scale: 1, mode: 'fit' };
+
+function ivEl(id) { return document.getElementById(id); }
+
+function ivApply(z) {
+  const im = ivEl('ivImg'), stage = ivEl('ivStage');
+  if (!im || !stage || !im.naturalWidth) return;
+  let scale;
+  if (z === 'fit') {
+    scale = Math.min(1, (stage.clientWidth - 24) / im.naturalWidth,
+                        (stage.clientHeight - 24) / im.naturalHeight);
+    IV.mode = 'fit';
+  } else {
+    scale = Math.max(0.05, Math.min(10, z));
+    IV.mode = 'zoom';
+  }
+  IV.scale = scale;
+  im.style.width = Math.round(im.naturalWidth * scale) + 'px';
+  ivEl('ivVal').textContent = Math.round(scale * 100) + ' %';
+}
+
+function closeImageViewer() {
+  const v = ivEl('imgViewer');
+  if (v) v.hidden = true;
+  document.removeEventListener('keydown', ivKeys);
+}
+
+function ivKeys(e) {
+  if (e.key === 'Escape') { e.stopPropagation(); closeImageViewer(); }
+  else if (e.key === '+' || e.key === '=') ivApply(IV.scale * 1.25);
+  else if (e.key === '-') ivApply(IV.scale / 1.25);
+  else if (e.key === '0') ivApply('fit');
+  else if (e.key === '1') ivApply(1);
+}
+
+function openImageViewer(src) {
+  const v = ivEl('imgViewer');
+  if (!v || !src) return;
+  const im = ivEl('ivImg'), stage = ivEl('ivStage');
+  ivEl('ivOpen').href = src;
+  v.hidden = false;
+  // Wire once — the viewer markup lives in the page, not in this function.
+  if (!v._wired) {
+    v._wired = true;
+    ivEl('ivIn').onclick    = () => ivApply(IV.scale * 1.25);
+    ivEl('ivOut').onclick   = () => ivApply(IV.scale / 1.25);
+    ivEl('ivFit').onclick   = () => ivApply('fit');
+    ivEl('iv1').onclick     = () => ivApply(1);
+    ivEl('ivClose').onclick = closeImageViewer;
+    stage.addEventListener('wheel', e => {
+      if (!e.ctrlKey) return;            // plain wheel still scrolls the image
+      e.preventDefault();
+      ivApply(IV.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+    }, { passive: false });
+    // Drag to pan — with a 1:1 screenshot the scrollbars alone are painful.
+    let pan = null;
+    stage.addEventListener('mousedown', e => {
+      pan = { x: e.clientX, y: e.clientY, l: stage.scrollLeft, t: stage.scrollTop };
+      stage.classList.add('panning');
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', e => {
+      if (!pan) return;
+      stage.scrollLeft = pan.l - (e.clientX - pan.x);
+      stage.scrollTop  = pan.t - (e.clientY - pan.y);
+    });
+    window.addEventListener('mouseup', () => { pan = null; stage.classList.remove('panning'); });
+    im.addEventListener('load', () => ivApply('fit'));
+  }
+  document.addEventListener('keydown', ivKeys);
+  if (im.src !== src) { im.src = src; }        // load handler will fit it
+  else ivApply('fit');
+}
+
+// Klik na obrázek v otevřené poznámce / návodu ho zvětší.
+function setupImageViewerClicks() {
+  document.addEventListener('click', e => {
+    const img = e.target.closest('#detailContent img, .note-detail-content img');
+    if (!img) return;
+    // Hotspots handle their own clicks — they navigate to a chapter.
+    if (img.closest('.hs-wrap') && img.closest('.hs-wrap').querySelector('.hs-area')) return;
+    e.preventDefault();
+    openImageViewer(img.currentSrc || img.src);
+  });
+}
+
 // ── Editing ───────────────────────────────────────────────────
+// Current on-screen scale of the stage image (1 = actual pixels).
+function hsScale() {
+  const im = document.getElementById('hsImg');
+  if (!im || !im.naturalWidth) return 1;
+  return im.getBoundingClientRect().width / im.naturalWidth;
+}
+
+// 'fit' = shrink to the visible area (never blow a small picture up);
+// a number = that scale, clamped so you can still get back out.
+function setHsZoom(z) {
+  const im = document.getElementById('hsImg');
+  const scroll = document.getElementById('hsScroll');
+  if (!im || !scroll || !im.naturalWidth) return;
+  let scale;
+  if (z === 'fit') {
+    const availW = scroll.clientWidth - 20, availH = scroll.clientHeight - 20;
+    scale = Math.min(1, availW / im.naturalWidth, availH / im.naturalHeight);
+    HS.zoom = 'fit';
+  } else {
+    scale = Math.max(0.05, Math.min(8, z));
+    HS.zoom = scale;
+  }
+  im.style.width = Math.round(im.naturalWidth * scale) + 'px';
+  const val = document.getElementById('hsZoomVal');
+  if (val) val.textContent = Math.round(scale * 100) + ' %';
+}
+
 function openHotspotEditor(img) {
   const note = NOTES_MAP.get(EDIT_ID || GUIDE?.noteId);
   if (!note || !pagesOf(note).length) {
@@ -576,6 +696,25 @@ function openHotspotEditor(img) {
   drawHotspotBoxes();
 
   const stageImg = document.getElementById('hsImg');
+  HS.zoom = 'fit';
+  // The picture only becomes readable once it can be shown at its own size, so
+  // it may be bigger than the modal and .hs-scroll pans over it.
+  setHsZoom('fit');
+  stageImg.addEventListener('load', () => setHsZoom(HS.zoom));
+  if (stageImg.complete && stageImg.naturalWidth) setHsZoom('fit');
+
+  document.getElementById('hsZoomIn').onclick  = () => setHsZoom(hsScale() * 1.25);
+  document.getElementById('hsZoomOut').onclick = () => setHsZoom(hsScale() / 1.25);
+  document.getElementById('hsZoomFit').onclick = () => setHsZoom('fit');
+  document.getElementById('hsZoom1').onclick   = () => setHsZoom(1);
+
+  const scroll = document.getElementById('hsScroll');
+  scroll.onwheel = e => {
+    if (!e.ctrlKey) return;              // plain wheel keeps scrolling the area
+    e.preventDefault();
+    setHsZoom(hsScale() * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+  };
+
   let box = null, start = null;
 
   stage.onmousedown = e => {
@@ -597,13 +736,13 @@ function openHotspotEditor(img) {
     box.style.cssText = `left:${x}%;top:${y}%;width:${w}%;height:${h}%;`;
     box._rect = { x, y, w, h };
   };
-  stage.onmouseup = () => {
+  stage.onmouseup = e => {
     if (!box) return;
     const rect = box._rect;
     box.remove(); box = null;
     // A stray click shouldn't create an invisible area.
     if (!rect || rect.w < 2 || rect.h < 2) return;
-    pickHotspotTarget(note, rect);
+    pickHotspotTarget(note, rect, { x: e.clientX, y: e.clientY });
   };
   stage.onmouseleave = () => { if (box) { box.remove(); box = null; } };
 
@@ -611,7 +750,7 @@ function openHotspotEditor(img) {
 }
 
 // Chapter picker shown right after an area is drawn.
-function pickHotspotTarget(note, rect) {
+function pickHotspotTarget(note, rect, at) {
   const menu = document.createElement('div');
   menu.className = 'context-menu';
   menu.id = 'hsPick';
@@ -622,9 +761,13 @@ function pickHotspotTarget(note, rect) {
   menu.innerHTML = `<div class="hs-pick-h">Kam má oblast vést?</div>` + build(null, 0);
   document.body.appendChild(menu);
 
+  // Anchor to where the drag ended — the stage can now be far bigger than the
+  // screen, so its top-left corner is no longer anywhere near the new area.
   const stage = document.getElementById('hsStage').getBoundingClientRect();
-  menu.style.left = Math.min(window.innerWidth - menu.offsetWidth - 8, stage.left + 20) + 'px';
-  menu.style.top  = Math.min(window.innerHeight - menu.offsetHeight - 8, stage.top + 40) + 'px';
+  const ax = at ? at.x + 8 : stage.left + 20;
+  const ay = at ? at.y + 8 : stage.top + 40;
+  menu.style.left = Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, ax)) + 'px';
+  menu.style.top  = Math.max(8, Math.min(window.innerHeight - menu.offsetHeight - 8, ay)) + 'px';
 
   const close = () => menu.remove();
   menu.addEventListener('click', e => {

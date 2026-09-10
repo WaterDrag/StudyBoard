@@ -3496,12 +3496,44 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .hs-area:hover .hs-tip { opacity: 1; }
 
 /* Editing */
+/* Editor oblastí je pracovní plocha: screenshot 1920 px vmáčknutý do 560px
+   modalu se nedal přečíst. Modal je proto skoro přes celou obrazovku a
+   plocha s obrázkem se zoomuje — obrázek smí být větší než okno a scrolluje. */
+.modal-hotspot {
+  max-width: 1400px;
+  height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+}
+.modal-hotspot > * { flex-shrink: 0; }
+.hs-hint { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 10px; line-height: 1.5; }
+.hs-toolbar {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 8px; flex-wrap: wrap;
+}
+.hs-zoom-val {
+  font-size: 0.78rem; color: var(--text-muted);
+  min-width: 62px; text-align: center; font-variant-numeric: tabular-nums;
+}
+.hs-toolbar-note { font-size: 0.72rem; color: var(--text-muted); margin-left: auto; }
+.hs-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
 .hs-stage {
-  position: relative; display: inline-block; max-width: 100%;
+  position: relative; margin: auto;
   user-select: none; cursor: crosshair; line-height: 0;
   border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  flex-shrink: 0;
 }
-.hs-stage img { display: block; max-width: 100%; max-height: 55vh; height: auto; }
+/* Šířku řídí zoom v JS — žádné stropy, jinak by se přiblížení neprojevilo. */
+.hs-stage img { display: block; max-width: none; max-height: none; height: auto; }
 .hs-draw {
   position: absolute; pointer-events: none;
   background: color-mix(in srgb, var(--accent) 25%, transparent);
@@ -3528,7 +3560,7 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
   font-size: 0.72rem; color: var(--text-muted); padding: 6px 10px;
   text-transform: uppercase; letter-spacing: .4px;
 }
-.hs-list { margin-top: 12px; }
+.hs-list { margin-top: 10px; max-height: 20vh; overflow: auto; flex-shrink: 0; }
 .hs-row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   font-size: 0.84rem; padding: 6px 10px; border: 1px solid var(--border);
@@ -3536,6 +3568,45 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 }
 .hs-row-del { background: none; border: none; color: #fca5a5; cursor: pointer; font-size: 0.78rem; }
 .img-toolbar [data-spots] { font-size: 0.75rem; }
+
+/* ===== PROHLÍŽEČ OBRÁZKU ===== */
+/* Screenshot 1920 px vykreslený na šířku poznámky je půlka velikosti a text
+   v něm nejde přečíst. Tady se dá otevřít 1:1 (i větší) a táhnout myší. */
+#imgViewer {
+  position: fixed; inset: 0; z-index: 4000;
+  background: rgba(8,8,10,0.94);
+  display: flex; flex-direction: column;
+}
+.iv-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; flex-shrink: 0;
+  background: rgba(0,0,0,0.5);
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.iv-btn {
+  background: rgba(255,255,255,0.1); color: #fff; text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.16); border-radius: 7px;
+  padding: 5px 11px; font-size: 0.8rem; font-family: inherit;
+  cursor: pointer; line-height: 1.3; transition: background 0.12s;
+}
+.iv-btn:hover { background: rgba(255,255,255,0.2); }
+.iv-close { margin-left: auto; }
+.iv-val {
+  color: #ddd; font-size: 0.8rem; min-width: 62px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.iv-stage {
+  flex: 1 1 auto; min-height: 0; overflow: auto;
+  display: flex; cursor: grab;
+}
+.iv-stage.panning { cursor: grabbing; }
+.iv-stage img {
+  margin: auto; display: block; flex-shrink: 0;
+  max-width: none; max-height: none;
+  image-rendering: -webkit-optimize-contrast;   /* ostřejší text při zmenšení */
+}
+/* Obrázek v poznámce se dá otevřít kliknutím */
+#detailContent img, .note-detail-content img { cursor: zoom-in; }
 
 /* ===== TRAVEL AGENT (app-wide jump palette) ===== */
 #travelAgent {
