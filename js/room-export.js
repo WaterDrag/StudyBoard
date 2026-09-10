@@ -400,9 +400,16 @@ function buildExportHtml(data, opts) {
             const body = hotspotsToHtml(
               (pg.content || '').replace(/data-page="([^"]+)"/g, (m, id) => `href="#pg-${esc(n.id)}-${esc(id)}"`),
               n.id);
+            // Named links drawn in the map become anchors here too.
+            const named = (Array.isArray(pg.links) ? pg.links : [])
+              .map(l => {
+                const t = guidePages.find(x => x.id === l.to);
+                return t ? `<a class="gpage-link" href="#pg-${esc(n.id)}-${esc(l.to)}">🔗 ${esc(l.label || t.title || 'Odkaz')}</a>` : '';
+              }).filter(Boolean).join('');
             return `<div class="gpage" id="pg-${esc(n.id)}-${esc(pg.id)}" style="--gd:${depth}">
                 <div class="gpage-h">${esc(pg.title || 'Kapitola')}</div>
                 <div class="gpage-b">${body}</div>
+                ${named ? `<div class="gpage-links">${named}</div>` : ''}
               </div>` + chapterHtml(pg.id, depth + 1);
           }).join('');
         const content = guidePages.length
@@ -563,6 +570,10 @@ function buildExportHtml(data, opts) {
   .gpage-h { font-weight:700; font-size:calc(1rem - var(--gd,0) * 0.04rem); margin-bottom:3px; }
   .gpage-b { font-size:.92rem; }
   .gpage-b a[href^="#pg-"] { color:var(--ac); font-weight:600; text-decoration:none; border-bottom:1px dashed var(--ac); }
+  .gpage-links { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+  .gpage-link { font-size:.82rem; color:var(--ac); text-decoration:none;
+                border:1px solid var(--bd); border-radius:8px; padding:3px 10px; }
+  .gpage-link:hover { border-color:var(--ac); }
   /* Clickable areas drawn over a picture */
   .hs-wrap { position:relative; display:inline-block; max-width:100%; line-height:0; }
   .hs-wrap img { display:block; max-width:100%; height:auto; margin:0 !important; float:none !important; }

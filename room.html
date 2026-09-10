@@ -397,6 +397,22 @@
     </div>
   </div>
 
+  <!-- MODAL: Vizuální mapa návodu -->
+  <div class="modal-overlay" id="guideMapModal">
+    <div class="modal modal-wide" style="max-width:1100px;">
+      <div class="modal-header">
+        <h3>🗺️ Mapa návodu</h3>
+        <button class="modal-close" data-close="guideMapModal">✕</button>
+      </div>
+      <div class="gmap-bar">
+        <button id="gmapAddRoot" class="btn btn-primary" style="font-size:0.8rem;padding:5px 12px;">＋ Hlavní kapitola</button>
+        <button id="gmapCancelLink" class="btn btn-ghost" style="font-size:0.8rem;padding:5px 12px;">Zrušit spojování</button>
+        <span id="gmapHint" class="gmap-hint"></span>
+      </div>
+      <div class="gmap-wrap"><div id="gmapStage" class="gmap-stage"></div></div>
+    </div>
+  </div>
+
   <!-- MODAL: Klikací oblasti na obrázku -->
   <div class="modal-overlay" id="hotspotModal">
     <div class="modal modal-wide">
@@ -635,6 +651,7 @@
         <nav id="guideCrumbs" class="guide-crumbs"></nav>
         <span style="flex:1;"></span>
         <button class="guide-act" id="guideBack" title="Zpět">←</button>
+        <button class="guide-act" id="guideMapBtn" title="Vizuální mapa kapitol">🗺️ Mapa</button>
         <button class="guide-act" id="guideAddSub" title="Přidat podkapitolu">＋ Podkapitola</button>
         <button class="guide-act" id="guideEdit" title="Upravit tuto kapitolu">✏️ Upravit</button>
       </div>

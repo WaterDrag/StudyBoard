@@ -3549,3 +3549,49 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
   100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
 }
 .travel-flash { animation: travelFlash 1.5s ease-out 2; outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ===== GUIDE MAP (visual chapter editor) ===== */
+.gmap-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.gmap-hint { font-size: 0.78rem; color: var(--text-muted); }
+.gmap-wrap {
+  overflow: auto; max-height: 66vh;
+  background: var(--bg-3); border: 1px solid var(--border); border-radius: 12px;
+  background-image: radial-gradient(color-mix(in srgb, var(--text-muted) 22%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+.gmap-stage { position: relative; min-width: 100%; min-height: 260px; padding: 20px; }
+.gmap-svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.gmap-path { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0.55; }
+.gmap-path.struct { stroke-dasharray: none; }
+.gmap-path.link   { stroke-dasharray: 6 4; opacity: 0.9; }
+.gmap-label {
+  fill: var(--text); font-size: 11px; font-weight: 600; text-anchor: middle;
+  paint-order: stroke; stroke: var(--bg-3); stroke-width: 4px; stroke-linejoin: round;
+}
+.gmap-card {
+  position: absolute; box-sizing: border-box;
+  background: var(--bg-2); border: 1.5px solid var(--border); border-radius: 12px;
+  padding: 9px 12px; cursor: pointer; box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.gmap-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.gmap-card.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--bg-2)); }
+.gmap-card.linking { border-color: #f59e0b; border-style: dashed; }
+.gmap-no {
+  display: inline-block; background: var(--accent); color: #fff;
+  font-size: 0.62rem; font-weight: 700; border-radius: 5px; padding: 0 6px;
+}
+.gmap-title {
+  font-size: 0.87rem; font-weight: 600; margin-top: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gmap-meta { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; }
+.gmap-tools {
+  position: absolute; right: 6px; top: 6px; display: none; gap: 2px;
+}
+.gmap-card:hover .gmap-tools { display: flex; }
+.gmap-tools button {
+  background: var(--bg-3); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); cursor: pointer; font-size: 0.7rem; padding: 1px 5px; line-height: 1.5;
+}
+.gmap-tools button:hover { border-color: var(--accent); }

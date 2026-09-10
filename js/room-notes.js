@@ -728,6 +728,12 @@ async function savePages(noteId, pages) {
     pages,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   });
+  // Update the local copy straight away. Without this every caller renders
+  // BEFORE the Firestore snapshot lands, finds no chapters and bails out —
+  // which is exactly why "make this a guide" and "add a subchapter" looked
+  // like they did nothing at all.
+  const n = NOTES_MAP.get(noteId);
+  if (n) n.pages = pages;
 }
 
 // Turn a plain note into a guide: its current content becomes chapter 1.
@@ -771,6 +777,21 @@ function renderGuide() {
   addImageClickHandlers(contentEl);
   wirePageLinks(contentEl);
   renderHotspots(contentEl, note, goToPage);
+
+  // Named links first — these are the ones drawn in the map editor.
+  const named = linksOf(page);
+  if (named.length) {
+    const box = document.createElement('div');
+    box.className = 'guide-kids';
+    box.innerHTML = '<div class="guide-kids-h">Odkazy</div>' + named.map(l => {
+      const t = pageById(note, l.to);
+      return t ? `<button class="guide-kid" data-go="${esc(l.to)}">
+          <span class="crumb-no">${esc(pageLabel(note, l.to))}</span>
+          <span>🔗 ${esc(l.label || t.title || 'Odkaz')}</span><span class="guide-kid-arrow">›</span>
+        </button>` : '';
+    }).join('');
+    contentEl.appendChild(box);
+  }
 
   // Chapters directly below this one, as ready-made buttons — so a guide is
   // click-through even before any links are written into the text.
@@ -830,17 +851,25 @@ function wirePageLinks(root) {
 }
 
 // ── Editing ───────────────────────────────────────────────────
-async function addSubChapter() {
-  if (!GUIDE) return;
+// Add a chapter under `parentId` (null = a new top-level chapter).
+async function addChapter(parentId, title) {
+  if (!GUIDE) return null;
   const note = NOTES_MAP.get(GUIDE.noteId);
-  if (!canEdit(note)) { toast('Upravit může jen autor nebo vlastník.'); return; }
-  const title = prompt('Název podkapitoly:');
-  if (title === null) return;
-  const page = { id: newPageId(), title: (title || 'Nová kapitola').trim(), parentId: GUIDE.pageId, content: '' };
+  if (!canEdit(note)) { toast('Upravit může jen autor nebo vlastník.'); return null; }
+  const page = { id: newPageId(), title: (title || 'Nová kapitola').trim(),
+                 parentId: parentId || null, content: '', links: [] };
   try {
     await savePages(GUIDE.noteId, [...pagesOf(note), page]);
-    goToPage(page.id);
-  } catch (e) { toast('Chyba: ' + e.message); }
+    return page;
+  } catch (e) { toast('Chyba: ' + e.message); return null; }
+}
+
+async function addSubChapter() {
+  if (!GUIDE) return;
+  const title = prompt('Název podkapitoly:');
+  if (title === null) return;
+  const page = await addChapter(GUIDE.pageId, title);
+  if (page) goToPage(page.id);
 }
 
 function editCurrentChapter() {
@@ -855,6 +884,246 @@ function editCurrentChapter() {
   document.getElementById('noteEditorEdit').innerHTML = page.content || '';
   document.getElementById('editModalTitle').textContent = 'Upravit kapitolu';
   openModal('editModal');
+}
+
+
+// ── Guide map: the visual editor ──────────────────────────────
+// The chapter tree drawn as cards with arrows, the way you'd sketch a manual
+// on a whiteboard. Structure (parent → child) is drawn as a plain arrow;
+// a NAMED cross-link gets its own labelled arrow, so "click this role → its
+// setup steps" is visible at a glance instead of being buried in the text.
+//
+// Named links live on the page as `links: [{to, label}]`, which keeps them
+// editable here without touching the chapter's HTML. Inline <a data-page>
+// links written into the text keep working alongside them.
+const GMAP_W = 210, GMAP_H = 76;          // card size
+const GMAP_GAP_X = 110, GMAP_GAP_Y = 26;  // spacing between columns / rows
+let GMAP_LINK_FROM = null;                // id of the card a new link starts at
+
+function linksOf(page) { return Array.isArray(page?.links) ? page.links : []; }
+
+// Auto-layout: one column per depth, children stacked beside their parent.
+// A page may override with its own x/y (dragged by hand).
+function gmapLayout(note) {
+  const pos = new Map();
+  let cursorY = 0;
+  const place = (parentId, depth) => {
+    childPages(note, parentId).forEach(p => {
+      const top = cursorY;
+      place(p.id, depth + 1);
+      // centre a parent against the block of its children
+      const kids = childPages(note, p.id);
+      const y = kids.length
+        ? (pos.get(kids[0].id).y + pos.get(kids[kids.length - 1].id).y) / 2
+        : (cursorY = Math.max(cursorY, top) , top);
+      pos.set(p.id, {
+        x: p.mx != null ? p.mx : depth * (GMAP_W + GMAP_GAP_X),
+        y: p.my != null ? p.my : y,
+        auto: p.mx == null,
+      });
+      if (!kids.length) cursorY = top + GMAP_H + GMAP_GAP_Y;
+    });
+  };
+  place(null, 0);
+  return pos;
+}
+
+function openGuideMap() {
+  if (!GUIDE) return;
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  if (!note) return;
+  GMAP_LINK_FROM = null;
+  openModal('guideMapModal');
+  renderGuideMap();
+}
+
+function renderGuideMap() {
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  if (!note) return;
+  const stage = document.getElementById('gmapStage');
+  const pages = pagesOf(note);
+  const pos = gmapLayout(note);
+  const editable = canEdit(note);
+
+  let maxX = 0, maxY = 0;
+  pos.forEach(p => { maxX = Math.max(maxX, p.x + GMAP_W); maxY = Math.max(maxY, p.y + GMAP_H); });
+
+  // Arrows first, so cards sit on top of them.
+  const arrows = [];
+  pages.forEach(p => {
+    const a = pos.get(p.id);
+    if (!a) return;
+    if (p.parentId && pos.get(p.parentId)) {
+      arrows.push(gmapArrow(pos.get(p.parentId), a, '', 'struct'));
+    }
+    linksOf(p).forEach(l => {
+      const b = pos.get(l.to);
+      if (b) arrows.push(gmapArrow(a, b, l.label || 'odkaz', 'link'));
+    });
+  });
+
+  stage.style.width  = (maxX + 40) + 'px';
+  stage.style.height = (maxY + 40) + 'px';
+  stage.innerHTML =
+    `<svg class="gmap-svg" width="${maxX + 40}" height="${maxY + 40}">
+       <defs>
+         <marker id="gmapHead" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+           <polygon points="0 0, 9 3.5, 0 7" fill="var(--accent)"></polygon>
+         </marker>
+       </defs>${arrows.join('')}</svg>` +
+    pages.map(p => {
+      const a = pos.get(p.id);
+      if (!a) return '';
+      const kids = childPages(note, p.id).length;
+      return `<div class="gmap-card${p.id === GUIDE.pageId ? ' on' : ''}${GMAP_LINK_FROM === p.id ? ' linking' : ''}"
+            data-id="${esc(p.id)}" style="left:${a.x}px;top:${a.y}px;width:${GMAP_W}px;height:${GMAP_H}px;">
+          <div class="gmap-no">${esc(pageLabel(note, p.id))}</div>
+          <div class="gmap-title">${esc(p.title || 'Kapitola')}</div>
+          <div class="gmap-meta">${kids ? `${kids} podkapitol` : 'kapitola'}${linksOf(p).length ? ` · ${linksOf(p).length} odkazů` : ''}</div>
+          ${editable ? `<div class="gmap-tools">
+            <button data-act="sub"  title="Přidat podkapitolu">＋</button>
+            <button data-act="link" title="Vytvořit pojmenovaný odkaz na jinou kapitolu">🔗</button>
+            <button data-act="ren"  title="Přejmenovat">✏️</button>
+            <button data-act="del"  title="Smazat kapitolu">🗑</button>
+          </div>` : ''}
+        </div>`;
+    }).join('');
+
+  wireGuideMap(note, editable);
+  document.getElementById('gmapHint').textContent = GMAP_LINK_FROM
+    ? 'Klikni na kapitolu, kam má odkaz vést (Esc zruší).'
+    : (pages.length ? 'Klikni na kartu = otevřít kapitolu. 🔗 = pojmenovaný odkaz jinam.' : 'Zatím žádná kapitola.');
+}
+
+// One arrow between two cards, with an optional label in the middle.
+function gmapArrow(from, to, label, kind) {
+  const x1 = from.x + GMAP_W, y1 = from.y + GMAP_H / 2;
+  const x2 = to.x, y2 = to.y + GMAP_H / 2;
+  // Route backwards links around instead of through the cards.
+  const back = x2 < x1;
+  const mx = back ? (x1 + 40) : (x1 + x2) / 2;
+  const d = `M ${x1} ${y1} C ${mx} ${y1}, ${back ? x2 - 40 : mx} ${y2}, ${x2} ${y2}`;
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2 - 8;
+  return `<path d="${d}" class="gmap-path ${kind}" marker-end="url(#gmapHead)"></path>` +
+    (label ? `<text x="${cx}" y="${cy}" class="gmap-label">${esc(label)}</text>` : '');
+}
+
+function wireGuideMap(note, editable) {
+  const stage = document.getElementById('gmapStage');
+
+  stage.querySelectorAll('.gmap-card').forEach(card => {
+    const id = card.dataset.id;
+
+    card.addEventListener('click', e => {
+      if (e.target.closest('[data-act]')) return;
+      if (GMAP_LINK_FROM) { finishGuideLink(id); return; }
+      goToPage(id);
+      closeModal('guideMapModal');
+    });
+
+    card.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', async e => {
+      e.stopPropagation();
+      const act = b.dataset.act;
+      if (act === 'sub') {
+        const t = prompt('Název podkapitoly:');
+        if (t === null) return;
+        await addChapter(id, t);
+        renderGuideMap();
+      } else if (act === 'link') {
+        GMAP_LINK_FROM = id;
+        renderGuideMap();
+      } else if (act === 'ren') {
+        const page = pageById(note, id);
+        const t = prompt('Název kapitoly:', page?.title || '');
+        if (t === null) return;
+        await savePages(GUIDE.noteId, pagesOf(note).map(p => p.id === id ? { ...p, title: t.trim() || p.title } : p));
+        renderGuideMap();
+      } else if (act === 'del') {
+        await deleteChapter(id);
+        renderGuideMap();
+      }
+    }));
+
+    // Dragging a card fixes its position; the rest stays auto-arranged.
+    if (!editable) return;
+    card.addEventListener('mousedown', e => {
+      if (e.target.closest('[data-act]') || GMAP_LINK_FROM) return;
+      const sx = e.clientX, sy = e.clientY;
+      const x0 = parseInt(card.style.left), y0 = parseInt(card.style.top);
+      let moved = false;
+      const mv = ev => {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
+        moved = true;
+        card.style.left = Math.max(0, x0 + ev.clientX - sx) + 'px';
+        card.style.top  = Math.max(0, y0 + ev.clientY - sy) + 'px';
+      };
+      const up = async () => {
+        window.removeEventListener('mousemove', mv);
+        window.removeEventListener('mouseup', up);
+        if (!moved) return;
+        card._dragged = true;                       // suppress the click that follows
+        setTimeout(() => { card._dragged = false; }, 0);
+        const mx = parseInt(card.style.left), my = parseInt(card.style.top);
+        await savePages(GUIDE.noteId, pagesOf(note).map(p => p.id === id ? { ...p, mx, my } : p));
+        renderGuideMap();
+      };
+      window.addEventListener('mousemove', mv);
+      window.addEventListener('mouseup', up);
+      e.preventDefault();
+    });
+  });
+}
+
+// Second half of "make a link": pick the target, then name it.
+async function finishGuideLink(toId) {
+  const from = GMAP_LINK_FROM;
+  GMAP_LINK_FROM = null;
+  if (!from || from === toId) { renderGuideMap(); return; }
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  const target = pageById(note, toId);
+  const label = prompt('Jak se má odkaz jmenovat?', target?.title || 'Odkaz');
+  if (label === null) { renderGuideMap(); return; }
+  const pages = pagesOf(note).map(p => p.id === from
+    ? { ...p, links: [...linksOf(p).filter(l => l.to !== toId), { to: toId, label: label.trim() || 'Odkaz' }] }
+    : p);
+  await savePages(GUIDE.noteId, pages);
+  renderGuideMap();
+}
+
+// Removing a chapter re-parents its children, so nothing is orphaned, and
+// clears any links that pointed at it.
+async function deleteChapter(id) {
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  const page = pageById(note, id);
+  if (!page) return;
+  if (!confirm(`Smazat kapitolu „${page.title || 'Kapitola'}"?\n\nPodkapitoly se přesunou o úroveň výš, text kapitoly se ztratí.`)) return;
+  const pages = pagesOf(note)
+    .filter(p => p.id !== id)
+    .map(p => ({
+      ...p,
+      parentId: p.parentId === id ? (page.parentId || null) : p.parentId,
+      links: linksOf(p).filter(l => l.to !== id),
+    }));
+  await savePages(GUIDE.noteId, pages);
+  if (GUIDE.pageId === id) GUIDE.pageId = pages[0]?.id || null;
+  if (!pages.length) closeModal('guideMapModal');
+  renderGuide();
+}
+
+function setupGuideMap() {
+  document.getElementById('gmapAddRoot')?.addEventListener('click', async () => {
+    const t = prompt('Název nové hlavní kapitoly:');
+    if (t === null) return;
+    await addChapter(null, t);
+    renderGuideMap();
+  });
+  document.getElementById('gmapCancelLink')?.addEventListener('click', () => {
+    GMAP_LINK_FROM = null;
+    renderGuideMap();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && GMAP_LINK_FROM) { GMAP_LINK_FROM = null; renderGuideMap(); }
+  });
 }
 
 // ── Chapter link picker (🔗📖 in the editor toolbar) ──────────
@@ -933,6 +1202,8 @@ function setupGuide() {
     renderGuide();
   });
   document.getElementById('guideAddSub').addEventListener('click', addSubChapter);
+  document.getElementById('guideMapBtn')?.addEventListener('click', openGuideMap);
+  setupGuideMap();
   document.getElementById('guideEdit').addEventListener('click', editCurrentChapter);
 }
 
