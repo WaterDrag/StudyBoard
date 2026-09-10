@@ -103,7 +103,13 @@ function renderNote(id, note) {
     if (e.target.tagName === 'IMG') return;
     if (el.dataset.dragged === 'true') return;
     if (CONNECT_MODE) { handleNoteConnectClick(id, el); return; }
-    openNoteDetail(el, note);
+    // NOTES_MAP, never the `note` this closure captured: the card is drawn
+    // once and patched in place afterwards, so the captured copy is whatever
+    // the note looked like back then — and it comes from doc.data(), which
+    // carries no id at all. Opening a guide that way gave GUIDE.noteId
+    // undefined, so the chapter bar never appeared and only the right-click
+    // "Otevřít" (which reads NOTES_MAP) worked.
+    openNoteDetail(el, NOTES_MAP.get(id) || { id, ...note });
   });
 
   // Right-CLICK opens the note's context menu; a right-DRAG still pans the
@@ -214,7 +220,7 @@ function wireNoteButtons(el, id, note) {
     fresh.addEventListener('mousedown', e => e.stopPropagation());
     fresh.addEventListener('click', e => {
       e.stopPropagation();
-      if (fresh.dataset.action === 'edit')   openEdit(id, note);
+      if (fresh.dataset.action === 'edit')   openEdit(id, NOTES_MAP.get(id) || note);
       if (fresh.dataset.action === 'delete') deleteNote(id);
     });
   });
@@ -2049,6 +2055,11 @@ function openEdit(id, note) {
 
 // ── Note detail ───────────────────────────────────────────────
 function openNoteDetail(el, note) {
+  if (!note) return;
+  // The id is what everything below hangs off; recover it from the card when
+  // the caller handed us a bare doc.data().
+  if (!note.id && el?.id?.startsWith('n-')) note = { ...note, id: el.id.slice(2) };
+  if (!note.id) { toast('Poznámku se nepodařilo otevřít.'); return; }
   const box = document.getElementById('noteDetailBox');
   box.style.setProperty('--note-accent', note.color || '#fef9c3');
 
@@ -2082,8 +2093,12 @@ function openNoteDetail(el, note) {
     }
   }
 
-  loadComments(note.id);
+  // Open FIRST: comments are a nice-to-have, and while their Firestore rules
+  // are unpublished this call can fail — which used to stop the note opening
+  // at all, with nothing on screen to say why.
   openModal('noteDetailModal');
+  try { loadComments(note.id); }
+  catch (e) { console.warn('Komentáře se nenačetly:', e); }
 }
 
 // ── Comments on notes ─────────────────────────────────────────
