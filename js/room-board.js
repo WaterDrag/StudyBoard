@@ -232,12 +232,12 @@ function travelDestinations(remote) {
   out.push({ kind: 'action', id: 'back', icon: '↩︎', group: 'Na této nástěnce',
              title: 'Zpět, kde jsem byl', sub: 'vrátí předchozí výřez' });
 
-  NOTES_MAP.forEach((n, id) => out.push({
+  NOTES_MAP.forEach((n, id) => { if (isHeading(n)) return; out.push({
     kind: 'note', id, icon: '📝', group: 'Poznámky',
     title: n.title || noteToPlainText(n).slice(0, 50) || noteBlankLabel(n) || '(bez názvu)',
     sub: folderOf(id) || (pagesOf(n).length ? 'návod' : ''),
     x: n.x, y: n.y, color: n.color, note: n,
-  }));
+  }); });
 
   WHITEBOARDS_MAP.forEach((wb, id) => out.push({
     kind: 'board', id, icon: '🎨', group: 'Tabule',
@@ -618,7 +618,8 @@ function openBoardMenu(clientX, clientY) {
     <div class="context-menu-sep"></div>
     <button class="context-menu-item" data-act="note">➕ Přidat poznámku</button>
     <button class="context-menu-item" data-act="guide">📖 Přidat návod</button>
-    <button class="context-menu-item" data-act="board">🖊️ Přidat tabuli</button>`;
+    <button class="context-menu-item" data-act="board">🖊️ Přidat tabuli</button>
+    <button class="context-menu-item" data-act="heading">🔠 Přidat nadpis</button>`;
   document.body.appendChild(menu);
   menu.style.left = clientX + 'px'; menu.style.top = clientY + 'px';
   const r = menu.getBoundingClientRect();
@@ -629,6 +630,7 @@ function openBoardMenu(clientX, clientY) {
   menu.querySelector('[data-act="note"]').addEventListener('click', () => { closeBoardMenu(); PENDING_ADD_POS = { x: sx, y: sy }; openAddNote(); });
   menu.querySelector('[data-act="guide"]').addEventListener('click', () => { closeBoardMenu(); createGuide(sx, sy); });
   menu.querySelector('[data-act="board"]').addEventListener('click', () => { closeBoardMenu(); createWhiteboard(sx, sy); });
+  menu.querySelector('[data-act="heading"]').addEventListener('click', () => { closeBoardMenu(); createHeading(sx, sy); });
   setTimeout(() => document.addEventListener('click', closeBoardMenu, { once: true }), 0);
 }
 
@@ -667,6 +669,7 @@ function drawMinimapNow() {
 
   // Notes (their colors)
   NOTES_MAP.forEach(n => {
+    if (isHeading(n)) return;
     ctx.fillStyle = n.color || '#fef9c3';
     ctx.fillRect(toRenderX(n.x) * s, toRenderY(n.y) * s, Math.max(3, 220 * s), Math.max(2, 150 * s));
   });

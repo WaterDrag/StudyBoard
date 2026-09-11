@@ -18,6 +18,8 @@ const REQUIRED = {
                         '.gt-item', '.crumb', '.crumb-no'],
   'velka okna':        ['.modal-editor', '.form-group-grow', '.modal-hotspot', '.modal-detail'],
   'prohlizec obrazku': ['.lb-bar', '.lb-btn', '.lb-val'],
+  'zony v editoru':    ['.img-zones', '.img-zone'],
+  'nadpis na nastence':['.note.is-heading', '.heading-text'],
 };
 
 const css = fs.readdirSync('css').filter(f => f.endsWith('.css'))

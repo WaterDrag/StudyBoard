@@ -1167,6 +1167,42 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   z-index: 1;
 }
 
+/* ── Nadpis na nastence ──────────────────────────────────────────
+   Popisek nad skupinou listecku. Neni to karta: zadne pozadi, zadny stin,
+   sirka podle textu. Technicky je to .note (kvuli tazeni a pravum), takze
+   vsechno, co delalo listecek listeckem, se tu musi vynulovat. */
+.note.is-heading {
+  width: auto;
+  max-width: 900px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: transparent !important;
+  box-shadow: none;
+  border: 1px dashed transparent;
+  z-index: 2;                       /* nad listecky, at ho neprekryji */
+  user-select: auto;
+}
+.note.is-heading:hover { border-color: rgba(148,163,184,0.45); }
+.note.is-heading.dragging { border-color: var(--accent); }
+.heading-text {
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  outline: none;
+  cursor: text;
+  min-width: 40px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+.note.is-heading .heading-text:empty::before {
+  content: 'Nadpis';
+  opacity: 0.45;
+}
+/* Vybrany nadpis pri multi-vyberu */
+.note.is-heading.selected { border-color: var(--accent); border-style: solid; }
+
 /* ── Whiteboard ("tabule") — a drawable surface behind the notes ── */
 .whiteboard {
   position: absolute;
@@ -3607,19 +3643,22 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
    obrázku, nasměruješ tady kliknutím na cílovou kapitolu. */
 .gmap-zones {
   display: flex !important;
-  flex-wrap: nowrap;
+  /* Zalamovat, ne scrollovat: pri jednom radku se treti odkaz nevesel a nebyl
+     videt vubec. Karta se misto toho natahne (gmapCardH v JS). */
+  flex-wrap: wrap;
   gap: 4px; margin-top: 4px;
-  overflow-x: auto; overflow-y: hidden;
-  scrollbar-width: none;
 }
-.gmap-zones::-webkit-scrollbar { display: none; }
 .gmap-zone {
-  flex: 0 0 auto;
+  /* Presne dva na radek — jinak se pocet radku v gmapCardH() rozejde se
+     skutecnosti a posledni cip precni ven z karty. */
+  flex: 1 1 calc(50% - 2px);
+  min-width: 0; max-width: calc(50% - 2px);
+  text-align: left;
   background: var(--bg-3); color: var(--text-muted);
   border: 1px dashed var(--border); border-radius: 6px;
   font-size: 0.63rem; font-family: inherit; line-height: 1.6;
   padding: 1px 6px; cursor: pointer;
-  white-space: nowrap; max-width: 120px;
+  white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
 .gmap-zone:hover { color: var(--text); border-color: var(--accent); }
@@ -3627,6 +3666,25 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .gmap-zone.picking {
   background: var(--accent); color: #fff; border-color: var(--accent); border-style: solid;
 }
+/* Prekryv klikacich oblasti nad obrazkem PRI PSANI kapitoly — aby bylo
+   videt, kde uz oblasti jsou, bez otevirani editoru oblasti. */
+.img-zones {
+  position: fixed; z-index: 560; pointer-events: none;
+}
+.img-zone {
+  position: absolute;
+  border: 2px solid #f59e0b;
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+  border-radius: 4px;
+}
+.img-zone span {
+  position: absolute; left: 0; top: -17px;
+  background: #f59e0b; color: #1a1a1a; font-weight: 600;
+  font-size: 0.6rem; line-height: 16px; padding: 0 5px;
+  border-radius: 4px; white-space: nowrap;
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+}
+
 /* Nepropojená zóna na obrázku: vidět, že tam je, ale nikam neklikne. */
 .hs-area.unlinked { cursor: default; border-style: dashed; }
 .hs-edit.unlinked { border-color: #a3a3a3; background: color-mix(in srgb, #a3a3a3 18%, transparent); }

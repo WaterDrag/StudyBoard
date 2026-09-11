@@ -270,7 +270,7 @@ async function openAiCardsModal() {
         <input type="checkbox" id="aiNotesAll">
         <span style="font-weight:600;">Vybrat vše</span>
       </label>` +
-      snap.docs.map(d => {
+      snap.docs.filter(d => d.data().kind !== 'heading').map(d => {
         const note = d.data();
         const preview = noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
         return `<label class="ai-note-row">

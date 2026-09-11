@@ -38,6 +38,122 @@ function setNoteContent(contentEl, note) {
 // note bodies — e.g. reading-journal writeups — would otherwise dominate the
 // board). Falls back to the full content when no title was given, same as
 // before titles existed.
+// ── Nadpisy na nastence ───────────────────────────────────────
+// Popisek nad skupinou listecku ("Sitě", "Maturita – okruh 3"). Je to
+// POZNAMKA s kind:'heading', ne vlastni kolekce: nova kolekce by narazila na
+// publikovana pravidla (stejne jako log aktivity) a nefungovala by, kdezto
+// notes se zapisovat da. Diky tomu ma zadarmo tazeni, prava i undo mazani.
+const HEADING_SIZES = { s: 20, m: 30, l: 44, xl: 64 };
+
+function isHeading(note) { return note?.kind === 'heading'; }
+function headingSize(note) {
+  const v = +note?.hsize;
+  return v > 0 ? v : HEADING_SIZES.l;
+}
+
+async function createHeading(storeX, storeY) {
+  const canWrite = MY_ROLE !== 'viewer' && !(ME.isAnonymous && MY_ROLE !== 'owner');
+  if (!canWrite) { toast('Nadpis muze pridat jen editor.'); return; }
+  const title = prompt('Text nadpisu:', '');
+  if (title === null) return;
+  const data = {
+    kind: 'heading',
+    title: (title || 'Nadpis').trim(),
+    hsize: HEADING_SIZES.l,
+    content: '', contentType: 'html',
+    color: 'transparent',
+    x: Math.round(storeX), y: Math.round(storeY),
+    authorId: ME.uid, authorName: ME.displayName || ME.email,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    const ref = await db.collection('rooms').doc(ROOM_ID).collection('notes').add(data);
+    logActivity('note', `pridal nadpis „${data.title}"`);
+    const now = new Date();
+    NOTES_MAP.set(ref.id, { id: ref.id, ...data, createdAt: now, updatedAt: now });
+  } catch (e) { toast('Chyba: ' + e.message); }
+}
+
+async function saveHeading(id, patch) {
+  const n = NOTES_MAP.get(id);
+  if (n) Object.assign(n, patch);              // hned, at UI necaka na snapshot
+  const el = document.getElementById('n-' + id);
+  if (el) paintHeading(el, NOTES_MAP.get(id));
+  try {
+    await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(id).update({
+      ...patch, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) { toast('Nepovedlo se ulozit: ' + e.message); }
+}
+
+function paintHeading(el, note) {
+  el.classList.add('is-heading');
+  el.style.background = 'transparent';
+  const t = el.querySelector('.heading-text');
+  if (!t) return;
+  if (document.activeElement !== t) t.textContent = note.title || 'Nadpis';
+  t.style.fontSize = headingSize(note) + 'px';
+  t.style.color = note.hcolor || '';
+}
+
+// Lista nad nadpisem: velikost, barva, smazani.
+function closeHeadingBar() { document.getElementById('headingBar')?.remove(); }
+
+function openHeadingBar(el, id) {
+  closeHeadingBar();
+  const note = NOTES_MAP.get(id);
+  if (!note || !canEdit(note)) return;
+  const bar = document.createElement('div');
+  bar.id = 'headingBar';
+  bar.className = 'img-toolbar';             // stejny vzhled jako lista obrazku
+  bar.innerHTML =
+    `<span class="it-lbl">Velikost</span>` +
+    Object.keys(HEADING_SIZES).map(k =>
+      `<button data-size="${k}">${k.toUpperCase()}</button>`).join('') +
+    `<span class="it-sep"></span>` +
+    `<label class="it-lbl" style="cursor:pointer;">Barva
+       <input type="color" id="headingColor" value="${esc(note.hcolor || '#e2e8f0')}"
+              style="width:22px;height:18px;border:none;background:none;padding:0;vertical-align:middle;">
+     </label>` +
+    `<span class="it-sep"></span>` +
+    `<button data-del="1" class="it-del" title="Smazat nadpis">🗑</button>`;
+  document.body.appendChild(bar);
+
+  const place = () => {
+    const r = el.getBoundingClientRect();
+    bar.style.left = Math.max(8, Math.min(window.innerWidth - bar.offsetWidth - 8, r.left)) + 'px';
+    bar.style.top  = Math.max(8, r.top - bar.offsetHeight - 8) + 'px';
+  };
+  place();
+  const mark = () => bar.querySelectorAll('[data-size]').forEach(b =>
+    b.classList.toggle('on', HEADING_SIZES[b.dataset.size] === headingSize(NOTES_MAP.get(id))));
+  mark();
+
+  bar.addEventListener('mousedown', e => e.stopPropagation());
+  bar.addEventListener('click', async e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    e.stopPropagation();
+    if (b.dataset.del) {
+      if (!confirm('Smazat nadpis?')) return;
+      closeHeadingBar();
+      await doDeleteNote(id, false);
+      return;
+    }
+    if (b.dataset.size) { await saveHeading(id, { hsize: HEADING_SIZES[b.dataset.size] }); mark(); place(); }
+  });
+  bar.querySelector('#headingColor').addEventListener('input', e =>
+    saveHeading(id, { hcolor: e.target.value }));
+
+  setTimeout(() => document.addEventListener('click', function once(ev) {
+    if (ev.target.closest('#headingBar') || ev.target.closest('#n-' + id)) {
+      document.addEventListener('click', once, { once: true }); return;
+    }
+    closeHeadingBar();
+  }, { once: true }), 0);
+}
+
 function setNoteCardContent(contentEl, note) {
   const n = pagesOf(note).length;
   if (n) {
@@ -73,6 +189,7 @@ function addImageClickHandlers(contentEl) {
 
 function renderNote(id, note) {
   if (document.getElementById('n-' + id)) return;
+  if (isHeading(note)) return renderHeadingNote(id, note);
 
   const el = document.createElement('div');
   el.className = 'note';
@@ -189,6 +306,16 @@ function patchNote(id, note) {
   const el = document.getElementById('n-' + id);
   if (!el) { renderNote(id, note); return; }
 
+  if (isHeading(note)) {
+    if (!el.classList.contains('dragging')) {
+      el.style.left = toRenderX(note.x) + 'px';
+      el.style.top  = toRenderY(note.y) + 'px';
+      expandBoardIfNeeded(el);
+    }
+    paintHeading(el, note);
+    return;
+  }
+
   if (!el.classList.contains('dragging')) {
     el.style.left = toRenderX(note.x) + 'px';
     el.style.top  = toRenderY(note.y) + 'px';
@@ -224,6 +351,58 @@ function wireNoteButtons(el, id, note) {
       if (fresh.dataset.action === 'delete') deleteNote(id);
     });
   });
+}
+
+function renderHeadingNote(id, note) {
+  const el = document.createElement('div');
+  el.className = 'note is-heading';
+  el.id = 'n-' + id;
+  el.style.left = toRenderX(note.x) + 'px';
+  el.style.top  = toRenderY(note.y) + 'px';
+  el.dataset.authorId = note.authorId;
+  el.dataset.dragged  = 'false';
+  const editable = canEdit(note);
+  el.innerHTML = `<div class="heading-text"${editable ? ' contenteditable="true" spellcheck="false"' : ''}></div>`;
+  paintHeading(el, note);
+
+  const t = el.querySelector('.heading-text');
+  if (editable) {
+    // Psani rovnou na nastence. Tazeni musi zacinat mimo text, jinak by
+    // nesla oznacit slova — proto makeDraggable dostane cely prvek, ale
+    // mousedown v textu ho nepusti.
+    t.addEventListener('mousedown', e => e.stopPropagation());
+    t.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); t.blur(); }
+      if (e.key === 'Escape') { clearTimeout(t._save); t.textContent = NOTES_MAP.get(id)?.title || ''; t.blur(); }
+    });
+    // Uklada se UZ PRI PSANI (s prodlevou), ne az na blur: blur nemusi prijit
+    // vubec — prekresleni nastenky, zavreni karty, prepnuti do seznamu — a
+    // napsany nadpis by se tise ztratil.
+    const flush = () => {
+      clearTimeout(t._save);
+      const v = t.textContent.trim();
+      const cur = NOTES_MAP.get(id);
+      if (!cur || !v || v === cur.title) return;
+      saveHeading(id, { title: v });
+    };
+    t.addEventListener('input', () => { clearTimeout(t._save); t._save = setTimeout(flush, 600); });
+    t.addEventListener('blur', () => {
+      flush();
+      const cur = NOTES_MAP.get(id);
+      if (!t.textContent.trim() && cur) t.textContent = cur.title || 'Nadpis';  // prazdny nadpis nedava smysl
+    });
+    makeDraggable(el, id);
+    el.addEventListener('click', e => {
+      if (el.dataset.dragged === 'true') return;
+      if (e.target === t) return;             // klik do textu = kurzor, ne lista
+      openHeadingBar(el, id);
+    });
+  } else {
+    el.style.cursor = 'default';
+  }
+
+  document.getElementById('board').appendChild(el);
+  expandBoardIfNeeded(el);
 }
 
 // ── Board auto-expand ─────────────────────────────────────────
@@ -459,7 +638,31 @@ function normalizeEditorImages(editor) {
   });
 }
 
-function closeImgToolbar() { document.getElementById('imgToolbar')?.remove(); }
+function closeImgToolbar() {
+  document.getElementById('imgToolbar')?.remove();
+  document.getElementById('imgZones')?.remove();
+}
+
+// Ukaz, KDE na obrazku jsou klikaci oblasti, uz pri psani kapitoly. Kresli se
+// do <body> nad obrazek, ne do editoru — cokoli vlozeneho do contenteditable
+// by se ulozilo do obsahu poznamky.
+function showEditorZones(img) {
+  document.getElementById('imgZones')?.remove();
+  const spots = hotspotsOf(img);
+  if (!spots.length) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'imgZones';
+  wrap.className = 'img-zones';
+  document.body.appendChild(wrap);
+  const place = () => {
+    const r = img.getBoundingClientRect();
+    wrap.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;`;
+  };
+  wrap.innerHTML = spots.map(sp => `<div class="img-zone" style="left:${sp.x}%;top:${sp.y}%;width:${sp.w}%;height:${sp.h}%;">
+      <span>${esc(sp.label || 'Oblast')}</span></div>`).join('');
+  place();
+  wrap._place = place;
+}
 
 function openImgToolbar(img, editor) {
   closeImgToolbar();
@@ -489,8 +692,12 @@ function openImgToolbar(img, editor) {
     const r = img.getBoundingClientRect();
     bar.style.left = Math.max(8, Math.min(window.innerWidth - bar.offsetWidth - 8, r.left)) + 'px';
     bar.style.top  = Math.max(8, r.top - bar.offsetHeight - 8) + 'px';
+    document.getElementById('imgZones')?._place?.();
   };
+  showEditorZones(img);
   place();
+  // Editor scrolluje -> prekryv i listu drzet u obrazku.
+  editor?.addEventListener('scroll', place);
 
   const mark = () => {
     const w = img.style.width || '';
@@ -727,12 +934,18 @@ function saveHotspots() {
     HS.img.removeAttribute('data-spots');
   }
   closeModal('hotspotModal');
+  const img = HS.img;
   const loose = HS.spots.filter(s => !s.page).length;
   toast(HS.spots.length
     ? `Uloženo ${HS.spots.length} oblastí — ulož kapitolu` +
       (loose ? `, pak je v 🗺️ mapě propoj (${loose} zatím nikam nevede).` : '.')
     : 'Oblasti odebrány.');
   HS = null;
+  // Zpatky k obrazku i s prekryvem oblasti. Driv se nezobrazil nic: listu
+  // obrazku zavira uz otevreni editoru oblasti, takze podminka na ni nikdy
+  // neplatila a po ulozeni jsi videl jen holy obrazek.
+  const editor = img?.closest('.rich-editor');
+  if (editor && img.isConnected) { openImgToolbar(img, editor); }
 }
 
 // ── Guides: chapters wired up by hand ─────────────────────────
@@ -770,9 +983,27 @@ function mainPage(note) {
 
 // Plain 1..n, by position in the array — a free graph has no "1.b.a" to
 // compute, and a number is still handy for pointing at a card in the map.
+// Cislo kapitoly. Poradi v poli je jen vychozi navrh — kdo si chce navod
+// ocislovat po svem (1, 1a, 2.3, "A"), prepise si ho a drzi se ho.
 function pageLabel(note, pageId) {
-  const i = pagesOf(note).findIndex(p => p.id === pageId);
-  return i < 0 ? '' : String(i + 1);
+  const pages = pagesOf(note);
+  const i = pages.findIndex(p => p.id === pageId);
+  if (i < 0) return '';
+  const own = pages[i].num;
+  return own != null && String(own).trim() ? String(own).trim() : String(i + 1);
+}
+
+async function setPageNumber(pageId) {
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  const page = pageById(note, pageId);
+  if (!page) return;
+  const cur = page.num != null ? String(page.num) : '';
+  const v = prompt('Cislo kapitoly (prazdne = zpet na poradi):', cur);
+  if (v === null) return;
+  await savePages(GUIDE.noteId, pagesOf(note).map(p =>
+    p.id === pageId ? { ...p, num: v.trim() || null } : p));
+  renderGuideMap();
+  renderGuide();
 }
 
 // Everywhere this chapter leads. Legacy parentId children are reported as
@@ -815,7 +1046,22 @@ function migrateGuideLinks(pages) {
   });
 }
 
+// Firestore odmitne CELY zapis, kdyz je kdekoliv `undefined`
+// ("Unsupported field value: undefined") - a projevi se to jako "nejde smazat".
+// Driv to zpusoboval `parentId: undefined` z mazani kapitoly; tenhle filtr je
+// posledni pojistka, aby na tom nespadlo nic dalsiho.
+function stripUndefined(v) {
+  if (Array.isArray(v)) return v.map(stripUndefined);
+  if (v && typeof v === 'object' && !(v instanceof Date) && typeof v.toDate !== 'function') {
+    const out = {};
+    Object.keys(v).forEach(k => { if (v[k] !== undefined) out[k] = stripUndefined(v[k]); });
+    return out;
+  }
+  return v;
+}
+
 async function savePages(noteId, pages) {
+  pages = stripUndefined(pages);
   await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(noteId).update({
     pages,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1005,11 +1251,13 @@ function wirePageLinks(root) {
 // Every chapter is created standalone. Pass `fromId` only when the gesture
 // was "pokračuj odsud" — then it also gets an arrow from that chapter, which
 // is the one thing that makes it part of a flow.
-async function addChapter(title, fromId) {
+async function addChapter(title, fromId, at) {
   if (!GUIDE) return null;
   const note = NOTES_MAP.get(GUIDE.noteId);
   if (!canEdit(note)) { toast('Upravit může jen autor nebo vlastník.'); return null; }
   const page = { id: newPageId(), title: (title || 'Nová kapitola').trim(), content: '', links: [] };
+  // Zalozeni pravym klikem v mape: kapitola vznikne rovnou pod kurzorem.
+  if (at && at.mx != null) { page.mx = at.mx; page.my = at.my; }
   const pages = [...pagesOf(note), page];
   if (!pages.some(p => p.main)) page.main = true;   // the very first one starts the guide
   const withLink = fromId
@@ -1074,7 +1322,16 @@ function editCurrentChapter() {
 // Named links live on the page as `links: [{to, label}]`, which keeps them
 // editable here without touching the chapter's HTML. Inline <a data-page>
 // links written into the text keep working alongside them.
-const GMAP_W = 210, GMAP_H = 102;         // card size (room for the zone chips)
+const GMAP_W = 210, GMAP_H = 102;         // card size (room for one row of chips)
+const GMAP_ZONES_PER_ROW = 2, GMAP_ZONE_ROW_H = 22;
+
+// Cards grow downwards so EVERY zone chip is visible. They used to be a fixed
+// 102px with the chips in one scrolling row, so a chapter with three links
+// showed two (clipped) and the third not at all.
+function gmapCardH(page) {
+  const rows = Math.ceil(zonesOfPage(page).length / GMAP_ZONES_PER_ROW);
+  return GMAP_H + Math.max(0, rows - 1) * GMAP_ZONE_ROW_H;
+}
 const GMAP_GAP_X = 110, GMAP_GAP_Y = 26;  // spacing between columns / rows
 let GMAP_LINK_FROM = null;                // id of the card a new link starts at
 let GMAP_ZONE_FROM = null;                // {pageId, img, spot} of a zone being pointed somewhere
@@ -1147,11 +1404,19 @@ function gmapLayout(note) {
   });
 
   const pos = new Map();
-  byCol.forEach((col, d) => col.forEach((p, i) => pos.set(p.id, {
-    x: p.mx != null ? p.mx : d * (GMAP_W + GMAP_GAP_X),
-    y: p.my != null ? p.my : i * (GMAP_H + GMAP_GAP_Y),
-    auto: p.mx == null,
-  })));
+  byCol.forEach((col, d) => {
+    let y = 0;
+    col.forEach(p => {
+      const h = gmapCardH(p);
+      pos.set(p.id, {
+        x: p.mx != null ? p.mx : d * (GMAP_W + GMAP_GAP_X),
+        y: p.my != null ? p.my : y,
+        h,
+        auto: p.mx == null,
+      });
+      y += h + GMAP_GAP_Y;
+    });
+  });
   return pos;
 }
 
@@ -1176,6 +1441,79 @@ async function openGuideMap() {
   renderGuideMap();
 }
 
+// Kontextove menu mapy (pravy klik). Vlevo nahore zustava "+ Kapitola",
+// ale zaklada nakonec vzdycky do rohu — tady kapitola vznikne pod kurzorem.
+function closeGmapMenu() { document.getElementById('gmapCtxMenu')?.remove(); }
+
+function openGmapMenu(clientX, clientY, pageId, at) {
+  closeGmapMenu();
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  const page = pageId ? pageById(note, pageId) : null;
+  const items = page
+    ? [['open', '👁 Otevřít kapitolu'], ['sub', '＋ Navazující kapitola'],
+       ['link', '🔗 Šipka odsud jinam'], ['main', '★ Označit jako hlavní'],
+       ['num', '#️⃣ Vlastní číslo'], ['ren', '✏️ Přejmenovat'],
+       ['del', '🗑️ Smazat kapitolu']]
+    : [['add', '＋ Kapitola sem'], ['fit', '🔭 Srovnat rozložení']];
+
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'gmapCtxMenu';
+  menu.innerHTML = items.map(([a, t]) =>
+    `<button class="context-menu-item" data-m="${a}"${a === 'del' ? ' style="color:#fca5a5;"' : ''}>${t}</button>`).join('');
+  document.body.appendChild(menu);
+  menu.style.left = Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, clientX)) + 'px';
+  menu.style.top  = Math.max(8, Math.min(window.innerHeight - menu.offsetHeight - 8, clientY)) + 'px';
+
+  menu.addEventListener('click', async e => {
+    const m = e.target.closest('[data-m]')?.dataset.m;
+    if (!m) return;
+    closeGmapMenu();
+    try {
+      if (m === 'add') {
+        const t = prompt('Název kapitoly:');
+        if (t === null) return;
+        await addChapter(t, null, { mx: Math.round(at.x), my: Math.round(at.y) });
+        renderGuideMap();
+      } else if (m === 'fit') {
+        await clearGmapPositions();
+      } else if (m === 'open') {
+        goToPage(pageId); closeModal('guideMapModal');
+      } else if (m === 'sub') {
+        const t = prompt('Název navazující kapitoly:');
+        if (t === null) return;
+        await addChapter(t, pageId);
+        renderGuideMap();
+      } else if (m === 'link') {
+        GMAP_LINK_FROM = pageId; GMAP_ZONE_FROM = null; renderGuideMap();
+      } else if (m === 'main') {
+        await setMainChapter(pageId); renderGuideMap(); renderGuide();
+      } else if (m === 'num') {
+        await setPageNumber(pageId);
+      } else if (m === 'ren') {
+        const t = prompt('Název kapitoly:', page?.title || '');
+        if (t === null) return;
+        await savePages(GUIDE.noteId, pagesOf(note).map(p =>
+          p.id === pageId ? { ...p, title: t.trim() || p.title } : p));
+        renderGuideMap();
+      } else if (m === 'del') {
+        await deleteChapter(pageId);
+      }
+    } catch (err) { toast('Nepovedlo se: ' + (err?.message || err)); }
+  });
+  setTimeout(() => document.addEventListener('click', closeGmapMenu, { once: true }), 0);
+}
+
+// Zahodi rucni pozice karet -> mapa se srovna sama podle sipek.
+async function clearGmapPositions() {
+  const note = NOTES_MAP.get(GUIDE.noteId);
+  await savePages(GUIDE.noteId, pagesOf(note).map(p => {
+    const { mx, my, ...rest } = p;
+    return rest;
+  }));
+  renderGuideMap();
+}
+
 function renderGuideMap() {
   const note = NOTES_MAP.get(GUIDE.noteId);
   if (!note) return;
@@ -1186,7 +1524,12 @@ function renderGuideMap() {
   const main = mainPage(note);
 
   let maxX = 0, maxY = 0;
-  pos.forEach(p => { maxX = Math.max(maxX, p.x + GMAP_W); maxY = Math.max(maxY, p.y + GMAP_H); });
+  pos.forEach(p => { maxX = Math.max(maxX, p.x + GMAP_W); maxY = Math.max(maxY, p.y + (p.h || GMAP_H)); });
+  // Volna plocha za obsahem, aby slo karty tahat dal a stavet dolu/doprava.
+  // Bez ni mapa "proste skoncila" na posledni karte.
+  const wrap = document.getElementById('gmapWrap');
+  maxX = Math.max(maxX + 700, (wrap?.clientWidth || 900) + 200);
+  maxY = Math.max(maxY + 500, (wrap?.clientHeight || 600) + 200);
 
   // Arrows first, so cards sit on top of them.
   const arrows = [];
@@ -1208,10 +1551,10 @@ function renderGuideMap() {
     });
   });
 
-  stage.style.width  = (maxX + 40) + 'px';
-  stage.style.height = (maxY + 40) + 'px';
+  stage.style.width  = maxX + 'px';
+  stage.style.height = maxY + 'px';
   stage.innerHTML =
-    `<svg class="gmap-svg" width="${maxX + 40}" height="${maxY + 40}">
+    `<svg class="gmap-svg" width="${maxX}" height="${maxY}">
        <defs>
          <marker id="gmapHead" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
            <polygon points="0 0, 9 3.5, 0 7" fill="var(--accent)"></polygon>
@@ -1230,8 +1573,8 @@ function renderGuideMap() {
       const meta = [outs ? `${outs}× ven` : '', ins ? `${ins}× sem` : '']
         .filter(Boolean).join(' · ') || 'zatím nepropojená';
       return `<div class="gmap-card${p.id === GUIDE.pageId ? ' on' : ''}${GMAP_LINK_FROM === p.id ? ' linking' : ''}${isMain ? ' main' : ''}"
-            data-id="${esc(p.id)}" style="left:${a.x}px;top:${a.y}px;width:${GMAP_W}px;height:${GMAP_H}px;">
-          <div class="gmap-no">${isMain ? '★' : esc(pageLabel(note, p.id))}</div>
+            data-id="${esc(p.id)}" style="left:${a.x}px;top:${a.y}px;width:${GMAP_W}px;height:${a.h}px;">
+          <div class="gmap-no" data-act="num" title="Klikni a napiš si vlastní číslo kapitoly">${isMain ? '★ ' : ''}${esc(pageLabel(note, p.id))}</div>
           <div class="gmap-title">${esc(p.title || 'Kapitola')}</div>
           <div class="gmap-meta">${esc(meta)}</div>
           <div class="gmap-zones">${zones.map(z => {
@@ -1265,22 +1608,65 @@ function renderGuideMap() {
 }
 
 // One arrow between two cards, with an optional label in the middle.
+// Sipka si sama vybere, kterou stranou z karty vyjde a kterou do druhe
+// vejde — driv vzdycky vpravo -> vlevo, takze zpetne a svisle spoje se
+// tahly pres pulku mapy a pres ostatni karty.
+const GMAP_SIDES = [
+  { k: 'r', dx: 1,   dy: 0.5, ox:  1, oy:  0 },
+  { k: 'l', dx: 0,   dy: 0.5, ox: -1, oy:  0 },
+  { k: 'b', dx: 0.5, dy: 1,   ox:  0, oy:  1 },
+  { k: 't', dx: 0.5, dy: 0,   ox:  0, oy: -1 },
+];
+
+function gmapPort(box, side) {
+  const h = box.h || GMAP_H;
+  return { x: box.x + GMAP_W * side.dx, y: box.y + h * side.dy };
+}
+
 function gmapArrow(from, to, label, kind, tag) {
-  const x1 = from.x + GMAP_W, y1 = from.y + GMAP_H / 2;
-  const x2 = to.x, y2 = to.y + GMAP_H / 2;
-  // Route backwards links around instead of through the cards.
-  const back = x2 < x1;
-  const mx = back ? (x1 + 40) : (x1 + x2) / 2;
-  const d = `M ${x1} ${y1} C ${mx} ${y1}, ${back ? x2 - 40 : mx} ${y2}, ${x2} ${y2}`;
-  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2 - 8;
+  // Vyber dvojici stran s nejkratsim spojenim, ale zvyhodni ty, ktere
+  // smeruji "ven" ke druhe karte (jinak by sipka vystartovala dozadu).
+  let best = null;
+  for (const a of GMAP_SIDES) {
+    for (const b of GMAP_SIDES) {
+      const p1 = gmapPort(from, a), p2 = gmapPort(to, b);
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const dist = Math.hypot(dx, dy);
+      // penalizace, kdyz strana miri opacne, nez kam ve skutecnosti jdeme
+      const away = (a.ox * dx + a.oy * dy) < 0 ? 260 : 0;
+      const into = (b.ox * dx + b.oy * dy) > 0 ? 260 : 0;
+      const score = dist + away + into;
+      if (!best || score < best.score) best = { score, a, b, p1, p2 };
+    }
+  }
+  const { a, b, p1, p2 } = best;
+  // Ridici body vystrcene kolmo ze zvolenych stran -> plynula krivka.
+  const pull = Math.max(45, Math.min(150, Math.hypot(p2.x - p1.x, p2.y - p1.y) / 2));
+  const c1x = p1.x + a.ox * pull, c1y = p1.y + a.oy * pull;
+  const c2x = p2.x + b.ox * pull, c2y = p2.y + b.oy * pull;
+  const d = `M ${p1.x} ${p1.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
+  // Popisek na stred krivky (bezier v t=0.5), ne na spojnici stredu karet.
+  const cx = (p1.x + 3 * c1x + 3 * c2x + p2.x) / 8;
+  const cy = (p1.y + 3 * c1y + 3 * c2y + p2.y) / 8 - 6;
   const at = tag || '';
   const head = kind === 'zone' ? 'gmapHeadZone' : 'gmapHead';
-  return `<path d="${d}" class="gmap-path ${kind}"${at} marker-end="url(#${head})"></path>` +
-    (label ? `<text x="${cx}" y="${cy}" class="gmap-label ${kind}"${at}>${esc(label)}</text>` : '');
+  return `<path d="${d}" class="gmap-path ${kind}"${at} marker-end="url(#${head})" fill="none"></path>` +
+    (label ? `<text x="${cx}" y="${cy}" class="gmap-label ${kind}"${at} text-anchor="middle">${esc(label)}</text>` : '');
 }
 
 function wireGuideMap(note, editable) {
   const stage = document.getElementById('gmapStage');
+
+  // Pravy klik do volne plochy zaloz kapitolu PRESNE tam, kam se kliklo —
+  // stejne jako na nastence. Klik na kartu nabidne jeji akce.
+  if (editable) stage.oncontextmenu = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const card = e.target.closest('.gmap-card');
+    const r = stage.getBoundingClientRect();
+    openGmapMenu(e.clientX, e.clientY, card ? card.dataset.id : null,
+      { x: e.clientX - r.left, y: e.clientY - r.top });
+  };
 
   // Click an arrow (or its label) to remove that connection — without this the
   // only way to unpick a wrong link would be to delete the whole chapter.
@@ -1359,6 +1745,8 @@ function wireGuideMap(note, editable) {
           if (t === null) return;
           await savePages(GUIDE.noteId, pagesOf(note).map(p => p.id === id ? { ...p, title: t.trim() || p.title } : p));
           renderGuideMap();
+        } else if (act === 'num') {
+          await setPageNumber(id);
         } else if (act === 'del') {
           await deleteChapter(id);      // refreshes the map itself
         }
@@ -1455,11 +1843,7 @@ async function deleteChapter(id) {
   if (!confirm(msg)) return;
   let pages = pagesOf(note)
     .filter(p => p.id !== id)
-    .map(p => ({
-      ...p,
-      parentId: p.parentId === id ? null : p.parentId,
-      links: linksOf(p).filter(l => l.to !== id),
-    }));
+    .map(p => ({ ...p, links: linksOf(p).filter(l => l.to !== id) }));
   // A guide always needs somewhere to start.
   if (page.main && pages.length && !pages.some(p => p.main)) {
     pages = pages.map((p, i) => i === 0 ? { ...p, main: true } : p);
@@ -2137,7 +2521,7 @@ async function loadCommentCounts() {
   if (_commentBackfillDone) return;
   _commentBackfillDone = true;
 
-  const missing = [...NOTES_MAP.values()].filter(n => typeof n.commentCount !== 'number');
+  const missing = [...NOTES_MAP.values()].filter(n => !isHeading(n) && typeof n.commentCount !== 'number');
   if (!missing.length || NOTES_MAP.size > COMMENT_BACKFILL_MAX_NOTES) return;
   await Promise.all(missing.map(async n => {
     try {

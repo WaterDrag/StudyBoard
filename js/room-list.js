@@ -389,7 +389,8 @@ function openMoveFolderPicker(folderId) {
 
 function renderNotesListView() {
   const el = document.getElementById('notesListBody');
-  const notes = [...NOTES_MAP.values()];
+  // Nadpisy jsou popisky nastenky, ne poznamky — v seznamu nemaji co delat.
+  const notes = [...NOTES_MAP.values()].filter(n => !isHeading(n));
 
   if (!notes.length) {
     el.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--text-muted);">Zatím žádné poznámky.</div>`;
@@ -717,6 +718,7 @@ function renderSearchResults(q) {
 
   const hits = [];
   NOTES_MAP.forEach(note => {
+    if (isHeading(note)) return;
     const title = note.title || '';
     const text = noteToPlainText(note);
     const hay = searchNormalize(title + ' ' + text);

@@ -39,7 +39,8 @@ function renderExportPicker(preselect) {
     const f = [...FOLDERS_MAP.values()].find(x => (x.noteIds || []).includes(id));
     return f ? f.name : '';
   };
-  const notes = [...NOTES_MAP.values()].sort((a, b) => noteRecency(b) - noteRecency(a));
+  const notes = [...NOTES_MAP.values()].filter(n => !isHeading(n))
+    .sort((a, b) => noteRecency(b) - noteRecency(a));
   list.innerHTML = notes.map(n => `
     <label class="ai-note-row">
       <input type="checkbox" class="export-pick" data-id="${esc(n.id)}"${pre && pre.has(n.id) ? ' checked' : ''}>
@@ -235,7 +236,7 @@ function buildFolderSections() {
     (byParent.get(parentId) || []).forEach(f => {
       if (seen.has(f.id)) return;
       seen.add(f.id);
-      const notes = (f.noteIds || []).map(id => NOTES_MAP.get(id)).filter(Boolean);
+      const notes = (f.noteIds || []).map(id => NOTES_MAP.get(id)).filter(n => n && !isHeading(n));
       const before = sections.length;
       sections.push({ id: f.id, title: f.name || 'Složka', color: f.color || '#6366f1', depth, notes });
       walk(f.id, depth + 1);
