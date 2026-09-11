@@ -211,10 +211,15 @@ function hotspotsToHtml(html, noteId) {
     wrap.appendChild(img);
     spots.forEach(sp => {
       const a = document.createElement('a');
-      a.className = 'hs-area';
-      a.setAttribute('href', `#pg-${noteId}-${sp.page}`);
+      // Nepropojena zona na nic nevede — nedelej z ni odkaz, at nekliknes
+      // do prazdna (v aplikaci se chova stejne).
+      a.className = 'hs-area' + (sp.page ? '' : ' unlinked');
+      a.setAttribute('href', '#');
+      // data-goto je to, na co reaguje ctecka navodu v exportu; puvodni
+      // kotva #pg-… uz neexistuje, kapitoly se prepinaji skriptem.
+      if (sp.page) a.setAttribute('data-goto', noteId + '|' + sp.page);
       a.setAttribute('style', `left:${sp.x}%;top:${sp.y}%;width:${sp.w}%;height:${sp.h}%;`);
-      a.setAttribute('title', sp.label || 'Kapitola');
+      a.setAttribute('title', sp.label || 'Oblast');
       wrap.appendChild(a);
     });
   });
@@ -461,22 +466,96 @@ function buildExportHtml(data, opts) {
         };
         walk(guidePages.find(pg => pg.main) || guidePages[0], 0);
         guidePages.forEach(pg => walk(pg, 0));      // nothing links to these yet
-        const chapterHtml = order.map(([pg, depth]) => {
+        // Cislo kapitoly: vlastni (pg.num) ma prednost pred poradim.
+        const pgNo = pg => {
+          const own = pg.num != null && String(pg.num).trim();
+          return own ? String(pg.num).trim() : String(guidePages.indexOf(pg) + 1);
+        };
+
+        const chapterHtml = order.map(([pg]) => {
             const body = hotspotsToHtml(
-              (pg.content || '').replace(/data-page="([^"]+)"/g, (m, id) => `href="#pg-${esc(n.id)}-${esc(id)}"`),
+              (pg.content || '').replace(/data-page="([^"]+)"/g,
+                (m, id) => `href="#" data-goto="${esc(n.id)}|${esc(id)}"`),
               n.id);
             const named = linksOfPg(pg).map(l => {
                 const t = guidePages.find(x => x.id === l.to);
-                return `<a class="gpage-link" href="#pg-${esc(n.id)}-${esc(l.to)}">→ ${esc(l.label || t.title || 'Kapitola')}</a>`;
+                return `<button class="gpage-link" data-goto="${esc(n.id)}|${esc(l.to)}">${esc(l.label || (t && t.title) || 'Kapitola')} →</button>`;
               }).join('');
-            return `<div class="gpage" id="pg-${esc(n.id)}-${esc(pg.id)}" style="--gd:${Math.min(depth, 4)}">
-                <div class="gpage-h">${pg.main ? '★ ' : ''}${esc(pg.title || 'Kapitola')}</div>
+            const ins = guidePages.filter(x => linksOfPg(x).some(l => l.to === pg.id));
+            return `<div class="gpage${pg.main ? ' is-main' : ''}" data-gid="${esc(n.id)}" data-pid="${esc(pg.id)}">
+                <div class="gpage-h"><span class="gpage-no">${pg.main ? '★ ' : ''}${esc(pgNo(pg))}</span> ${esc(pg.title || 'Kapitola')}</div>
                 <div class="gpage-b">${body}</div>
-                ${named ? `<div class="gpage-links">${named}</div>` : ''}
+                ${named ? `<div class="gpage-links"><span class="gpage-lh">Odsud vede dál</span>${named}</div>` : ''}
+                ${ins.length ? `<div class="gpage-in">Sem vede: ${ins.map(x => `<button class="gpage-back" data-goto="${esc(n.id)}|${esc(x.id)}">${esc(x.title || 'Kapitola')}</button>`).join('')}</div>` : ''}
               </div>`;
           }).join('');
+
+        // ── Mapa kapitol: stejne rozlozeni jako v aplikaci, jen staticke ──
+        const GW = 150, GH = 54, GGX = 76, GGY = 18;
+        const depthOf = new Map();
+        const startPg = guidePages.find(pg => pg.main) || guidePages[0];
+        if (startPg) {
+          const q = [[startPg.id, 0]];
+          while (q.length) {
+            const [id, d] = q.shift();
+            if (depthOf.has(id)) continue;
+            depthOf.set(id, d);
+            const cur = guidePages.find(x => x.id === id);
+            linksOfPg(cur || {}).forEach(l => { if (!depthOf.has(l.to)) q.push([l.to, d + 1]); });
+          }
+        }
+        const maxD = depthOf.size ? Math.max(...depthOf.values()) : 0;
+        guidePages.forEach(pg => { if (!depthOf.has(pg.id)) depthOf.set(pg.id, maxD + 1); });
+        const colY = new Map();
+        const gpos = new Map();
+        guidePages.forEach(pg => {
+          const d = depthOf.get(pg.id) || 0;
+          const y = colY.get(d) || 0;
+          gpos.set(pg.id, { x: d * (GW + GGX), y });
+          colY.set(d, y + GH + GGY);
+        });
+        let gW = 0, gH = 0;
+        gpos.forEach(p => { gW = Math.max(gW, p.x + GW); gH = Math.max(gH, p.y + GH); });
+        const gArrows = guidePages.map(pg => linksOfPg(pg).map(l => {
+            const p1 = gpos.get(pg.id), p2 = gpos.get(l.to);
+            if (!p1 || !p2) return '';
+            const back = p2.x < p1.x;
+            const x1 = back ? p1.x : p1.x + GW, y1 = p1.y + GH / 2;
+            const x2 = back ? p2.x + GW : p2.x,  y2 = p2.y + GH / 2;
+            const mx = (x1 + x2) / 2;
+            return `<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" class="gm-path"></path>`;
+          }).join('')).join('');
+        const gCards = guidePages.map(pg => {
+            const p = gpos.get(pg.id);
+            return `<button class="gm-card${pg.main ? ' is-main' : ''}" data-goto="${esc(n.id)}|${esc(pg.id)}"
+                style="left:${p.x}px;top:${p.y}px;width:${GW}px;height:${GH}px;">
+                <span class="gm-no">${pg.main ? '★' : esc(pgNo(pg))}</span>
+                <span class="gm-t">${esc(pg.title || 'Kapitola')}</span>
+              </button>`;
+          }).join('');
+        const gmapHtml = guidePages.length > 1 ? `
+          <div class="gmap" data-gid="${esc(n.id)}" hidden>
+            <div class="gmap-in" style="width:${gW + 8}px;height:${gH + 8}px;">
+              <svg class="gm-svg" width="${gW + 8}" height="${gH + 8}">
+                <defs><marker id="gmH-${esc(n.id)}" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                  <polygon points="0 0, 8 3, 0 6"></polygon></marker></defs>
+                ${gArrows}
+              </svg>${gCards}
+            </div>
+          </div>` : '';
+
+        const guideBar = guidePages.length ? `
+          <div class="gbar" data-gid="${esc(n.id)}">
+            <button class="gbtn gback" data-gback="${esc(n.id)}" title="Zpět na předchozí kapitolu">←</button>
+            <span class="gcrumbs" data-crumbs="${esc(n.id)}"></span>
+            ${guidePages.length > 1 ? `<button class="gbtn" data-gmap="${esc(n.id)}">🗺️ Mapa</button>` : ''}
+            <button class="gbtn" data-gall="${esc(n.id)}" title="Vypsat všechny kapitoly pod sebou">📖 Vše</button>
+            <span class="gcount">${guidePages.length} kapitol</span>
+          </div>` : '';
+
         const content = guidePages.length
-          ? (n.content ? `<div>${n.content}</div>` : '') + chapterHtml
+          ? (n.content ? `<div>${n.content}</div>` : '') + guideBar + gmapHtml +
+            `<div class="gpages" data-gid="${esc(n.id)}">${chapterHtml}</div>`
           : (n.contentType === 'html' ? (n.content || '') : `<p>${esc(n.content || '')}</p>`);
         const conns = opts.conns ? exportNoteConns(n.id) : [];
         const connsHtml = conns.length ? `<div class="meta">🔗 ${conns.map(esc).join(' · ')}</div>` : '';
@@ -704,20 +783,67 @@ function buildExportHtml(data, opts) {
   .ncontent td, .ncontent th { border:1px solid var(--bd); padding:4px 8px; }
   .meta { font-size:.8rem; color:var(--muted); margin-top:10px; }
   /* Guide chapters — indented by depth, linked from the text */
-  .gpage { margin:10px 0 0 calc(var(--gd,0) * 16px); padding-left:11px; border-left:2px solid var(--bd); }
-  .gpage-h { font-weight:700; font-size:calc(1rem - var(--gd,0) * 0.04rem); margin-bottom:3px; }
-  .gpage-b { font-size:.92rem; }
-  .gpage-b a[href^="#pg-"] { color:var(--ac); font-weight:600; text-decoration:none; border-bottom:1px dashed var(--ac); }
-  .gpage-links { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
-  .gpage-link { font-size:.82rem; color:var(--ac); text-decoration:none;
-                border:1px solid var(--bd); border-radius:8px; padding:3px 10px; }
+  /* ── Navod jako ctecka: jedna kapitola, sipky dal, mapa ── */
+  .gbar { display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+    margin:10px 0 8px; padding-bottom:8px; border-bottom:1px solid var(--bd); }
+  .gbtn { font-size:.78rem; font-family:inherit; cursor:pointer; color:var(--text);
+    background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:4px 10px; }
+  .gbtn:hover { border-color:var(--ac); }
+  .gbtn.on { background:var(--ac); color:#fff; border-color:var(--ac); }
+  .gback[disabled] { opacity:.35; cursor:default; }
+  .gcrumbs { font-size:.78rem; color:var(--muted); flex:1; min-width:80px; }
+  .gcrumbs b { color:var(--text); font-weight:600; }
+  .gcount { font-size:.72rem; color:var(--muted); }
+  /* Jen aktivni kapitola je videt. Trida, ne [hidden] — na tom uz to jednou
+     spadlo: #id pravidlo s display prebije prohlizecove [hidden]. */
+  .gpage { display:none; margin-top:4px; }
+  .gpage.on { display:block; }
+  .gpages.all .gpage { display:block; margin-top:16px; padding-top:12px; border-top:1px solid var(--bd); }
+  .gpages.all .gpage:first-child { border-top:none; padding-top:0; }
+  .gpage-h { font-weight:700; font-size:1.02rem; margin-bottom:5px; display:flex; align-items:baseline; gap:7px; }
+  .gpage-no { font-size:.72rem; color:var(--muted); background:var(--bg);
+    border:1px solid var(--bd); border-radius:6px; padding:1px 6px; white-space:nowrap; }
+  .gpage.is-main .gpage-no { color:var(--warn); border-color:var(--warn); }
+  .gpage-b { font-size:.94rem; }
+  .gpage-b a[data-goto] { color:var(--ac); font-weight:600; text-decoration:none; border-bottom:1px dashed var(--ac); }
+  .gpage-links { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:12px; }
+  .gpage-lh { font-size:.68rem; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
+  .gpage-link { font-size:.84rem; font-family:inherit; cursor:pointer; color:var(--ac);
+    background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:4px 11px; font-weight:600; }
   .gpage-link:hover { border-color:var(--ac); }
+  .gpage-in { margin-top:9px; font-size:.72rem; color:var(--muted); }
+  .gpage-back { font-size:.72rem; font-family:inherit; cursor:pointer; color:var(--muted);
+    background:none; border:1px solid var(--bd); border-radius:6px; padding:1px 7px; margin-left:4px; }
+  .gpage-back:hover { color:var(--text); border-color:var(--ac); }
+  /* Mapa kapitol */
+  .gmap { overflow:auto; border:1px solid var(--bd); border-radius:10px;
+    background:var(--bg); padding:8px; margin-bottom:10px; max-height:52vh; }
+  .gmap[hidden] { display:none; }
+  .gmap-in { position:relative; }
+  .gm-svg { position:absolute; left:0; top:0; }
+  .gm-path { fill:none; stroke:var(--ac); stroke-width:1.8; opacity:.6; }
+  .gm-card { position:absolute; display:flex; flex-direction:column; gap:3px;
+    align-items:flex-start; text-align:left; cursor:pointer; font-family:inherit;
+    background:var(--card); border:1px solid var(--bd); border-radius:8px;
+    padding:6px 9px; color:var(--text); overflow:hidden; }
+  .gm-card:hover { border-color:var(--ac); }
+  .gm-card.on { border-color:var(--ac); box-shadow:0 0 0 2px var(--ac) inset; }
+  .gm-card.is-main { border-color:var(--warn); }
+  .gm-no { font-size:.62rem; color:var(--muted); }
+  .gm-t { font-size:.8rem; font-weight:600; line-height:1.2; }
+  /* Na tisk se vypise cely navod pod sebou, mapa se vynecha. */
+  @media print {
+    .gpage { display:block !important; margin-top:14px; }
+    .gbar, .gmap, .gpage-links, .gpage-in { display:none !important; }
+  }
   /* Clickable areas drawn over a picture */
   .hs-wrap { position:relative; display:inline-block; max-width:100%; line-height:0; }
   .hs-wrap img { display:block; max-width:100%; height:auto; margin:0 !important; float:none !important; }
   .hs-area { position:absolute; border:1.5px solid rgba(99,102,241,.55); background:rgba(99,102,241,.14);
              border-radius:4px; border-bottom-style:solid !important; }
   .hs-area:hover { background:rgba(99,102,241,.32); border-color:var(--ac); }
+  .hs-area.unlinked { border-style:dashed; border-color:rgba(148,163,184,.6);
+    background:rgba(148,163,184,.1); cursor:default; pointer-events:none; }
   @media print { .hs-area { border-style:dashed; background:none; } }
   .cmts { margin-top:10px; padding-top:9px; border-top:1px dashed var(--bd); }
   .cmts-h { font-size:.76rem; font-weight:600; color:var(--muted); margin-bottom:5px; }
@@ -967,6 +1093,103 @@ function setView(v){
   try { localStorage.setItem(STORE_KEY + ':view', v); } catch(e){}
 }
 function toggleView(){ setView(boardView && boardView.hidden ? 'board' : 'doc'); }
+
+// ── Ctecka navodu: jedna kapitola, sipky dal, zpet, mapa ──────
+// Bez sablonovych retezcu (backtick ani dolar-slozena) — cely tenhle <script>
+// je uvnitr template literalu v room-export.js.
+var GHIST = {};                       // gid -> zasobnik predchozich kapitol
+
+function gPages(gid){ return document.querySelector('.gpages[data-gid="' + gid + '"]'); }
+
+function gShow(gid, pid, push){
+  var wrap = gPages(gid);
+  if (!wrap) return;
+  var pages = wrap.querySelectorAll('.gpage');
+  var cur = wrap.querySelector('.gpage.on');
+  if (push && cur && cur.getAttribute('data-pid') !== pid) {
+    (GHIST[gid] = GHIST[gid] || []).push(cur.getAttribute('data-pid'));
+  }
+  var found = null;
+  for (var i = 0; i < pages.length; i++) {
+    var on = pages[i].getAttribute('data-pid') === pid;
+    pages[i].classList.toggle('on', on);
+    if (on) found = pages[i];
+  }
+  if (!found && pages.length) { pages[0].classList.add('on'); found = pages[0]; }
+  wrap.classList.remove('all');
+  var allBtn = document.querySelector('[data-gall="' + gid + '"]');
+  if (allBtn) allBtn.classList.remove('on');
+
+  var map = document.querySelector('.gmap[data-gid="' + gid + '"]');
+  if (map) {
+    var cards = map.querySelectorAll('.gm-card');
+    for (var j = 0; j < cards.length; j++) {
+      cards[j].classList.toggle('on', cards[j].getAttribute('data-goto') === gid + '|' + pid);
+    }
+  }
+  var back = document.querySelector('[data-gback="' + gid + '"]');
+  if (back) back.disabled = !(GHIST[gid] && GHIST[gid].length);
+  var crumbs = document.querySelector('[data-crumbs="' + gid + '"]');
+  if (crumbs && found) {
+    var hist = (GHIST[gid] || []).slice();
+    // Kdyz posledni krok vedl zpatky na tu kapitolu, na ktere prave jsem,
+    // nevypisuj ji v drobeckach dvakrat za sebou.
+    while (hist.length && hist[hist.length - 1] === pid) hist.pop();
+    var trail = hist.slice(-2).map(function(id){
+      var el = wrap.querySelector('.gpage[data-pid="' + id + '"]');
+      return el ? el.querySelector('.gpage-h').textContent.trim() : '';
+    }).filter(Boolean);
+    var here = found.querySelector('.gpage-h').textContent.trim();
+    crumbs.innerHTML = '';
+    trail.forEach(function(t){ crumbs.appendChild(document.createTextNode(t + '  ›  ')); });
+    var b = document.createElement('b'); b.textContent = here; crumbs.appendChild(b);
+  }
+  return found;
+}
+
+document.addEventListener('click', function(e){
+  var go = e.target.closest ? e.target.closest('[data-goto]') : null;
+  if (go) {
+    e.preventDefault();
+    var parts = go.getAttribute('data-goto').split('|');
+    var el = gShow(parts[0], parts[1], true);
+    var map = document.querySelector('.gmap[data-gid="' + parts[0] + '"]');
+    if (map && go.classList.contains('gm-card')) map.hidden = true;
+    if (el) el.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+  var bk = e.target.closest ? e.target.closest('[data-gback]') : null;
+  if (bk) {
+    var gid = bk.getAttribute('data-gback');
+    var prev = (GHIST[gid] || []).pop();
+    if (prev) gShow(gid, prev, false);
+    return;
+  }
+  var mp = e.target.closest ? e.target.closest('[data-gmap]') : null;
+  if (mp) {
+    var g2 = mp.getAttribute('data-gmap');
+    var m2 = document.querySelector('.gmap[data-gid="' + g2 + '"]');
+    if (m2) { m2.hidden = !m2.hidden; mp.classList.toggle('on', !m2.hidden); }
+    return;
+  }
+  var al = e.target.closest ? e.target.closest('[data-gall]') : null;
+  if (al) {
+    var g3 = al.getAttribute('data-gall');
+    var w3 = gPages(g3);
+    if (w3) { var on = w3.classList.toggle('all'); al.classList.toggle('on', on); }
+    return;
+  }
+});
+
+// Prvni kapitola kazdeho navodu (hlavni, jinak prvni v poradi).
+(function(){
+  var wraps = document.querySelectorAll('.gpages');
+  for (var i = 0; i < wraps.length; i++) {
+    var gid = wraps[i].getAttribute('data-gid');
+    var main = wraps[i].querySelector('.gpage.is-main') || wraps[i].querySelector('.gpage');
+    if (main) gShow(gid, main.getAttribute('data-pid'), false);
+  }
+})();
 if (boardView) {
   try { if (localStorage.getItem(STORE_KEY + ':view') === 'board') setView('board'); } catch(e){}
   // Klik na listecek na plose skoci na poznamku v dokumentu a zvyrazni ji.
