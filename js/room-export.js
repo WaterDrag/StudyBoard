@@ -254,7 +254,10 @@ async function gatherExportData(opts, onStep) {
   const filedIds = new Set();
   FOLDERS_MAP.forEach(f => (f.noteIds || []).forEach(id => filedIds.add(id)));
   let sections = buildFolderSections();
-  const unfiled = [...NOTES_MAP.values()].filter(n => !filedIds.has(n.id)).sort((a, b) => noteRecency(b) - noteRecency(a));
+  // Nadpisy jsou popisky plochy, ne poznámky — do dokumentové části nepatří
+  // (na ploše se vykreslí zvlášť, jako nadpis).
+  const unfiled = [...NOTES_MAP.values()].filter(n => !filedIds.has(n.id) && !isHeading(n))
+    .sort((a, b) => noteRecency(b) - noteRecency(a));
   if (unfiled.length) sections.push({ id: '_unfiled', title: 'Nezařazené poznámky', color: '#94a3b8', depth: 0, notes: unfiled });
 
   // Exporting a selection: keep the folder structure, drop everything that
@@ -324,7 +327,49 @@ async function gatherExportData(opts, onStep) {
       step();
     } catch (_) {}
   }
-  return { sections, commentsByNote, decks, whiteboards };
+  // Rozmisteni po nastence, aby si export mohl nakreslit i pohled "Nastenka"
+  // (ne jen dokument pod sebou). Bere se ze STEJNE mnoziny poznamek, jaka
+  // prosla filtrem vyberu — jinak by se na plose objevilo, co uzivatel
+  // z exportu vyradil.
+  const picked = new Set();
+  sections.forEach(sec => sec.notes.forEach(n => picked.add(n.id)));
+  const contentById = new Map();
+  sections.forEach(sec => sec.notes.forEach(n => contentById.set(n.id, n)));
+
+  const boardNotes = [];
+  NOTES_MAP.forEach(n => {
+    const inc = only ? only.has(n.id) : true;
+    if (!inc) return;
+    if (isHeading(n)) {
+      boardNotes.push({ id: n.id, kind: 'heading', title: n.title || '',
+        x: n.x || 0, y: n.y || 0, hsize: n.hsize || 44, hcolor: n.hcolor || '' });
+      return;
+    }
+    if (!picked.has(n.id)) return;      // nezarazena/odfiltrovana poznamka
+    const full = contentById.get(n.id) || n;
+    boardNotes.push({
+      id: n.id, kind: 'note',
+      title: exportNoteTitle(full),
+      color: n.color || '#fef9c3',
+      x: n.x || 0, y: n.y || 0,
+      chapters: pagesOf(n).length,
+      author: n.authorName || '',
+    });
+  });
+
+  const boardConns = [];
+  CONNS_MAP.forEach(c => {
+    if (!opts.conns) return;
+    if (!picked.has(c.fromId) || !picked.has(c.toId)) return;
+    boardConns.push({ from: c.fromId, to: c.toId, color: c.color || '#c0392b', label: c.name || '' });
+  });
+
+  const boardBoards = whiteboards.map(wb => ({
+    id: wb.id, x: wb.x || 0, y: wb.y || 0, w: wb.w, h: wb.h,
+  }));
+
+  return { sections, commentsByNote, decks, whiteboards,
+           board: { notes: boardNotes, conns: boardConns, boards: boardBoards } };
 }
 
 async function runExport() {
@@ -452,6 +497,81 @@ function buildExportHtml(data, opts) {
       }).join('') || '<p class="hint sub-only">Poznámky jsou v podsložkách ↓</p>'}
       </div>
     </section>`).join('');
+
+  // ── Pohled "Nastenka": listecky presne tam, kde jsou na webu ──
+  const bd = data.board || { notes: [], conns: [], boards: [] };
+  const bNotes = bd.notes || [];
+  const NOTE_W = 220, NOTE_H = 150;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const seen = (x, y, w, h) => {
+    minX = Math.min(minX, x); minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+  };
+  bNotes.forEach(n => seen(n.x, n.y, n.kind === 'heading' ? 320 : NOTE_W,
+                                    n.kind === 'heading' ? (n.hsize + 10) : NOTE_H));
+  (bd.boards || []).forEach(b => seen(b.x, b.y, b.w, b.h));
+  if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 800; maxY = 600; }
+  const PAD = 60;
+  const offX = PAD - minX, offY = PAD - minY;
+  const canvasW = Math.round(maxX - minX + PAD * 2), canvasH = Math.round(maxY - minY + PAD * 2);
+  const cx = n => Math.round(n.x + offX), cy = n => Math.round(n.y + offY);
+
+  const byId = new Map(bNotes.map(n => [n.id, n]));
+  // Cara se orizne na OKRAJ karty, ne na jeji stred — jinak ji listecek
+  // prekryje a popisek propojeni je schovany pod nim.
+  const edge = (ox, oy, tx, ty) => {
+    const dx = tx - ox, dy = ty - oy;
+    if (!dx && !dy) return { x: ox, y: oy };
+    const hw = NOTE_W / 2, hh = NOTE_H / 2;
+    const t = Math.min(dx ? hw / Math.abs(dx) : Infinity, dy ? hh / Math.abs(dy) : Infinity);
+    return { x: ox + dx * t, y: oy + dy * t };
+  };
+  // Cary jdou POD listecky, popisky NAD ne. Jinak popisek zmizi pod kartou,
+  // kdykoli je mezera mezi nimi uzsi nez text.
+  const connLines = [], connLabels = [];
+  (bd.conns || []).forEach(c => {
+    const a = byId.get(c.from), b = byId.get(c.to);
+    if (!a || !b) return;
+    const ax = cx(a) + NOTE_W / 2, ay = cy(a) + NOTE_H / 2;
+    const bx = cx(b) + NOTE_W / 2, by = cy(b) + NOTE_H / 2;
+    const p1 = edge(ax, ay, bx, by), p2 = edge(bx, by, ax, ay);
+    connLines.push(`<line x1="${Math.round(p1.x)}" y1="${Math.round(p1.y)}" x2="${Math.round(p2.x)}" y2="${Math.round(p2.y)}" stroke="${esc(c.color)}" stroke-width="2.5" opacity=".85"></line>`);
+    if (!c.label) return;
+    const mx = Math.round((p1.x + p2.x) / 2), my = Math.round((p1.y + p2.y) / 2);
+    connLabels.push(`<div class="bconn-l" style="left:${mx}px;top:${my}px;">${esc(c.label)}</div>`);
+  });
+
+  const wbById = new Map((data.whiteboards || []).map(wb => [wb.id, wb]));
+  const boardSurfaces = (bd.boards || []).map(b => {
+    const wb = wbById.get(b.id);
+    return `<div class="bwb" style="left:${Math.round(b.x + offX)}px;top:${Math.round(b.y + offY)}px;width:${b.w}px;height:${b.h}px;">` +
+      (wb && wb.png ? `<img src="${wb.png}" width="${b.w}" height="${b.h}" alt="Tabule">` : '') + `</div>`;
+  }).join('');
+
+  const boardCards = bNotes.map(n => {
+    if (n.kind === 'heading') {
+      return `<div class="bhead" style="left:${cx(n)}px;top:${cy(n)}px;font-size:${n.hsize}px;` +
+        (n.hcolor ? `color:${esc(n.hcolor)};` : '') + `">${esc(n.title)}</div>`;
+    }
+    return `<button class="bnote" data-go="note-${esc(n.id)}" style="left:${cx(n)}px;top:${cy(n)}px;--nc:${esc(n.color)}" title="Otevřít poznámku">
+        <span class="bnote-pin"></span>
+        <span class="bnote-t">${esc(n.title)}</span>
+        ${n.chapters ? `<span class="bnote-g">📖 ${n.chapters} kap.</span>` : ''}
+        ${n.author ? `<span class="bnote-a">${esc(n.author)}</span>` : ''}
+      </button>`;
+  }).join('');
+
+  const boardViewHtml = bNotes.length ? `
+    <div id="boardView" hidden>
+      <div class="bcanvas-wrap">
+        <div class="bcanvas" style="width:${canvasW}px;height:${canvasH}px;">
+          ${boardSurfaces}
+          <svg class="bconns" width="${canvasW}" height="${canvasH}">${connLines.join('')}</svg>
+          ${boardCards}
+          ${connLabels.join('')}
+        </div>
+      </div>
+    </div>` : '';
 
   const boardsHtml = boardCount ? `
     <section class="folder" id="boards" data-depth="0" style="--d:0;--fc:#f59e0b">
@@ -604,6 +724,39 @@ function buildExportHtml(data, opts) {
   .cmt { font-size:.85rem; margin:3px 0; } .cmt b { margin-right:5px; }
   .nosearch { text-align:center; color:var(--muted); padding:30px 0; display:none; }
   /* Whiteboards */
+  /* ── Pohled Nastenka: listecky presne tam, kde jsou na webu ── */
+  #boardView[hidden] { display:none; }
+  .bcanvas-wrap { overflow:auto; border:1px solid var(--bd); border-radius:12px;
+    background:var(--panel); max-height:calc(100vh - 150px); }
+  .bcanvas { position:relative;
+    background-image:radial-gradient(circle, rgba(148,163,184,.18) 1px, transparent 1px);
+    background-size:26px 26px; }
+  .bconns { position:absolute; left:0; top:0; pointer-events:none; }
+  .bconn-l { position:absolute; z-index:3; transform:translate(-50%,-50%);
+    font-size:11px; font-weight:600; color:var(--text); background:var(--panel);
+    border:1px solid var(--bd); border-radius:5px; padding:1px 6px;
+    white-space:nowrap; pointer-events:none; box-shadow:var(--shadow); }
+  .bwb { position:absolute; background:#fff; border:1px solid var(--bd);
+    border-radius:8px; overflow:hidden; z-index:0; }
+  .bwb img { display:block; width:100%; height:100%; }
+  .bnote { position:absolute; width:220px; min-height:150px; z-index:1;
+    background:var(--nc); color:#1a1a1a; border:none; text-align:left;
+    border-radius:4px 4px 12px 12px; padding:18px 14px 10px; cursor:pointer;
+    box-shadow:0 10px 26px rgba(0,0,0,.35), 0 2px 5px rgba(0,0,0,.25);
+    font-family:inherit; display:flex; flex-direction:column; gap:5px;
+    transition:transform .12s, box-shadow .12s; }
+  .bnote:hover { transform:translateY(-2px); box-shadow:0 14px 34px rgba(0,0,0,.45); }
+  .bnote-pin { position:absolute; left:50%; top:-7px; transform:translateX(-50%);
+    width:13px; height:13px; border-radius:50%; background:#e11d48;
+    box-shadow:0 2px 4px rgba(0,0,0,.4); }
+  .bnote-t { font-weight:700; font-size:.92rem; line-height:1.3; }
+  .bnote-g { font-size:.7rem; opacity:.75; }
+  .bnote-a { margin-top:auto; font-size:.66rem; opacity:.55; }
+  .bhead { position:absolute; z-index:2; font-weight:800; line-height:1.15;
+    color:var(--text); white-space:pre-wrap; max-width:900px;
+    text-shadow:0 1px 2px rgba(0,0,0,.3); }
+  .note.flash { outline:3px solid var(--ac); outline-offset:3px; }
+  @media print { #boardView { display:none !important; } #docView { display:block !important; } }
   .board-note { overflow-x:auto; }
   .wbwrap { position:relative; background:#fff; border:1px solid var(--bd); border-radius:8px; overflow:hidden; }
   .wbimg { display:block; }
@@ -705,6 +858,7 @@ function buildExportHtml(data, opts) {
   <div class="ring" id="ring" title="Naučeno"><i id="ringTxt">0%</i></div>
   <button class="tb-btn" onclick="openStats()">📊 Statistiky</button>
   <button class="tb-btn" onclick="openExam()">🎓 Zkouška</button>
+  ${bNotes.length ? `<button class="tb-btn" id="viewBtn" onclick="toggleView()" title="Přepnout dokument / nástěnku">📌 Nástěnka</button>` : ''}
   <button class="tb-btn" id="themeBtn" title="Přepnout vzhled">🌙</button>
 </div></div>
 <div class="wrap">
@@ -719,12 +873,15 @@ function buildExportHtml(data, opts) {
     </div>
   </nav>
   <main>
+    ${boardViewHtml}
+    <div id="docView">
     <h1>${esc(roomName)}</h1>
     <div class="sub">Exportováno ${esc(when)} · ${noteCount} poznámek${boardCount ? ` · ${boardCount} tabulí` : ''}${cardCount ? ` · ${cardCount} kartiček` : ''} · funguje offline</div>
     ${notesHtml || '<p class="hint">Žádné poznámky.</p>'}
     ${boardsHtml}
     <div class="nosearch" id="noHits">Nic nenalezeno.</div>
     ${decksHtml}
+    </div>
     <footer>Vytvořeno ve StudyBoard · <kbd>/</kbd> hledat · <kbd>Esc</kbd> zavřít</footer>
   </main>
 </div>
@@ -795,6 +952,37 @@ var themeBtn = document.getElementById('themeBtn');
 function setTheme(t){ document.documentElement.dataset.theme = t; themeBtn.textContent = t === 'dark' ? '☀️' : '🌙'; try { localStorage.setItem('sbx_theme', t); } catch(e){} }
 setTheme((function(){ try { return localStorage.getItem('sbx_theme') || 'light'; } catch(e){ return 'light'; } })());
 themeBtn.onclick = function(){ setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); };
+
+// Prepinac Dokument / Nastenka. Bez sablonovych retezcu: cely tenhle <script>
+// je uvnitr template literalu, backtick i dolar-slozena zavorka by ho rozbily.
+var boardView = document.getElementById('boardView');
+var docView   = document.getElementById('docView');
+var viewBtn   = document.getElementById('viewBtn');
+function setView(v){
+  if (!boardView || !docView) return;
+  var board = v === 'board';
+  boardView.hidden = !board;
+  docView.style.display = board ? 'none' : '';
+  if (viewBtn) viewBtn.textContent = board ? '📄 Dokument' : '📌 Nástěnka';
+  try { localStorage.setItem(STORE_KEY + ':view', v); } catch(e){}
+}
+function toggleView(){ setView(boardView && boardView.hidden ? 'board' : 'doc'); }
+if (boardView) {
+  try { if (localStorage.getItem(STORE_KEY + ':view') === 'board') setView('board'); } catch(e){}
+  // Klik na listecek na plose skoci na poznamku v dokumentu a zvyrazni ji.
+  boardView.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('[data-go]') : null;
+    if (!b) return;
+    var el = document.getElementById(b.getAttribute('data-go'));
+    setView('doc');
+    if (!el) return;
+    var fold = el.closest('.folder');
+    if (fold && fold.classList.contains('collapsed')) fold.classList.remove('collapsed');
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('flash');
+    setTimeout(function(){ el.classList.remove('flash'); }, 1600);
+  });
+}
 
 /* ── Note flags: learned / starred ── */
 function applyNoteFlags(){

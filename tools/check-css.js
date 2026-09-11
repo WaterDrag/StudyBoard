@@ -45,7 +45,21 @@ const has = sel => heads.some(h => {
   return false;
 });
 
+// Export si nese vlastni CSS uvnitr sablony — promenna, kterou nikdo
+// nedeklaruje, se projevi az v hotovem souboru (cerny prouzek misto pozadi).
+var exp = fs.readFileSync(path.join('js', 'room-export.js'), 'utf8');
+var si = exp.indexOf('<style>'), sj = exp.indexOf('</style>', si);
+var expCss = si >= 0 ? exp.slice(si, sj) : '';
+var used = (expCss.match(/var\(--[\w-]+\)/g) || []).map(function (v) { return v.slice(6, -1); });
+var decl = (expCss.match(/--[\w-]+\s*:/g) || []).map(function (v) { return v.replace(/[-\s:]+$/, '').slice(2); });
+var LOCAL = ['nc', 'd', 'fc'];                 // nastavuji se inline na prvku
+var undeclared = used.filter(function (v) { return decl.indexOf(v) === -1 && LOCAL.indexOf(v) === -1; });
+
 let bad = 0, n = 0;
+if (undeclared.length) {
+  bad += undeclared.length;
+  undeclared.forEach(function (v) { console.log('CHYBI v CSS exportu: --' + v); });
+}
 for (const group of Object.keys(REQUIRED)) {
   for (const sel of REQUIRED[group]) {
     n++;

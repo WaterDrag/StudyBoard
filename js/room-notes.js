@@ -117,7 +117,8 @@ function openHeadingBar(el, id) {
               style="width:22px;height:18px;border:none;background:none;padding:0;vertical-align:middle;">
      </label>` +
     `<span class="it-sep"></span>` +
-    `<button data-del="1" class="it-del" title="Smazat nadpis">🗑</button>`;
+    `<button data-del="1" class="it-del" title="Smazat nadpis">🗑</button>` +
+    `<span class="it-lbl" style="opacity:.6;margin-left:6px;">dvojklik = psát</span>`;
   document.body.appendChild(bar);
 
   const place = () => {
@@ -362,39 +363,20 @@ function renderHeadingNote(id, note) {
   el.dataset.authorId = note.authorId;
   el.dataset.dragged  = 'false';
   const editable = canEdit(note);
-  el.innerHTML = `<div class="heading-text"${editable ? ' contenteditable="true" spellcheck="false"' : ''}></div>`;
+  el.innerHTML = `<div class="heading-text"></div>`;
   paintHeading(el, note);
 
   const t = el.querySelector('.heading-text');
   if (editable) {
-    // Psani rovnou na nastence. Tazeni musi zacinat mimo text, jinak by
-    // nesla oznacit slova — proto makeDraggable dostane cely prvek, ale
-    // mousedown v textu ho nepusti.
-    t.addEventListener('mousedown', e => e.stopPropagation());
-    t.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); t.blur(); }
-      if (e.key === 'Escape') { clearTimeout(t._save); t.textContent = NOTES_MAP.get(id)?.title || ''; t.blur(); }
-    });
-    // Uklada se UZ PRI PSANI (s prodlevou), ne az na blur: blur nemusi prijit
-    // vubec — prekresleni nastenky, zavreni karty, prepnuti do seznamu — a
-    // napsany nadpis by se tise ztratil.
-    const flush = () => {
-      clearTimeout(t._save);
-      const v = t.textContent.trim();
-      const cur = NOTES_MAP.get(id);
-      if (!cur || !v || v === cur.title) return;
-      saveHeading(id, { title: v });
-    };
-    t.addEventListener('input', () => { clearTimeout(t._save); t._save = setTimeout(flush, 600); });
-    t.addEventListener('blur', () => {
-      flush();
-      const cur = NOTES_MAP.get(id);
-      if (!t.textContent.trim() && cur) t.textContent = cur.title || 'Nadpis';  // prazdny nadpis nedava smysl
-    });
+    // Jako v tabulkovem editoru: TAZENI kdekoli, psani az na DVOJKLIK.
+    // Kdyz byl text trvale contenteditable, zabiral cely nadpis a tahnout
+    // slo jen za par pixelu okraje — prakticky vubec.
+    t.addEventListener('mousedown', e => { if (t.isContentEditable) e.stopPropagation(); });
+    el.addEventListener('dblclick', e => { e.preventDefault(); startHeadingEdit(id, e.clientX, e.clientY); });
     makeDraggable(el, id);
     el.addEventListener('click', e => {
       if (el.dataset.dragged === 'true') return;
-      if (e.target === t) return;             // klik do textu = kurzor, ne lista
+      if (t.isContentEditable) return;      // prave se pise, listu nevytahuj
       openHeadingBar(el, id);
     });
   } else {
@@ -403,6 +385,68 @@ function renderHeadingNote(id, note) {
 
   document.getElementById('board').appendChild(el);
   expandBoardIfNeeded(el);
+}
+
+// Zapne psani v nadpisu a postavi kurzor tam, kam se kliklo.
+function startHeadingEdit(id, clientX, clientY) {
+  const el = document.getElementById('n-' + id);
+  const t = el?.querySelector('.heading-text');
+  if (!t || t.isContentEditable) return;
+  closeHeadingBar();
+  t.contentEditable = 'true';
+  t.spellcheck = false;
+  el.classList.add('editing');
+  t.focus();
+
+  const caret = (clientX != null && document.caretRangeFromPoint)
+    ? document.caretRangeFromPoint(clientX, clientY) : null;
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  if (caret) sel.addRange(caret);
+  else { const rg = document.createRange(); rg.selectNodeContents(t); sel.addRange(rg); }
+
+  // Konec psani se vola PRIMO (Enter/Esc), ne pres blur: blur nemusi prijit
+  // — nezaostrene okno, prekresleni nastenky, prepnuti do seznamu — a nadpis
+  // by zustal viset v rezimu psani a nesel by tahnout.
+  const stop = () => {
+    if (t.contentEditable !== 'true') return;      // idempotentni
+    clearTimeout(t._save);
+    flushHeading(id);
+    t.contentEditable = 'false';
+    el.classList.remove('editing');
+    const cur = NOTES_MAP.get(id);
+    if (!t.textContent.trim() && cur) t.textContent = cur.title || 'Nadpis';
+    window.getSelection()?.removeAllRanges();
+  };
+  // Uklada se UZ PRI PSANI (s prodlevou), ne az na blur: blur nemusi prijit
+  // vubec — prekresleni nastenky, zavreni karty, prepnuti do seznamu — a
+  // napsany nadpis by se tise ztratil.
+  t.oninput = () => { clearTimeout(t._save); t._save = setTimeout(() => flushHeading(id), 600); };
+  t.onblur  = stop;
+  // Zalozni cesta ven: klik kamkoli mimo tenhle nadpis psani ukonci.
+  const outside = ev => {
+    if (ev.target.closest('#n-' + id)) return;
+    document.removeEventListener('mousedown', outside, true);
+    stop();
+  };
+  setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
+  t.onkeydown = e => {
+    if (e.key === 'Enter')  { e.preventDefault(); t.blur(); stop(); }
+    if (e.key === 'Escape') {
+      clearTimeout(t._save);
+      t.textContent = NOTES_MAP.get(id)?.title || '';
+      t.blur(); stop();
+    }
+  };
+}
+
+function flushHeading(id) {
+  const t = document.getElementById('n-' + id)?.querySelector('.heading-text');
+  const cur = NOTES_MAP.get(id);
+  if (!t || !cur) return;
+  const v = t.textContent.trim();
+  if (!v || v === cur.title) return;
+  saveHeading(id, { title: v });
 }
 
 // ── Board auto-expand ─────────────────────────────────────────
