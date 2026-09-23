@@ -4,7 +4,7 @@
 const fs = require('fs');
 const dir = 'C:/Users/zitka/Desktop/StudyBoard/js/';
 const files = ['ai.js', 'drive.js', 'room-core.js', 'room-list.js', 'room-notes.js', 'room-export.js',
-               'room-board.js', 'room-whiteboard.js', 'room-ai.js', 'room-social.js', 'room-init.js'];
+               'room-board.js', 'room-whiteboard.js', 'room-ai.js', 'room-social.js', 'room-files.js', 'room-init.js'];
 
 // Odstrani komentare a OBSAH retezcu vcetne template literalu, aby se proza
 // a CSS nemohly tvarit jako kod. Puvodni verze to delala regularnimi vyrazy a

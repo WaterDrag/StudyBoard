@@ -3670,6 +3670,44 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .gmap-zone.picking {
   background: var(--accent); color: #fff; border-color: var(--accent); border-style: solid;
 }
+/* ===== Soubory místnosti (Google Disk) ===== */
+.modal-files { max-width: 820px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
+.modal-files > * { flex-shrink: 0; }
+.files-hint { font-size: 0.82rem; color: var(--text-muted); line-height: 1.55; margin-bottom: 12px; }
+.files-hint code { background: var(--bg-3); padding: 1px 6px; border-radius: 5px; }
+.files-drop {
+  display: flex; align-items: center; gap: 12px; justify-content: center;
+  border: 2px dashed var(--border); border-radius: 12px;
+  padding: 18px; background: var(--bg-3); transition: border-color .15s, background .15s;
+}
+.files-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.files-drop-or { font-size: 0.8rem; color: var(--text-muted); }
+.files-warn {
+  font-size: 0.75rem; color: var(--text-muted); line-height: 1.5;
+  background: var(--bg-3); border-left: 3px solid #f59e0b;
+  padding: 8px 11px; border-radius: 0 8px 8px 0; margin: 10px 0;
+}
+.files-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-top: 4px; }
+.files-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 9px; margin-bottom: 6px; background: var(--bg-2);
+}
+.files-ico { font-size: 1.1rem; flex-shrink: 0; }
+.files-name { flex: 1; min-width: 0; font-size: 0.86rem; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-meta { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
+.files-open {
+  font-size: 0.78rem; text-decoration: none; color: var(--accent);
+  border: 1px solid var(--border); border-radius: 7px; padding: 3px 10px; white-space: nowrap;
+}
+.files-open:hover { border-color: var(--accent); }
+.files-del { background: none; border: none; color: #fca5a5; cursor: pointer; font-size: 0.82rem; padding: 2px 4px; }
+.files-empty { color: var(--text-muted); font-size: 0.84rem; padding: 14px 2px; text-align: center; }
+.files-msg { flex: 1; font-size: 0.78rem; color: var(--text-muted); text-align: left; }
+.files-msg.err { color: #fca5a5; }
+.files-msg.ok { color: #86efac; }
+
 /* Export: stazeni a Disk vedle sebe */
 .export-actions { display: flex; gap: 8px; }
 .export-actions .btn { flex: 1; justify-content: center; }

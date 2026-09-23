@@ -112,17 +112,74 @@ async function driveFolder() {
   return DRIVE_FOLDER;
 }
 
-// Nahraj soubor do složky. Multipart: metadata + obsah v jednom požadavku.
-async function driveUpload(name, content, mime = 'text/plain') {
+// Podsložka uvnitř StudyBoard, jedna na místnost. Hledá se JEN mezi soubory,
+// které appka vytvořila (víc `drive.file` nevidí), takže se nic cizího
+// nepřepíše — v nejhorším vznikne vlastní složka.
+const DRIVE_SUBFOLDERS = new Map();      // název -> id
+
+function driveSafeName(name) {
+  return String(name || 'Místnost').replace(/['\\\\]/g, '').slice(0, 80).trim() || 'Místnost';
+}
+
+async function driveSubfolder(name) {
+  const safe = driveSafeName(name);
+  if (DRIVE_SUBFOLDERS.has(safe)) return DRIVE_SUBFOLDERS.get(safe);
   const parent = await driveFolder();
+  const q = encodeURIComponent(
+    "mimeType='application/vnd.google-apps.folder' and name='" + safe +
+    "' and '" + parent + "' in parents and trashed=false");
+  const found = await driveJson(
+    'https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id)&pageSize=1');
+  let id;
+  if (found.files && found.files.length) id = found.files[0].id;
+  else {
+    const made = await driveJson('https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: safe, mimeType: 'application/vnd.google-apps.folder', parents: [parent] }),
+    });
+    id = made.id;
+  }
+  DRIVE_SUBFOLDERS.set(safe, id);
+  return id;
+}
+
+// Aby na odkaz dosáhli i ostatní ve místnosti, musí být soubor čitelný
+// odkazem — jinak jim Disk ukáže „požádat o přístup". Jde to zrušit
+// (`driveUnshare`) a týká se to jen souborů, které nahrála tahle aplikace.
+async function driveShareByLink(fileId) {
+  await driveJson('https://www.googleapis.com/drive/v3/files/' + fileId + '/permissions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+  });
+}
+
+async function driveUnshare(fileId) {
+  const perms = await driveJson(
+    'https://www.googleapis.com/drive/v3/files/' + fileId + '/permissions?fields=permissions(id,type)');
+  for (const p of (perms.permissions || [])) {
+    if (p.type === 'anyone') {
+      await driveFetch('https://www.googleapis.com/drive/v3/files/' + fileId + '/permissions/' + p.id,
+        { method: 'DELETE' });
+    }
+  }
+}
+
+// Nahraj soubor do složky. Multipart: metadata + obsah v jednom požadavku.
+async function driveUpload(name, content, mime = 'text/plain', parentId = null) {
+  const parent = parentId || await driveFolder();
   const boundary = 'sbx' + Math.random().toString(36).slice(2);
   const meta = JSON.stringify({ name, parents: [parent] });
-  const body =
-    '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta +
-    '\r\n--' + boundary + '\r\nContent-Type: ' + mime + '\r\n\r\n' + content +
-    '\r\n--' + boundary + '--';
+  // Blob, ne retezec: jinak by se binarni soubor (PDF, obrazek) cestou rozbil.
+  const body = new Blob([
+    '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n',
+    '--' + boundary + '\r\nContent-Type: ' + mime + '\r\n\r\n',
+    content,
+    '\r\n--' + boundary + '--',
+  ], { type: 'multipart/related; boundary=' + boundary });
   return driveJson(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,webViewLink',
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,mimeType,webViewLink',
     { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + boundary }, body });
 }
 

@@ -155,6 +155,7 @@ auth.onAuthStateChanged(async user => {
     setupPresence();
     setupComments();
     setupExport();
+    setupRoomFiles();
     setupNoteHistoryKeys();
     setupConnections();
     setupWhiteboards();
