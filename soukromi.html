@@ -1,0 +1,90 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudyBoard – Zásady ochrany soukromí</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 40px 20px 80px;
+    background: #0f1420; color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.7;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 1.7rem; margin: 0 0 6px; }
+  h2 { font-size: 1.1rem; margin: 34px 0 10px; color: #a5b4fc; }
+  .sub { color: #94a3b8; font-size: .88rem; margin-bottom: 28px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: .9rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #2b3650; vertical-align: top; }
+  th { color: #94a3b8; font-weight: 600; }
+  code { background: #1c2437; padding: 1px 5px; border-radius: 4px; font-size: .86em; }
+  a { color: #818cf8; }
+  .note { background: #1c2437; border-left: 3px solid #f59e0b; padding: 12px 14px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid #2b3650; color: #94a3b8; font-size: .85rem; }
+</style>
+<main>
+  <h1>Zásady ochrany soukromí</h1>
+  <div class="sub">StudyBoard — sdílené studijní nástěnky · naposledy upraveno 23. 9. 2026</div>
+
+  <p>StudyBoard je školní projekt pro sdílené poznámky a učení. Tahle stránka
+  popisuje, jaké údaje aplikace zpracovává, kam je posílá a jak se dají smazat.
+  Nic se neprodává ani nepředává pro reklamu.</p>
+
+  <h2>Jaké údaje se ukládají</h2>
+  <table>
+    <tr><th>Údaj</th><th>Kde leží</th><th>Proč</th></tr>
+    <tr><td>E-mail, jméno a profilový obrázek</td><td>Firebase (Google)</td><td>Přihlášení a zobrazení autora u poznámek</td></tr>
+    <tr><td>Poznámky, návody, tabule, kartičky, komentáře, složky</td><td>Firebase Firestore</td><td>Vlastní obsah aplikace</td></tr>
+    <tr><td>Kdo je zrovna online a kde má kurzor</td><td>Firebase Realtime Database</td><td>Společná práce v reálném čase</td></tr>
+    <tr><td>Vzhled, postup v učení, klíče k AI</td><td>Prohlížeč (<code>localStorage</code>)</td><td>Nastavení zůstane mezi návštěvami</td></tr>
+  </table>
+  <p>Přihlásit se jde i <strong>jako host</strong> — pak se neukládá e-mail ani jméno.</p>
+
+  <h2>Kam se data posílají</h2>
+  <table>
+    <tr><th>Služba</th><th>Co tam jde</th><th>Kdy</th></tr>
+    <tr><td><a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">Firebase</a> (Google)</td><td>Účet a veškerý obsah</td><td>Vždy</td></tr>
+    <tr><td><a href="https://imgbb.com/privacy" target="_blank" rel="noopener">imgBB</a></td><td>Obrázky vložené do poznámek</td><td>Při vložení obrázku</td></tr>
+    <tr><td>Google Gemini / Groq</td><td>Text vybraných poznámek</td><td>Jen když sám spustíš funkci AI</td></tr>
+    <tr><td>Google Disk</td><td>Export, který sám pošleš</td><td>Jen na tvoje kliknutí</td></tr>
+  </table>
+
+  <div class="note">
+    <strong>Obrázky jsou veřejné.</strong> Vkládané obrázky se ukládají na imgBB
+    a jsou dostupné komukoli, kdo zná jejich odkaz — i bez přihlášení do
+    StudyBoardu. Nevkládej do poznámek nic citlivého.
+  </div>
+
+  <h2>Google Disk</h2>
+  <p>Připojení Disku je dobrovolné. StudyBoard žádá jedině rozsah
+  <code>drive.file</code>, což znamená, že <strong>vidí pouze soubory, které sám
+  vytvoří</strong> — typicky exporty ve složce <code>StudyBoard</code>. Do zbytku
+  Disku nemá přístup, nečte ho a nijak neprochází. Soubory zůstávají na Disku
+  toho, kdo je nahrál; nikam jinam se nekopírují.</p>
+  <p>Přístup jde kdykoli odebrat na
+  <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.
+  Už nahrané soubory tím nezmizí — ty smažeš přímo na Disku.</p>
+
+  <h2>Kdo obsah vidí</h2>
+  <p>Poznámky v místnosti vidí její členové. Přizvat někoho může vlastník
+  místnosti odkazem nebo kódem. Veřejně prohledatelné to není, ale
+  <strong>kdo má odkaz na pozvánku, dostane se dovnitř</strong> — ber to jako
+  sdílený sešit ve třídě, ne jako trezor.</p>
+
+  <h2>Jak dlouho se data drží a jak je smazat</h2>
+  <p>Obsah zůstává, dokud ho někdo nesmaže. Poznámky, tabule i celé balíčky
+  kartiček smažeš přímo v aplikaci. O smazání účtu a všech svých dat napiš na
+  e-mail níž — smažu je ručně.</p>
+
+  <h2>Děti a škola</h2>
+  <p>Aplikace vznikla pro středoškolské studium. Nesbírá polohu, nepoužívá
+  reklamní systémy ani sledování napříč weby.</p>
+
+  <h2>Změny</h2>
+  <p>Kdyby se zpracování údajů změnilo, upraví se tahle stránka a nahoře se
+  změní datum.</p>
+
+  <footer>
+    Kontakt: <a href="mailto:zitkatomik007@gmail.com">zitkatomik007@gmail.com</a><br>
+    Zpět do aplikace: <a href="./">StudyBoard</a>
+  </footer>
+</main>

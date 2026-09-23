@@ -19,6 +19,7 @@ const REQUIRED = {
   'velka okna':        ['.modal-editor', '.form-group-grow', '.modal-hotspot', '.modal-detail'],
   'prohlizec obrazku': ['.lb-bar', '.lb-btn', '.lb-val'],
   'zony v editoru':    ['.img-zones', '.img-zone'],
+  'uchopy obrazku':    ['.img-handles', '.ih-nw', '.ih-se', '.ih-size'],
   'nadpis na nastence':['.note.is-heading', '.heading-text'],
 };
 

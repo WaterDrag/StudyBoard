@@ -90,6 +90,7 @@ function setupExport() {
     openExportModal(null);
   });
   document.getElementById('exportRunBtn').addEventListener('click', runExport);
+  document.getElementById('exportDriveBtn')?.addEventListener('click', runExportToDrive);
   document.getElementById('exportScope')?.addEventListener('change', () => {
     EXPORT_ONLY = null;                 // the dropdown takes over from here
     applyExportScopeUi();
@@ -377,9 +378,9 @@ async function gatherExportData(opts, onStep) {
            board: { notes: boardNotes, conns: boardConns, boards: boardBoards } };
 }
 
-async function runExport() {
-  const btn  = document.getElementById('exportRunBtn');
-  const hint = document.getElementById('exportHint');
+// Sestaveni exportu je spolecne pro stazeni i pro odeslani na Disk — at se
+// ty dve cesty nemuzou rozejit.
+async function buildExport(hint) {
   const only = exportScopeSet();
   const opts = {
     conns:    document.getElementById('exportConns').checked,
@@ -389,24 +390,47 @@ async function runExport() {
     embed:    (document.getElementById('exportEmbed')  || {}).checked !== false,
     only,
   };
-  if (only && !only.size) { hint.textContent = 'Nevybral jsi žádnou poznámku.'; return; }
-  btn.disabled = true;
+  if (only && !only.size) throw new Error('Nevybral jsi žádnou poznámku.');
   let done = 0;
-  const step = () => { done++; hint.textContent = 'Připravuji… (' + done + ' hotovo)'; };
-  hint.textContent = 'Připravuji…';
+  const step = () => { done++; if (hint) hint.textContent = 'Připravuji… (' + done + ' hotovo)'; };
+  if (hint) hint.textContent = 'Připravuji…';
+  const data = await gatherExportData(opts, step);
+  if (hint) hint.textContent = 'Sestavuji stránku…';
+  const html = buildExportHtml(data, opts);
+  // One note → name the file after it; a selection → say how many.
+  let base = ROOM.name || 'mistnost';
+  if (only && only.size === 1) base = exportNoteTitle(NOTES_MAP.get([...only][0]) || {});
+  else if (only) base = (ROOM.name || 'vyber') + '_' + only.size + '_poznamek';
+  const safe = base.replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60) || 'export';
+  return { filename: safe + '.html', html };
+}
+
+async function runExport() {
+  const btn  = document.getElementById('exportRunBtn');
+  const hint = document.getElementById('exportHint');
+  btn.disabled = true;
   try {
-    const data = await gatherExportData(opts, step);
-    hint.textContent = 'Sestavuji stránku…';
-    const html = buildExportHtml(data, opts);
-    // One note → name the file after it; a selection → say how many.
-    let base = ROOM.name || 'mistnost';
-    if (only && only.size === 1) base = exportNoteTitle(NOTES_MAP.get([...only][0]) || {});
-    else if (only) base = (ROOM.name || 'vyber') + '_' + only.size + '_poznamek';
-    const safe = base.replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60) || 'export';
-    downloadFile(safe + '.html', html, 'text/html;charset=utf-8');
+    const { filename, html } = await buildExport(hint);
+    downloadFile(filename, html, 'text/html;charset=utf-8');
     hint.textContent = 'Hotovo ✓ (' + Math.round(html.length / 1024) + ' kB)';
     setTimeout(() => closeModal('exportModal'), 1400);
   } catch (e) { hint.textContent = 'Chyba: ' + e.message; }
+  btn.disabled = false;
+}
+
+// Tentyz export rovnou do složky StudyBoard na Google Disku.
+async function runExportToDrive() {
+  const btn  = document.getElementById('exportDriveBtn');
+  const hint = document.getElementById('exportHint');
+  if (!driveConfigured()) { hint.textContent = driveSetupHint(); return; }
+  btn.disabled = true;
+  try {
+    const { filename, html } = await buildExport(hint);
+    hint.textContent = driveSignedIn() ? 'Nahrávám na Disk…' : 'Přihlas se k Disku v okně Googlu…';
+    const file = await driveUpload(filename, html, 'text/html;charset=utf-8');
+    hint.innerHTML = 'Uloženo na Disk ✓ — ' + esc(DRIVE_FOLDER_NAME) + '/' + esc(file.name || filename) +
+      (file.webViewLink ? ' · <a href="' + esc(file.webViewLink) + '" target="_blank" rel="noopener">otevřít</a>' : '');
+  } catch (e) { hint.textContent = 'Disk: ' + e.message; }
   btn.disabled = false;
 }
 

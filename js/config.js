@@ -45,3 +45,11 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 
 // ImgBB – free image hosting (imgbb.com)
 const IMGBB_KEY = '35d2aa02584eaf0848eb0b70a4d78686';
+
+// ── Google Disk ───────────────────────────────────────────────
+// Vlastní OAuth Client ID z Google Cloud konzole. Prázdné = funkce Disku
+// se v aplikaci nabídne, ale místo přihlášení ukáže návod, co doplnit.
+// Rozsah `drive.file` dává přístup JEN k souborům, které StudyBoard sám
+// vytvoří — do zbytku Disku nevidí, a proto ho Google nemusí schvalovat.
+const GOOGLE_CLIENT_ID = '176474203674-ptefinmq61s4ith4damet00olc3j1hq1.apps.googleusercontent.com';
+const DRIVE_FOLDER_NAME = 'StudyBoard';

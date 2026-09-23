@@ -386,6 +386,27 @@
           <input type="text" id="aiDeckName" class="input" placeholder="AI karty ze zápisků" maxlength="60">
         </div>
       </div>
+      <!-- Bez API klíče: zadání do schránky → vložit do jakéhokoli chatu → odpověď zpět -->
+      <details id="aiManual" class="ai-manual">
+        <summary>📋 Nemám API klíč — udělám to přes schránku</summary>
+        <p class="ai-manual-hint">
+          StudyBoard sestaví zadání, ty ho vložíš do Gemini, ChatGPT nebo čehokoli máš,
+          a odpověď sem nakopíruješ zpátky. Klíč netřeba.
+        </p>
+        <div class="ai-manual-row">
+          <button type="button" id="aiCopyPrompt" class="btn btn-secondary btn-sm">1 · 📋 Zkopírovat zadání</button>
+          <a class="btn btn-secondary btn-sm" id="aiOpenChat" href="https://gemini.google.com/app" target="_blank" rel="noopener">2 · Otevřít Gemini ↗</a>
+        </div>
+        <textarea id="aiPromptBox" class="input ai-paste" rows="4" readonly
+          style="display:none;margin-top:8px;" aria-label="Zadání ke zkopírování"></textarea>
+        <label class="label" style="margin-top:10px;display:block;">3 · Vlož sem odpověď</label>
+        <textarea id="aiPasteBox" class="input ai-paste" rows="5"
+          placeholder="Sem vlož celou odpověď z chatu (klidně i s textem okolo — JSON si najdu sám)."></textarea>
+        <div class="ai-manual-row" style="margin-top:8px;">
+          <button type="button" id="aiParsePaste" class="btn btn-primary btn-sm">4 · Zpracovat odpověď</button>
+          <span id="aiManualMsg" class="ai-manual-msg"></span>
+        </div>
+      </details>
       <div id="aiCardsPreview"></div>
       <div id="aiExamArea" style="display:none;"></div>
       <div class="modal-footer">
@@ -613,7 +634,10 @@
         <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportBoards" checked> Tabule (kresby)</label>
         <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportEmbed" checked> Vložit obrázky do souboru <span style="color:var(--text-muted);font-size:0.76rem;">(větší soubor, ale funguje úplně bez internetu)</span></label>
       </div>
-      <button id="exportRunBtn" class="btn btn-primary" style="width:100%;justify-content:center;">⬇️ Stáhnout HTML</button>
+      <div class="export-actions">
+        <button id="exportRunBtn" class="btn btn-primary">⬇️ Stáhnout HTML</button>
+        <button id="exportDriveBtn" class="btn btn-secondary" title="Uloží export do složky StudyBoard na tvém Google Disku">☁️ Uložit na Google Disk</button>
+      </div>
       <p class="hint" id="exportHint" style="text-align:center;margin-top:10px;"></p>
     </div>
   </div>
@@ -718,7 +742,7 @@
     // room.js je rozdělený na moduly (klasické skripty sdílející globály).
     // async=false drží pořadí spouštění; room-init.js MUSÍ být poslední —
     // registruje auth callback, který volá funkce ze všech ostatních souborů.
-    var files = ['room-core.js','room-list.js','room-notes.js','room-export.js',
+    var files = ['drive.js','room-core.js','room-list.js','room-notes.js','room-export.js',
                  'room-board.js','room-whiteboard.js','room-ai.js','room-social.js','room-init.js'];
     files.forEach(function(f){
       var s = document.createElement('script');

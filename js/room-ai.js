@@ -74,6 +74,87 @@ function setupAiCards() {
   document.getElementById('aiGenerateBtn').addEventListener('click', generateAiCards);
   document.getElementById('aiSaveBtn').addEventListener('click', saveAiCards);
   document.getElementById('aiExamBtn').addEventListener('click', runAiExam);
+  document.getElementById('aiCopyPrompt')?.addEventListener('click', copyAiCardsPrompt);
+  document.getElementById('aiParsePaste')?.addEventListener('click', useAiCardsPaste);
+}
+
+// ── Režim bez API klíče: zadání do schránky, odpověď zpátky ───
+// Pro toho, kdo si klíč udělat nechce: StudyBoard sestaví stejné zadání, jaké
+// jinak posílá do API, a odpověď z libovolného chatu si rozebere sám.
+function aiManualMsg(text, kind) {
+  const el = document.getElementById('aiManualMsg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'ai-manual-msg' + (kind ? ' ' + kind : '');
+}
+
+async function copyAiCardsPrompt() {
+  const ids = [...document.querySelectorAll('.ai-note-check:checked')].map(c => c.dataset.id);
+  if (!ids.length) { aiManualMsg('Nejdřív vyber aspoň jednu poznámku.', 'err'); return; }
+  const count = Math.max(2, Math.min(20, parseInt(document.getElementById('aiCardCount').value) || 8));
+  const btn = document.getElementById('aiCopyPrompt');
+  btn.disabled = true;
+  try {
+    const text = await selectedNotesText(ids);
+    if (!text.trim()) { aiManualMsg('Vybrané poznámky jsou prázdné.', 'err'); return; }
+    const prompt = buildAiCardsPrompt(text, count);
+    const box = document.getElementById('aiPromptBox');
+    try {
+      await copyToClipboard(prompt);
+      if (box) box.style.display = 'none';
+      aiManualMsg('Zkopírováno (' + Math.round(prompt.length / 1000) + ' tis. znaků) — vlož to do chatu.', 'ok');
+    } catch (e) {
+      // Schránku může odmítnout oprávnění i prohlížeč. Není důvod skončit —
+      // ukaž zadání rovnou tady a nech ho označené, ať staví jen Ctrl+C.
+      if (box) {
+        box.value = prompt;
+        box.style.display = 'block';
+        box.focus(); box.select();
+      }
+      aiManualMsg('Schránku prohlížeč nepustil — zadání je níž, zkopíruj ho přes Ctrl+C.', 'err');
+    }
+  } catch (e) {
+    aiManualMsg('Nepovedlo se: ' + (e?.message || e), 'err');
+  } finally { btn.disabled = false; }
+}
+
+// navigator.clipboard vyžaduje https nebo localhost — na http by tiše selhalo,
+// proto záloha přes skrytý textarea + execCommand.
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+  } catch (_) { /* spadneme do zálohy níž */ }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+  document.body.appendChild(ta);
+  ta.select();
+  const ok = document.execCommand('copy');
+  ta.remove();
+  if (!ok) throw new Error('prohlížeč kopírování odmítl');
+}
+
+function useAiCardsPaste() {
+  const box = document.getElementById('aiPasteBox');
+  const raw = (box?.value || '').trim();
+  if (!raw) { aiManualMsg('Vlož nejdřív odpověď z chatu.', 'err'); return; }
+  let cards;
+  try {
+    cards = parseAiCards(raw);
+  } catch (e) {
+    aiManualMsg(e?.message === 'no-json'
+      ? 'V té odpovědi není JSON se seznamem kartiček. Zkopíruj ji celou, i s hranatými závorkami.'
+      : 'Odpověď se nepodařilo přečíst — chatu řekni, ať vrátí JEN ten JSON.', 'err');
+    return;
+  }
+  AI_GENERATED_CARDS = cards;
+  renderAiCardsPreview(cards);
+  document.getElementById('aiSaveBtn').style.display = 'inline-flex';
+  document.getElementById('aiGenerateBtn').style.display = 'none';
+  aiManualMsg('Načteno ' + cards.length + ' kartiček.', 'ok');
 }
 
 // ── AI exam ("Vyzkoušej mě") ──────────────────────────────────
@@ -293,27 +374,10 @@ async function openAiCardsModal() {
   }
 }
 
-async function generateAiCards() {
-  const checkedIds = [...document.querySelectorAll('.ai-note-check:checked')].map(c => c.dataset.id);
-  if (!checkedIds.length) { toast('Vyber alespoň jednu poznámku.'); return; }
-  const count = Math.max(2, Math.min(20, parseInt(document.getElementById('aiCardCount').value) || 8));
-
-  const btn = document.getElementById('aiGenerateBtn');
-  btn.disabled = true; btn.textContent = '⏳ Připravuji…';
-  const previewEl = document.getElementById('aiCardsPreview');
-  previewEl.innerHTML = '<div id="aiStatusMsg" style="font-size:.82rem;color:var(--text-muted);margin-top:10px;">Generuji…</div>';
-
-  try {
-    const snap = await db.collection('rooms').doc(ROOM_ID).collection('notes').get();
-    const byId = new Map(snap.docs.map(d => [d.id, d.data()]));
-    const combinedText = checkedIds
-      .map(id => (byId.has(id) ? noteToPlainText(byId.get(id)) : ''))
-      .filter(Boolean)
-      .join('\n\n---\n\n');
-
-    if (!combinedText.trim()) { toast('Vybrané poznámky jsou prázdné.'); btn.disabled = false; btn.textContent = '✨ Vygenerovat'; return; }
-
-    const prompt = `You are creating study flashcards from the notes below. Keep the SAME language as the notes (they may be in Czech).
+// Zadani i rozebrani odpovedi jsou zvlast, protoze je pouzivaji DVE cesty:
+// primo pres API s klicem, a rezim bez klice (zkopiruj zadani -> vloz odpoved).
+function buildAiCardsPrompt(text, count) {
+  return `You are creating study flashcards from the notes below. Keep the SAME language as the notes (they may be in Czech).
 Create exactly ${count} flashcards covering the key facts, terms, and concepts.
 Each flashcard:
 - "front": a short question or term
@@ -330,52 +394,70 @@ Return ONLY a JSON array like this, nothing else: [{"front":"...","back":"...","
 
 NOTES:
 """
-${combinedText.slice(0, 8000)}
+${text.slice(0, 8000)}
 """`;
+}
 
-    const cards = await aiGenerate(prompt, {
+function parseAiCards(text) {
+      const m = text.match(/\[[\s\S]*\]/);
+      if (!m) throw new Error('no-json');
+      const arr = JSON.parse(repairAiJson(m[0]));
+      const clean = arr
+        .filter(c => c && c.front && c.back)
+        .map(c => {
+          const back = String(c.back).trim();
+          const rawWrong = (Array.isArray(c.wrong) ? c.wrong : []).map(w => String(w).trim()).filter(Boolean);
+          // Extra correct answers — the quiz shows a random subset of them.
+          // Anything the model listed as correct AND wrong is contradictory,
+          // so it is dropped from both rather than trusted either way.
+          const rawAlso = (Array.isArray(c.alsoCorrect) ? c.alsoCorrect : []).map(w => String(w).trim()).filter(Boolean);
+          // Listed as correct AND wrong = the model contradicted itself.
+          // Drop it from both: being marked wrong for picking a genuinely
+          // correct answer is the worse failure, so never risk it.
+          const conflict = new Set(rawAlso.filter(w => rawWrong.includes(w)));
+          const corrects = [...new Set(rawAlso.filter(w => w !== back && !conflict.has(w)))].slice(0, 4);
+          const correctSet = new Set([back, ...corrects]);
+          const distractors = [...new Set(rawWrong.filter(w => !correctSet.has(w) && !conflict.has(w)))].slice(0, 6);
+          // Only accept a language we can plausibly render as code.
+          const lang = v => {
+            const t = String(v || '').trim().toLowerCase().replace(/[^a-z+#]/g, '');
+            return t && t.length <= 12 ? t : null;
+          };
+          return {
+            front: String(c.front).trim(),
+            back,
+            corrects,
+            frontLang: lang(c.frontLang),
+            codeLang: lang(c.codeLang),
+            distractors,
+            // The AI's chosen option count = its distractors + the answer.
+            // No distractors sent → classic 4 options (the quiz pads with
+            // other cards' backs).
+            answerCount: distractors.length ? Math.min(5, distractors.length + 1) : 4,
+          };
+        });
+      if (!clean.length) throw new Error('empty');
+      return clean;
+    
+}
+
+async function generateAiCards() {
+  const checkedIds = [...document.querySelectorAll('.ai-note-check:checked')].map(c => c.dataset.id);
+  if (!checkedIds.length) { toast('Vyber alespoň jednu poznámku.'); return; }
+  const count = Math.max(2, Math.min(20, parseInt(document.getElementById('aiCardCount').value) || 8));
+
+  const btn = document.getElementById('aiGenerateBtn');
+  btn.disabled = true; btn.textContent = '⏳ Připravuji…';
+  const previewEl = document.getElementById('aiCardsPreview');
+  previewEl.innerHTML = '<div id="aiStatusMsg" style="font-size:.82rem;color:var(--text-muted);margin-top:10px;">Generuji…</div>';
+
+  try {
+    const combinedText = await selectedNotesText(checkedIds);
+    if (!combinedText.trim()) { toast('Vybrané poznámky jsou prázdné.'); btn.disabled = false; btn.textContent = '✨ Vygenerovat'; return; }
+
+    const cards = await aiGenerate(buildAiCardsPrompt(combinedText, count), {
       maxOutputTokens: 3500,
-      parse(text) {
-        const m = text.match(/\[[\s\S]*\]/);
-        if (!m) throw new Error('no-json');
-        const arr = JSON.parse(repairAiJson(m[0]));
-        const clean = arr
-          .filter(c => c && c.front && c.back)
-          .map(c => {
-            const back = String(c.back).trim();
-            const rawWrong = (Array.isArray(c.wrong) ? c.wrong : []).map(w => String(w).trim()).filter(Boolean);
-            // Extra correct answers — the quiz shows a random subset of them.
-            // Anything the model listed as correct AND wrong is contradictory,
-            // so it is dropped from both rather than trusted either way.
-            const rawAlso = (Array.isArray(c.alsoCorrect) ? c.alsoCorrect : []).map(w => String(w).trim()).filter(Boolean);
-            // Listed as correct AND wrong = the model contradicted itself.
-            // Drop it from both: being marked wrong for picking a genuinely
-            // correct answer is the worse failure, so never risk it.
-            const conflict = new Set(rawAlso.filter(w => rawWrong.includes(w)));
-            const corrects = [...new Set(rawAlso.filter(w => w !== back && !conflict.has(w)))].slice(0, 4);
-            const correctSet = new Set([back, ...corrects]);
-            const distractors = [...new Set(rawWrong.filter(w => !correctSet.has(w) && !conflict.has(w)))].slice(0, 6);
-            // Only accept a language we can plausibly render as code.
-            const lang = v => {
-              const t = String(v || '').trim().toLowerCase().replace(/[^a-z+#]/g, '');
-              return t && t.length <= 12 ? t : null;
-            };
-            return {
-              front: String(c.front).trim(),
-              back,
-              corrects,
-              frontLang: lang(c.frontLang),
-              codeLang: lang(c.codeLang),
-              distractors,
-              // The AI's chosen option count = its distractors + the answer.
-              // No distractors sent → classic 4 options (the quiz pads with
-              // other cards' backs).
-              answerCount: distractors.length ? Math.min(5, distractors.length + 1) : 4,
-            };
-          });
-        if (!clean.length) throw new Error('empty');
-        return clean;
-      },
+      parse: parseAiCards,
     });
 
     AI_GENERATED_CARDS = cards;
@@ -386,6 +468,14 @@ ${combinedText.slice(0, 8000)}
     previewEl.innerHTML = `<div style="color:#fca5a5;font-size:.85rem;margin-top:10px;">${aiErrorMessage(e)}</div>`;
     btn.disabled = false; btn.textContent = '✨ Vygenerovat';
   }
+}
+
+// Text vybranych poznamek slozeny dohromady (sdili generovani i rezim bez klice).
+async function selectedNotesText(ids) {
+  const snap = await db.collection('rooms').doc(ROOM_ID).collection('notes').get();
+  const byId = new Map(snap.docs.map(d => [d.id, d.data()]));
+  return ids.map(id => (byId.has(id) ? noteToPlainText(byId.get(id)) : ''))
+    .filter(Boolean).join('\n\n---\n\n');
 }
 
 function renderAiCardsPreview(cards) {

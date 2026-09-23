@@ -623,6 +623,137 @@ function imgHtml(url, width) {
          `float:left;margin:4px 12px 6px 0;">`;
 }
 
+// ── Uchopy na rozich: skutecne skalovani obrazku ──────────────
+// Shift = drz pomer stran, Ctrl = roste ze STREDU (do vsech stran, ne jen
+// tam, kam tahnu). Uchopy se kresli do <body>, ne do editoru — cokoli
+// vlozeneho do contenteditable by skoncilo v ulozenem obsahu poznamky.
+const IMG_MIN = 40;
+
+function closeImgHandles() { document.getElementById('imgHandles')?.remove(); }
+
+function showImgHandles(img, editor, onChange) {
+  closeImgHandles();
+  const box = document.createElement('div');
+  box.id = 'imgHandles';
+  box.className = 'img-handles';
+  box.innerHTML = ['nw', 'ne', 'sw', 'se'].map(k =>
+    `<i class="ih ih-${k}" data-h="${k}"></i>`).join('') +
+    `<span class="ih-size" id="ihSize"></span>`;
+  document.body.appendChild(box);
+
+  const place = () => {
+    const r = img.getBoundingClientRect();
+    box.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;`;
+    const lbl = box.querySelector('#ihSize');
+    if (lbl) lbl.textContent = Math.round(r.width) + ' × ' + Math.round(r.height);
+  };
+  place();
+  box._place = place;
+
+  box.addEventListener('mousedown', e => {
+    const h = e.target.closest('[data-h]');
+    if (!h) return;
+    e.preventDefault(); e.stopPropagation();
+    const k = h.dataset.h;
+    const r = img.getBoundingClientRect();
+    // Pomer ber z PRIROZENYCH rozmeru: vykreslena vyska je 0, dokud se
+    // obrazek nenacte, a Shift by pak delal ctverec.
+    const ratio = (img.naturalWidth && img.naturalHeight)
+      ? img.naturalHeight / img.naturalWidth
+      : (r.height / r.width || 1);
+    const x0 = e.clientX, y0 = e.clientY;
+    const w0 = r.width || img.naturalWidth || IMG_MIN;
+    const h0 = r.height || Math.round(w0 * ratio);
+    // Pri volnem umisteni se pri tahu za levy/horni roh musi posunout i
+    // pozice, jinak by obrazek "utikal" misto aby se zmensoval.
+    const free = img.style.position === 'absolute';
+    const l0 = parseFloat(img.style.left) || 0, t0 = parseFloat(img.style.top) || 0;
+
+    const move = mv => {
+      const dirX = (k === 'ne' || k === 'se') ? 1 : -1;
+      const dirY = (k === 'sw' || k === 'se') ? 1 : -1;
+      let dw = (mv.clientX - x0) * dirX;
+      let dh = (mv.clientY - y0) * dirY;
+      if (mv.ctrlKey || mv.metaKey) { dw *= 2; dh *= 2; }   // roste ze stredu
+      let w = w0 + dw, hgt = h0 + dh;
+      if (mv.shiftKey) { hgt = w * ratio; }                  // drz pomer
+      w = Math.max(IMG_MIN, w);
+      hgt = Math.max(IMG_MIN, hgt);
+      img.style.width = Math.round(w) + 'px';
+      img.style.height = Math.round(hgt) + 'px';
+      img.style.maxWidth = '100%';
+      if (free) {
+        // Ze stredu: uber pulku prirustku na obe strany. Jinak posouvej jen
+        // tu hranu, za kterou se tahne.
+        if (mv.ctrlKey || mv.metaKey) {
+          img.style.left = Math.round(l0 - (w - w0) / 2) + 'px';
+          img.style.top  = Math.round(t0 - (hgt - h0) / 2) + 'px';
+        } else {
+          if (dirX < 0) img.style.left = Math.round(l0 - (w - w0)) + 'px';
+          if (dirY < 0) img.style.top  = Math.round(t0 - (hgt - h0)) + 'px';
+        }
+      }
+      place();
+      onChange?.();
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      box.classList.remove('sizing');
+    };
+    box.classList.add('sizing');
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  return box;
+}
+
+// ── Volne umisteni: obrazek kamkoli, pred text nebo pod nej ───
+function imgIsFree(img) { return img.style.position === 'absolute'; }
+
+function makeImgFree(img, editor) {
+  const er = editor.getBoundingClientRect(), r = img.getBoundingClientRect();
+  const w = Math.round(r.width), h = Math.round(r.height);
+  img.style.cssFloat = 'none';
+  img.style.display = 'block';
+  img.style.margin = '0';
+  img.style.position = 'absolute';
+  img.style.left = Math.round(r.left - er.left + editor.scrollLeft) + 'px';
+  img.style.top  = Math.round(r.top  - er.top  + editor.scrollTop)  + 'px';
+  img.style.width = w + 'px';
+  img.style.height = h + 'px';
+  img.style.maxWidth = 'none';
+  img.style.zIndex = '2';
+}
+
+function makeImgInline(img) {
+  ['position', 'left', 'top', 'zIndex'].forEach(k => { img.style[k] = ''; });
+  img.style.maxWidth = '100%';
+  img.style.height = '';
+  img.style.cssFloat = 'left';
+  img.style.display = '';
+  img.style.margin = '4px 12px 6px 0';
+}
+
+// Tazeni volne umisteneho obrazku po plose poznamky.
+function dragFreeImg(img, editor, e, after) {
+  if (!imgIsFree(img)) return;
+  e.preventDefault();
+  const l0 = parseFloat(img.style.left) || 0, t0 = parseFloat(img.style.top) || 0;
+  const x0 = e.clientX, y0 = e.clientY;
+  const move = mv => {
+    img.style.left = Math.round(l0 + mv.clientX - x0) + 'px';
+    img.style.top  = Math.round(Math.max(0, t0 + mv.clientY - y0)) + 'px';
+    after?.();
+  };
+  const up = () => {
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', up);
+  };
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', up);
+}
+
 function setupEditorImages(editor) {
   if (!editor || editor._imgWired) return;
   editor._imgWired = true;
@@ -671,6 +802,15 @@ function setupEditorImages(editor) {
     if (e.target.tagName === 'IMG') { e.stopPropagation(); openImgToolbar(e.target, editor); }
     else closeImgToolbar();
   });
+
+  // Volne umisteny obrazek se tahne mysi po plose poznamky.
+  editor.addEventListener('mousedown', e => {
+    if (e.target.tagName !== 'IMG' || !imgIsFree(e.target)) return;
+    dragFreeImg(e.target, editor, e, () => {
+      document.getElementById('imgHandles')?._place?.();
+      document.getElementById('imgZones')?._place?.();
+    });
+  });
 }
 
 // Anything that arrived by other means (old notes, pasted HTML) still gets a
@@ -685,6 +825,7 @@ function normalizeEditorImages(editor) {
 function closeImgToolbar() {
   document.getElementById('imgToolbar')?.remove();
   document.getElementById('imgZones')?.remove();
+  closeImgHandles();
 }
 
 // Ukaz, KDE na obrazku jsou klikaci oblasti, uz pri psani kapitoly. Kresli se
@@ -725,6 +866,10 @@ function openImgToolbar(img, editor) {
     <button data-align="center" title="Na střed — samostatně na řádku">⬛</button>
     <button data-align="right"  title="Vpravo — text teče vlevo vedle">➡️</button>
     <span class="it-sep"></span>
+    <button data-free="1" title="Volně — obrázek jde táhnout kamkoli po poznámce">✥ Volně</button>
+    <button data-z="front" title="Před text">▲</button>
+    <button data-z="back"  title="Pod text">▼</button>
+    <span class="it-sep"></span>
     <button data-spots="1" title="Klikací oblasti — víc odkazů na jednom obrázku">🎯 Oblasti</button>
     <span class="it-sep"></span>
     <button data-zoom="1" title="Zvětšit na celou obrazovku — screenshot se dá přečíst">🔍 Zvětšit</button>
@@ -737,6 +882,7 @@ function openImgToolbar(img, editor) {
     bar.style.left = Math.max(8, Math.min(window.innerWidth - bar.offsetWidth - 8, r.left)) + 'px';
     bar.style.top  = Math.max(8, r.top - bar.offsetHeight - 8) + 'px';
     document.getElementById('imgZones')?._place?.();
+    document.getElementById('imgHandles')?._place?.();
   };
   showEditorZones(img);
   place();
@@ -746,11 +892,22 @@ function openImgToolbar(img, editor) {
   const mark = () => {
     const w = img.style.width || '';
     bar.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', IMG_SIZES[b.dataset.size] === w));
+    const free = imgIsFree(img);
     const f = img.style.float || 'none';
     const cur = f === 'left' ? 'left' : f === 'right' ? 'right' : 'center';
-    bar.querySelectorAll('[data-align]').forEach(b => b.classList.toggle('on', b.dataset.align === cur));
+    bar.querySelectorAll('[data-align]').forEach(b => {
+      b.classList.toggle('on', !free && b.dataset.align === cur);
+      b.disabled = free;                       // volny obrazek text neobteka
+    });
+    bar.querySelector('[data-free]')?.classList.toggle('on', free);
+    bar.querySelectorAll('[data-z]').forEach(b => {
+      b.disabled = !free;
+      b.classList.toggle('on', free && ((img.style.zIndex === '0') === (b.dataset.z === 'back')));
+    });
   };
   mark();
+  // Uchopy na rohy — tazenim se obrazek skutecne skaluje.
+  showImgHandles(img, editor, () => { place(); mark(); });
 
   bar.addEventListener('mousedown', e => e.preventDefault()); // keep the caret
   bar.addEventListener('click', e => {
@@ -760,11 +917,19 @@ function openImgToolbar(img, editor) {
     if (b.dataset.del) { img.remove(); closeImgToolbar(); editor.focus(); return; }
     if (b.dataset.spots) { closeImgToolbar(); openHotspotEditor(img); return; }
     if (b.dataset.zoom)  { openLightbox(img.currentSrc || img.src); return; }
-    if (b.dataset.size) { img.style.width = IMG_SIZES[b.dataset.size]; img.style.maxWidth = '100%'; }
+    if (b.dataset.free) {
+      if (imgIsFree(img)) makeImgInline(img); else makeImgFree(img, editor);
+      mark(); place(); showImgHandles(img, editor, () => { place(); mark(); });
+      return;
+    }
+    if (b.dataset.z) { img.style.zIndex = b.dataset.z === 'back' ? '0' : '2'; mark(); return; }
+    // Vyber velikosti zahodi rucne dotazenou vysku, at si obrazek vrati pomer.
+    if (b.dataset.size) { img.style.width = IMG_SIZES[b.dataset.size]; img.style.height = ''; img.style.maxWidth = imgIsFree(img) ? 'none' : '100%'; }
     if (b.dataset.align === 'left')  { img.style.cssFloat = 'left';  img.style.display = ''; img.style.margin = '4px 12px 6px 0'; }
     if (b.dataset.align === 'right') { img.style.cssFloat = 'right'; img.style.display = ''; img.style.margin = '4px 0 6px 12px'; }
     if (b.dataset.align === 'center'){ img.style.cssFloat = 'none';  img.style.display = 'block'; img.style.margin = '8px auto'; }
     mark(); place();
+    document.getElementById('imgHandles')?._place?.();
   });
 
   // Close when clicking elsewhere / scrolling away
@@ -2510,14 +2675,6 @@ function openNoteDetail(el, note) {
       h.className = 'note-detail-title';
       h.textContent = note.title;
       contentEl.prepend(h);
-    }
-    // Offer turning it into a guide — chapters with click-through links.
-    if (canEdit(note)) {
-      const b = document.createElement('button');
-      b.className = 'make-guide-btn';
-      b.textContent = '📖 Udělat z toho návod (kapitoly)';
-      b.addEventListener('click', () => convertToGuide(note.id));
-      contentEl.appendChild(b);
     }
   }
 

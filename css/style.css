@@ -2010,6 +2010,7 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   padding: 4px 0 8px;
   color: var(--text);
 }
+.note-detail-time { flex-shrink: 0; }
 .note-detail-title {
   font-size: 1.2rem;
   font-weight: 700;
@@ -2032,9 +2033,9 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 }
 
 /* ===== COMMENTS ===== */
-.note-comments { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.note-comments { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
 .note-comments-title { font-size: 0.82rem; font-weight: 600; margin-bottom: 10px; color: var(--text-muted); }
-.comments-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.comments-list { max-height: min(220px, 26vh); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .comments-empty { color: var(--text-muted); font-size: 0.82rem; padding: 6px 0; }
 .comment-row { display: flex; gap: 9px; align-items: flex-start; }
 .comment-av {
@@ -3479,8 +3480,14 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
   font-size: 0.64rem; font-weight: 700; border-radius: 5px;
   padding: 0 5px; margin-right: 4px; vertical-align: 1px;
 }
-.guide-wrap { display: flex; gap: 14px; align-items: flex-start; }
-.guide-wrap #detailContent { flex: 1; min-width: 0; }
+/* Tohle je ten prvek, ktery ma v detailu rust a scrollovat — bez flex:1 a
+   min-height:0 rostlo misto obsahu cele OKNO a dlouha poznamka utekla dolu
+   pod obrazovku i s komentari. */
+.guide-wrap {
+  display: flex; gap: 14px; align-items: stretch;
+  flex: 1 1 auto; min-height: 0;
+}
+.guide-wrap #detailContent { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; }
 .guide-tree {
   width: 210px; flex-shrink: 0; max-height: 50vh; overflow-y: auto;
   border: 1px solid var(--border); border-radius: 10px; padding: 6px; background: var(--bg-2);
@@ -3516,12 +3523,6 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .guide-kid:hover { border-color: var(--accent); transform: translateX(3px); transition: var(--transition); }
 .guide-kid-arrow { margin-left: auto; color: var(--text-muted); }
 
-.make-guide-btn {
-  display: block; margin-top: 18px;
-  background: var(--bg-3); border: 1px dashed var(--border); border-radius: 9px;
-  color: var(--text-muted); cursor: pointer; font-size: 0.82rem; padding: 8px 14px;
-}
-.make-guide-btn:hover { border-color: var(--accent); color: var(--text); }
 
 /* A guide is its own kind of thing on the board — book spine down the side,
    its own colour, its own header. Underneath it's still a note document, so
@@ -3669,6 +3670,41 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .gmap-zone.picking {
   background: var(--accent); color: #fff; border-color: var(--accent); border-style: solid;
 }
+/* Export: stazeni a Disk vedle sebe */
+.export-actions { display: flex; gap: 8px; }
+.export-actions .btn { flex: 1; justify-content: center; }
+@media (max-width: 560px) { .export-actions { flex-direction: column; } }
+
+/* Uchopy na rozich obrazku — skutecne skalovani tazenim.
+   Kresli se do <body> nad obrazek (ne do contenteditable, to by se ulozilo). */
+.img-handles { position: fixed; z-index: 561; pointer-events: none; }
+.img-handles::before {
+  content: ''; position: absolute; inset: 0;
+  border: 1px solid var(--accent); border-radius: 3px;
+}
+.img-handles .ih {
+  position: absolute; width: 12px; height: 12px;
+  background: var(--accent); border: 2px solid #fff; border-radius: 3px;
+  pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+.ih-nw { left: -6px; top: -6px;    cursor: nwse-resize; }
+.ih-ne { right: -6px; top: -6px;   cursor: nesw-resize; }
+.ih-sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.ih-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.ih-size {
+  position: absolute; right: 0; bottom: -20px;
+  font-size: 0.66rem; color: #fff; background: var(--accent);
+  padding: 1px 6px; border-radius: 5px; white-space: nowrap;
+  opacity: 0; transition: opacity .12s;
+}
+.img-handles.sizing .ih-size { opacity: 1; }
+
+/* Volne umisteny obrazek: lezi kdekoli po poznamce, pred textem nebo pod nim. */
+.rich-editor, .note-detail-content, #detailContent, .note-content { position: relative; }
+.rich-editor img[style*="position:absolute"],
+.rich-editor img[style*="position: absolute"] { cursor: move; }
+.note-content { overflow: hidden; }
+
 /* Prekryv klikacich oblasti nad obrazkem PRI PSANI kapitoly — aby bylo
    videt, kde uz oblasti jsou, bez otevirani editoru oblasti. */
 .img-zones {
@@ -3718,6 +3754,35 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .guide-kids-back { opacity: 0.78; }
 .guide-kids-back .guide-kid { font-weight: 400; }
 .crumb.on { font-weight: 600; }
+
+/* ===== AI bez klíče: přes schránku ===== */
+.ai-manual {
+  margin: 4px 0 10px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--bg-3);
+}
+.ai-manual > summary {
+  cursor: pointer; font-size: 0.84rem; font-weight: 600;
+  color: var(--text); list-style: none; user-select: none;
+}
+.ai-manual > summary::-webkit-details-marker { display: none; }
+.ai-manual > summary::before { content: '▸ '; color: var(--text-muted); }
+.ai-manual[open] > summary::before { content: '▾ '; }
+.ai-manual-hint {
+  font-size: 0.78rem; color: var(--text-muted);
+  line-height: 1.5; margin: 8px 0 10px;
+}
+.ai-manual-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ai-manual-msg { font-size: 0.78rem; color: var(--text-muted); }
+.ai-manual-msg.err { color: #fca5a5; }
+.ai-manual-msg.ok  { color: #86efac; }
+.ai-paste {
+  width: 100%; resize: vertical; min-height: 90px;
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  font-size: 0.78rem; line-height: 1.45;
+}
 
 /* ===== TRAVEL AGENT (app-wide jump palette) ===== */
 #travelAgent {
