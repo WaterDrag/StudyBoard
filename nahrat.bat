@@ -103,6 +103,23 @@ if errorlevel 1 (
 rem ------------------------------------------------------------------
 echo   [5/5] Nahravam na GitHub...
 echo         (poprve otevre prohlizec kvuli prihlaseni)
+
+rem Nejdriv stahni, co je na GitHubu. Kdyz se tam neco zmenilo jinudy
+rem (treba CNAME pres web), push by se odmitl s "fetch first" a skript
+rem by skoncil chybou, i kdyz je vsechno v poradku.
+echo         nejdriv stahuji zmeny z GitHubu...
+git pull --rebase origin main
+if errorlevel 1 (
+  echo.
+  echo   POZOR: zmeny z GitHubu se nepodarilo spojit s tvymi.
+  echo   Nejspis jste se stejnym souborem hnuli oba. Spust v teto slozce:
+  echo       git status
+  echo   a vyres oznacene soubory, pak:
+  echo       git rebase --continue
+  echo   Nebo rebase zrus prikazem:  git rebase --abort
+  goto :konec
+)
+
 git push -u origin main
 if errorlevel 1 goto :chyba
 
