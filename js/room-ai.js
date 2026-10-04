@@ -3,6 +3,11 @@
 // pořadí načítání určuje room.html (room-init.js jde poslední).
 
 let AI_GENERATED_CARDS = [];
+const AI_CARD_MAX = 100;
+const AI_CARD_BATCH_SIZE = 8;
+const AI_CARD_PARALLELISM = 3;
+let AI_SOURCE_COLOR = null;
+let AI_JOB = { status: 'idle', done: 0, total: 0, cards: [], message: '' };
 
 // Flatten a note's content to plain text for the AI prompt. Tables are
 // converted to "cell | cell" rows (not just mashed together) since notes can
@@ -73,6 +78,12 @@ function setupAiCards() {
   btn.addEventListener('click', openAiCardsModal);
   document.getElementById('aiGenerateBtn').addEventListener('click', generateAiCards);
   document.getElementById('aiSaveBtn').addEventListener('click', saveAiCards);
+  document.getElementById('aiJobNotice')?.addEventListener('click', () => openModal('aiCardsModal'));
+  const autoCount = document.getElementById('aiAutoCount');
+  const countInput = document.getElementById('aiCardCount');
+  const updateCountInput = () => { countInput.disabled = autoCount.checked; };
+  autoCount.addEventListener('change', updateCountInput);
+  updateCountInput();
   document.getElementById('aiExamBtn').addEventListener('click', runAiExam);
   document.getElementById('aiCopyPrompt')?.addEventListener('click', copyAiCardsPrompt);
   document.getElementById('aiParsePaste')?.addEventListener('click', useAiCardsPaste);
@@ -91,13 +102,14 @@ function aiManualMsg(text, kind) {
 async function copyAiCardsPrompt() {
   const ids = [...document.querySelectorAll('.ai-note-check:checked')].map(c => c.dataset.id);
   if (!ids.length) { aiManualMsg('Nejdřív vyber aspoň jednu poznámku.', 'err'); return; }
-  const count = Math.max(2, Math.min(20, parseInt(document.getElementById('aiCardCount').value) || 8));
+  const automatic = document.getElementById('aiAutoCount').checked;
+  const count = automatic ? null : Math.max(2, Math.min(AI_CARD_MAX, parseInt(document.getElementById('aiCardCount').value) || 8));
   const btn = document.getElementById('aiCopyPrompt');
   btn.disabled = true;
   try {
     const text = await selectedNotesText(ids);
     if (!text.trim()) { aiManualMsg('Vybrané poznámky jsou prázdné.', 'err'); return; }
-    const prompt = buildAiCardsPrompt(text, count);
+    const prompt = buildAiCardsPrompt(text, count, automatic);
     const box = document.getElementById('aiPromptBox');
     try {
       await copyToClipboard(prompt);
@@ -151,10 +163,12 @@ function useAiCardsPaste() {
     return;
   }
   AI_GENERATED_CARDS = cards;
+  AI_JOB = { ...AI_JOB, status: 'ready', cards };
   renderAiCardsPreview(cards);
   document.getElementById('aiSaveBtn').style.display = 'inline-flex';
   document.getElementById('aiGenerateBtn').style.display = 'none';
   aiManualMsg('Načteno ' + cards.length + ' kartiček.', 'ok');
+  updateAiJobNotice();
 }
 
 // ── AI exam ("Vyzkoušej mě") ──────────────────────────────────
@@ -327,6 +341,12 @@ function shuffleArr(a) {
 }
 
 async function openAiCardsModal() {
+  // Keep a running job and its finished preview when the modal is dismissed.
+  // Reopening the AI tool brings the user back to the same progress/review.
+  if (AI_JOB.status !== 'idle') {
+    openModal('aiCardsModal');
+    return;
+  }
   const listEl = document.getElementById('aiNotesList');
   listEl.innerHTML = '<div style="text-align:center;padding:14px;color:var(--text-muted);font-size:.85rem;">Načítám poznámky…</div>';
   document.getElementById('aiCardsPreview').innerHTML = '';
@@ -334,6 +354,10 @@ async function openAiCardsModal() {
   document.getElementById('aiGenerateBtn').style.display = 'inline-flex';
   document.getElementById('aiGenerateBtn').disabled = false;
   document.getElementById('aiGenerateBtn').textContent = '✨ Vygenerovat';
+  document.getElementById('aiPasteBox').value = '';
+  document.getElementById('aiPromptBox').value = '';
+  AI_GENERATED_CARDS = [];
+  AI_SOURCE_COLOR = null;
   const examArea = document.getElementById('aiExamArea');
   if (examArea) { examArea.style.display = 'none'; examArea.innerHTML = ''; }
   document.getElementById('aiDeckName').value = 'AI karty ze zápisků';
@@ -376,9 +400,11 @@ async function openAiCardsModal() {
 
 // Zadani i rozebrani odpovedi jsou zvlast, protoze je pouzivaji DVE cesty:
 // primo pres API s klicem, a rezim bez klice (zkopiruj zadani -> vloz odpoved).
-function buildAiCardsPrompt(text, count) {
+function buildAiCardsPrompt(text, count, automatic = false) {
   return `You are creating study flashcards from the notes below. Keep the SAME language as the notes (they may be in Czech).
-Create exactly ${count} flashcards covering the key facts, terms, and concepts.
+${automatic
+    ? `Choose the suitable number of flashcards yourself (2 to ${AI_CARD_MAX}). Cover every separately defined term and important concept; do not stop at an arbitrary small number. Prefer one clear card per distinct term, and merge only genuinely inseparable concepts.`
+    : `Create exactly ${count} flashcards covering the key facts, terms, and concepts.`}
 Each flashcard:
 - "front": a short question or term
 - "back": the single best correct answer or definition
@@ -394,8 +420,124 @@ Return ONLY a JSON array like this, nothing else: [{"front":"...","back":"...","
 
 NOTES:
 """
-${text.slice(0, 8000)}
+${text}
 """`;
+}
+
+function buildAiCardPlanPrompt(text, automatic, count) {
+  const countRule = automatic
+    ? `Choose a suitable number of distinct study targets (2 to ${AI_CARD_MAX}). If the notes contain a glossary or a list of terminology with definitions, include EVERY separately defined term. Usually use one target per term; combine only concepts that cannot be tested separately.`
+    : `Choose exactly ${count} distinct study targets, distributed across the important terms and concepts. Do not omit a clearly defined term when the requested count allows it.`;
+  return `You are planning a comprehensive set of study flashcards from the notes below. Keep the same language as the notes.
+${countRule}
+First identify the concepts that deserve their own card. Do not write the cards yet. For each target, include a short topic and a concise evidence excerpt or faithful summary from the notes, so a second step can write a grounded card for it. Avoid duplicate targets and do not invent topics absent from the notes.
+Return ONLY valid JSON in this shape:
+{"targets":[{"topic":"term or concept","evidence":"supporting definition or facts from the notes"}]}
+
+NOTES:
+<<<
+${text}
+>>>`;
+}
+
+function parseAiCardPlan(raw) {
+  const match = raw.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+  if (!match) throw new Error('no-json');
+  const parsed = JSON.parse(repairAiJson(match[0]));
+  const source = Array.isArray(parsed) ? parsed : (parsed.targets || parsed.items || []);
+  if (!Array.isArray(source)) throw new Error('empty');
+  const seen = new Set();
+  const targets = source.map(item => ({
+    topic: String(item?.topic || item?.term || item?.front || '').trim(),
+    evidence: String(item?.evidence || item?.context || item?.definition || '').trim(),
+  })).filter(item => {
+    if (!item.topic) return false;
+    const key = item.topic.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, AI_CARD_MAX);
+  if (!targets.length) throw new Error('empty');
+  return targets;
+}
+
+function buildAiCardBatchPrompt(targets) {
+  return `Create exactly one study flashcard for EACH target below, in the same order. Keep the same language as the notes. Cover the named target directly, use its evidence, and do not add facts that the evidence does not support. Do not repeat a card for another target.
+For each card return:
+- "front": a short question or term
+- "back": the best correct answer or definition
+- "alsoCorrect": 0-4 genuinely correct alternative answers, if any
+- "wrong": 4-6 plausible but clearly incorrect answers
+- "frontLang" when the question itself contains code; "codeLang" when the answer contains code
+For code, keep real indentation and do not use markdown fences. Return ONLY a JSON array, nothing else:
+[{"front":"...","back":"...","alsoCorrect":[],"wrong":[]}]
+
+TARGETS:
+${JSON.stringify(targets.map(t => ({ topic: t.topic, evidence: t.evidence })))} `;
+}
+
+function setAiCardsStatus(message) {
+  AI_JOB.message = message;
+  const status = document.getElementById('aiStatusMsg');
+  if (status) status.textContent = message;
+  updateAiJobNotice();
+}
+
+function updateAiJobNotice() {
+  const notice = document.getElementById('aiJobNotice');
+  if (!notice) return;
+  if (AI_JOB.status === 'idle') { notice.style.display = 'none'; return; }
+  notice.style.display = 'block';
+  if (AI_JOB.status === 'running') {
+    const progress = AI_JOB.total ? ` · ${AI_JOB.done}/${AI_JOB.total} dávek` : '';
+    notice.textContent = `⏳ AI připravuje kartičky${progress} · otevřít`;
+  } else if (AI_JOB.status === 'ready') {
+    notice.textContent = `✅ ${AI_JOB.cards.length} kartiček je hotových · zkontrolovat`;
+  } else {
+    notice.textContent = '⚠️ Generování se nepodařilo · zobrazit';
+  }
+}
+
+function parseAiCardBatch(raw, expectedCount) {
+  const cards = parseAiCards(raw);
+  if (cards.length !== expectedCount) throw new Error('batch-count');
+  return cards;
+}
+
+async function generateAiCardBatches(targets) {
+  const batches = [];
+  for (let i = 0; i < targets.length; i += AI_CARD_BATCH_SIZE) {
+    batches.push(targets.slice(i, i + AI_CARD_BATCH_SIZE));
+  }
+  AI_JOB.done = 0;
+  AI_JOB.total = batches.length;
+  setAiCardsStatus(`Připraven plán ${targets.length} kartiček. Generuji ${batches.length} dávek souběžně…`);
+
+  const results = new Array(batches.length);
+  let nextBatch = 0;
+  let failure = null;
+  async function worker() {
+    while (!failure) {
+      const index = nextBatch++;
+      if (index >= batches.length) return;
+      const batch = batches[index];
+      try {
+        results[index] = await aiGenerate(buildAiCardBatchPrompt(batch), {
+          temperature: 0.45,
+          maxOutputTokens: 5000,
+          statusElementId: null,
+          parse: raw => parseAiCardBatch(raw, batch.length),
+        });
+        AI_JOB.done++;
+        setAiCardsStatus(`Generuji kartičky… hotovo ${AI_JOB.done} z ${AI_JOB.total} dávek.`);
+      } catch (e) {
+        failure = e;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(AI_CARD_PARALLELISM, batches.length) }, worker));
+  if (failure) throw failure;
+  return results.flat();
 }
 
 function parseAiCards(text) {
@@ -444,29 +586,50 @@ function parseAiCards(text) {
 async function generateAiCards() {
   const checkedIds = [...document.querySelectorAll('.ai-note-check:checked')].map(c => c.dataset.id);
   if (!checkedIds.length) { toast('Vyber alespoň jednu poznámku.'); return; }
-  const count = Math.max(2, Math.min(20, parseInt(document.getElementById('aiCardCount').value) || 8));
+  const automatic = document.getElementById('aiAutoCount').checked;
+  const count = automatic ? null : Math.max(2, Math.min(AI_CARD_MAX, parseInt(document.getElementById('aiCardCount').value) || 8));
 
   const btn = document.getElementById('aiGenerateBtn');
   btn.disabled = true; btn.textContent = '⏳ Připravuji…';
   const previewEl = document.getElementById('aiCardsPreview');
-  previewEl.innerHTML = '<div id="aiStatusMsg" style="font-size:.82rem;color:var(--text-muted);margin-top:10px;">Generuji…</div>';
+  AI_SOURCE_COLOR = document.querySelector('.ai-note-check:checked')?.dataset.color || '#6366f1';
+  AI_JOB = { status: 'running', done: 0, total: 0, cards: [], message: 'Načítám vybrané poznámky…', noteIds: checkedIds };
+  previewEl.innerHTML = '<div id="aiStatusMsg" style="font-size:.82rem;color:var(--text-muted);margin-top:10px;"></div>';
+  setAiCardsStatus('Načítám vybrané poznámky…');
 
   try {
     const combinedText = await selectedNotesText(checkedIds);
-    if (!combinedText.trim()) { toast('Vybrané poznámky jsou prázdné.'); btn.disabled = false; btn.textContent = '✨ Vygenerovat'; return; }
+    if (!combinedText.trim()) throw new Error('Vybrané poznámky jsou prázdné.');
 
-    const cards = await aiGenerate(buildAiCardsPrompt(combinedText, count), {
-      maxOutputTokens: 3500,
-      parse: parseAiCards,
+    setAiCardsStatus('AI vybírá vhodný počet a sestavuje seznam témat…');
+    const targets = await aiGenerate(buildAiCardPlanPrompt(combinedText, automatic, count), {
+      temperature: 0.2,
+      maxOutputTokens: 8000,
+      statusElementId: null,
+      parse: raw => {
+        const plan = parseAiCardPlan(raw);
+        if (!automatic && plan.length !== count) throw new Error('plan-count');
+        return plan;
+      },
     });
+    const cards = await generateAiCardBatches(targets);
 
     AI_GENERATED_CARDS = cards;
+    AI_JOB.status = 'ready';
+    AI_JOB.cards = cards;
     renderAiCardsPreview(cards);
     document.getElementById('aiSaveBtn').style.display = 'inline-flex';
     btn.style.display = 'none';
+    updateAiJobNotice();
+    toastAction(`AI připravila ${cards.length} kartiček.`, 'Zkontrolovat', () => openModal('aiCardsModal'));
   } catch (e) {
-    previewEl.innerHTML = `<div style="color:#fca5a5;font-size:.85rem;margin-top:10px;">${aiErrorMessage(e)}</div>`;
+    AI_JOB.status = 'error';
+    AI_JOB.error = e;
+    const message = e.message === 'Vybrané poznámky jsou prázdné.' ? e.message : aiErrorMessage(e);
+    previewEl.innerHTML = `<div style="color:#fca5a5;font-size:.85rem;margin-top:10px;">${message}</div>`;
     btn.disabled = false; btn.textContent = '✨ Vygenerovat';
+    updateAiJobNotice();
+    toast('Generování AI kartiček se nepodařilo. Stav a možnost opakování najdeš v AI kartách.');
   }
 }
 
@@ -480,7 +643,7 @@ async function selectedNotesText(ids) {
 
 function renderAiCardsPreview(cards) {
   const el = document.getElementById('aiCardsPreview');
-  el.innerHTML = `<label class="label" style="margin-top:12px;display:block;">Náhled — odškrtni, co nechceš uložit:</label>
+  el.innerHTML = `<label class="label" style="margin-top:12px;display:block;">Náhled (${cards.length}) — odškrtni, co nechceš uložit:</label>
     <div class="ai-cards-preview-list">` +
     cards.map((c, i) => `
       <label class="ai-card-row">
@@ -511,7 +674,7 @@ async function saveAiCards() {
     const name = document.getElementById('aiDeckName').value.trim() || 'AI karty ze zápisků';
     // Match the color of the note(s) these cards were generated from,
     // instead of always defaulting to the same indigo.
-    const sourceColor = document.querySelector('.ai-note-check:checked')?.dataset.color || '#6366f1';
+    const sourceColor = AI_SOURCE_COLOR || document.querySelector('.ai-note-check:checked')?.dataset.color || '#6366f1';
     const deckRef = await db.collection('decks').add({
       name, color: sourceColor, description: null,
       ownerUid: ME.uid, roomId: ROOM_ID, cardCount: 0,
@@ -535,6 +698,10 @@ async function saveAiCards() {
     await batch.commit();
     toast(`Uloženo ${toSave.length} karet do balíčku „${name}" ✓`);
     closeModal('aiCardsModal');
+    AI_GENERATED_CARDS = [];
+    AI_SOURCE_COLOR = null;
+    AI_JOB = { status: 'idle', done: 0, total: 0, cards: [], message: '' };
+    updateAiJobNotice();
   } catch (e) {
     toast('Chyba při ukládání: ' + e.message);
   }

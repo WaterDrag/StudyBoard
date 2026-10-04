@@ -130,11 +130,11 @@ async function aiGenerateGrounded(prompt, { temperature = 0.2, maxOutputTokens =
   return { text, sources, queries: meta.webSearchQueries || [] };
 }
 
-async function aiGenerate(prompt, { temperature = 0.9, maxOutputTokens = 1600, parse } = {}) {
+async function aiGenerate(prompt, { temperature = 0.9, maxOutputTokens = 1600, parse, statusElementId = 'aiStatusMsg' } = {}) {
   const gKey = getGeminiKey(), qKey = getGroqKey();
   if (!gKey && !qKey) throw new Error('no-key');
 
-  const statusEl = () => document.getElementById('aiStatusMsg');
+  const statusEl = () => statusElementId ? document.getElementById(statusElementId) : null;
   const countdown = async (seconds, label) => {
     for (let s = seconds; s > 0; s--) {
       const el = statusEl();
