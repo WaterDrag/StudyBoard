@@ -379,18 +379,31 @@
         <label class="label">Poznámky k použití</label>
         <div id="aiNotesList" class="ai-notes-list"></div>
       </div>
-      <div style="display:flex;gap:14px;">
-        <div class="form-group" style="flex:1;">
-          <label class="label">Počet kartiček při ručním výběru</label>
-          <input type="number" id="aiCardCount" class="input" value="8" min="2" max="100">
-          <label class="ai-auto-count"><input type="checkbox" id="aiAutoCount" checked> AI sama vybere vhodný počet</label>
-          <div class="ai-count-hint">Zavřením okna generování nepřerušíš; můžeš pokračovat na nástěnce.</div>
-        </div>
-        <div class="form-group" style="flex:2;">
-          <label class="label">Název nového balíčku</label>
-          <input type="text" id="aiDeckName" class="input" placeholder="AI karty ze zápisků" maxlength="60">
+      <div class="form-group ai-count-group">
+        <label class="label">Počet kartiček</label>
+        <div class="ai-count-modes">
+          <div class="ai-count-mode">
+            <label class="ai-count-choice" for="aiManualCountMode">
+              <input type="radio" id="aiManualCountMode" name="aiCountMode" value="manual">
+              <span>Zvolím počet</span>
+            </label>
+            <span class="ai-count-mode-desc">Zadej přesný počet (2–100).</span>
+            <input type="number" id="aiCardCount" class="input" value="8" min="2" max="100" aria-label="Zvolený počet kartiček" disabled>
+          </div>
+          <div class="ai-count-mode">
+            <label class="ai-count-choice" for="aiAutoCount">
+              <input type="radio" id="aiAutoCount" name="aiCountMode" value="auto" checked>
+              <span>AI vybere podle poznámek</span>
+            </label>
+            <span class="ai-count-mode-desc">Přizpůsobí počet pojmům a tématům.</span>
+          </div>
         </div>
       </div>
+      <div class="form-group">
+        <label class="label">Název nového balíčku</label>
+        <input type="text" id="aiDeckName" class="input" placeholder="AI karty ze zápisků" maxlength="60">
+      </div>
+      <div class="ai-count-hint">Po spuštění můžeš okno zavřít a pokračovat na nástěnce; generování poběží dál.</div>
       <!-- Bez API klíče: zadání do schránky → vložit do jakéhokoli chatu → odpověď zpět -->
       <details id="aiManual" class="ai-manual">
         <summary>📋 Nemám API klíč — udělám to přes schránku</summary>

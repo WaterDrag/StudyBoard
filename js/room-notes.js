@@ -472,6 +472,9 @@ function expandBoardIfNeeded(noteEl) {
 
 // ── Drag & drop ───────────────────────────────────────────────
 function makeDraggable(el, noteId) {
+  // The board uses this marker to let viewers pan by swiping over a note,
+  // while editable notes keep one-finger drag for repositioning.
+  el.dataset.touchDraggable = 'true';
   el.addEventListener('mousedown', e => {
     if (e.target.closest('[data-action]')) return;
     if (e.button !== 0) return;
@@ -561,13 +564,22 @@ function makeDraggable(el, noteId) {
     const startX = t0.clientX, startY = t0.clientY;
     const startL = parseInt(el.style.left) || 0;
     const startT = parseInt(el.style.top)  || 0;
-    let moved = false;
+    let moved = false, multiTouch = false;
     el.dataset.dragged = 'false';
 
     const onMove = mv => {
+      // When a second finger lands, switch the gesture over to board pan/zoom
+      // and keep this note from moving underneath the pinch.
+      if (mv.touches.length > 1) {
+        multiTouch = true;
+        el.dataset.dragged = 'true';
+        mv.preventDefault();
+        return;
+      }
+      if (multiTouch) { mv.preventDefault(); return; }
       const t = mv.touches[0];
-      const dx = t.clientX - startX;
-      const dy = t.clientY - startY;
+      const dx = (t.clientX - startX) / BOARD_ZOOM;
+      const dy = (t.clientY - startY) / BOARD_ZOOM;
       if (!moved && Math.hypot(dx, dy) < 8) return; // still a tap
       if (!moved) { moved = true; el.classList.add('dragging'); el.style.zIndex = 100; el.dataset.dragged = 'true'; }
       mv.preventDefault(); // dragging — don't let the board pan/scroll under it
@@ -581,7 +593,10 @@ function makeDraggable(el, noteId) {
       el.removeEventListener('touchmove', onMove);
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onEnd);
-      if (!moved) return;
+      if (!moved) {
+        if (multiTouch) setTimeout(() => { el.dataset.dragged = 'false'; }, 150);
+        return;
+      }
       el.classList.remove('dragging');
       el.style.zIndex = '';
       setTimeout(() => { el.dataset.dragged = 'false'; }, 150); // outlive the ghost click

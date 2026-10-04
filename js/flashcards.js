@@ -521,7 +521,7 @@ Correct answer: ${JSON.stringify(back)}${already}
 
 Return JSON with two arrays, in the SAME language as the card:
 - "wrong": ${POOL_WRONG} plausible but clearly WRONG answers. Same format, length and style as the correct answer. They must NOT be variations of each other, and none of them may actually be correct.
-- "alsoCorrect": up to ${POOL_ALSO} OTHER answers that are ALSO fully correct for this exact question (different true facts, valid alternatives, other members of the same set). Use an EMPTY array when the question genuinely has only one correct answer — never pad it with half-truths.
+- "alsoCorrect": up to ${POOL_ALSO} OTHER independently correct choices that should be selected together with the saved answer when shown. Add them only if the existing question clearly asks for multiple items (for example, "Which ...?" about a set). Do NOT add synonyms, paraphrases, mutually exclusive alternatives, or several possible answers to a question asking for just one. Use an EMPTY array for a genuinely single-answer question — never pad it with half-truths.
 
 Return ONLY this JSON, nothing else: {"wrong":["..."],"alsoCorrect":["..."]}`;
 

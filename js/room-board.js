@@ -889,39 +889,87 @@ function setupBoardPan() {
   window.addEventListener('mouseup', stopPan);
   window.addEventListener('blur', stopPan);
 
-  // ── Touch: one finger on empty canvas pans, two fingers pinch-zoom.
-  // Notes handle their own touch drag in makeDraggable; the .note check
-  // below keeps the board from panning underneath while a note is dragged.
+  // ── Touch: one finger on empty canvas pans; two fingers pan and pinch-zoom.
+  // Notes handle their own one-finger drag in makeDraggable.
   let touchPan = null;   // { x, y, sl, st }
-  let pinch    = null;   // { dist, zoom }
+  let pinch    = null;   // { dist, zoom, x, y, sl, st }
+  let suppressTouchClick = false, suppressTouchClickTimer = null;
+  const suppressGestureClick = () => {
+    suppressTouchClick = true;
+    clearTimeout(suppressTouchClickTimer);
+    suppressTouchClickTimer = setTimeout(() => { suppressTouchClick = false; }, 350);
+  };
+  // Some mobile browsers synthesize a click on the note after a swipe/pinch.
+  // Eat that one click so a board gesture doesn't accidentally open the note.
+  wrap.addEventListener('click', e => {
+    if (!suppressTouchClick) return;
+    suppressTouchClick = false;
+    clearTimeout(suppressTouchClickTimer);
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
   const touchDist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const touchMid = t => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
 
   wrap.addEventListener('touchstart', e => {
     if (e.touches.length === 2) {
-      pinch = { dist: touchDist(e.touches), zoom: BOARD_ZOOM };
+      const mid = touchMid(e.touches);
+      pinch = {
+        dist: Math.max(1, touchDist(e.touches)), zoom: BOARD_ZOOM,
+        x: mid.x, y: mid.y, sl: wrap.scrollLeft, st: wrap.scrollTop,
+        moved: !!touchPan?.moved,
+      };
       touchPan = null;
       e.preventDefault();
-    } else if (e.touches.length === 1 && !e.target.closest('.note, .wb-bar, .wb-h')) {
+    } else if (e.touches.length === 1 &&
+               !e.target.closest('.wb-bar, .wb-h, .note[data-touch-draggable="true"]')) {
       const t = e.touches[0];
-      touchPan = { x: t.clientX, y: t.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop };
+      touchPan = { x: t.clientX, y: t.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop, moved: false };
     }
   }, { passive: false });
 
   wrap.addEventListener('touchmove', e => {
     if (pinch && e.touches.length === 2) {
       e.preventDefault();
-      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      setBoardZoom(pinch.zoom * (touchDist(e.touches) / pinch.dist), mx, my);
+      const mid = touchMid(e.touches);
+      const rect = wrap.getBoundingClientRect();
+      if (Math.hypot(mid.x - pinch.x, mid.y - pinch.y) > 8 ||
+          Math.abs(touchDist(e.touches) - pinch.dist) > 8) {
+        pinch.moved = true;
+        suppressGestureClick();
+      }
+      const boardX = (pinch.sl + pinch.x - rect.left) / pinch.zoom;
+      const boardY = (pinch.st + pinch.y - rect.top) / pinch.zoom;
+      BOARD_ZOOM = Math.min(2.2, Math.max(0.15, pinch.zoom * (touchDist(e.touches) / pinch.dist)));
+      document.getElementById('board').style.zoom = BOARD_ZOOM;
+      // Keep the original board point under the moving finger midpoint. This
+      // makes a two-finger drag pan the board even when pinch distance stays
+      // the same, and combines translation + zoom without jumping.
+      wrap.scrollLeft = boardX * BOARD_ZOOM - (mid.x - rect.left);
+      wrap.scrollTop  = boardY * BOARD_ZOOM - (mid.y - rect.top);
+      updateMinimap();
     } else if (touchPan && e.touches.length === 1) {
       e.preventDefault();
       const t = e.touches[0];
+      if (Math.hypot(t.clientX - touchPan.x, t.clientY - touchPan.y) > 8) {
+        touchPan.moved = true;
+        suppressGestureClick();
+      }
       wrap.scrollLeft = touchPan.sl - (t.clientX - touchPan.x);
       wrap.scrollTop  = touchPan.st - (t.clientY - touchPan.y);
     }
   }, { passive: false });
 
-  const endTouch = e => { if (e.touches.length < 2) pinch = null; if (e.touches.length === 0) touchPan = null; };
+  const endTouch = e => {
+    if (e.touches.length < 2 && pinch) {
+      if (pinch.moved) suppressGestureClick();
+      pinch = null;
+    }
+    if (e.touches.length === 0 && touchPan) {
+      if (touchPan.moved) suppressGestureClick();
+      touchPan = null;
+    }
+  };
   wrap.addEventListener('touchend', endTouch);
   wrap.addEventListener('touchcancel', endTouch);
 }

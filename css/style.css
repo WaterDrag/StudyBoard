@@ -1468,10 +1468,25 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 }
 .ai-note-row:last-child { border-bottom: none; }
 .ai-note-row input, .ai-card-row input { margin-top: 3px; accent-color: var(--accent); flex-shrink: 0; }
+.ai-note-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.ai-note-title { color: var(--text); font-weight: 650; }
+.ai-note-preview { color: var(--text-muted); font-size: 0.76rem; }
 .ai-cards-preview-list { max-height: 280px; overflow-y: auto; margin-top: 6px; }
-.ai-auto-count { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-size: 0.8rem; cursor: pointer; }
-.ai-auto-count input { accent-color: var(--accent); }
-.ai-count-hint { margin-top: 6px; color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
+.ai-count-group { margin-bottom: 14px; }
+.ai-count-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ai-count-mode {
+  min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--bg-3); display: flex; flex-direction: column; gap: 6px;
+}
+.ai-count-mode:has(.ai-count-choice input:checked) { border-color: var(--accent); }
+.ai-count-choice { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+.ai-count-choice input { margin: 0; accent-color: var(--accent); flex-shrink: 0; }
+.ai-count-mode-desc { color: var(--text-muted); font-size: 0.72rem; line-height: 1.35; }
+.ai-count-mode > .input { margin-top: 2px; }
+.ai-count-hint { margin: -4px 0 12px; color: var(--text-muted); font-size: 0.74rem; line-height: 1.4; }
+@media (max-width: 520px) {
+  .ai-count-modes { grid-template-columns: 1fr; }
+}
 .ai-job-notice {
   position: fixed; right: 20px; bottom: 18px; z-index: 450;
   max-width: min(420px, calc(100vw - 32px));

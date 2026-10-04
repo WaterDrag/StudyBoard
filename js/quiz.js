@@ -12,7 +12,6 @@ let SCORE      = 0;
 let STREAK     = 0;
 let MAX_STREAK = 0;
 let WRONG_IDS  = new Set();
-let QUIZ_MULTI = false;     // whole-quiz tick-and-confirm mode
 let CURRENT_OPTS = [];      // options shown for the current question
 
 // ── Spaced repetition (Leitner boxes) ─────────────────────────
@@ -152,10 +151,6 @@ async function loadDeck() {
 // ── Start / restart ───────────────────────────────────────────
 function startQuiz(cards) {
   QUIZ_QUEUE = shuffle([...cards]).slice(0, Math.min(20, cards.length));
-  // If ANY card in this run can have several correct answers, the whole quiz
-  // uses the tick-and-confirm UI. Mixing single-click and multi-select would
-  // give the answer away — seeing checkboxes would mean "more than one".
-  QUIZ_MULTI = QUIZ_QUEUE.some(c => (c.corrects || []).length > 0);
   QUIZ_IDX   = 0;
   SCORE      = 0;
   STREAK     = 0;
@@ -218,8 +213,9 @@ function buildQuizOptions(card) {
     wrongPool = wrongPool.concat(extra);
   }
 
-  // How many correct answers to show: at least one, never all-but-none.
-  const nCorrect = uniqCorrect.length > 1 ? randInt(1, Math.min(uniqCorrect.length, 3)) : 1;
+  // When the card has multiple independently correct choices, show at least
+  // two so this question really uses the multi-select interaction.
+  const nCorrect = uniqCorrect.length > 1 ? randInt(2, Math.min(uniqCorrect.length, 3)) : 1;
   // How many wrong ones: varies too, so the total option count moves around.
   // A single-answer card only gets to vary once its pool is big enough —
   // older cards with just three stored distractors keep their fixed layout.
@@ -246,22 +242,23 @@ function renderAnswers(card, opts) {
 
   const hint = document.getElementById('quizMultiHint');
   const confirmBtn = document.getElementById('quizConfirmBtn');
-  if (hint)       hint.style.display = QUIZ_MULTI ? 'block' : 'none';
+  const multi = opts.filter(opt => opt.correct).length > 1;
+  if (hint)       hint.style.display = multi ? 'block' : 'none';
   if (confirmBtn) {
-    confirmBtn.style.display = QUIZ_MULTI ? 'inline-flex' : 'none';
+    confirmBtn.style.display = multi ? 'inline-flex' : 'none';
     confirmBtn.disabled = true;
     confirmBtn.onclick = () => submitMulti(card);
   }
 
   opts.forEach((opt, i) => {
     const btn = document.createElement('button');
-    btn.className = 'quiz-answer-btn' + (card.codeLang ? ' is-code' : '') + (QUIZ_MULTI ? ' is-multi' : '');
+    btn.className = 'quiz-answer-btn' + (card.codeLang ? ' is-code' : '') + (multi ? ' is-multi' : '');
     btn.textContent = opt.text;   // textContent — options are never trusted HTML
     btn.style.animationDelay = `${i * 55}ms`;
     btn.dataset.i = String(i);
     btn.addEventListener('click', () => {
       if (btn.disabled) return;
-      if (!QUIZ_MULTI) { pick(btn, opt.correct, card); return; }
+      if (!multi) { pick(btn, opt.correct, card); return; }
       btn.classList.toggle('selected');
       confirmBtn.disabled = !wrap.querySelector('.quiz-answer-btn.selected');
     });

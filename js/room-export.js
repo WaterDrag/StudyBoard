@@ -1354,7 +1354,7 @@ function optionsFor(card, allCards){
     pool = pool.concat(allCards.filter(function(c){ return c !== card && c.back; }).map(function(c){ return c.back; }));
   }
   pool = pool.filter(function(v,i,a){ return v && a.indexOf(v) === i && corr.indexOf(v) === -1; });
-  var nC = corr.length > 1 ? rnd(1, Math.min(corr.length, 3)) : 1;
+  var nC = corr.length > 1 ? rnd(2, Math.min(corr.length, 3)) : 1;
   var want = corr.length > 1 ? rnd(2, 5) : (pool.length >= 4 ? rnd(3, Math.min(5, pool.length)) : 3);
   var nW = Math.max(1, Math.min(want, pool.length));
   return shuffle(
@@ -1453,7 +1453,7 @@ function renderQuiz(){
   var x = S.list[S.i], card = x.c;
   var all = DECKS[x.di] ? DECKS[x.di].cards : [];
   var opts = optionsFor(card, all);
-  var multi = (card.corrects || []).length > 0;
+  var multi = opts.filter(function(o){ return o.correct; }).length > 1;
   var body = setQ(card);
   if (multi){
     var h = document.createElement('div');

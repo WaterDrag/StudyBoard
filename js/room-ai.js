@@ -80,9 +80,11 @@ function setupAiCards() {
   document.getElementById('aiSaveBtn').addEventListener('click', saveAiCards);
   document.getElementById('aiJobNotice')?.addEventListener('click', () => openModal('aiCardsModal'));
   const autoCount = document.getElementById('aiAutoCount');
+  const manualCount = document.getElementById('aiManualCountMode');
   const countInput = document.getElementById('aiCardCount');
-  const updateCountInput = () => { countInput.disabled = autoCount.checked; };
+  const updateCountInput = () => { countInput.disabled = !manualCount.checked; };
   autoCount.addEventListener('change', updateCountInput);
+  manualCount.addEventListener('change', updateCountInput);
   updateCountInput();
   document.getElementById('aiExamBtn').addEventListener('click', runAiExam);
   document.getElementById('aiCopyPrompt')?.addEventListener('click', copyAiCardsPrompt);
@@ -197,7 +199,7 @@ async function runAiExam() {
 
     const prompt = `You are examining a student on the notes below. Keep the SAME language as the notes (they may be in Czech).
 Create exactly ${count} multiple-choice questions covering the key facts and concepts.
-Each question: "q" is the question, "correct" is the best right answer, "alsoCorrect" is an array of 0-4 OTHER answers that are ALSO fully correct (leave it empty when the question truly has one answer), and "wrong" is an array of 4-6 plausible but clearly wrong answers (same format/length as the correct one, never accidentally correct). Treat these as POOLS — a random subset of each is shown per attempt.
+Each question: "q" is the question, "correct" is one correct choice, "alsoCorrect" is an array of 0-4 OTHER independently correct choices that should be selected together with it when shown. Use these only when the notes support a question with several answers (for example, "Which of these...?"); phrase "q" clearly as a plural/multiple-answer question. Do NOT put synonyms, paraphrases, mutually exclusive alternatives, or "name any one" answers in "alsoCorrect". Leave it empty for a genuinely single-answer question. Include multiple correct choices whenever the notes clearly support them; do not force them when they do not. "wrong" is an array of 4-6 plausible but clearly wrong answers (same format/length as the correct one, never accidentally correct). Treat these as POOLS — a random subset of each is shown per attempt.
 If the notes contain programming code, also ask real code questions ("what does this print?", "find the bug", "complete the loop"). Put the properly indented code straight into "q" (no markdown fences) and add "lang" with the language id (java, python, sql...). If the ANSWERS are code, add "answersAreCode": true.
 Return ONLY a JSON array like this, nothing else: [{"q":"...","correct":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"lang":"java"}, ...]
 
@@ -256,7 +258,7 @@ function examOptions(q) {
   const uniqCorrect = [...new Set(correctPool)];
   const wrongPool = [...new Set((q.wrong || []).filter(w => w && !uniqCorrect.includes(w)))];
   const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-  const nCorrect = uniqCorrect.length > 1 ? rnd(1, Math.min(uniqCorrect.length, 3)) : 1;
+  const nCorrect = uniqCorrect.length > 1 ? rnd(2, Math.min(uniqCorrect.length, 3)) : 1;
   const nWrong = Math.max(1, Math.min(uniqCorrect.length > 1 ? rnd(2, 5) : 3, wrongPool.length));
   return shuffleArr([
     ...shuffleArr(uniqCorrect).slice(0, nCorrect).map(text => ({ text, correct: true })),
@@ -284,7 +286,8 @@ function startAiExam(questions) {
     }
     const q = questions[order[idx]];
     const opts = examOptions(q);
-    const multi = questions.some(x => (x.alsoCorrect || []).length > 0);
+    // Decide from the options shown on this question, not from the full exam.
+    const multi = opts.filter(x => x.correct).length > 1;
     area.innerHTML = `
       <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
         <div style="display:flex;justify-content:space-between;font-size:0.74rem;color:var(--text-muted);margin-bottom:8px;">
@@ -378,9 +381,10 @@ async function openAiCardsModal() {
       snap.docs.filter(d => d.data().kind !== 'heading').map(d => {
         const note = d.data();
         const preview = noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
+        const title = String(note.title || '').trim();
         return `<label class="ai-note-row">
           <input type="checkbox" class="ai-note-check" data-id="${d.id}" data-color="${note.color || '#fef9c3'}">
-          <span>${esc(preview)}</span>
+          <span class="ai-note-copy">${title ? `<strong class="ai-note-title">${esc(title)}</strong>` : ''}<span class="ai-note-preview">${esc(preview)}</span></span>
         </label>`;
       }).join('');
 
@@ -408,7 +412,7 @@ ${automatic
 Each flashcard:
 - "front": a short question or term
 - "back": the single best correct answer or definition
-- "alsoCorrect": an array of OTHER answers that are ALSO fully correct for this question — different true facts, valid alternatives, other members of the same set (e.g. for "Which are OSI layers?" list several real layers; for "Which keywords declare a variable in JS?" list let, const, var). Give 0-4 of them: 0 when the question genuinely has one single answer, more when it honestly has several. Never pad it with half-truths.
+- "alsoCorrect": 0-4 OTHER independently correct choices that should be selected together with "back" when they appear in the quiz (for example, members of a set when "front" asks which items belong to it). If the notes clearly support several, make "front" explicitly ask for all / which items and put one choice in "back" plus the others here. Do NOT list synonyms, paraphrases, mutually exclusive alternatives, or choices when the question asks for just one. Leave empty for a genuinely single-answer question; never pad with half-truths.
 - "wrong": an array of 4-6 plausible but clearly WRONG answers, in the same format/length/language as "back", not variations of each other and not accidentally correct.
 Write these as POOLS — the app picks a random subset of each for every attempt, so more is better as long as every entry is honestly right (or honestly wrong).
 
@@ -466,7 +470,7 @@ function buildAiCardBatchPrompt(targets) {
 For each card return:
 - "front": a short question or term
 - "back": the best correct answer or definition
-- "alsoCorrect": 0-4 genuinely correct alternative answers, if any
+- "alsoCorrect": 0-4 OTHER independently correct choices that should be selected together with "back" when shown. When evidence supports a set/list, phrase "front" as a multiple-answer question (e.g. "Which ...?") and provide its distinct correct members here. Do NOT include synonyms, paraphrases, mutually exclusive alternatives, or answers to a question asking for only one. Leave empty for a genuinely single-answer target.
 - "wrong": 4-6 plausible but clearly incorrect answers
 - "frontLang" when the question itself contains code; "codeLang" when the answer contains code
 For code, keep real indentation and do not use markdown fences. Return ONLY a JSON array, nothing else:
