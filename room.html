@@ -546,6 +546,33 @@
           <button id="copyLinkBtn" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Kopírovat</button>
         </div>
         <div id="tempInvitesList" style="margin-top:12px;"></div>
+
+        <div id="agentInviteSection" style="display:none;margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
+          <label class="label">🤖 Pozvánka pro AI agenta</label>
+          <p style="color:var(--text-muted);font-size:0.78rem;margin:0 0 10px;">
+            Agent nepotřebuje být členem místnosti ani přítelem. Přístup dostane přes API podle oprávnění tokenu. Token se ukáže jen při vytvoření; ulož ho do soukromých přihlašovacích údajů agenta.
+          </p>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:0.8rem;color:var(--text-muted);">
+            <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" checked disabled> Číst poznámky</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="agentNotesWriteScope"> Vytvářet a upravovat textové poznámky</label>
+            <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="agentCommentsScope"> Přidávat komentáře</label>
+            <select id="agentInviteExpiry" class="input" style="width:auto;flex:0 0 auto;">
+              <option value="24">Platnost 1 den</option>
+              <option value="168" selected>Platnost 7 dní</option>
+              <option value="720">Platnost 30 dní</option>
+              <option value="1">Platnost 1 hodina</option>
+            </select>
+            <button id="agentInviteCreate" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Vytvořit token</button>
+          </div>
+          <div id="agentInviteError" style="display:none;color:#fca5a5;font-size:0.78rem;margin:8px 0;"></div>
+          <div id="agentInviteResult" style="display:none;background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:10px;margin:10px 0;">
+            <div style="font-size:0.78rem;font-weight:600;margin-bottom:6px;">Token — zobrazí se znovu jen po vytvoření nové pozvánky</div>
+            <textarea id="agentInviteToken" class="input" readonly rows="2" style="width:100%;resize:vertical;font-family:monospace;font-size:0.76rem;word-break:break-all;"></textarea>
+            <button id="agentInviteCopy" class="btn btn-secondary" style="margin-top:8px;padding:6px 10px;font-size:0.78rem;">📋 Kopírovat instrukce pro agenta</button>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">Kdo získá token, může použít přidělená oprávnění. StudyBoard neumí nezávisle ověřit, zda je jeho držitel opravdu AI.</div>
+          </div>
+          <div id="agentInviteList" style="margin-top:10px;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -630,8 +657,10 @@
       </p>
       <div class="files-drop" id="filesDrop">
         <input type="file" id="filesInput" multiple hidden>
+        <input type="file" id="filesFolderInput" webkitdirectory directory multiple hidden>
         <button class="btn btn-primary btn-sm" id="filesPickBtn">＋ Nahrát soubory</button>
-        <span class="files-drop-or">nebo je sem přetáhni</span>
+        <button class="btn btn-secondary btn-sm" id="filesFolderPickBtn">📁 Nahrát složku</button>
+        <span class="files-drop-or">nebo sem přetáhni soubory či celou složku</span>
       </div>
       <div class="files-warn">
         ⚠️ Nahrané soubory jsou dostupné <b>každému, kdo má odkaz</b> — jinak by

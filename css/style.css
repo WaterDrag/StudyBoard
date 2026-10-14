@@ -561,6 +561,7 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 #exportModal .modal,
 #shareModal .modal { max-width: 760px; }
 #searchModal .modal, #activityModal .modal { max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
+#shareModal .modal { max-height: calc(100vh - 40px); overflow-y: auto; }
 #searchModal .modal > *, #activityModal .modal > * { flex-shrink: 0; }
 #searchResults, #activityList { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
@@ -3705,12 +3706,12 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .files-hint { font-size: 0.82rem; color: var(--text-muted); line-height: 1.55; margin-bottom: 12px; }
 .files-hint code { background: var(--bg-3); padding: 1px 6px; border-radius: 5px; }
 .files-drop {
-  display: flex; align-items: center; gap: 12px; justify-content: center;
+  display: flex; align-items: center; gap: 12px; justify-content: center; flex-wrap: wrap;
   border: 2px dashed var(--border); border-radius: 12px;
   padding: 18px; background: var(--bg-3); transition: border-color .15s, background .15s;
 }
 .files-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.files-drop-or { font-size: 0.8rem; color: var(--text-muted); }
+.files-drop-or { flex-basis: 100%; text-align: center; font-size: 0.8rem; color: var(--text-muted); }
 .files-warn {
   font-size: 0.75rem; color: var(--text-muted); line-height: 1.5;
   background: var(--bg-3); border-left: 3px solid #f59e0b;

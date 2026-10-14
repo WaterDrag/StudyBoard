@@ -2,6 +2,9 @@
 // Rozděleno z room.js (v9.8). Klasické skripty sdílející globály;
 // pořadí načítání určuje room.html (room-init.js jde poslední).
 
+const AGENT_API_BASE = `https://europe-west1-${firebaseConfig.projectId}.cloudfunctions.net/agentApi`;
+let LAST_AGENT_INVITE = null;
+
 // ── Share ─────────────────────────────────────────────────────
 // One unified link builder: Trvalý/Dočasný type switch, role, and a "jen 1
 // použití" flag. A plain permanent link reuses the room's inviteCode (no
@@ -11,6 +14,7 @@ function setupShare() {
   const roleSelect = document.getElementById('inviteRoleSelect');
   const typeSelect = document.getElementById('inviteTypeSelect');
   const linkText   = document.getElementById('inviteLinkText');
+  setupAgentInviteUi();
 
   // Only the OWNER can create invites with editor rights — everyone else
   // (including viewers, who used to be able to self-escalate this way) gets
@@ -41,6 +45,7 @@ function setupShare() {
   document.getElementById('shareBtn').addEventListener('click', () => {
     document.getElementById('inviteCode').textContent = ROOM.inviteCode || '------';
     renderTempInvites();
+    if (MY_ROLE === 'owner') loadAgentInvites();
     openModal('shareModal');
   });
 
@@ -129,6 +134,151 @@ function renderTempInvites() {
       toast('Pozvánka zrušena.');
     } catch (e) { toast('Chyba: ' + e.message); }
   }));
+}
+
+// ── AI agent access (server-issued, scoped bearer tokens) ──────
+function setupAgentInviteUi() {
+  const section = document.getElementById('agentInviteSection');
+  if (!section || MY_ROLE !== 'owner') return;
+  section.style.display = 'block';
+
+  document.getElementById('agentInviteCreate')?.addEventListener('click', createAgentInviteFromRoom);
+  document.getElementById('agentInviteCopy')?.addEventListener('click', async () => {
+    if (!LAST_AGENT_INVITE) return;
+    try {
+      await navigator.clipboard.writeText(agentInviteInstructions(LAST_AGENT_INVITE));
+      toast('Instrukce s tokenem zkopírovány.');
+    } catch (_) { showAgentInviteError('Kopírování se nepodařilo; token můžeš zkopírovat ručně.'); }
+  });
+}
+
+function agentInvitePath(roomId) {
+  return `/v1/rooms/${encodeURIComponent(roomId)}/agent-invites`;
+}
+
+async function agentManagementRequest(path, options = {}) {
+  const idToken = await ME.getIdToken();
+  let response;
+  try {
+    response = await fetch(AGENT_API_BASE + path, {
+      method: options.method || 'GET',
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+    });
+  } catch (_) {
+    throw new Error('Agentní server ještě není nasazený nebo není dostupný.');
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Požadavek se nezdařil (${response.status}).`);
+  return data;
+}
+
+function showAgentInviteError(message) {
+  const el = document.getElementById('agentInviteError');
+  if (!el) return;
+  el.textContent = message;
+  el.style.display = 'block';
+}
+
+async function createAgentInviteFromRoom() {
+  const btn = document.getElementById('agentInviteCreate');
+  const error = document.getElementById('agentInviteError');
+  const result = document.getElementById('agentInviteResult');
+  error.style.display = 'none';
+  result.style.display = 'none';
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = 'Vytvářím…';
+  const scopes = ['notes:read'];
+  if (document.getElementById('agentNotesWriteScope').checked) scopes.push('notes:write');
+  if (document.getElementById('agentCommentsScope').checked) scopes.push('comments:write');
+
+  try {
+    const data = await agentManagementRequest(agentInvitePath(ROOM_ID), {
+      method: 'POST',
+      body: { expiresInHours: Number(document.getElementById('agentInviteExpiry').value), scopes },
+    });
+    LAST_AGENT_INVITE = { token: data.token, invite: data.invite, roomId: ROOM_ID };
+    document.getElementById('agentInviteToken').value = data.token;
+    result.style.display = 'block';
+    await loadAgentInvites();
+  } catch (e) {
+    showAgentInviteError(e.message || 'Pozvánku se nepodařilo vytvořit.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
+function agentInviteInstructions(item) {
+  const canWriteNotes = item.invite.scopes.includes('notes:write');
+  const hasComments = item.invite.scopes.includes('comments:write');
+  return [
+    'StudyBoard — přístup AI agenta',
+    `API: ${AGENT_API_BASE}/v1`,
+    `Room ID: ${item.roomId}`,
+    'Agent nepotřebuje členství v místnosti ani přátelství s vlastníkem.',
+    `Authorization: Bearer ${item.token}`,
+    '',
+    'Dostupné operace:',
+    `GET /rooms/${encodeURIComponent(item.roomId)}/notes — číst poznámky (limit 1–200, cursor pro další stránku)`,
+    `GET /rooms/${encodeURIComponent(item.roomId)}/notes/{noteId} — číst jednu poznámku`,
+    ...(canWriteNotes ? [
+      `POST /rooms/${encodeURIComponent(item.roomId)}/notes — vytvořit textovou poznámku, JSON tělo: {"title":"Název","content":"Obsah","x":60,"y":60}`,
+      `PATCH /rooms/${encodeURIComponent(item.roomId)}/notes/{noteId} — upravit title a/nebo content, JSON tělo: {"content":"Nový obsah"}`,
+      'Úpravy přijímají prostý text; mazání poznámek není povoleno.',
+    ] : []),
+    ...(hasComments ? [`POST /rooms/${encodeURIComponent(item.roomId)}/notes/{noteId}/comments — přidat komentář, JSON tělo: {"text":"..."}`] : []),
+    `Pozvánka platí do: ${new Date(item.invite.expiresAt).toLocaleString('cs-CZ')}`,
+    'Token nikam veřejně nevypisuj a po skončení práce ho přestaň používat.',
+  ].join('\n');
+}
+
+async function loadAgentInvites() {
+  if (MY_ROLE !== 'owner') return;
+  const list = document.getElementById('agentInviteList');
+  if (!list) return;
+  list.innerHTML = '<div style="font-size:0.76rem;color:var(--text-muted);padding:6px 0;">Načítám agentní pozvánky…</div>';
+  try {
+    const { invites = [] } = await agentManagementRequest(agentInvitePath(ROOM_ID));
+    if (!invites.length) {
+      list.innerHTML = '<div style="font-size:0.76rem;color:var(--text-muted);padding:6px 0;">Zatím žádná agentní pozvánka.</div>';
+      return;
+    }
+    const statusLabel = { active: 'aktivní', expired: 'vypršela', revoked: 'zrušena' };
+    const scopeLabels = {
+      'notes:read': 'číst poznámky',
+      'notes:write': 'vytvářet a upravovat textové poznámky',
+      'comments:write': 'přidávat komentáře',
+    };
+    list.innerHTML = '<label class="label" style="margin-bottom:5px;">Agentní pozvánky</label>' + invites.map(invite => `
+      <div style="display:flex;align-items:center;gap:8px;font-size:0.76rem;color:var(--text-muted);padding:6px 0;border-bottom:1px solid var(--border);">
+        <span style="flex:1;min-width:0;">${statusLabel[invite.status] || 'neaktivní'} · ${invite.scopes.map(scope => esc(scopeLabels[scope] || scope)).join(', ')} · do ${invite.expiresAt ? new Date(invite.expiresAt).toLocaleString('cs-CZ', { day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit' }) : '–'}</span>
+        ${invite.status === 'active' ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.72rem;color:#fca5a5;" data-revoke-agent="${esc(invite.id)}" title="Zrušit agentní přístup">Zrušit</button>` : ''}
+      </div>`).join('');
+    list.querySelectorAll('[data-revoke-agent]').forEach(button => button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await agentManagementRequest(`${agentInvitePath(ROOM_ID)}/${encodeURIComponent(button.dataset.revokeAgent)}`, { method: 'DELETE' });
+        if (LAST_AGENT_INVITE?.invite.id === button.dataset.revokeAgent) {
+          LAST_AGENT_INVITE = null;
+          document.getElementById('agentInviteResult').style.display = 'none';
+          document.getElementById('agentInviteToken').value = '';
+        }
+        await loadAgentInvites();
+        toast('Agentní přístup byl zrušen.');
+      } catch (e) {
+        button.disabled = false;
+        showAgentInviteError(e.message || 'Pozvánku se nepodařilo zrušit.');
+      }
+    }));
+  } catch (e) {
+    list.innerHTML = '';
+    showAgentInviteError(e.message || 'Agentní pozvánky se nepodařilo načíst.');
+  }
 }
 
 // ── Members ───────────────────────────────────────────────────

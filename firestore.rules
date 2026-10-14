@@ -191,6 +191,13 @@ service cloud.firestore {
       }
     }
 
+    // Agent invitation hashes and permission metadata are server-only.
+    // Cloud Functions uses the Admin SDK; no client (including room members)
+    // may read, create, update, or revoke these credentials directly.
+    match /agentInvites/{inviteId} {
+      allow read, write: if false;
+    }
+
     // ── Uživatelské profily ────────────────────────────────────
     match /users/{uid} {
       // The profile is readable by any signed-in user on purpose — friend

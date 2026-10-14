@@ -70,23 +70,109 @@ async function saveRoomFiles(mutate) {
   renderRoomFiles();
 }
 
+function roomFileItems(fileList) {
+  return [...(fileList || [])].map(item => {
+    const file = item?.file || item;
+    if (!file || typeof file.size !== 'number') return null;
+    return {
+      file,
+      relativePath: item?.relativePath || file.webkitRelativePath || file.name,
+    };
+  }).filter(Boolean);
+}
+
+function roomFilePathParts(path, fallback) {
+  return String(path || fallback || '')
+    .split(/[\\/]/)
+    .filter(part => part && part !== '.' && part !== '..')
+    .map(driveSafeName)
+    .filter(Boolean);
+}
+
+async function driveRoomFileTarget(relativePath, fallbackName) {
+  const parts = roomFilePathParts(relativePath, fallbackName);
+  if (!parts.length) throw new Error('Soubor nemá platný název.');
+  const fileName = parts.pop();
+  let folder = await driveSubfolder(ROOM?.name);
+  for (const part of parts) folder = await driveSubfolder(part, folder);
+  return { folder, fileName, displayName: [...parts, fileName].join('/') };
+}
+
+function fileFromEntry(entry) {
+  return new Promise((resolve, reject) => entry.file(resolve, reject));
+}
+
+function readDirectoryBatch(reader) {
+  return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+}
+
+async function directoryEntries(entry) {
+  const reader = entry.createReader();
+  const entries = [];
+  while (true) {
+    const batch = await readDirectoryBatch(reader);
+    if (!batch.length) return entries;
+    entries.push(...batch);
+  }
+}
+
+async function collectDroppedEntry(entry, parentPath = '') {
+  const path = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+  if (entry.isFile) {
+    const file = await fileFromEntry(entry);
+    return [{ file, relativePath: path }];
+  }
+  if (entry.isDirectory) {
+    const children = await directoryEntries(entry);
+    const nested = await Promise.all(children.map(child => collectDroppedEntry(child, path)));
+    return nested.flat();
+  }
+  return [];
+}
+
+async function filesFromDrop(dataTransfer) {
+  const items = [...(dataTransfer?.items || [])];
+  // Read DataTransferItem handles synchronously while the drop event is active.
+  const sources = items.map(item => {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry) return { entry };
+    const file = item.getAsFile?.();
+    return file ? { file } : null;
+  }).filter(Boolean);
+  const containsDirectory = sources.some(source => source.entry?.isDirectory);
+  const files = [];
+  for (const source of sources) {
+    if (source.entry) files.push(...await collectDroppedEntry(source.entry));
+    else files.push({ file: source.file, relativePath: source.file.webkitRelativePath || source.file.name });
+  }
+  if (files.length) return files;
+  if (containsDirectory) return [];
+  return [...(dataTransfer?.files || [])].map(file => ({
+    file,
+    relativePath: file.webkitRelativePath || file.name,
+  }));
+}
+
 async function uploadRoomFiles(fileList) {
-  const files = [...fileList].filter(Boolean);
+  const files = roomFileItems(fileList);
   if (!files.length) return;
   if (!driveConfigured()) { filesMsg(driveSetupHint(), 'err'); return; }
   if (MY_ROLE === 'viewer') { filesMsg('Nahrávat můžou jen editoři.', 'err'); return; }
 
   let done = 0;
-  for (const file of files) {
+  for (const item of files) {
+    const { file, relativePath } = item;
+    let displayName = relativePath || file.name;
     try {
-      filesMsg('Nahrávám ' + file.name + '… (' + (done + 1) + '/' + files.length + ')');
-      const folder = await driveSubfolder(ROOM?.name);
-      const up = await driveUpload(file.name, file, file.type || 'application/octet-stream', folder);
+      filesMsg('Nahrávám ' + displayName + '… (' + (done + 1) + '/' + files.length + ')');
+      const target = await driveRoomFileTarget(relativePath, file.name);
+      displayName = target.displayName;
+      const up = await driveUpload(target.fileName, file, file.type || 'application/octet-stream', target.folder);
       // Bez tohohle by spolužákům Disk nabídl jen „požádat o přístup".
       await driveShareByLink(up.id);
       await saveRoomFiles(list => [...list, {
         id: up.id,
-        name: up.name || file.name,
+        name: displayName || up.name || file.name,
         mime: up.mimeType || file.type || '',
         size: up.size || String(file.size || ''),
         link: up.webViewLink || ('https://drive.google.com/file/d/' + up.id + '/view'),
@@ -128,7 +214,16 @@ function setupRoomFiles() {
 
   const input = document.getElementById('filesInput');
   document.getElementById('filesPickBtn')?.addEventListener('click', () => input.click());
-  input?.addEventListener('change', () => { uploadRoomFiles(input.files); input.value = ''; });
+  input?.addEventListener('change', () => {
+    uploadRoomFiles(input.files);
+    input.value = '';
+  });
+  const folderInput = document.getElementById('filesFolderInput');
+  document.getElementById('filesFolderPickBtn')?.addEventListener('click', () => folderInput?.click());
+  folderInput?.addEventListener('change', () => {
+    uploadRoomFiles(folderInput.files);
+    folderInput.value = '';
+  });
 
   const drop = document.getElementById('filesDrop');
   if (drop) {
@@ -138,7 +233,18 @@ function setupRoomFiles() {
     ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => {
       e.preventDefault(); drop.classList.remove('over');
     }));
-    drop.addEventListener('drop', e => uploadRoomFiles(e.dataTransfer?.files || []));
+    drop.addEventListener('drop', async e => {
+      try {
+        const files = await filesFromDrop(e.dataTransfer);
+        if (!files.length) {
+          filesMsg('Složka neobsahuje žádné soubory.', 'err');
+          return;
+        }
+        await uploadRoomFiles(files);
+      } catch (err) {
+        filesMsg('Složku se nepodařilo načíst: ' + (err?.message || err), 'err');
+      }
+    });
   }
 
   document.getElementById('filesList')?.addEventListener('click', e => {

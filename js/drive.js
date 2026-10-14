@@ -121,10 +121,11 @@ function driveSafeName(name) {
   return String(name || 'Místnost').replace(/['\\\\]/g, '').slice(0, 80).trim() || 'Místnost';
 }
 
-async function driveSubfolder(name) {
+async function driveSubfolder(name, parentId = null) {
   const safe = driveSafeName(name);
-  if (DRIVE_SUBFOLDERS.has(safe)) return DRIVE_SUBFOLDERS.get(safe);
-  const parent = await driveFolder();
+  const parent = parentId || await driveFolder();
+  const cacheKey = parent + '/' + safe;
+  if (DRIVE_SUBFOLDERS.has(cacheKey)) return DRIVE_SUBFOLDERS.get(cacheKey);
   const q = encodeURIComponent(
     "mimeType='application/vnd.google-apps.folder' and name='" + safe +
     "' and '" + parent + "' in parents and trashed=false");
@@ -140,7 +141,7 @@ async function driveSubfolder(name) {
     });
     id = made.id;
   }
-  DRIVE_SUBFOLDERS.set(safe, id);
+  DRIVE_SUBFOLDERS.set(cacheKey, id);
   return id;
 }
 
