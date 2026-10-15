@@ -63,6 +63,57 @@ function repairAiJson(txt) {
   return out;
 }
 
+// A reply copied out of a chat app often isn't valid JSON any more: the app
+// (or autocorrect) turns the quotes into “typographic” ones, and people copy
+// just the objects without the surrounding [ ]. The same characters also
+// appear INSIDE the text (Czech „quotes“, Click="Save" in code), so a quote
+// only counts as the end of a string when JSON structure follows it.
+const CHAT_QUOTES = '"“”„‟″';
+function closesChatString(txt, i) {
+  while (i < txt.length && /\s/.test(txt[i])) i++;
+  if (i >= txt.length || '}]:'.includes(txt[i])) return true;
+  if (txt[i] !== ',') return false;
+  i++;
+  while (i < txt.length && /\s/.test(txt[i])) i++;
+  return i >= txt.length || CHAT_QUOTES.includes(txt[i]) || '{[]}'.includes(txt[i]);
+}
+function looseChatJsonArray(txt) {
+  let out = '', inStr = false;
+  for (let i = 0; i < txt.length; i++) {
+    const ch = txt[i];
+    if (!inStr) {
+      if (CHAT_QUOTES.includes(ch)) { out += '"'; inStr = true; } else out += ch;
+      continue;
+    }
+    if (ch === '\\') { out += ch + (txt[i + 1] ?? ''); i++; continue; }
+    if (CHAT_QUOTES.includes(ch) && closesChatString(txt, i + 1)) { out += '"'; inStr = false; continue; }
+    if (ch === '"') out += '\\"';
+    else if (ch === '\n') out += '\\n';
+    else if (ch === '\r') out += '\\r';
+    else if (ch === '\t') out += '\\t';
+    else out += ch;
+  }
+  const arrAt = out.indexOf('['), objAt = out.indexOf('{');
+  if (objAt < 0 && arrAt < 0) return null;
+  const json = objAt >= 0 && (arrAt < 0 || objAt < arrAt)
+    ? '[' + out.slice(objAt, out.lastIndexOf('}') + 1) + ']'
+    : out.slice(arrAt, out.lastIndexOf(']') + 1);
+  try {
+    const arr = JSON.parse(json);
+    return Array.isArray(arr) ? arr : null;
+  } catch (_) { return null; }
+}
+
+// Cards and exam questions are answered by someone who sees ONLY the card —
+// not the notes. Without this, the model happily asks "what does Withdraw()
+// return?" about a class that exists only in the notes, which nobody can
+// answer from the card alone.
+const AI_SELF_CONTAINED_RULE = `SELF-CONTAINED QUESTIONS (most important rule): the student sees ONLY the question and the answer choices, never the notes. Every question must be answerable from that alone plus general knowledge of the topic.
+- Never refer to "the code above", "the example", "the program from the notes", "this class" etc.
+- If a question is about specific code (what a method returns, what it prints, which member is static, where the bug is...), put that code — or the relevant excerpt of it — into the question itself, marked as code. Include every line needed to answer; a method body that is not shown cannot be asked about.
+- Only use names of classes, methods, variables or examples defined in the notes (e.g. Withdraw(), BankAccount, TbName) if the question also shows their code or fully describes what they are.
+- If the needed code is missing from the notes or too long to show, ask about the general concept instead (e.g. "What does a method with return type bool tell the caller?").`;
+
 // Render a snippet as a real code block: monospace, indentation preserved,
 // horizontally scrollable. Shared by the AI preview, the exam and (via the
 // same markup/CSS) the flash-card pages.
@@ -201,6 +252,7 @@ async function runAiExam() {
 Create exactly ${count} multiple-choice questions covering the key facts and concepts.
 Each question: "q" is the question, "correct" is one correct choice, "alsoCorrect" is an array of 0-4 OTHER independently correct choices that should be selected together with it when shown. Use these only when the notes support a question with several answers (for example, "Which of these...?"); phrase "q" clearly as a plural/multiple-answer question. Do NOT put synonyms, paraphrases, mutually exclusive alternatives, or "name any one" answers in "alsoCorrect". Leave it empty for a genuinely single-answer question. Include multiple correct choices whenever the notes clearly support them; do not force them when they do not. "wrong" is an array of 4-6 plausible but clearly wrong answers (same format/length as the correct one, never accidentally correct). Treat these as POOLS — a random subset of each is shown per attempt.
 If the notes contain programming code, also ask real code questions ("what does this print?", "find the bug", "complete the loop"). Put the properly indented code straight into "q" (no markdown fences) and add "lang" with the language id (java, python, sql...). If the ANSWERS are code, add "answersAreCode": true.
+${AI_SELF_CONTAINED_RULE}
 Return ONLY a JSON array like this, nothing else: [{"q":"...","correct":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"lang":"java"}, ...]
 
 NOTES:
@@ -420,6 +472,7 @@ SOURCE CODE: if the notes contain programming code, make proper code cards too, 
 - "frontLang": language id (java, python, c, cpp, csharp, js, php, sql, html, css, bash...) when the QUESTION itself is code — e.g. "What does this print?", "Find the bug", "What is the complexity?". Put the real, correctly indented code in "front".
 - "codeLang": same idea when the ANSWER is code — e.g. "Write a for-each loop over a List". Put the code in "back", and make "wrong" plausible but genuinely broken/incorrect code in the same language.
 Keep code short (max ~12 lines), keep the original indentation using real newlines, and never wrap it in markdown fences. Use the language actually used in the notes. Mix code cards with normal ones when the notes mix theory and code.
+${AI_SELF_CONTAINED_RULE}
 Return ONLY a JSON array like this, nothing else: [{"front":"...","back":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"codeLang":"java"}, ...]
 
 NOTES:
@@ -435,6 +488,7 @@ function buildAiCardPlanPrompt(text, automatic, count) {
   return `You are planning a comprehensive set of study flashcards from the notes below. Keep the same language as the notes.
 ${countRule}
 First identify the concepts that deserve their own card. Do not write the cards yet. For each target, include a short topic and a concise evidence excerpt or faithful summary from the notes, so a second step can write a grounded card for it. Avoid duplicate targets and do not invent topics absent from the notes.
+The second step will NOT see the notes — only your topic and evidence — and the finished card must make sense to a student who never saw the notes either. So when a target is about specific code (a class, method, example program), copy the relevant code VERBATIM into "evidence", with real newlines and indentation, not just a description of it. If a target only makes sense with code the notes do not contain, phrase the topic as the general concept instead.
 Return ONLY valid JSON in this shape:
 {"targets":[{"topic":"term or concept","evidence":"supporting definition or facts from the notes"}]}
 
@@ -473,7 +527,10 @@ For each card return:
 - "alsoCorrect": 0-4 OTHER independently correct choices that should be selected together with "back" when shown. When evidence supports a set/list, phrase "front" as a multiple-answer question (e.g. "Which ...?") and provide its distinct correct members here. Do NOT include synonyms, paraphrases, mutually exclusive alternatives, or answers to a question asking for only one. Leave empty for a genuinely single-answer target.
 - "wrong": 4-6 plausible but clearly incorrect answers
 - "frontLang" when the question itself contains code; "codeLang" when the answer contains code
-For code, keep real indentation and do not use markdown fences. Return ONLY a JSON array, nothing else:
+For code, keep real indentation and do not use markdown fences.
+${AI_SELF_CONTAINED_RULE}
+The code you may show is the code given in the evidence; if a target's evidence has none, do not ask about the exact behaviour of a specific named method or class.
+Return ONLY a JSON array, nothing else:
 [{"front":"...","back":"...","alsoCorrect":[],"wrong":[]}]
 
 TARGETS:
@@ -545,9 +602,15 @@ async function generateAiCardBatches(targets) {
 }
 
 function parseAiCards(text) {
-      const m = text.match(/\[[\s\S]*\]/);
-      if (!m) throw new Error('no-json');
-      const arr = JSON.parse(repairAiJson(m[0]));
+      let arr = null;
+      try {
+        const m = text.match(/\[[\s\S]*\]/);
+        if (m) arr = JSON.parse(repairAiJson(m[0]));
+      } catch (_) { /* zkusíme volnější čtení níž */ }
+      if (!Array.isArray(arr) || !arr.some(c => c && c.front && c.back)) {
+        arr = looseChatJsonArray(text) || arr;
+      }
+      if (!Array.isArray(arr)) throw new Error(/[[{]/.test(text) ? 'bad-json' : 'no-json');
       const clean = arr
         .filter(c => c && c.front && c.back)
         .map(c => {
@@ -569,13 +632,17 @@ function parseAiCards(text) {
             const t = String(v || '').trim().toLowerCase().replace(/[^a-z+#]/g, '');
             return t && t.length <= 12 ? t : null;
           };
+          // Code copied through a chat app comes back with “typographic”
+          // quotes, which no compiler accepts — straighten them in code parts.
+          const frontLang = lang(c.frontLang), codeLang = lang(c.codeLang);
+          const code = (on, s) => on ? s.replace(/[“”„‟″]/g, '"').replace(/[‘’‚]/g, "'") : s;
           return {
-            front: String(c.front).trim(),
-            back,
-            corrects,
-            frontLang: lang(c.frontLang),
-            codeLang: lang(c.codeLang),
-            distractors,
+            front: code(frontLang, String(c.front).trim()),
+            back: code(codeLang, back),
+            corrects: corrects.map(s => code(codeLang, s)),
+            frontLang,
+            codeLang,
+            distractors: distractors.map(s => code(codeLang, s)),
             // The AI's chosen option count = its distractors + the answer.
             // No distractors sent → classic 4 options (the quiz pads with
             // other cards' backs).
@@ -608,7 +675,7 @@ async function generateAiCards() {
     setAiCardsStatus('AI vybírá vhodný počet a sestavuje seznam témat…');
     const targets = await aiGenerate(buildAiCardPlanPrompt(combinedText, automatic, count), {
       temperature: 0.2,
-      maxOutputTokens: 8000,
+      maxOutputTokens: 12000,
       statusElementId: null,
       parse: raw => {
         const plan = parseAiCardPlan(raw);

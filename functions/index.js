@@ -391,7 +391,7 @@ async function addComment(req, res, roomId, noteId) {
 
 exports.agentApi = onRequest({
   region: 'europe-west1',
-  maxInstances: 10,
+  maxInstances: 3,
   // Agents can call the API from their own runtime/origin. CORS is not the
   // access check: every management request needs Firebase auth and every
   // agent request needs its scoped bearer token.
