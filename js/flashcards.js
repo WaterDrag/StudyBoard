@@ -250,59 +250,42 @@ async function loadDeck() {
       setupEditCardModal();
     }
 
-    // Přejmenovat/smazat celý balíček – jen vlastník balíčku
+    // Deck toolbar (v10): the three ways to learn stay visible; rarely used
+    // things (stats, rename, delete) sit in the ⋯ menu.
+    const ICO = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+    const actions = document.getElementById('deckActions');
+    const quizHref  = `quiz.html?deck=${DECK_ID}${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
+    const smartHref = `quiz.html?deck=${DECK_ID}&smart=1${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
+    actions.classList.add('deck-actions');
+    actions.innerHTML = `
+      <button class="btn btn-primary" id="studyBtn">${ICO('<path d="M7 4v16l13-8z"/>')}Studovat</button>
+      <a class="btn btn-secondary" id="quizBtn" href="${quizHref}">${ICO('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>')}Kvíz</a>
+      <a class="btn btn-secondary" id="smartBtn" href="${smartHref}" title="Chytré procvičování — opakuje hlavně to, co ti nejde">${ICO('<path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/><path d="M9 21h6"/>')}Chytře</a>
+      ${canAddCards() ? `<button class="btn btn-ghost" id="bulkDistractorsBtn" title="Vygeneruje špatné odpovědi (možnosti do kvízu) ke všem kartám, které je ještě nemají">🤖 AI odpovědi ke všem</button>` : ''}
+      <div class="nav-menu-wrap">
+        <button class="icon-btn" id="deckMoreBtn" aria-label="Další možnosti" aria-haspopup="true" aria-expanded="false" title="Další možnosti">${ICO('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>')}</button>
+        <div class="nav-menu" id="deckMoreMenu" role="menu">
+          <button type="button" class="nav-menu-item" id="statsBtn" role="menuitem">${ICO('<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>')}<span>Statistiky</span></button>
+          ${isOwner ? `<button type="button" class="nav-menu-item" id="renameDeckBtn" role="menuitem">${ICO('<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>')}<span>Přejmenovat</span></button>
+          <button type="button" class="nav-menu-item danger" id="deleteDeckBtn" role="menuitem">🗑️<span>Smazat balíček</span></button>` : ''}
+        </div>
+      </div>`;
+    document.getElementById('studyBtn').addEventListener('click', () => startStudy(false));
+    document.getElementById('statsBtn').addEventListener('click', openLearnStats);
+    document.getElementById('bulkDistractorsBtn')?.addEventListener('click', bulkGenerateDistractors);
+    const moreBtn = document.getElementById('deckMoreBtn'), moreMenu = document.getElementById('deckMoreMenu');
+    moreBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const open = !moreMenu.classList.contains('open');
+      moreMenu.classList.toggle('open', open);
+      moreBtn.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('click', () => { moreMenu.classList.remove('open'); moreBtn.setAttribute('aria-expanded', 'false'); });
     if (isOwner) {
-      const actions = document.getElementById('deckActions');
-      actions.innerHTML = `
-        <button class="btn btn-ghost" style="font-size:0.82rem;padding:7px 13px;" id="renameDeckBtn">✏️ Přejmenovat</button>
-        <button class="btn btn-ghost" style="font-size:0.82rem;padding:7px 13px;" id="deleteDeckBtn">🗑 Smazat balíček</button>`;
       document.getElementById('renameDeckBtn').addEventListener('click', () => openEditDeckModal(DECK_ID, DECK));
       document.getElementById('deleteDeckBtn').addEventListener('click', () => openModal('deleteDeckModal'));
       setupDeleteModal();
       setupEditDeckModal();
-    }
-
-    // Tlačítko Studovat (vždy viditelné)
-    const studyBtn = document.createElement('button');
-    studyBtn.className   = 'btn btn-primary';
-    studyBtn.textContent = '▶ Studovat';
-    studyBtn.id          = 'studyBtn';
-    studyBtn.addEventListener('click', () => startStudy(false));
-    document.getElementById('deckActions').prepend(studyBtn);
-
-    const quizBtn   = document.createElement('a');
-    quizBtn.className   = 'btn btn-secondary';
-    quizBtn.style.cssText = 'padding:7px 14px;font-size:0.82rem;';
-    quizBtn.textContent = '🎮 Kvíz';
-    quizBtn.href        = `quiz.html?deck=${DECK_ID}${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
-    studyBtn.insertAdjacentElement('afterend', quizBtn);
-
-    // Smart practice = spaced repetition (Leitner): asks only what's due.
-    const smartBtn = document.createElement('a');
-    smartBtn.className = 'btn btn-secondary';
-    smartBtn.style.cssText = 'padding:7px 14px;font-size:0.82rem;';
-    smartBtn.textContent = '🧠 Chytře';
-    smartBtn.title = 'Chytré procvičování — opakuje hlavně to, co ti nejde';
-    smartBtn.href = `quiz.html?deck=${DECK_ID}&smart=1${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
-    quizBtn.insertAdjacentElement('afterend', smartBtn);
-
-    const statsBtn = document.createElement('button');
-    statsBtn.className = 'btn btn-ghost';
-    statsBtn.style.cssText = 'padding:7px 14px;font-size:0.82rem;';
-    statsBtn.textContent = '📊 Statistiky';
-    statsBtn.addEventListener('click', openLearnStats);
-    smartBtn.insertAdjacentElement('afterend', statsBtn);
-
-    // One-click: let the AI write wrong answers for every card that has none.
-    if (canAddCards()) {
-      const bulkBtn = document.createElement('button');
-      bulkBtn.className = 'btn btn-ghost';
-      bulkBtn.id = 'bulkDistractorsBtn';
-      bulkBtn.style.cssText = 'padding:7px 14px;font-size:0.82rem;';
-      bulkBtn.textContent = '🤖 AI odpovědi ke všem';
-      bulkBtn.title = 'Vygeneruje špatné odpovědi (možnosti do kvízu) ke všem kartám, které je ještě nemají';
-      bulkBtn.addEventListener('click', bulkGenerateDistractors);
-      statsBtn.insertAdjacentElement('afterend', bulkBtn);
     }
 
     // Survival is started from the room's lobby list (loadSurvivalLobbies
@@ -793,7 +776,12 @@ function startStudy(wrongOnly = false) {
 function showStudyCard() {
   IS_FLIPPED = false;
   const inner = document.getElementById('flashcardInner');
+  // Snap back to the front WITHOUT the flip animation — otherwise the next
+  // card's answer is visible on the turning back face for half a second.
+  inner.classList.add('no-anim');
   inner.classList.remove('flipped');
+  void inner.offsetWidth;
+  inner.classList.remove('no-anim');
 
   const card = STUDY_QUEUE[STUDY_IDX];
   const fEl = document.getElementById('studyFront'), bEl = document.getElementById('studyBack');
@@ -821,12 +809,26 @@ function setupStudyControls() {
 
   document.getElementById('knowBtn').onclick     = () => gradeCard(true);
   document.getElementById('dontKnowBtn').onclick = () => gradeCard(false);
+  document.getElementById('almostBtn').onclick   = () => gradeCard(false);
   document.getElementById('skipBtn').onclick     = () => gradeCard(null);
 
   document.getElementById('restartBtn').onclick    = () => startStudy(false);
   document.getElementById('onlyWrongBtn').onclick  = () => startStudy(true);
   document.getElementById('backToCardsBtn').onclick = () => showView('cards');
 }
+
+// Keyboard while studying: Space/Enter flips, 1–3 grade, → skips.
+document.addEventListener('keydown', e => {
+  if (document.getElementById('viewStudy')?.style.display === 'none') return;
+  if (e.target instanceof Element && e.target.closest('input, textarea, [contenteditable="true"]') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    if (!IS_FLIPPED) document.getElementById('flashcardWrap').click();
+  } else if (IS_FLIPPED && e.key === '1') gradeCard(false);
+  else if (IS_FLIPPED && e.key === '2') gradeCard(false);
+  else if (IS_FLIPPED && e.key === '3') gradeCard(true);
+  else if (e.key === 'ArrowRight') gradeCard(null);
+});
 
 function gradeCard(known) {
   if (known === true) {

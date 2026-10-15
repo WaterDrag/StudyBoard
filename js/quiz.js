@@ -256,6 +256,7 @@ function renderAnswers(card, opts) {
     btn.textContent = opt.text;   // textContent — options are never trusted HTML
     btn.style.animationDelay = `${i * 55}ms`;
     btn.dataset.i = String(i);
+    if (i < 9) btn.dataset.key = String(i + 1);   // keyboard hint, see keydown below
     btn.addEventListener('click', () => {
       if (btn.disabled) return;
       if (!multi) { pick(btn, opt.correct, card); return; }
@@ -265,6 +266,20 @@ function renderAnswers(card, opts) {
     wrap.appendChild(btn);
   });
 }
+
+// Keyboard: 1–9 picks (or ticks) that answer, Enter confirms a multi-answer.
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || (e.target instanceof Element && e.target.closest('input, textarea'))) return;
+  const wrap = document.getElementById('quizAnswers');
+  if (!wrap || wrap.style.display === 'none') return;
+  if (/^[1-9]$/.test(e.key)) {
+    const btn = wrap.querySelector(`.quiz-answer-btn[data-key="${e.key}"]`);
+    if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
+  } else if (e.key === 'Enter') {
+    const confirmBtn = document.getElementById('quizConfirmBtn');
+    if (confirmBtn && confirmBtn.style.display !== 'none' && !confirmBtn.disabled) { e.preventDefault(); confirmBtn.click(); }
+  }
+});
 
 // Tick-and-confirm scoring: the answer counts only when the ticked set is
 // EXACTLY the correct set — no partial credit, since guessing everything
@@ -368,7 +383,9 @@ function showResults() {
 
 // ── UI helpers ────────────────────────────────────────────────
 function updateScoreNav() {
-  document.getElementById('quizScoreNav').textContent = `${SCORE} / ${QUIZ_IDX}`;
+  // Right / wrong so far ("1 / 0" used to read as a score out of zero).
+  document.getElementById('quizScoreNav').innerHTML =
+    `<span class="qs-good">✓ ${SCORE}</span><span class="qs-bad">✗ ${WRONG_IDS.size}</span>`;
 }
 
 function updateStreak() {
