@@ -84,7 +84,7 @@ const builtins = new Set(['if','for','while','switch','catch','return','typeof',
   'Intl','Symbol','WeakMap','WeakSet','Proxy','Reflect','btoa','atob','crypto','URLSearchParams','AbortController',
   'ResizeObserver','IntersectionObserver','MutationObserver','Node','Element','HTMLElement','Infinity','NaN','undefined',
   'super','void','delete','in','of','instanceof','yield','class','extends','import','export','const','let','var','this',
-  'true','false','null','APP_VERSION','IMGBB_KEY','Uint8Array',
+  'true','false','null','APP_VERSION','IMGBB_KEY','Uint8Array','DOMParser',
   // regex artefacts, not real calls
   'async','stnosti']);
 

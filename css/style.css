@@ -25,6 +25,9 @@
   --transition:   0.15s ease;
   --font:         'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono:    'Geist Mono', 'SF Mono', Consolas, monospace;
+  /* Note text column: editor and note view share it, so wrapping and
+     freely placed pictures land in the same spot in both. */
+  --doc-w:        800px;
   --board-bg:          #0B0C10;
   --board-grid-fine:   rgba(255,255,255,0.045);
   --board-grid-coarse: rgba(255,255,255,0.08);
@@ -1621,26 +1624,54 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .wb-bar {
   position: absolute;
   top: 0; left: 0; right: 0;
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 2px;
   flex-wrap: wrap;
-  padding: 4px 6px;
-  background: rgba(15,23,42,0.82);
-  backdrop-filter: blur(3px);
+  padding: 5px 6px;
+  background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+  border-bottom: 1px solid var(--border-strong);
+  backdrop-filter: blur(6px);
   cursor: grab;
+  color: var(--text);
 }
-.wb-bar-ro { background: rgba(15,23,42,0.55); justify-content: center; }
+.wb-bar-ro { justify-content: center; padding: 6px; }
+.wb-ro-label { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); }
 .wb-spacer { flex: 1; }
+.wb-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
 .wb-btn {
-  background: none; border: none; color: #e5e7eb;
-  font-size: 0.9rem; cursor: pointer; padding: 2px 5px; border-radius: 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: none; border: none; color: var(--text-muted);
+  font-size: 0.95rem; cursor: pointer; padding: 0; border-radius: 7px;
   line-height: 1;
+  transition: background 0.12s, color 0.12s;
 }
-.wb-btn:hover { background: rgba(255,255,255,0.14); }
-.wb-btn.active { background: var(--accent); color: #fff; }
-.wb-color { width: 26px; height: 22px; border: none; background: none; padding: 0; cursor: pointer; }
-.wb-type { font-size: 0.72rem; padding: 1px 2px; border-radius: 4px; max-width: 108px; }
-.wb-wrange { width: 78px; cursor: pointer; }
-.wb-wnum { width: 44px; font-size: 0.72rem; padding: 1px 3px; border-radius: 4px; }
+.wb-btn svg { width: 17px; height: 17px; }
+.wb-btn:hover { background: var(--bg-3); color: var(--text); }
+.wb-btn.active { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.wb-color {
+  width: 26px; height: 26px; margin: 0 3px; padding: 0;
+  border: 2px solid var(--border-strong); border-radius: 50%;
+  background: none; cursor: pointer; overflow: hidden;
+}
+.wb-color::-webkit-color-swatch-wrapper { padding: 0; }
+.wb-color::-webkit-color-swatch { border: none; border-radius: 50%; }
+.wb-color::-moz-color-swatch { border: none; border-radius: 50%; }
+.wb-type {
+  height: 30px; max-width: 128px; padding: 0 26px 0 10px;
+  font: 500 0.8rem var(--font); color: var(--text);
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A0A6B0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center;
+  border: 1px solid var(--border-strong); border-radius: 7px;
+  appearance: none; -webkit-appearance: none; cursor: pointer;
+}
+.wb-type:focus { outline: none; border-color: var(--accent); }
+.wb-width { display: inline-flex; align-items: center; gap: 6px; margin: 0 2px; }
+.wb-wrange { width: 84px; cursor: pointer; accent-color: var(--accent); }
+.wb-wnum {
+  width: 46px; height: 28px; padding: 0 6px;
+  font: 500 0.78rem var(--font-mono); color: var(--text);
+  background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px;
+}
+.wb-wnum:focus { outline: none; border-color: var(--accent); }
 
 /* Resize handles — 4 edges + 4 corners. Kept fully inside the box because
    .whiteboard is overflow:hidden (anything sticking out would be clipped). */
@@ -2425,7 +2456,9 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   font-size: 1rem;
   line-height: 1.7;
   word-break: break-word;
-  padding: 4px 0 8px;
+  width: min(var(--doc-w), 100%);
+  margin: 0 auto;
+  padding: 16px 0 8px;
   color: var(--text);
 }
 .note-detail-time { flex-shrink: 0; }
@@ -2438,10 +2471,11 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .note-detail-content img {
   max-width: 100%;
   border-radius: 8px;
-  margin: 6px 0;
   cursor: zoom-in;
-  display: block;
 }
+/* Pictures that carry no layout of their own (old notes) sit on their own line;
+   ones set up in the editor keep exactly that layout. */
+.note-detail-content img:not([style*="display"]):not([style*="float"]):not([style*="position"]) { display: block; margin: 6px 0; }
 .note-detail-time {
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -2670,55 +2704,102 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 
 /* ===== RICH TEXT EDITOR ===== */
 .rich-editor-wrap {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   overflow: hidden;
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
+.rich-editor-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .rich-toolbar {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 6px 8px;
-  background: var(--bg-3);
+  gap: 1px;
+  padding: 5px 6px;
+  background: var(--bg-2);
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
 .rt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
   background: none;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 5px 8px;
-  border-radius: 5px;
-  font-size: 0.84rem;
+  padding: 0 7px;
+  border-radius: 7px;
+  font-size: 0.82rem;
+  font-weight: 500;
   font-family: inherit;
   line-height: 1;
   transition: background 0.12s, color 0.12s;
 }
-.rt-btn:hover { background: var(--bg-2); color: var(--text); }
-.rt-btn b, .rt-btn i, .rt-btn u { font-family: serif; font-size: 0.9rem; }
-.rt-size { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; }
-.rt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+.rt-btn svg { width: 17px; height: 17px; flex-shrink: 0; }
+.rt-btn:hover { background: var(--bg-3); color: var(--text); }
+.rt-btn.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.rt-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rt-btn b, .rt-btn i, .rt-btn u { font-family: Georgia, 'Times New Roman', serif; font-size: 1rem; }
+.rt-fontsize {
+  height: 30px; width: 70px; margin: 0 2px; padding: 0 22px 0 9px;
+  font: 500 0.82rem var(--font-mono); color: var(--text);
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A0A6B0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 7px center;
+  border: 1px solid var(--border-strong); border-radius: 7px;
+  appearance: none; -webkit-appearance: none; cursor: pointer;
+}
+.rt-fontsize:focus { outline: none; border-color: var(--accent); }
+.rt-status {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px;
+  padding: 6px 12px;
+  background: var(--bg-2);
+  border-top: 1px solid var(--border);
+  font: 500 0.72rem var(--font);
+  color: var(--text-faint);
+}
+.rt-status .rt-hint { margin-left: auto; }
+.rt-status kbd {
+  font: 500 0.68rem var(--font-mono);
+  padding: 1px 5px; border-radius: 4px;
+  background: var(--bg-3); border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+@media (max-width: 640px) { .rt-status .rt-hint { display: none; } }
+.link-pop { display: flex; flex-direction: column; gap: 8px; padding: 10px; width: min(340px, calc(100vw - 16px)); }
+.link-pop .input { width: 100%; }
+.link-pop .input-error { border-color: #E5534B; }
+.link-pop-row { display: flex; align-items: center; gap: 6px; }
+.link-pop .btn { padding: 6px 12px; font-size: 0.8rem; }
+.rich-editor a[href]:not(.page-link) { color: #3B5BDB; text-decoration: underline; text-underline-offset: 2px; }
+.note-detail-content a[href]:not(.page-link), #detailContent a[href]:not(.page-link) { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.rt-sep { width: 1px; height: 20px; background: var(--border); margin: 0 5px; flex-shrink: 0; }
 .rt-color-wrap {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
   cursor: pointer;
-  padding: 5px 8px;
-  border-radius: 5px;
+  padding: 0 7px;
+  border-radius: 7px;
   transition: background 0.12s;
   position: relative;
   user-select: none;
 }
-.rt-color-wrap:hover { background: var(--bg-2); }
+.rt-color-wrap:hover { background: var(--bg-3); }
 .rt-color-a {
+  display: inline-flex;
+  align-items: center;
   font-weight: 700;
-  font-size: 0.9rem;
-  font-family: serif;
+  font-size: 0.95rem;
+  font-family: Georgia, 'Times New Roman', serif;
   color: var(--text);
   border-bottom: 3px solid #e33;
-  line-height: 1.3;
+  line-height: 1.15;
   padding-bottom: 1px;
 }
+.rt-color-a svg { width: 16px; height: 16px; }
 .rt-color-wrap input[type="color"] {
   position: absolute;
   left: 0; top: 0;
@@ -2728,15 +2809,19 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   border: none;
   padding: 0;
 }
+.rich-editor-wrap { background: #FAFAF7; }
 .rich-editor {
   min-height: 150px;
   max-height: 280px;
   overflow-y: auto;
-  padding: 13px 15px;
-  background: #f9f8f5;
-  color: #1a1a1a;
-  font-size: 0.9rem;
-  line-height: 1.6;
+  width: min(var(--doc-w), 100% - 40px);
+  margin: 0 auto;
+  padding: 16px 0 24px;
+  background: transparent;
+  color: #1B1D22;
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.7;
   outline: none;
   cursor: text;
   word-break: break-word;
@@ -2749,7 +2834,7 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .rich-editor li, .note-content li, .note-detail-content li { margin: 2px 0; }
 .rich-editor:empty::before {
   content: attr(data-placeholder);
-  color: #aaa;
+  color: #9A9EA6;
   pointer-events: none;
 }
 
@@ -3752,11 +3837,16 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   color: var(--text); cursor: pointer;
   font-size: 0.78rem; padding: 3px 8px; line-height: 1.4;
 }
+.img-toolbar button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 30px; height: 30px; }
+.img-toolbar button svg { width: 17px; height: 17px; flex-shrink: 0; }
 .img-toolbar button:hover { background: var(--bg-3); }
 .img-toolbar button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .img-toolbar .it-del:hover { background: #ef4444; color: #fff; }
 .img-toolbar .it-lbl { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
 .img-toolbar .it-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+.img-toolbar { flex-wrap: wrap; max-width: calc(100vw - 16px); }
+/* Seznam vedle obtékaného obrázku: celý se posune vedle něj, odrážky nezmizí pod obrázkem */
+.rich-editor ul, .rich-editor ol, .note-detail-content ul, .note-detail-content ol, #detailContent ul, #detailContent ol { display: flow-root; }
 /* Clicking an image in the editor selects it for the toolbar */
 .rich-editor img { cursor: pointer; }
 .rich-editor img:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -3915,7 +4005,7 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
   display: flex; gap: 14px; align-items: stretch;
   flex: 1 1 auto; min-height: 0;
 }
-.guide-wrap #detailContent { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; }
+.guide-wrap #detailContent { flex: 1 1 auto; width: auto; max-width: var(--doc-w); min-width: 0; min-height: 0; overflow-y: auto; margin: 0 auto; }
 .guide-tree {
   width: 210px; flex-shrink: 0; max-height: 50vh; overflow-y: auto;
   border: 1px solid var(--border); border-radius: 10px; padding: 6px; background: var(--bg-2);

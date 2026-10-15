@@ -262,29 +262,34 @@ function renderWhiteboard(wb) {
       ${editable ? '<div class="wb-brush"></div>' : ''}
       ${editable ? `
       <div class="wb-bar">
-        <button class="wb-btn wb-draw" title="Zapnout/vypnout kreslení">✏️</button>
-        <select class="wb-type" title="Nástroj">
-          <option value="pen">🖊️ Pero</option>
-          <option value="pencil">✏️ Tužka</option>
-          <option value="marker">🖍️ Zvýrazňovač</option>
-          <option value="spray">💨 Sprej</option>
-          <option value="line">／ Čára</option>
-          <option value="rect">▭ Obdélník</option>
-          <option value="ellipse">◯ Elipsa</option>
-          <option value="text">🔤 Text</option>
+        <button class="wb-btn wb-draw" title="Zapnout/vypnout kreslení" aria-label="Kreslit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>
+        <select class="wb-type" title="Nástroj" aria-label="Nástroj">
+          <option value="pen">Pero</option>
+          <option value="pencil">Tužka</option>
+          <option value="marker">Zvýrazňovač</option>
+          <option value="spray">Sprej</option>
+          <option value="line">Čára</option>
+          <option value="rect">Obdélník</option>
+          <option value="ellipse">Elipsa</option>
+          <option value="text">Text</option>
         </select>
-        <button class="wb-btn wb-erase" title="Guma">🧽</button>
-        <button class="wb-btn wb-fill" title="Kýbl – vylít plochu barvou">🪣</button>
-        <button class="wb-btn wb-pick" title="Kapátko – vybrat barvu z kresby">💧</button>
-        <button class="wb-btn wb-imgbtn" title="Vložit obrázek">🖼️</button>
-        <input type="color" class="wb-color" value="${WB_TOOL.color}" title="Barva">
-        <input type="range"  class="wb-wrange" min="1" max="40" value="${WB_TOOL.width}" title="Tloušťka">
-        <input type="number" class="wb-wnum"   min="1" max="40" value="${WB_TOOL.width}" title="Tloušťka">
-        <button class="wb-btn wb-undo" title="Zpět (můj tah)">↶</button>
-        <button class="wb-btn wb-redo" title="Znovu">↷</button>
+        <span class="wb-sep"></span>
+        <button class="wb-btn wb-erase" title="Guma" aria-label="Guma"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L13 19"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></button>
+        <button class="wb-btn wb-fill" title="Kýbl – vylít plochu barvou" aria-label="Kýbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4z"/></svg></button>
+        <button class="wb-btn wb-pick" title="Kapátko – vybrat barvu z kresby" aria-label="Kapátko"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3z"/></svg></button>
+        <button class="wb-btn wb-imgbtn" title="Vložit obrázek" aria-label="Vložit obrázek"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></button>
+        <span class="wb-sep"></span>
+        <input type="color" class="wb-color" value="${WB_TOOL.color}" title="Barva" aria-label="Barva">
+        <span class="wb-width">
+          <input type="range"  class="wb-wrange" min="1" max="40" value="${WB_TOOL.width}" title="Tloušťka" aria-label="Tloušťka">
+          <input type="number" class="wb-wnum"   min="1" max="40" value="${WB_TOOL.width}" title="Tloušťka" aria-label="Tloušťka v pixelech">
+        </span>
+        <span class="wb-sep"></span>
+        <button class="wb-btn wb-undo" title="Zpět (můj tah)" aria-label="Zpět"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+        <button class="wb-btn wb-redo" title="Znovu" aria-label="Znovu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
         <span class="wb-spacer"></span>
-        <button class="wb-btn wb-del" title="Smazat tabuli">🗑️</button>
-      </div>` : `<div class="wb-bar wb-bar-ro"><span style="font-size:.7rem;opacity:.7;">🖊️ Tabule</span></div>`}
+        <button class="wb-btn wb-del" title="Smazat tabuli" aria-label="Smazat tabuli">🗑️</button>
+      </div>` : `<div class="wb-bar wb-bar-ro"><span class="wb-ro-label">Tabule</span></div>`}
       ${editable ? handles : ''}`;
     // Behind notes: z-index 0 via CSS. Board grid shows through transparent bits.
     document.getElementById('board').appendChild(el);

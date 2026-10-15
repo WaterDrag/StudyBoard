@@ -144,37 +144,57 @@
             <button type="button" class="rt-btn" data-cmd="bold"      title="Tučné (Ctrl+B)"><b>B</b></button>
             <button type="button" class="rt-btn" data-cmd="italic"    title="Kurzíva (Ctrl+I)"><i>I</i></button>
             <button type="button" class="rt-btn" data-cmd="underline" title="Podtržení (Ctrl+U)"><u>U</u></button>
+            <button type="button" class="rt-btn" data-cmd="strikeThrough" title="Přeškrtnutí" aria-label="Přeškrtnutí"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4H9a3 3 0 0 0-2.8 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><path d="M4 12h16"/></svg></button>
             <div class="rt-sep"></div>
-            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="2" title="Malý">S</button>
-            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="3" title="Normální">M</button>
-            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="5" title="Velký">L</button>
-            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="7" title="Velmi velký">XL</button>
+            <select class="rt-fontsize" title="Velikost písma (body)" aria-label="Velikost písma">
+              <option value="" hidden>12</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+              <option value="14">14</option>
+              <option value="16">16</option>
+              <option value="18">18</option>
+              <option value="20">20</option>
+              <option value="24">24</option>
+              <option value="28">28</option>
+              <option value="36">36</option>
+              <option value="48">48</option>
+              <option value="72">72</option>
+            </select>
+            <div class="rt-sep"></div>
+            <button type="button" class="rt-btn" data-cmd="justifyLeft" title="Zarovnat vlevo" aria-label="Zarovnat vlevo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="justifyCenter" title="Na střed" aria-label="Na střed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="justifyRight" title="Zarovnat vpravo" aria-label="Zarovnat vpravo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="justifyFull" title="Do bloku" aria-label="Do bloku"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></button>
             <div class="rt-sep"></div>
             <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<h2>" title="Nadpis">H1</button>
             <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<h3>" title="Podnadpis">H2</button>
-            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<blockquote>" title="Citace">❝</button>
-            <button type="button" class="rt-btn" data-cmd="insertHorizontalRule" title="Vodorovná čára">―</button>
+            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<blockquote>" title="Citace" aria-label="Citace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h4v5c0 2.5-1.5 4-4 5"/><path d="M14 7h4v5c0 2.5-1.5 4-4 5"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="insertHorizontalRule" title="Vodorovná čára" aria-label="Vodorovná čára"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16"/></svg></button>
             <div class="rt-sep"></div>
             <label class="rt-color-wrap" title="Barva textu">
               <span class="rt-color-a" id="addColorA">A</span>
               <input type="color" id="addTextColor" value="#1a1a1a">
             </label>
             <label class="rt-color-wrap rt-hi-wrap" title="Zvýraznit text">
-              <span class="rt-color-a rt-hi-a">🖍</span>
+              <span class="rt-color-a rt-hi-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-5 5v3h3l5-5"/><path d="m9 11 6-6 4 4-6 6z"/></svg></span>
               <input type="color" class="rt-hilite" value="#fde047">
             </label>
-            <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" style="font-size:0.72rem;opacity:.7;">✕fmt</button>
+            <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" aria-label="Vymazat formátování"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5h12v2"/><path d="M10 5 7 19"/><path d="m15 14 5 5M20 14l-5 5"/></svg></button>
             <div class="rt-sep"></div>
-            <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky (Tab = zanořit)" style="font-size:0.9rem;">•—</button>
-            <button type="button" class="rt-btn" data-cmd="insertOrderedList" title="Číslovaný seznam (Tab = zanořit)" style="font-size:0.9rem;">1.</button>
-            <button type="button" class="rt-btn rt-liststyle" title="Styl odrážky" style="font-size:0.9rem;">▾</button>
-            <button type="button" class="rt-btn rt-checklist" title="Zaškrtávací seznam" style="font-size:0.9rem;">☑</button>
-            <button type="button" class="rt-btn rt-pagelink" title="Odkaz na kapitolu (proklik)" style="font-size:0.9rem;">🔗📖</button>
+            <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky (Tab = zanořit)" aria-label="Odrážky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="insertOrderedList" title="Číslovaný seznam (Tab = zanořit)" aria-label="Číslovaný seznam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 5h1v4"/><path d="M4 15.5c0-.8.7-1.5 1.5-1.5S7 14.7 7 15.5c0 1-3 2-3 3.5h3"/></svg></button>
+            <button type="button" class="rt-btn rt-liststyle" title="Styl odrážky" aria-label="Styl odrážky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+            <button type="button" class="rt-btn rt-checklist" title="Zaškrtávací seznam" aria-label="Zaškrtávací seznam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></svg></button>
+            <button type="button" class="rt-btn rt-weblink" title="Odkaz na web (Ctrl+K)" aria-label="Odkaz na web"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></button>
+            <button type="button" class="rt-btn rt-pagelink" title="Odkaz na kapitolu (proklik)" aria-label="Odkaz na kapitolu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7"/></svg></button>
             <div class="rt-sep"></div>
-            <button type="button" class="rt-btn rt-table-btn" title="Vložit tabulku" style="font-size:0.85rem;">⊞</button>
+            <button type="button" class="rt-btn rt-table-btn" title="Vložit tabulku" aria-label="Vložit tabulku"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg></button>
             <div class="rt-sep"></div>
             <label class="rt-btn rt-img-label" title="Vložit obrázek" style="cursor:pointer;">
-              🖼
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>
               <input type="file" class="rt-img-input" accept="image/*" style="display:none;">
             </label>
           </div>
@@ -222,37 +242,57 @@
             <button type="button" class="rt-btn" data-cmd="bold"      title="Tučné"><b>B</b></button>
             <button type="button" class="rt-btn" data-cmd="italic"    title="Kurzíva"><i>I</i></button>
             <button type="button" class="rt-btn" data-cmd="underline" title="Podtržení"><u>U</u></button>
+            <button type="button" class="rt-btn" data-cmd="strikeThrough" title="Přeškrtnutí" aria-label="Přeškrtnutí"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4H9a3 3 0 0 0-2.8 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><path d="M4 12h16"/></svg></button>
             <div class="rt-sep"></div>
-            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="2" title="Malý">S</button>
-            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="3" title="Normální">M</button>
-            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="5" title="Velký">L</button>
-            <button type="button" class="rt-btn rt-size" data-cmd="fontSize" data-val="7" title="Velmi velký">XL</button>
+            <select class="rt-fontsize" title="Velikost písma (body)" aria-label="Velikost písma">
+              <option value="" hidden>12</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+              <option value="14">14</option>
+              <option value="16">16</option>
+              <option value="18">18</option>
+              <option value="20">20</option>
+              <option value="24">24</option>
+              <option value="28">28</option>
+              <option value="36">36</option>
+              <option value="48">48</option>
+              <option value="72">72</option>
+            </select>
+            <div class="rt-sep"></div>
+            <button type="button" class="rt-btn" data-cmd="justifyLeft" title="Zarovnat vlevo" aria-label="Zarovnat vlevo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="justifyCenter" title="Na střed" aria-label="Na střed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="justifyRight" title="Zarovnat vpravo" aria-label="Zarovnat vpravo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="justifyFull" title="Do bloku" aria-label="Do bloku"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></button>
             <div class="rt-sep"></div>
             <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<h2>" title="Nadpis">H1</button>
             <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<h3>" title="Podnadpis">H2</button>
-            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<blockquote>" title="Citace">❝</button>
-            <button type="button" class="rt-btn" data-cmd="insertHorizontalRule" title="Vodorovná čára">―</button>
+            <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="<blockquote>" title="Citace" aria-label="Citace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h4v5c0 2.5-1.5 4-4 5"/><path d="M14 7h4v5c0 2.5-1.5 4-4 5"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="insertHorizontalRule" title="Vodorovná čára" aria-label="Vodorovná čára"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16"/></svg></button>
             <div class="rt-sep"></div>
             <label class="rt-color-wrap" title="Barva textu">
               <span class="rt-color-a" id="editColorA">A</span>
               <input type="color" id="editTextColor" value="#1a1a1a">
             </label>
             <label class="rt-color-wrap rt-hi-wrap" title="Zvýraznit text">
-              <span class="rt-color-a rt-hi-a">🖍</span>
+              <span class="rt-color-a rt-hi-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-5 5v3h3l5-5"/><path d="m9 11 6-6 4 4-6 6z"/></svg></span>
               <input type="color" class="rt-hilite" value="#fde047">
             </label>
-            <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" style="font-size:0.72rem;opacity:.7;">✕fmt</button>
+            <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" aria-label="Vymazat formátování"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5h12v2"/><path d="M10 5 7 19"/><path d="m15 14 5 5M20 14l-5 5"/></svg></button>
             <div class="rt-sep"></div>
-            <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky (Tab = zanořit)" style="font-size:0.9rem;">•—</button>
-            <button type="button" class="rt-btn" data-cmd="insertOrderedList" title="Číslovaný seznam (Tab = zanořit)" style="font-size:0.9rem;">1.</button>
-            <button type="button" class="rt-btn rt-liststyle" title="Styl odrážky" style="font-size:0.9rem;">▾</button>
-            <button type="button" class="rt-btn rt-checklist" title="Zaškrtávací seznam" style="font-size:0.9rem;">☑</button>
-            <button type="button" class="rt-btn rt-pagelink" title="Odkaz na kapitolu (proklik)" style="font-size:0.9rem;">🔗📖</button>
+            <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky (Tab = zanořit)" aria-label="Odrážky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
+            <button type="button" class="rt-btn" data-cmd="insertOrderedList" title="Číslovaný seznam (Tab = zanořit)" aria-label="Číslovaný seznam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 5h1v4"/><path d="M4 15.5c0-.8.7-1.5 1.5-1.5S7 14.7 7 15.5c0 1-3 2-3 3.5h3"/></svg></button>
+            <button type="button" class="rt-btn rt-liststyle" title="Styl odrážky" aria-label="Styl odrážky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+            <button type="button" class="rt-btn rt-checklist" title="Zaškrtávací seznam" aria-label="Zaškrtávací seznam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></svg></button>
+            <button type="button" class="rt-btn rt-weblink" title="Odkaz na web (Ctrl+K)" aria-label="Odkaz na web"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></button>
+            <button type="button" class="rt-btn rt-pagelink" title="Odkaz na kapitolu (proklik)" aria-label="Odkaz na kapitolu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7"/></svg></button>
             <div class="rt-sep"></div>
-            <button type="button" class="rt-btn rt-table-btn" title="Vložit tabulku" style="font-size:0.85rem;">⊞</button>
+            <button type="button" class="rt-btn rt-table-btn" title="Vložit tabulku" aria-label="Vložit tabulku"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg></button>
             <div class="rt-sep"></div>
             <label class="rt-btn rt-img-label" title="Vložit obrázek" style="cursor:pointer;">
-              🖼
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>
               <input type="file" class="rt-img-input" accept="image/*" style="display:none;">
             </label>
           </div>

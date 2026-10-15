@@ -579,7 +579,7 @@ async function openTravelAgent() {
 
 function setupTravelAgent() {
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !e.defaultPrevented) {
       e.preventDefault();
       document.getElementById('travelAgent') ? closeTravelAgent() : openTravelAgent();
     }

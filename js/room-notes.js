@@ -32,6 +32,7 @@ function setNoteContent(contentEl, note) {
     contentEl.textContent = note.content || '';
   }
   addImageClickHandlers(contentEl);
+  wireWebLinks(contentEl);
 }
 
 // Compact board card: show ONLY the manually-entered title when set (long
@@ -752,6 +753,30 @@ function makeImgInline(img) {
   img.style.margin = '4px 12px 6px 0';
 }
 
+// Obtékání jako ve Wordu. Volné režimy (před/za textem) drží pozici v px
+// vůči sloupci textu — editor i zobrazení poznámky mají stejně široký sloupec
+// (viz --doc-w v CSS), takže obrázek sedí na stejném místě.
+function imgWrapMode(img) {
+  if (imgIsFree(img)) return img.style.zIndex === '0' ? 'behind' : 'front';
+  const f = img.style.cssFloat || img.style.float;
+  if (f === 'left' || f === 'right') return f;
+  return img.style.display === 'inline' || img.style.display === 'inline-block' ? 'inline' : 'block';
+}
+
+function setImgWrap(img, mode, editor) {
+  if (mode === 'front' || mode === 'behind') {
+    if (!imgIsFree(img)) makeImgFree(img, editor);
+    img.style.zIndex = mode === 'behind' ? '0' : '2';
+    return;
+  }
+  if (imgIsFree(img)) makeImgInline(img);
+  img.style.height = '';
+  if (mode === 'left')   { img.style.cssFloat = 'left';  img.style.display = 'block'; img.style.margin = '4px 14px 8px 0'; img.style.verticalAlign = ''; }
+  if (mode === 'right')  { img.style.cssFloat = 'right'; img.style.display = 'block'; img.style.margin = '4px 0 8px 14px'; img.style.verticalAlign = ''; }
+  if (mode === 'block')  { img.style.cssFloat = 'none';  img.style.display = 'block'; img.style.margin = '10px auto'; img.style.verticalAlign = ''; }
+  if (mode === 'inline') { img.style.cssFloat = 'none';  img.style.display = 'inline'; img.style.margin = '0 3px'; img.style.verticalAlign = 'bottom'; }
+}
+
 // Tazeni volne umisteneho obrazku po plose poznamky.
 function dragFreeImg(img, editor, e, after) {
   if (!imgIsFree(img)) return;
@@ -871,25 +896,24 @@ function openImgToolbar(img, editor) {
   const bar = document.createElement('div');
   bar.id = 'imgToolbar';
   bar.className = 'img-toolbar';
+  const I = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
   bar.innerHTML = `
     <span class="it-lbl">Velikost</span>
     <button data-size="s" title="Malý">S</button>
     <button data-size="m" title="Střední">M</button>
     <button data-size="l" title="Velký">L</button>
-    <button data-size="full" title="Přes celou šířku">⤢</button>
+    <button data-size="full" title="Přes celou šířku">${I('<path d="M3 9V5h4M21 9V5h-4M3 15v4h4M21 15v4h-4"/>')}</button>
     <span class="it-sep"></span>
     <span class="it-lbl">Obtékání</span>
-    <button data-align="left"   title="Vlevo — text teče vpravo vedle">⬅️</button>
-    <button data-align="center" title="Na střed — samostatně na řádku">⬛</button>
-    <button data-align="right"  title="Vpravo — text teče vlevo vedle">➡️</button>
+    <button data-wrap="inline" title="V textu — obrázek je jako písmeno v řádku">${I('<path d="M3 10.5h3M17 10.5h4M3 18h18"/><rect x="7.5" y="6" width="8" height="8" rx="1" fill="currentColor" stroke="none" opacity=".55"/>')}</button>
+    <button data-wrap="left" title="Obtékat zprava — obrázek vlevo, text vedle">${I('<path d="M15 6h6M15 10h6M15 14h6M3 18h18"/><rect x="3" y="5" width="9" height="9" rx="1" fill="currentColor" stroke="none" opacity=".55"/>')}</button>
+    <button data-wrap="right" title="Obtékat zleva — obrázek vpravo, text vedle">${I('<path d="M3 6h6M3 10h6M3 14h6M3 18h18"/><rect x="12" y="5" width="9" height="9" rx="1" fill="currentColor" stroke="none" opacity=".55"/>')}</button>
+    <button data-wrap="block" title="Nad a pod textem — obrázek na samostatném řádku">${I('<path d="M3 4h18M3 20h18"/><rect x="7" y="7.5" width="10" height="9" rx="1" fill="currentColor" stroke="none" opacity=".55"/>')}</button>
+    <button data-wrap="front" title="Před textem — volně, táhni kamkoli">${I('<path d="M3 6h18M3 10h18M3 14h18M3 18h18" opacity=".45"/><rect x="8" y="7" width="9" height="9" rx="1" fill="currentColor" stroke="none"/>')}</button>
+    <button data-wrap="behind" title="Za textem — volně, text je přes obrázek">${I('<rect x="8" y="7" width="9" height="9" rx="1" fill="currentColor" stroke="none" opacity=".3"/><path d="M3 6h18M3 10h18M3 14h18M3 18h18"/>')}</button>
     <span class="it-sep"></span>
-    <button data-free="1" title="Volně — obrázek jde táhnout kamkoli po poznámce">✥ Volně</button>
-    <button data-z="front" title="Před text">▲</button>
-    <button data-z="back"  title="Pod text">▼</button>
-    <span class="it-sep"></span>
-    <button data-spots="1" title="Klikací oblasti — víc odkazů na jednom obrázku">🎯 Oblasti</button>
-    <span class="it-sep"></span>
-    <button data-zoom="1" title="Zvětšit na celou obrazovku — screenshot se dá přečíst">🔍 Zvětšit</button>
+    <button data-spots="1" title="Klikací oblasti — víc odkazů na jednom obrázku">${I('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>')}<span>Oblasti</span></button>
+    <button data-zoom="1" title="Zvětšit na celou obrazovku — screenshot se dá přečíst">${I('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M11 8v6M8 11h6"/>')}</button>
     <span class="it-sep"></span>
     <button data-del="1" class="it-del" title="Odstranit obrázek">🗑️</button>`;
   document.body.appendChild(bar);
@@ -909,18 +933,8 @@ function openImgToolbar(img, editor) {
   const mark = () => {
     const w = img.style.width || '';
     bar.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', IMG_SIZES[b.dataset.size] === w));
-    const free = imgIsFree(img);
-    const f = img.style.float || 'none';
-    const cur = f === 'left' ? 'left' : f === 'right' ? 'right' : 'center';
-    bar.querySelectorAll('[data-align]').forEach(b => {
-      b.classList.toggle('on', !free && b.dataset.align === cur);
-      b.disabled = free;                       // volny obrazek text neobteka
-    });
-    bar.querySelector('[data-free]')?.classList.toggle('on', free);
-    bar.querySelectorAll('[data-z]').forEach(b => {
-      b.disabled = !free;
-      b.classList.toggle('on', free && ((img.style.zIndex === '0') === (b.dataset.z === 'back')));
-    });
+    const cur = imgWrapMode(img);
+    bar.querySelectorAll('[data-wrap]').forEach(b => b.classList.toggle('on', b.dataset.wrap === cur));
   };
   mark();
   // Uchopy na rohy — tazenim se obrazek skutecne skaluje.
@@ -934,17 +948,13 @@ function openImgToolbar(img, editor) {
     if (b.dataset.del) { img.remove(); closeImgToolbar(); editor.focus(); return; }
     if (b.dataset.spots) { closeImgToolbar(); openHotspotEditor(img); return; }
     if (b.dataset.zoom)  { openLightbox(img.currentSrc || img.src); return; }
-    if (b.dataset.free) {
-      if (imgIsFree(img)) makeImgInline(img); else makeImgFree(img, editor);
+    if (b.dataset.wrap) {
+      setImgWrap(img, b.dataset.wrap, editor);
       mark(); place(); showImgHandles(img, editor, () => { place(); mark(); });
       return;
     }
-    if (b.dataset.z) { img.style.zIndex = b.dataset.z === 'back' ? '0' : '2'; mark(); return; }
     // Vyber velikosti zahodi rucne dotazenou vysku, at si obrazek vrati pomer.
     if (b.dataset.size) { img.style.width = IMG_SIZES[b.dataset.size]; img.style.height = ''; img.style.maxWidth = imgIsFree(img) ? 'none' : '100%'; }
-    if (b.dataset.align === 'left')  { img.style.cssFloat = 'left';  img.style.display = ''; img.style.margin = '4px 12px 6px 0'; }
-    if (b.dataset.align === 'right') { img.style.cssFloat = 'right'; img.style.display = ''; img.style.margin = '4px 0 6px 12px'; }
-    if (b.dataset.align === 'center'){ img.style.cssFloat = 'none';  img.style.display = 'block'; img.style.margin = '8px auto'; }
     mark(); place();
     document.getElementById('imgHandles')?._place?.();
   });
@@ -1392,6 +1402,7 @@ function renderGuide() {
   contentEl.prepend(h);
   addImageClickHandlers(contentEl);
   wirePageLinks(contentEl);
+  wireWebLinks(contentEl);
   renderHotspots(contentEl, note, goToPage);
 
   // Every arrow leaving this chapter, as a button. These are the branches you
@@ -2403,6 +2414,253 @@ function cleanEditorHtml(html) {
   return d.innerHTML;
 }
 
+// ── Rich-text: doplňky jako ve Wordu ──────────────────────────
+// Odkazy na web v textu poznámky — vždy do nové karty (jinak by klik
+// odvedl celou místnost pryč) a nic jiného než http(s)/mailto se nepustí.
+function safeWebUrl(raw) {
+  let v = String(raw || '').trim();
+  if (!v) return '';
+  if (/^www\./i.test(v) || /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/i.test(v)) v = 'https://' + v;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) v = 'mailto:' + v;
+  return /^(https?:\/\/|mailto:)/i.test(v) ? v : '';
+}
+
+function wireWebLinks(root) {
+  root.querySelectorAll('a[href]').forEach(a => {
+    if (a.hasAttribute('data-page')) return;
+    if (!safeWebUrl(a.getAttribute('href'))) { a.removeAttribute('href'); return; }
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+  });
+}
+
+// Vložený obsah z webu / Wordu: nechá stavbu textu (nadpisy, seznamy, tučné,
+// tabulky, odkazy, obrázky), ale zahodí cizí písma, barvy a pozadí — ty z
+// tmavých webů dělaly bílý text na bílém papíře. Při kopírování uvnitř
+// editoru se barvy a velikosti zachovají.
+const PASTE_TAGS = new Set(['P', 'DIV', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'SUB', 'SUP',
+  'H1', 'H2', 'H3', 'H4', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'CODE', 'A', 'IMG', 'HR',
+  'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH', 'SPAN', 'MARK']);
+const PASTE_DROP = new Set(['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'IFRAME', 'OBJECT', 'EMBED',
+  'svg', 'SVG', 'CANVAS', 'VIDEO', 'AUDIO', 'NOSCRIPT', 'TEMPLATE', 'FORM', 'INPUT', 'BUTTON', 'SELECT', 'TEXTAREA']);
+
+function cleanPastedHtml(html, keepLook) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const body = doc.body;
+  const walk = node => {
+    [...node.childNodes].forEach(n => {
+      if (n.nodeType === 8) { n.remove(); return; }                 // komentáře (Word)
+      if (n.nodeType !== 1) return;
+      if (PASTE_DROP.has(n.tagName)) { n.remove(); return; }
+      walk(n);
+      if (!PASTE_TAGS.has(n.tagName)) { n.replaceWith(...n.childNodes); return; }
+      const st = n.style;
+      const keep = {};
+      if (/^(bold|[6-9]00)$/.test(st.fontWeight)) keep.fontWeight = 'bold';
+      if (st.fontStyle === 'italic') keep.fontStyle = 'italic';
+      if (/underline|line-through/.test(st.textDecorationLine || st.textDecoration)) keep.textDecoration = st.textDecorationLine || st.textDecoration;
+      if (/^(P|DIV|H[1-4]|LI|TD|TH)$/.test(n.tagName) && /^(center|right|justify)$/.test(st.textAlign)) keep.textAlign = st.textAlign;
+      if (keepLook) ['color', 'backgroundColor', 'fontSize', 'cssFloat', 'display', 'margin', 'width', 'maxWidth', 'listStyleType']
+        .forEach(k => { if (st[k]) keep[k] = st[k]; });
+      if (n.tagName === 'IMG' && st.width) keep.width = st.width;
+      const href = n.tagName === 'A' ? n.getAttribute('href') : null;
+      const src = n.tagName === 'IMG' ? n.getAttribute('src') : null;
+      const span = ['colspan', 'rowspan'].map(a => [a, n.getAttribute(a)]);
+      const dataPage = keepLook ? n.getAttribute('data-page') : null;
+      const cls = keepLook ? n.getAttribute('class') : null;
+      [...n.attributes].forEach(a => n.removeAttribute(a.name));
+      Object.assign(n.style, keep);
+      if (n.tagName === 'A') {
+        if (dataPage) { n.setAttribute('href', '#'); n.setAttribute('data-page', dataPage); n.className = 'page-link'; }
+        else { const u = safeWebUrl(href); if (u) n.setAttribute('href', u); else { n.replaceWith(...n.childNodes); return; } }
+      }
+      if (n.tagName === 'IMG') {
+        if (!src || !/^(https?:|data:image\/)/i.test(src)) { n.remove(); return; }
+        n.setAttribute('src', src);
+      }
+      if (/^T[DH]$/.test(n.tagName)) span.forEach(([a, v]) => { if (v && /^\d+$/.test(v)) n.setAttribute(a, v); });
+      if (cls && keepLook && /^(checklist|page-link)$/.test(cls)) n.className = cls;
+      if (n.tagName === 'SPAN' && !n.getAttribute('style') && !n.className) n.replaceWith(...n.childNodes);
+    });
+  };
+  walk(body);
+  // Jeden odstavec = vložit jen jeho obsah do aktuálního řádku (jako Word).
+  const only = body.children.length === 1 && ![...body.childNodes].some(n => n.nodeType === 3 && n.data.trim()) ? body.firstElementChild : null;
+  if (only && /^(P|DIV)$/.test(only.tagName) && !only.getAttribute('style')) return only.innerHTML.trim();
+  return body.innerHTML.trim();
+}
+
+function setupEditorExtras(editor, toolbar) {
+  if (!editor || editor._extrasWired) return;
+  editor._extrasWired = true;
+
+  // ── Odkaz na web (tlačítko + Ctrl+K) ──
+  const linkBtn = toolbar.querySelector('.rt-weblink');
+  let linkRange = null;
+  const grabRange = () => {
+    const sel = window.getSelection();
+    linkRange = (sel && sel.rangeCount && editor.contains(sel.anchorNode)) ? sel.getRangeAt(0).cloneRange() : null;
+  };
+  if (linkBtn) {
+    linkBtn.addEventListener('mousedown', e => { e.preventDefault(); grabRange(); });
+    linkBtn.addEventListener('click', e => { e.preventDefault(); if (!linkRange) grabRange(); openWebLinkPop(editor, linkBtn, linkRange); });
+  }
+  editor.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      e.stopPropagation();                     // jinak se otevře i rychlé hledání místnosti
+      grabRange();
+      openWebLinkPop(editor, linkBtn || editor, linkRange);
+    }
+  });
+  // V editoru se odkaz neotvírá (klik = psaní) — Ctrl+klik ho otevře jako ve Wordu.
+  editor.addEventListener('click', e => {
+    const a = e.target.closest?.('a[href]');
+    if (!a || a.hasAttribute('data-page') || !(e.ctrlKey || e.metaKey)) return;
+    const u = safeWebUrl(a.getAttribute('href'));
+    if (u) { e.preventDefault(); window.open(u, '_blank', 'noopener'); }
+  });
+
+  // ── Vkládání: vyčistit cizí formátování ──
+  let lastCopied = '';
+  const remember = () => { lastCopied = (window.getSelection()?.toString() || '').trim(); };
+  editor.addEventListener('copy', remember);
+  editor.addEventListener('cut', remember);
+  editor.addEventListener('paste', e => {
+    const cd = e.clipboardData;
+    if (!cd || [...cd.items].some(i => i.type?.startsWith('image/') && i.kind === 'file')) return; // obrázek řeší setupEditorImages
+    const html = cd.getData('text/html');
+    if (!html) return;                                        // čistý text: prohlížeč to zvládne sám
+    const internal = !!lastCopied && cd.getData('text/plain').trim() === lastCopied;
+    const clean = cleanPastedHtml(html, internal);
+    if (!clean) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    document.execCommand('insertHTML', false, clean);
+    normalizeEditorImages(editor);
+  });
+
+  // ── Automatické formátování při psaní (mezera po značce na začátku řádku) ──
+  const isBlock = n => n.nodeType === 1 && /^(P|DIV|LI|H[1-6]|BLOCKQUOTE|PRE|UL|OL|TABLE|TD|TH)$/.test(n.tagName);
+  const lineStartsHere = (node) => {
+    // Před textovým uzlem nesmí na stejném řádku nic být.
+    let n = node;
+    while (n && n !== editor && !isBlock(n)) {
+      let p = n.previousSibling;
+      while (p && p.nodeType === 3 && !p.data.length) p = p.previousSibling;
+      if (p && !(isBlock(p) || p.nodeName === 'BR')) return false;
+      n = n.parentNode;
+    }
+    return !!n;
+  };
+  const RULES = [
+    { re: /^[-*•]$/,  run: () => !currentListItem(editor) && document.execCommand('insertUnorderedList') },
+    { re: /^1[.)]$/,  run: () => !currentListItem(editor) && document.execCommand('insertOrderedList') },
+    { re: /^\[ ?\]$/, run: () => toolbar.querySelector('.rt-checklist')?.click() },
+    { re: /^#$/,      run: () => document.execCommand('formatBlock', false, '<h2>') },
+    { re: /^##$/,     run: () => document.execCommand('formatBlock', false, '<h3>') },
+    { re: /^>$/,      run: () => document.execCommand('formatBlock', false, '<blockquote>') },
+  ];
+  editor.addEventListener('keydown', e => {
+    if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.isCollapsed || !sel.rangeCount) return;
+    const node = sel.anchorNode;
+    if (!node || node.nodeType !== 3 || !editor.contains(node)) return;
+    if (node.parentElement.closest('pre, code, td, th')) return;
+    const before = node.data.slice(0, sel.anchorOffset);
+    const rule = RULES.find(r => r.re.test(before));
+    if (!rule || !lineStartsHere(node)) return;
+    if (/^[-*•1]/.test(before) && currentListItem(editor)) return;   // už v seznamu
+    e.preventDefault();
+    const r = document.createRange();
+    r.setStart(node, 0); r.setEnd(node, sel.anchorOffset);
+    sel.removeAllRanges(); sel.addRange(r);
+    document.execCommand('delete');
+    rule.run();
+  });
+
+  // ── Počítadlo slov ──
+  const status = document.createElement('div');
+  status.className = 'rt-status';
+  status.setAttribute('aria-live', 'off');
+  editor.after(status);
+  let pending = false;
+  const count = () => {
+    pending = false;
+    const text = editor.innerText || '';
+    const words = (text.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length;
+    const chars = text.replace(/\s/g, '').length;
+    const w = words === 1 ? 'slovo' : words >= 2 && words <= 4 ? 'slova' : 'slov';
+    status.innerHTML = `<span>${words} ${w}</span><span>${chars} znaků</span>` +
+      '<span class="rt-hint">Tip: <kbd>-</kbd> + mezera = odrážky · <kbd>#</kbd> = nadpis · <kbd>Ctrl+K</kbd> = odkaz</span>';
+  };
+  new MutationObserver(() => { if (!pending) { pending = true; requestAnimationFrame(count); } })
+    .observe(editor, { childList: true, characterData: true, subtree: true });
+  count();
+}
+
+function closeWebLinkPop() { document.getElementById('webLinkPop')?.remove(); }
+
+function openWebLinkPop(editor, anchor, range) {
+  closeWebLinkPop();
+  const startEl = range ? (range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement) : null;
+  const existing = startEl?.closest('a[href]');
+  const curLink = existing && editor.contains(existing) && !existing.hasAttribute('data-page') ? existing : null;
+
+  const pop = document.createElement('div');
+  pop.className = 'context-menu link-pop';
+  pop.id = 'webLinkPop';
+  pop.innerHTML = `
+    <input type="text" class="input" placeholder="https://… nebo adresa stránky" spellcheck="false" aria-label="Adresa odkazu">
+    <div class="link-pop-row">
+      ${curLink ? '<button type="button" class="btn btn-ghost" data-act="open">Otevřít</button><button type="button" class="btn btn-ghost" data-act="remove">Odebrat</button>' : ''}
+      <span style="flex:1"></span>
+      <button type="button" class="btn btn-primary" data-act="ok">${curLink ? 'Uložit' : 'Vložit'}</button>
+    </div>`;
+  document.body.appendChild(pop);
+  const input = pop.querySelector('input');
+  input.value = curLink ? curLink.getAttribute('href') : '';
+
+  const r = (range && !range.collapsed ? range : anchor).getBoundingClientRect();
+  const a = (r.width || r.height) ? r : anchor.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(a.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+  pop.style.top  = (a.bottom + 6) + 'px';
+  if (pop.getBoundingClientRect().bottom > window.innerHeight) pop.style.top = (a.top - pop.offsetHeight - 6) + 'px';
+  setTimeout(() => { input.focus(); input.select(); }, 0);
+
+  const restore = () => {
+    editor.focus();
+    if (range) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); }
+  };
+  const apply = () => {
+    const url = safeWebUrl(input.value);
+    if (!url) { input.classList.add('input-error'); input.focus(); return; }
+    closeWebLinkPop();
+    if (curLink) { curLink.setAttribute('href', url); editor.focus(); return; }
+    restore();
+    const sel = window.getSelection();
+    if (sel.rangeCount && !sel.isCollapsed) document.execCommand('createLink', false, url);
+    else document.execCommand('insertHTML', false, `<a href="${esc(url)}">${esc(url.replace(/^mailto:/, ''))}</a>&nbsp;`);
+  };
+  pop.addEventListener('mousedown', e => { if (e.target !== input) e.preventDefault(); });
+  pop.addEventListener('click', e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'ok') apply();
+    if (act === 'open') { const u = safeWebUrl(curLink.getAttribute('href')); if (u) window.open(u, '_blank', 'noopener'); }
+    if (act === 'remove') { curLink.replaceWith(...curLink.childNodes); closeWebLinkPop(); editor.focus(); }
+  });
+  input.addEventListener('input', () => input.classList.remove('input-error'));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); apply(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeWebLinkPop(); restore(); }
+  });
+  setTimeout(() => {
+    const away = e => { if (!pop.contains(e.target)) { closeWebLinkPop(); document.removeEventListener('mousedown', away, true); } };
+    document.addEventListener('mousedown', away, true);
+  }, 0);
+}
+
 let EDIT_PAGE_ID = null;   // when set, the edit modal writes into this chapter
 
 function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
@@ -2427,6 +2685,61 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
     sel.addRange(savedRange);
   }
 
+  // Light up B / I / U / lists / alignment while the caret sits in such text,
+  // and show the font size under the caret (in points, like Word).
+  const STATEFUL = ['bold', 'italic', 'underline', 'strikeThrough', 'insertUnorderedList', 'insertOrderedList',
+                    'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'];
+  const sizeSel = toolbar.querySelector('.rt-fontsize');
+  function syncActive() {
+    const sel = window.getSelection();
+    const inside = sel.rangeCount > 0 && editor.contains(sel.anchorNode);
+    if (inside) saveRange();
+    toolbar.querySelectorAll('[data-cmd]').forEach(btn => {
+      if (!STATEFUL.includes(btn.dataset.cmd)) return;
+      let on = false;
+      try { on = inside && document.queryCommandState(btn.dataset.cmd); } catch (_) {}
+      btn.classList.toggle('active', on);
+    });
+    if (sizeSel && inside && document.activeElement !== sizeSel) {
+      const node = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+      const pt = Math.round(parseFloat(getComputedStyle(node).fontSize) * 0.75 * 2) / 2;
+      const opt = [...sizeSel.options].find(o => +o.value === pt);
+      if (opt) sizeSel.value = opt.value;
+      else { sizeSel.options[0].textContent = String(pt); sizeSel.value = ''; }
+    }
+  }
+  document.addEventListener('selectionchange', syncActive);
+
+  // Font size in points. Stored RELATIVE to the 12 pt body (em), so a note
+  // keeps its proportions on the small board card too. execCommand only
+  // knows the 7 legacy sizes, so mark the selection with a throw-away font
+  // face and turn exactly those marks into sized spans.
+  if (sizeSel) {
+    sizeSel.addEventListener('mousedown', saveRange);
+    sizeSel.addEventListener('change', () => {
+      const pt = parseFloat(sizeSel.value);
+      if (!pt) return;
+      restoreRange();
+      document.execCommand('styleWithCSS', false, false);
+      document.execCommand('fontName', false, '__sbsize__');
+      editor.querySelectorAll('font[face="__sbsize__"]').forEach(f => {
+        const span = document.createElement('span');
+        span.style.fontSize = +(pt / 12).toFixed(3) + 'em';
+        // Sizes set before on the same text would otherwise win from inside.
+        f.querySelectorAll('[style*="font-size"]').forEach(x => { x.style.fontSize = ''; });
+        f.querySelectorAll('font[size]').forEach(x => x.removeAttribute('size'));
+        while (f.firstChild) span.appendChild(f.firstChild);
+        f.replaceWith(span);
+      });
+      editor.querySelectorAll('span[style*="__sbsize__"]').forEach(sp => {
+        sp.style.fontFamily = '';
+        sp.style.fontSize = +(pt / 12).toFixed(3) + 'em';
+      });
+      editor.focus();
+      saveRange();
+    });
+  }
+
   // Format buttons: prevent blur, apply command
   toolbar.querySelectorAll('[data-cmd]').forEach(btn => {
     btn.addEventListener('mousedown', e => e.preventDefault());
@@ -2434,6 +2747,7 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
       restoreRange();
       document.execCommand(btn.dataset.cmd, false, btn.dataset.val || null);
       editor.focus();
+      syncActive();
     });
   });
 
@@ -2464,6 +2778,7 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
   setupListTools(editor, toolbar);
   setupPageLinkButton(editor, toolbar);
   setupHighlighter(editor, toolbar);
+  setupEditorExtras(editor, toolbar);
 
   // Image upload
   const imgLabel = toolbar.querySelector('.rt-img-label');
