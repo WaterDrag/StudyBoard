@@ -46,6 +46,7 @@ async function init(user) {
   setupSettings(user);
 
   setupTabs(user);
+  setupAllFiles();
   loadRooms(user);
   loadDecks(user);
   loadFriends(user);
@@ -69,6 +70,110 @@ function setupTabs(user) {
       if (btn.dataset.tab === 'flash') loadDecks(user);
     });
   });
+}
+
+// ── Soubory ze všech místností ──────────────────────────────────
+// Files live as a list on each room document (see room-files.js), and the
+// room snapshot below already brings those documents — so this tab costs
+// no extra reads. Read-only: uploading and removing stay inside the room.
+let ALL_FILES_ROOMS = [];
+
+const DASH_FILE_ICONS = [
+  [/pdf/, '📕'], [/image|png|jpe?g|gif|webp|svg/, '🖼️'], [/zip|rar|7z|tar/, '🗜️'],
+  [/word|document|[.]docx?$/, '📘'], [/sheet|excel|[.]xlsx?$/, '📗'],
+  [/presentation|powerpoint|[.]pptx?$/, '📙'], [/audio|mp3|wav/, '🎵'],
+  [/video|mp4|mkv|avi/, '🎬'], [/text|plain|[.]md$|[.]txt$/, '📄'],
+];
+function dashFileIcon(name, mime) {
+  const hay = ((mime || '') + ' ' + (name || '')).toLowerCase();
+  for (const [re, ico] of DASH_FILE_ICONS) if (re.test(hay)) return ico;
+  return '📎';
+}
+function dashFileSize(bytes) {
+  const n = +bytes;
+  if (!n) return '';
+  return n < 1024 ? n + ' B' : n < 1048576 ? Math.round(n / 1024) + ' kB' : (n / 1048576).toFixed(1) + ' MB';
+}
+// Links come from other members' writes — only ever render real web links.
+function safeFileLink(url) { return /^https:\/\//i.test(String(url || '')) ? url : '#'; }
+
+function setupAllFiles() {
+  ['allFilesSearch', 'allFilesRoom', 'allFilesMine'].forEach(id =>
+    document.getElementById(id)?.addEventListener(id === 'allFilesSearch' ? 'input' : 'change', renderAllFiles));
+}
+
+function renderAllFiles() {
+  const list = document.getElementById('allFilesList');
+  if (!list) return;
+  const total = ALL_FILES_ROOMS.reduce((n, r) => n + r.files.length, 0);
+  const badge = document.getElementById('filesCountBadge');
+  if (badge) badge.textContent = total || '';
+
+  // Room filter options (keep the current choice across re-renders)
+  const sel = document.getElementById('allFilesRoom');
+  const chosen = sel.value;
+  sel.innerHTML = '<option value="">Všechny místnosti</option>' + ALL_FILES_ROOMS
+    .filter(r => r.files.length)
+    .map(r => `<option value="${esc(r.id)}">${esc(r.name)} (${r.files.length})</option>`).join('');
+  sel.value = ALL_FILES_ROOMS.some(r => r.id === chosen) ? chosen : '';
+
+  const q = (document.getElementById('allFilesSearch').value || '').trim().toLowerCase();
+  const mine = document.getElementById('allFilesMine').checked;
+  const uid = auth.currentUser?.uid;
+  const rooms = ALL_FILES_ROOMS
+    .filter(r => !sel.value || r.id === sel.value)
+    .map(r => ({ ...r, files: r.files.filter(f =>
+      (!mine || f.by === uid) && (!q || String(f.name || '').toLowerCase().includes(q))) }))
+    .filter(r => r.files.length);
+
+  if (!total) {
+    list.innerHTML = '<div class="files-empty">V tvých místnostech zatím nikdo nic nenahrál. Soubory se nahrávají v místnosti přes 📎 Soubory.</div>';
+    return;
+  }
+  if (!rooms.length) {
+    list.innerHTML = '<div class="files-empty">Nic neodpovídá filtru.</div>';
+    return;
+  }
+
+  // "Složka/Podsložka/soubor.pdf" → nested tree, folders before files, A–Z
+  const tree = files => {
+    const root = { dirs: {}, files: [] };
+    files.forEach(f => {
+      const parts = String(f.name || 'soubor').split('/').filter(Boolean);
+      const leaf = parts.pop() || 'soubor';
+      let node = root;
+      parts.forEach(p => { node = node.dirs[p] ||= { dirs: {}, files: [] }; });
+      node.files.push({ ...f, leaf });
+    });
+    return root;
+  };
+  const count = node => node.files.length + Object.values(node.dirs).reduce((n, d) => n + count(d), 0);
+  const fileRow = f => `
+    <div class="files-row">
+      <span class="files-ico">${dashFileIcon(f.leaf, f.mime)}</span>
+      <span class="files-name" title="${esc(f.name)}">${esc(f.leaf)}</span>
+      <span class="files-meta">${esc(f.byName || '')}${f.size ? ' · ' + esc(dashFileSize(f.size)) : ''}${f.at ? ' · ' + esc(new Date(f.at).toLocaleDateString('cs-CZ')) : ''}</span>
+      <a class="files-open" href="${esc(safeFileLink(f.link))}" target="_blank" rel="noopener">otevřít ↗</a>
+    </div>`;
+  const renderNode = (node, depth) =>
+    Object.keys(node.dirs).sort((a, b) => a.localeCompare(b, 'cs')).map(name => `
+      <details class="allfiles-dir" ${q || depth < 1 ? 'open' : ''}>
+        <summary><span class="allfiles-caret"></span>📁 ${esc(name)} <span class="allfiles-count">${count(node.dirs[name])}</span></summary>
+        <div class="allfiles-children">${renderNode(node.dirs[name], depth + 1)}</div>
+      </details>`).join('') +
+    node.files.slice().sort((a, b) => a.leaf.localeCompare(b.leaf, 'cs')).map(fileRow).join('');
+
+  list.innerHTML = rooms.map(r => `
+    <details class="allfiles-room" open style="--room-color:${esc(r.color || '#6366f1')}">
+      <summary>
+        <span class="allfiles-caret"></span>
+        <span class="allfiles-dot"></span>
+        <span class="allfiles-room-name">${esc(r.name)}</span>
+        <span class="allfiles-count">${r.files.length}</span>
+        <a class="allfiles-goto" href="room.html?id=${encodeURIComponent(r.id)}">otevřít místnost →</a>
+      </summary>
+      <div class="allfiles-children">${renderNode(tree(r.files), 0)}</div>
+    </details>`).join('');
 }
 
 // ── Místnosti ───────────────────────────────────────────────────
@@ -109,6 +214,9 @@ function loadRooms(user) {
         const role = (r.roles || {})[user.uid] || 'viewer';
         grid.appendChild(buildRoomCard(doc.id, r, role));
       });
+      ALL_FILES_ROOMS = sorted.map(d => ({ id: d.id, name: d.data().name || 'Místnost', color: d.data().color,
+                                            files: Array.isArray(d.data().files) ? d.data().files : [] }));
+      renderAllFiles();
       loadInbox(user, sorted.map(d => ({ id: d.id, name: d.data().name, color: d.data().color })));
     }, err => {
       if (err.code === 'permission-denied') {

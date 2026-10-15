@@ -3921,6 +3921,33 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .files-open:hover { border-color: var(--accent); }
 .files-del { background: none; border: none; color: #fca5a5; cursor: pointer; font-size: 0.82rem; padding: 2px 4px; }
 .files-empty { color: var(--text-muted); font-size: 0.84rem; padding: 14px 2px; text-align: center; }
+
+/* Nástěnka → záložka Soubory (všechny soubory ze všech mých místností) */
+.allfiles-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+.allfiles-tools #allFilesSearch { flex: 1 1 260px; }
+.allfiles-tools #allFilesRoom { flex: 0 1 240px; }
+.allfiles-mine { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
+.allfiles-room { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-2); margin-bottom: 12px; overflow: hidden; }
+.allfiles-room > summary {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer;
+  list-style: none; border-left: 3px solid var(--room-color);
+}
+.allfiles-room > summary::-webkit-details-marker, .allfiles-dir > summary::-webkit-details-marker { display: none; }
+.allfiles-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--room-color); flex-shrink: 0; }
+.allfiles-room-name { font-weight: 600; }
+.allfiles-count { font-size: 0.75rem; color: var(--text-muted); background: var(--bg-3); padding: 1px 7px; border-radius: 10px; }
+.allfiles-goto { margin-left: auto; font-size: 0.8rem; color: var(--accent); text-decoration: none; white-space: nowrap; }
+.allfiles-goto:hover { text-decoration: underline; }
+.allfiles-caret { width: 0; height: 0; border-left: 5px solid var(--text-muted); border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.15s; flex-shrink: 0; }
+details[open] > summary > .allfiles-caret { transform: rotate(90deg); }
+.allfiles-room > .allfiles-children { padding: 4px 12px 8px; }
+.allfiles-dir > summary { display: flex; align-items: center; gap: 8px; padding: 7px 4px; cursor: pointer; list-style: none; font-size: 0.86rem; font-weight: 600; }
+.allfiles-dir > .allfiles-children { padding-left: 18px; border-left: 1px dashed var(--border); margin-left: 6px; }
+.allfiles-children .files-row { background: var(--bg); }
+@media (max-width: 600px) {
+  .allfiles-children .files-meta { display: none; }
+  .allfiles-goto { font-size: 0.75rem; }
+}
 .files-msg { flex: 1; font-size: 0.78rem; color: var(--text-muted); text-align: left; }
 .files-msg.err { color: #fca5a5; }
 .files-msg.ok { color: #86efac; }

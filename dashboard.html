@@ -47,6 +47,10 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         Flash Cards
       </button>
+      <button class="tab-btn" data-tab="files">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+        Soubory <span class="tab-badge" id="filesCountBadge" style="background:var(--bg-3);color:var(--text-muted);"></span>
+      </button>
       <button class="tab-btn" data-tab="friends">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Přátelé <span class="tab-badge" id="reqBadge"></span>
@@ -114,6 +118,19 @@
           <div class="spinner"></div> Načítám...
         </div>
       </div>
+    </div>
+
+    <!-- TAB: Soubory ze všech místností -->
+    <div class="tab-panel" id="tab-files">
+      <div class="dashboard-header" style="margin-bottom:18px;">
+        <div><h2>Soubory</h2><p>Všechno nahrané do místností, kde jsi členem</p></div>
+      </div>
+      <div class="allfiles-tools">
+        <input id="allFilesSearch" type="search" class="input" placeholder="Hledat soubor nebo složku…" autocomplete="off">
+        <select id="allFilesRoom" class="input"><option value="">Všechny místnosti</option></select>
+        <label class="allfiles-mine"><input type="checkbox" id="allFilesMine"> Jen moje</label>
+      </div>
+      <div id="allFilesList"></div>
     </div>
 
     <!-- TAB: Přátelé -->
