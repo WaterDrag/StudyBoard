@@ -3453,7 +3453,7 @@ function roundRect(x,y,w,h,r){
 }
 // Helper: floating world-space label tag
 function drawWorldTag(cx,cy,text,col){
-  ctx.font='600 10px Inter,sans-serif';
+  ctx.font='600 10px Geist,sans-serif';
   const wd=ctx.measureText(text).width+14;
   ctx.fillStyle='rgba(4,4,14,.82)';
   roundRect(cx-wd/2,cy-9,wd,16,5);ctx.fill();
@@ -3623,7 +3623,7 @@ function drawFloats(){
   gs.floats.forEach(f=>{
     ctx.globalAlpha=Math.min(1,f.life*2);
     ctx.fillStyle=f.col;
-    ctx.font='bold 14px Inter,sans-serif';
+    ctx.font='bold 14px Geist,sans-serif';
     ctx.fillText(f.txt,f.x,f.y);
   });
   ctx.globalAlpha=1;

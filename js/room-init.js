@@ -120,6 +120,13 @@ auth.onAuthStateChanged(async user => {
     if (MY_ROLE === 'owner') purgeExpiredMembers();
 
     document.getElementById('roomTitle').textContent = ROOM.name;
+    // Dashboard's "Pokračovat" and "Nedávné" sort read this (this browser only).
+    try {
+      const opened = JSON.parse(localStorage.getItem('sb_room_opened') || '{}') || {};
+      opened[ROOM_ID] = Date.now();
+      const keep = Object.entries(opened).sort((x, y) => y[1] - x[1]).slice(0, 50);
+      localStorage.setItem('sb_room_opened', JSON.stringify(Object.fromEntries(keep)));
+    } catch (_) { /* storage blocked — the dashboard falls back to newest */ }
     document.title = ROOM.name + ' – StudyBoard';
 
     // Anonymous guests are strictly view-only in shared rooms, no matter what

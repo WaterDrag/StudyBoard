@@ -21,9 +21,14 @@ async function init(user) {
     auth.signOut().then(() => (window.location.href = 'index.html'))
   );
 
+  setupDashHero(user);
+
   // Aktualizuj profil – vygeneruj friendCode pokud ještě nemá
   db.collection('users').doc(user.uid).get().then(async snap => {
     const existing = snap.exists ? snap.data().friendCode : null;
+    // Spaced-repetition progress (quiz.js) feeds "K opakování dnes".
+    USER_LEARN = (snap.exists && snap.data().learn) || {};
+    renderReview();
     // AI klíče: users/{uid} je čitelný pro KAŽDÉHO přihlášeného (kvůli
     // profilům přátel a členů), takže klíče tam nesmí ležet — čtou se
     // a ukládají do soukromé podkolekce, kam smí jen vlastník účtu.
@@ -183,9 +188,7 @@ function loadRooms(user) {
   // already-rendered buttons are refreshed once they arrive.
   if (!user.isAnonymous) BgFav.load().then(() => {
     grid.querySelectorAll('.card-fav-btn').forEach(b => {
-      const on = BgFav.has('karta', b.dataset.art);
-      b.classList.toggle('on', on);
-      b.textContent = on ? '♥' : '♡';
+      b.classList.toggle('on', BgFav.has('karta', b.dataset.art));
     });
   });
   db.collection('rooms')
@@ -201,19 +204,19 @@ function loadRooms(user) {
             <h3>Zatím žádné místnosti</h3>
             <p>Vytvoř novou nebo se připoj pomocí kódu.</p>
           </div>`;
+        DASH_ROOMS = [];
+        renderContinue();
+        updateDashSummary();
         return;
       }
-      grid.innerHTML = '';
       const sorted = [...snap.docs].sort((a, b) => {
         const at = a.data().createdAt?.toMillis?.() || 0;
         const bt = b.data().createdAt?.toMillis?.() || 0;
         return bt - at;
       });
-      sorted.forEach(doc => {
-        const r    = doc.data();
-        const role = (r.roles || {})[user.uid] || 'viewer';
-        grid.appendChild(buildRoomCard(doc.id, r, role));
-      });
+      DASH_ROOMS = sorted.map(doc => ({ id: doc.id, room: doc.data(), role: (doc.data().roles || {})[user.uid] || 'viewer' }));
+      renderRoomGrid();
+      renderContinue();
       ALL_FILES_ROOMS = sorted.map(d => ({ id: d.id, name: d.data().name || 'Místnost', color: d.data().color,
                                             files: Array.isArray(d.data().files) ? d.data().files : [] }));
       renderAllFiles();
@@ -323,6 +326,161 @@ function stripHtml(html) {
   return d.textContent || '';
 }
 
+// ── Hlavička nástěnky: pozdrav, hledání, řazení ─────────────────
+let USER_LEARN = null;        // users/{uid}.learn — progress written by quiz.js
+let DASH_ROOMS = [];          // [{ id, room, role }] in the current sort order
+let ROOM_SORT = 'recent';
+try { ROOM_SORT = localStorage.getItem('sb_room_sort') === 'az' ? 'az' : 'recent'; } catch (_) {}
+
+const ICON_PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>';
+const ICON_HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></svg>';
+
+// Czech plural: 1 místnost · 2–4 místnosti · 5+ místností
+function plural(n, one, few, many) { return n === 1 ? one : (n >= 2 && n <= 4 ? few : many); }
+
+// Rooms opened from this browser: { roomId: ms }, written by room-init.js.
+function roomOpenedMap() {
+  try { return JSON.parse(localStorage.getItem('sb_room_opened') || '{}') || {}; } catch (_) { return {}; }
+}
+
+function setupDashHero(user) {
+  const h = new Date().getHours();
+  const hello = h < 5 ? 'Dobrou noc' : h < 10 ? 'Dobré ráno' : h < 18 ? 'Dobrý den' : 'Dobrý večer';
+  const name = String(user.displayName || '').trim().split(/\s+/)[0];
+  document.getElementById('dashGreeting').textContent = name ? `${hello}, ${name}` : hello;
+
+  // Search filters the cards already on screen; Ctrl+K jumps into it.
+  const search = document.getElementById('dashSearch');
+  search.addEventListener('input', applyDashSearch);
+  search.addEventListener('keydown', e => { if (e.key === 'Escape') { search.value = ''; applyDashSearch(); search.blur(); } });
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); search.focus(); search.select(); }
+  });
+
+  document.querySelectorAll('[data-sort]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sort === ROOM_SORT);
+    btn.addEventListener('click', () => {
+      ROOM_SORT = btn.dataset.sort;
+      try { localStorage.setItem('sb_room_sort', ROOM_SORT); } catch (_) {}
+      document.querySelectorAll('[data-sort]').forEach(b => b.classList.toggle('active', b === btn));
+      renderRoomGrid();
+    });
+  });
+}
+
+function applyDashSearch() {
+  const q = document.getElementById('dashSearch').value.trim().toLowerCase();
+  document.querySelectorAll('#roomsGrid .room-card, #decksGrid .deck-card').forEach(card => {
+    card.style.display = !q || card.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+  const cont = document.getElementById('dashContinue');
+  if (cont) cont.style.display = q ? 'none' : '';
+}
+
+function sortDashRooms() {
+  const opened = roomOpenedMap();
+  const created = r => r.room.createdAt?.toMillis?.() || 0;
+  DASH_ROOMS.sort(ROOM_SORT === 'az'
+    ? (a, b) => String(a.room.name || '').localeCompare(String(b.room.name || ''), 'cs')
+    : (a, b) => (opened[b.id] || 0) - (opened[a.id] || 0) || created(b) - created(a));
+}
+
+function renderRoomGrid() {
+  const grid = document.getElementById('roomsGrid');
+  if (!DASH_ROOMS.length) return;
+  sortDashRooms();
+  grid.innerHTML = '';
+  DASH_ROOMS.forEach(r => grid.appendChild(buildRoomCard(r.id, r.room, r.role)));
+  applyDashSearch();
+}
+
+function updateDashSummary() {
+  const n = DASH_ROOMS.length;
+  const due = Object.values(dueByDeck()).reduce((a, b) => a + b, 0);
+  const parts = [`${n} ${plural(n, 'místnost', 'místnosti', 'místností')}`];
+  if (due) parts.push(`${due} ${plural(due, 'karta', 'karty', 'karet')} k opakování`);
+  document.getElementById('dashSummary').textContent = parts.join(' · ');
+  const badge = document.getElementById('roomsCountBadge');
+  if (badge) badge.textContent = n || '';
+}
+
+// "Pokračovat": the room last opened from this browser, else the newest one.
+function renderContinue() {
+  const box = document.getElementById('dashContinue');
+  if (!box) return;
+  if (!DASH_ROOMS.length) { box.innerHTML = ''; return; }
+  const opened = roomOpenedMap();
+  const last = DASH_ROOMS.filter(r => opened[r.id]).sort((a, b) => opened[b.id] - opened[a.id])[0];
+  const pick = last || DASH_ROOMS.slice().sort((a, b) => (b.room.createdAt?.toMillis?.() || 0) - (a.room.createdAt?.toMillis?.() || 0))[0];
+  const room = pick.room;
+  const members = (room.memberIds || []).length;
+  const fileCount = Array.isArray(room.files) ? room.files.length : 0;
+  const meta = [`${members} ${plural(members, 'člen', 'členové', 'členů')}`];
+  if (fileCount) meta.push(`${fileCount} ${plural(fileCount, 'soubor', 'soubory', 'souborů')}`);
+  box.innerHTML = `
+    <a class="continue-card" href="room.html?id=${encodeURIComponent(pick.id)}" style="--card-color:${esc(room.color || '#6366f1')}">
+      <div class="continue-art"></div>
+      <div class="continue-body">
+        <span class="eyebrow">${last ? 'Naposledy otevřené' : 'Nejnovější místnost'}</span>
+        <span class="continue-name">${esc(room.name)}</span>
+        <span class="continue-meta">${meta.join(' · ')}</span>
+        <span class="continue-go">Pokračovat
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </span>
+      </div>
+    </a>
+    <div class="review-panel" id="reviewPanel"></div>`;
+  if (BgGen.isRecipe(room.cardArt)) {
+    BgGen.toUrl(room.cardArt, 'karta').then(url => {
+      if (url) box.querySelector('.continue-art')?.style.setProperty('--card-art', `url("${url}")`);
+    });
+  }
+  renderReview();
+}
+
+// deckId → number of cards due now (only cards already studied have a due date)
+function dueByDeck() {
+  const now = Date.now(), out = {};
+  Object.entries(USER_LEARN || {}).forEach(([deckId, d]) => {
+    const n = Object.values(d?.cards || {}).filter(c => c && c.due && c.due <= now).length;
+    if (n) out[deckId] = n;
+  });
+  return out;
+}
+
+const DECK_NAME_CACHE = {};
+async function renderReview() {
+  updateDashSummary();
+  const panel = document.getElementById('reviewPanel');
+  if (!panel) return;
+  if (USER_LEARN === null) { panel.innerHTML = '<span class="eyebrow">K opakování dnes</span><div class="review-empty">Načítám…</div>'; return; }
+  const due = Object.entries(dueByDeck()).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  if (!due.length) {
+    panel.innerHTML = `<span class="eyebrow">K opakování dnes</span>
+      <div class="review-empty">Dnes nemáš nic k opakování.</div>
+      <button type="button" class="btn btn-secondary review-all" data-goto-tab="flash">Otevřít Flash Cards</button>`;
+  } else {
+    await Promise.all(due.map(async ([id]) => {
+      if (DECK_NAME_CACHE[id]) return;
+      try {
+        const snap = await db.collection('decks').doc(id).get();
+        DECK_NAME_CACHE[id] = snap.exists ? { name: snap.data().name, color: snap.data().color } : { gone: true };
+      } catch (_) { DECK_NAME_CACHE[id] = { gone: true }; }
+    }));
+    const rows = due.filter(([id]) => !DECK_NAME_CACHE[id]?.gone);
+    panel.innerHTML = `<span class="eyebrow">K opakování dnes</span>
+      ${rows.map(([id, n]) => `
+        <a class="review-row" href="quiz.html?deck=${encodeURIComponent(id)}&smart=1">
+          <span class="review-dot" style="background:${esc(DECK_NAME_CACHE[id]?.color || '#8B93FF')}"></span>
+          <span class="review-name">${esc(DECK_NAME_CACHE[id]?.name || 'Balíček')}</span>
+          <span class="review-count">${n} ${plural(n, 'karta', 'karty', 'karet')}</span>
+        </a>`).join('') || '<div class="review-empty">Dnes nemáš nic k opakování.</div>'}
+      <button type="button" class="btn btn-secondary review-all" data-goto-tab="flash">Všechny balíčky</button>`;
+  }
+  panel.querySelector('[data-goto-tab]')?.addEventListener('click', () =>
+    document.querySelector('.tab-btn[data-tab="flash"]')?.click());
+}
+
 function buildRoomCard(id, room, role) {
   const labels = { owner: 'Vlastník', editor: 'Editor', viewer: 'Prohlížeč' };
   const a = document.createElement('a');
@@ -335,14 +493,19 @@ function buildRoomCard(id, room, role) {
     a.classList.add('has-art');
     BgGen.toUrl(art, 'karta').then(url => { if (url) a.style.setProperty('--card-art', `url("${url}")`); });
   }
+  const members = (room.memberIds || []).length;
+  const meta = members > 1 ? `${members} ${plural(members, 'člen', 'členové', 'členů')}` : fmtDate(room.createdAt);
   a.innerHTML = `
-    ${role === 'owner' ? `<button class="card-edit-btn" data-edit-room="${id}" title="Upravit kartu">✏️</button>` : ''}
-    ${art && !auth.currentUser?.isAnonymous ? `<button data-art="${esc(art)}" class="card-fav-btn${BgFav.has('karta', art) ? ' on' : ''}" title="Uložit obrázek do oblíbených">${BgFav.has('karta', art) ? '♥' : '♡'}</button>` : ''}
-    <h3>${esc(room.name)}</h3>
-    ${room.description ? `<p class="card-desc">${esc(room.description)}</p>` : ''}
-    <div class="room-card-meta">
-      <span class="role-badge role-${role}">${labels[role] || role}</span>
-      <span class="meta-date">${fmtDate(room.createdAt)}</span>
+    <div class="room-card-art"><span class="room-card-dot"></span></div>
+    ${role === 'owner' ? `<button class="card-edit-btn" data-edit-room="${id}" title="Upravit kartu" aria-label="Upravit kartu">${ICON_PENCIL}</button>` : ''}
+    ${art && !auth.currentUser?.isAnonymous ? `<button data-art="${esc(art)}" class="card-fav-btn${BgFav.has('karta', art) ? ' on' : ''}" title="Uložit obrázek do oblíbených" aria-label="Uložit obrázek do oblíbených">${ICON_HEART}</button>` : ''}
+    <div class="room-card-body">
+      <h3>${esc(room.name)}</h3>
+      ${room.description ? `<p class="card-desc">${esc(room.description)}</p>` : ''}
+      <div class="room-card-meta">
+        <span class="role-badge role-${role}">${labels[role] || role}</span>
+        <span class="meta-date">${esc(meta)}</span>
+      </div>
     </div>`;
   a.querySelector('.card-fav-btn')?.addEventListener('click', async e => {
     e.preventDefault(); e.stopPropagation();
@@ -350,7 +513,6 @@ function buildRoomCard(id, room, role) {
     if (msg) { toast(msg); return; }
     const on = BgFav.has('karta', art);
     e.currentTarget.classList.toggle('on', on);
-    e.currentTarget.textContent = on ? '♥' : '♡';
     toast(on ? 'Obrázek uložen do oblíbených.' : 'Odebráno z oblíbených.');
   });
   const editBtn = a.querySelector('[data-edit-room]');
@@ -595,7 +757,7 @@ function buildDeckCard(id, deck, roomName, ownerName, myUid) {
 
   const isOwner = deck.ownerUid === myUid;
   a.innerHTML = `
-    ${isOwner ? `<button class="card-edit-btn" data-edit-deck="${id}" title="Upravit balíček">✏️</button>` : ''}
+    ${isOwner ? `<button class="card-edit-btn" data-edit-deck="${id}" title="Upravit balíček" aria-label="Upravit balíček">${ICON_PENCIL}</button>` : ''}
     <h3>${esc(deck.name)}</h3>
     ${deck.description ? `<p class="card-desc">${esc(deck.description)}</p>` : ''}
     <p style="margin-bottom:8px;">${deck.cardCount || 0} karet</p>
