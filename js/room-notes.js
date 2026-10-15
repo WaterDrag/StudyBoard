@@ -169,6 +169,8 @@ function setNoteCardContent(contentEl, note) {
   }
   contentEl.closest('.note')?.classList.remove('is-guide');
   if (note.title) {
+    // Title only, on purpose: a preview line would make existing cards taller
+    // and the notes people stacked tightly would start to overlap.
     contentEl.innerHTML = `<div class="note-card-title">${esc(note.title)}</div>`;
   } else {
     setNoteContent(contentEl, note);

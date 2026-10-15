@@ -19,7 +19,9 @@ function applyView(mode) {
     document.getElementById('connectBtn').style.display   = mode === 'board' ? '' : 'none';
     document.getElementById('newFolderBtn').style.display = mode === 'list'  ? '' : 'none';
   }
-  document.getElementById('viewToggleBtn').innerHTML = mode === 'board' ? '📋 Seznam' : '🗺️ Nástěnka';
+  document.querySelectorAll('.room-view-seg [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === mode));
+  // Board-only chrome: tool rail, zoom pill
+  ['toolRail', 'zoomCtl'].forEach(id => document.getElementById(id)?.classList.toggle('hidden-in-list', mode !== 'board'));
   if (mode === 'list') { exitConnectMode(); renderNotesListView(); }
 }
 
@@ -39,9 +41,9 @@ function goToBoard() {
 }
 
 function setupViewToggle() {
-  document.getElementById('viewToggleBtn').addEventListener('click', () => {
-    VIEW_MODE === 'board' ? goToList() : goToBoard();
-  });
+  document.querySelectorAll('.room-view-seg [data-view]').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.view === 'list') goToList(); else goToBoard();
+  }));
   // Top-left nav "Zpět": on the board it's the normal dashboard link; in the
   // list view it returns to the board instead (same label, context-aware).
   document.getElementById('navBackBtn').addEventListener('click', e => {

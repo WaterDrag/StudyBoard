@@ -22,53 +22,41 @@
 
   <!-- NAV -->
   <nav class="room-nav">
-    <a href="dashboard.html" id="navBackBtn" class="btn btn-ghost" style="padding:6px 10px;gap:4px;font-size:0.82rem;">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="15 18 9 12 15 6"/>
-      </svg>
-      Zpět
-    </a>
-    <span class="room-title" id="roomTitle">Načítám...</span>
+    <a href="dashboard.html" id="navBackBtn" class="icon-btn" aria-label="Zpět na nástěnku" title="Zpět"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <div class="room-name-wrap">
+      <span class="room-color-dot" id="roomColorDot"></span>
+      <span class="room-title" id="roomTitle">Načítám...</span>
+    </div>
     <div id="presenceBar" class="presence-bar" title="Online"></div>
+
+    <div class="seg room-view-seg" role="group" aria-label="Zobrazení">
+      <button type="button" class="seg-btn active" data-view="board">Nástěnka</button>
+      <button type="button" class="seg-btn" data-view="list">Seznam</button>
+    </div>
+
     <div class="room-nav-right">
-      <button id="searchBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Hledat v poznámkách">
-        🔍 Hledat
+      <button id="searchBtn" class="icon-btn" aria-label="Hledat v poznámkách" title="Hledat v poznámkách"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+      <button id="filesBtn" class="icon-btn" aria-label="Soubory místnosti" title="Soubory místnosti na Google Disku"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></button>
+      <button id="aiCardsBtn" class="btn btn-secondary nav-btn" title="AI kartičky a zkoušení z poznámek"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span>AI</span></button>
+      <a id="flashcardsBtn" href="#" class="btn btn-secondary nav-btn" title="Kartičky místnosti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="14" height="14" rx="2"/><path d="M7 2h12a2 2 0 0 1 2 2v12"/></svg><span>Kartičky</span></a>
+      <button id="newFolderBtn" class="btn btn-secondary nav-btn" style="display:none;" title="Nová složka"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v6M9 14h6"/></svg><span>Složka</span></button>
+      <div class="nav-menu-wrap">
+        <button id="roomMoreBtn" class="icon-btn" aria-label="Další možnosti" aria-haspopup="true" aria-expanded="false" title="Další možnosti"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
+        <div class="nav-menu" id="roomMoreMenu" role="menu">
+          <button type="button" class="nav-menu-item" id="travelMenuBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"/></svg><span>Přejít na…</span><span class="kbd">Ctrl K</span></button>
+          <button type="button" class="nav-menu-item mobile-only" data-proxy="filesBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg><span>Soubory</span></button>
+          <button type="button" class="nav-menu-item mobile-only" data-proxy="aiCardsBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/></svg><span>AI kartičky</span></button>
+          <button type="button" class="nav-menu-item mobile-only" data-proxy="flashcardsBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="14" height="14" rx="2"/><path d="M7 2h12a2 2 0 0 1 2 2v12"/></svg><span>Kartičky</span></button>
+          <button type="button" class="nav-menu-item mobile-only" data-proxy="shareTopBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg><span>Sdílet</span></button>
+          <button type="button" class="nav-menu-item" id="exportBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg><span>Export</span></button>
+        </div>
+      </div>
+      <button id="membersBtn" class="btn btn-secondary nav-btn" title="Členové místnosti">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg><span class="nav-btn-label">Členové</span>
+        <span id="memberCount" class="nav-count"></span>
+        <span id="membersReqBadge" class="nav-alert" style="display:none;"></span>
       </button>
-      <button id="filesBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Soubory místnosti na Google Disku">
-        📎 Soubory
-      </button>
-      <button id="exportBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Exportovat poznámky a kartičky">
-        ⬇️ Export
-      </button>
-      <a id="flashcardsBtn" href="#" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        Flash Cards
-      </a>
-      <button id="aiCardsBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Vygenerovat flash cards ze zápisků pomocí AI">
-        🤖 AI karty
-      </button>
-      <button id="connectBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Propojit poznámky">
-        🔗 Propojit
-      </button>
-      <button id="newFolderBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;display:none;" title="Nová složka">
-        📁+ Složka
-      </button>
-      <button id="roomBgBtn" class="btn btn-ghost" style="padding:6px 9px;font-size:0.82rem;display:none;" title="Pozadí místnosti">
-        🖼️
-      </button>
-      <button id="viewToggleBtn"class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Přepnout mezi nástěnkou a seznamem">
-        📋 Seznam
-      </button>
-      <button id="membersBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-        </svg>
-        Členové <span id="memberCount" style="background:var(--bg-3);padding:1px 6px;border-radius:10px;font-size:0.72rem;margin-left:2px;"></span>
-        <span id="membersReqBadge" style="display:none;background:#ef4444;color:#fff;padding:1px 6px;border-radius:10px;font-size:0.7rem;margin-left:4px;font-weight:700;"></span>
-      </button>
+      <button id="shareTopBtn" class="btn btn-primary nav-btn" title="Sdílet místnost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg><span>Sdílet</span></button>
     </div>
   </nav>
 
@@ -91,16 +79,31 @@
     </div>
   </div>
   <canvas id="boardMinimap" width="176" height="124" title="Minimapa — klikni pro přesun"></canvas>
+  <div class="zoom-ctl" id="zoomCtl" role="group" aria-label="Přiblížení">
+    <button type="button" class="icon-btn" id="zoomOutBtn" aria-label="Oddálit" title="Oddálit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+    <button type="button" class="zoom-pct" id="zoomPct" title="Zpět na 100 %">100 %</button>
+    <button type="button" class="icon-btn" id="zoomInBtn" aria-label="Přiblížit" title="Přiblížit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" class="icon-btn" id="zoomFitBtn" aria-label="Zobrazit vše" title="Zobrazit celou nástěnku"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
+  </div>
+  <nav class="tool-rail" id="toolRail" aria-label="Nástroje nástěnky">
+    <button type="button" class="tool-btn" id="toolNote" aria-label="Nová poznámka" title="Nová poznámka"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/><path d="M15 21v-6h6"/></svg></button>
+    <button type="button" class="tool-btn" id="toolHeading" aria-label="Nadpis" title="Nadpis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5h14M12 5v14"/></svg></button>
+    <button type="button" class="tool-btn" id="toolGuide" aria-label="Návod" title="Návod s kapitolami"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></button>
+    <button type="button" class="tool-btn" id="toolBoard" aria-label="Tabule na kreslení" title="Tabule na kreslení"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>
+    <button type="button" class="tool-btn" id="connectBtn" aria-label="Propojit poznámky" title="Propojit poznámky provázkem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></button>
+    <div class="tool-sep"></div>
+    <button type="button" class="tool-btn" id="roomBgBtn" style="display:none;" aria-label="Pozadí místnosti" title="Pozadí místnosti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></button>
+  </nav>
 
   <!-- Floating toolbar for multi-selection (Shift+tažení) -->
   <div id="mselBar" style="display:none;">
     <span id="mselCount"></span>
-    <button id="mselColor"  class="btn btn-ghost"  style="padding:5px 11px;font-size:0.8rem;">🎨 Barva</button>
-    <button id="mselFolder" class="btn btn-ghost"  style="padding:5px 11px;font-size:0.8rem;">📁 Složka</button>
-    <button id="mselExport" class="btn btn-ghost" style="padding:5px 11px;font-size:0.8rem;">⬇️ Export</button>
-    <button id="mselAi"     class="btn btn-ghost" style="padding:5px 11px;font-size:0.8rem;" title="AI karty a zkoušení z vybraných poznámek">🤖 AI karty</button>
-    <button id="mselDelete" class="btn btn-danger" style="padding:5px 11px;font-size:0.8rem;">🗑️ Smazat</button>
-    <button id="mselClear"  class="btn btn-ghost"  style="padding:5px 9px;font-size:0.8rem;">✕</button>
+    <button id="mselColor"  class="btn msel-btn">Barva</button>
+    <button id="mselFolder" class="btn msel-btn">Složka</button>
+    <button id="mselExport" class="btn msel-btn">Export</button>
+    <button id="mselAi"     class="btn msel-btn msel-ai" title="AI karty a zkoušení z vybraných poznámek">AI karty</button>
+    <button id="mselDelete" class="btn msel-btn msel-del">Smazat</button>
+    <button id="mselClear"  class="icon-btn" aria-label="Zrušit výběr" title="Zrušit výběr (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   </div>
 
   <!-- LIST VIEW -->

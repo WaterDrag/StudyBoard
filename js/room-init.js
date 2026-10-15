@@ -169,6 +169,7 @@ auth.onAuthStateChanged(async user => {
     setupBoardContextMenu();
     setupBoardMinimap();
     setupRoomBackground();
+    setupRoomChrome();
     setupMultiSelect();
     setupLightbox();
     setupGuide();

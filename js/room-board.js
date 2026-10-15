@@ -949,6 +949,7 @@ function setupBoardPan() {
       const boardY = (pinch.st + pinch.y - rect.top) / pinch.zoom;
       BOARD_ZOOM = Math.min(2.2, Math.max(0.15, pinch.zoom * (touchDist(e.touches) / pinch.dist)));
       document.getElementById('board').style.zoom = BOARD_ZOOM;
+      updateZoomLabel();
       // Keep the original board point under the moving finger midpoint. This
       // makes a two-finger drag pan the board even when pinch distance stays
       // the same, and combines translation + zoom without jumping.
@@ -1004,6 +1005,7 @@ function setBoardZoom(z, focalClientX, focalClientY) {
   wrap.scrollLeft = bx * BOARD_ZOOM - (fx - rect.left);
   wrap.scrollTop  = by * BOARD_ZOOM - (fy - rect.top);
   updateMinimap();
+  updateZoomLabel();
 }
 function setupBoardZoom() {
   const wrap = document.getElementById('boardWrap');
@@ -1148,4 +1150,71 @@ async function setRoomBackground(id) {
     document.querySelectorAll('#roomBgGrid .room-bg-opt').forEach(o => o.classList.toggle('selected', o.dataset.bgId === prev));
     toast('Pozadí se nepodařilo uložit: ' + e.message);
   }
+}
+
+// ── Ovládání místnosti: horní lišta, panel nástrojů, zoom (design v10) ──
+// The buttons keep their old ids (exportBtn, connectBtn, roomBgBtn…), so the
+// existing handlers in the other modules keep working wherever they now sit.
+function boardViewCenter() {
+  const wrap = document.getElementById('boardWrap');
+  return {
+    x: Math.round(toStoreX((wrap.scrollLeft + wrap.clientWidth / 2) / BOARD_ZOOM) - 110),
+    y: Math.round(toStoreY((wrap.scrollTop + wrap.clientHeight / 2) / BOARD_ZOOM) - 60),
+  };
+}
+
+function updateZoomLabel() {
+  const el = document.getElementById('zoomPct');
+  if (el) el.textContent = Math.round(BOARD_ZOOM * 100) + ' %';
+}
+
+function closeRoomMoreMenu() {
+  document.getElementById('roomMoreMenu')?.classList.remove('open');
+  document.getElementById('roomMoreBtn')?.setAttribute('aria-expanded', 'false');
+}
+
+function setupRoomChrome() {
+  document.getElementById('roomColorDot').style.background = ROOM.color || 'var(--accent)';
+
+  // ⋯ menu: every item closes it; the items' own handlers do the work.
+  const moreBtn = document.getElementById('roomMoreBtn');
+  const menu = document.getElementById('roomMoreMenu');
+  moreBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = !menu.classList.contains('open');
+    menu.classList.toggle('open', open);
+    moreBtn.setAttribute('aria-expanded', String(open));
+  });
+  menu.addEventListener('click', () => closeRoomMoreMenu());
+  document.addEventListener('click', e => { if (!e.target.closest('.nav-menu-wrap')) closeRoomMoreMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRoomMoreMenu(); });
+  document.getElementById('travelMenuBtn').addEventListener('click', () => openTravelAgent());
+  // Mobile: buttons that don't fit the bar are reachable from the menu.
+  menu.querySelectorAll('[data-proxy]').forEach(item => item.addEventListener('click', () =>
+    document.getElementById(item.dataset.proxy)?.click()));
+
+  // "Sdílet" in the bar opens the same dialog as the button in the members panel.
+  const shareTop = document.getElementById('shareTopBtn');
+  if (ME.isAnonymous) shareTop.style.display = 'none';
+  else shareTop.addEventListener('click', () => document.getElementById('shareBtn').click());
+
+  // Tool rail — creating things is for owners/editors only.
+  const rail = document.getElementById('toolRail');
+  const canWrite = MY_ROLE !== 'viewer' && !(ME.isAnonymous && MY_ROLE !== 'owner');
+  if (!canWrite) rail.style.display = 'none';
+  document.body.classList.toggle('can-write', canWrite);
+  document.getElementById('toolNote').addEventListener('click', () => {
+    PENDING_ADD_POS = boardViewCenter();
+    openAddNote();
+  });
+  document.getElementById('toolHeading').addEventListener('click', () => { const p = boardViewCenter(); createHeading(p.x, p.y); });
+  document.getElementById('toolGuide').addEventListener('click', () => { const p = boardViewCenter(); createGuide(p.x, p.y); });
+  document.getElementById('toolBoard').addEventListener('click', () => { const p = boardViewCenter(); createWhiteboard(p.x, p.y); });
+
+  // Zoom pill: − / 100 % / + / fit everything
+  document.getElementById('zoomOutBtn').addEventListener('click', () => { setBoardZoom(BOARD_ZOOM / 1.2); updateZoomLabel(); });
+  document.getElementById('zoomInBtn').addEventListener('click', () => { setBoardZoom(BOARD_ZOOM * 1.2); updateZoomLabel(); });
+  document.getElementById('zoomPct').addEventListener('click', () => { setBoardZoom(1); updateZoomLabel(); });
+  document.getElementById('zoomFitBtn').addEventListener('click', () => { travelFitAll(); updateZoomLabel(); });
+  updateZoomLabel();
 }
