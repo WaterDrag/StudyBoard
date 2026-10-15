@@ -10,6 +10,7 @@
 // leaving it (back button, nav toggle, or browser/mouse back) pops it.
 function applyView(mode) {
   VIEW_MODE = mode;
+  document.body.classList.toggle('view-list', mode === 'list');
   document.getElementById('boardWrap').style.display     = mode === 'board' ? '' : 'none';
   document.getElementById('notesListView').style.display = mode === 'list'  ? '' : 'none';
   const mm = document.getElementById('boardMinimap');
@@ -54,7 +55,12 @@ function setupViewToggle() {
   });
   // Deep-link / refresh support: landing directly on ?view=list opens the
   // list, with a board entry seeded beneath it so back still reaches the board.
-  if (new URLSearchParams(location.search).get('view') === 'list') {
+  // Phones open in the list (the board is hard to use on a small screen) —
+  // same history setup as a ?view=list deep link, so "Nástěnka" and back
+  // still land on the board. ?view=board forces the board.
+  const viewParam = new URLSearchParams(location.search).get('view');
+  const phone = window.matchMedia('(max-width: 700px)').matches;
+  if (viewParam === 'list' || (phone && viewParam !== 'board')) {
     const boardUrl = new URL(location.href); boardUrl.searchParams.delete('view');
     history.replaceState({ sbView: 'board' }, '', boardUrl);
     const listUrl = new URL(location.href); listUrl.searchParams.set('view', 'list');
