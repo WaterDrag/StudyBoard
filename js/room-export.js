@@ -951,6 +951,7 @@ function buildExportHtml(data, opts) {
   /* ── Overlay (all study modes live here) ── */
   #ov { position:fixed; inset:0; background:rgba(5,6,9,.6); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; padding:16px; z-index:99; overflow-y:auto; }
   #ovBox { background:var(--panel); color:var(--text); border:1px solid var(--bd); border-radius:16px; padding:24px; max-width:680px; width:100%; box-shadow:0 24px 60px -20px rgba(0,0,0,.6); margin:auto; }
+  @media (max-width:520px){ #ov { padding:8px; } #ovBox { padding:18px 16px; border-radius:14px; } .qopt { padding:13px 14px; } #ovActions .mainbtn, #cfm { min-height:44px; } }
   #ovTop { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
   #ovTitle { font-weight:600; font-size:1rem; letter-spacing:-.01em; }
   #ovClose { background:none; border:1px solid var(--bd); border-radius:8px; color:var(--muted); cursor:pointer; padding:5px 11px; font-size:.82rem; }
@@ -1403,6 +1404,7 @@ function startMode(mode, di, pool){
 
 function next(){
   if (!S) return;
+  S.goNext = null;
   S.i++;
   setBar(S.i / S.list.length * 100);
   ovScore(S.i > 0 ? ('Skóre ' + S.score + ' / ' + S.i) : '');
@@ -1492,7 +1494,19 @@ function renderQuiz(){
     });
     if (ok) S.score++;
     grade(x.di, x.ci, ok);
-    setTimeout(next, ok ? 900 : 1700);
+    if (ok){ setTimeout(next, 900); return; }
+    /* Spatne: nech cas si v klidu precist spravnou odpoved — dal az na klik */
+    var v = document.createElement('div');
+    v.className = 'verdict bad';
+    v.textContent = '✕ Špatně — správná odpověď je zeleně.';
+    body.appendChild(v);
+    ovActions('<button class="mainbtn" id="cfm">Další →</button>');
+    var go = document.getElementById('cfm');
+    go.onclick = next;
+    S.pickN = null;
+    S.goNext = next;                         /* Enter / mezerník = Další */
+    /* Na telefonu muze byt Dalsi pod okrajem — dojet k nemu */
+    setTimeout(function(){ go.scrollIntoView({ block:'nearest', behavior:'smooth' }); }, 60);
   }
   opts.forEach(function(o, i){
     var b = document.createElement('button');
@@ -1500,7 +1514,7 @@ function renderQuiz(){
     b.textContent = (multi ? '☐  ' : '') + o.text;
     b.onclick = function(){
       if (done) return;
-      if (!multi) return reveal(o.correct);
+      if (!multi){ b.dataset.sel = '1'; return reveal(o.correct); }
       b.dataset.sel = b.dataset.sel ? '' : '1';
       b.classList.toggle('sel', !!b.dataset.sel);
       b.textContent = (b.dataset.sel ? '☑  ' : '☐  ') + o.text;
@@ -1710,6 +1724,9 @@ document.addEventListener('keydown', function(e){
     if (e.key === '1' && S.no  && S.no.offsetParent)  S.no.click();
     if (e.key === '2' && S.yes && S.yes.offsetParent) S.yes.click();
     return;
+  }
+  if ((S.mode === 'quiz' || S.mode === 'exam') && S.goNext && (e.key === 'Enter' || e.key === ' ')){
+    e.preventDefault(); var g = S.goNext; S.goNext = null; g(); return;
   }
   if ((S.mode === 'quiz' || S.mode === 'exam') && S.pickN){
     var n = parseInt(e.key, 10);
