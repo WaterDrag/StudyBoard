@@ -117,7 +117,7 @@ function openHeadingBar(el, id) {
               style="width:22px;height:18px;border:none;background:none;padding:0;vertical-align:middle;">
      </label>` +
     `<span class="it-sep"></span>` +
-    `<button data-del="1" class="it-del" title="Smazat nadpis">🗑</button>` +
+    `<button data-del="1" class="it-del" title="Smazat nadpis">🗑️</button>` +
     `<span class="it-lbl" style="opacity:.6;margin-left:6px;">dvojklik = psát</span>`;
   document.body.appendChild(bar);
 
@@ -891,7 +891,7 @@ function openImgToolbar(img, editor) {
     <span class="it-sep"></span>
     <button data-zoom="1" title="Zvětšit na celou obrazovku — screenshot se dá přečíst">🔍 Zvětšit</button>
     <span class="it-sep"></span>
-    <button data-del="1" class="it-del" title="Odstranit obrázek">🗑</button>`;
+    <button data-del="1" class="it-del" title="Odstranit obrázek">🗑️</button>`;
   document.body.appendChild(bar);
 
   const place = () => {
@@ -1818,7 +1818,7 @@ function renderGuideMap() {
             <button data-act="link" title="Šipka odsud na jinou kapitolu">🔗</button>
             <button data-act="main" title="Označit jako hlavní kapitolu (odsud se začíná)">★</button>
             <button data-act="ren"  title="Přejmenovat">✏️</button>
-            <button data-act="del"  title="Smazat kapitolu">🗑</button>
+            <button data-act="del"  title="Smazat kapitolu">🗑️</button>
           </div>` : ''}
         </div>`;
     }).join('');

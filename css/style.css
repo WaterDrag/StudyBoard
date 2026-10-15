@@ -2211,7 +2211,10 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   padding: 12px 14px;
   display: flex; align-items: center; gap: 14px;
 }
-.card-sides { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+/* minmax(0,1fr): a long code line on the front must not squeeze the back
+   column into a sliver (the code block scrolls sideways instead). */
+.card-sides { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 640px) { .card-sides { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
 .card-side-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .card-side-txt { font-size: 0.875rem; word-break: break-word; }
 
@@ -4388,3 +4391,6 @@ body:has(#tab-rooms:not(.active)) .dash-hero .dashboard-actions { display: none;
   .room-view-seg .seg-btn { padding: 0 9px; }
   .tool-rail, .zoom-ctl { display: none; }
 }
+
+/* Edit / delete on a card row: same-size square emoji buttons */
+.card-act-btn { width: 36px; height: 36px; min-height: 36px; padding: 0; font-size: 1rem; }

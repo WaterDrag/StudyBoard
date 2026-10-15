@@ -47,7 +47,7 @@ function renderRoomFiles() {
         <span class="files-name" title="${esc(f.name)}">${esc(f.name)}</span>
         <span class="files-meta">${esc(f.byName || '')}${f.size ? ' · ' + esc(driveFileSize(f.size)) : ''}</span>
         <a class="files-open" href="${esc(/^https:\/\//i.test(String(f.link || '')) ? f.link : '#')}" target="_blank" rel="noopener">otevřít ↗</a>
-        ${canDel ? `<button class="files-del" data-del="${esc(f.id)}" title="Odebrat ze seznamu">🗑</button>` : ''}
+        ${canDel ? `<button class="files-del" data-del="${esc(f.id)}" title="Odebrat ze seznamu">🗑️</button>` : ''}
       </div>`;
   }).join('');
 }

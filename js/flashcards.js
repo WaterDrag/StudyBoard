@@ -400,8 +400,8 @@ function renderCardsList() {
       </div>
       ${editable ? `
         <div class="card-row-actions">
-          <button class="btn btn-ghost" style="padding:5px 9px;font-size:0.8rem;" data-edit="${card.id}">✏️</button>
-          <button class="btn btn-ghost" style="padding:5px 9px;color:#fca5a5;font-size:0.8rem;" data-del="${card.id}">🗑</button>
+          <button class="btn btn-ghost card-act-btn" data-edit="${card.id}" title="Upravit kartu" aria-label="Upravit kartu">✏️</button>
+          <button class="btn btn-ghost card-act-btn" data-del="${card.id}" title="Smazat kartu" aria-label="Smazat kartu">🗑️</button>
         </div>` : ''}`;
     list.appendChild(row);
   });
