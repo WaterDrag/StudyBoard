@@ -694,43 +694,62 @@
   </div>
 
   <div class="modal-overlay" id="exportModal">
-    <div class="modal">
+    <div class="modal modal-export">
       <div class="modal-header">
-        <h3>⬇️ Export</h3>
-        <button class="modal-close" data-close="exportModal">✕</button>
+        <h3>Export místnosti</h3>
+        <button class="modal-close" data-close="exportModal" aria-label="Zavřít">✕</button>
       </div>
-      <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:14px;line-height:1.5;">
-        Stáhne se <b>jedna HTML stránka</b>, která je celá offline: poznámky ve stromu složek,
-        vykreslené tabule, kartičky se čtyřmi režimy učení (učení s opakováním, kvíz, psaní,
-        párování), zkouškový režim a statistiky pokroku. Tisk / PDF uděláš v ní přes Ctrl+P.
+      <p class="export-intro">
+        Stáhne se <b>jedna HTML stránka</b>, která funguje i bez internetu: poznámky ve stromu složek,
+        tabule a kartičky se čtyřmi režimy učení, zkouškou a statistikami. PDF v ní uděláš přes Tisk (Ctrl+P).
       </p>
-      <label class="label">Co exportovat</label>
-      <div class="form-group" style="margin-bottom:14px;">
+
+      <div class="export-sec">
+        <label class="export-sec-h" for="exportScope">Co exportovat</label>
         <select id="exportScope" class="input">
           <option value="all">Celou místnost</option>
           <option value="selected">Jen vybrané poznámky</option>
           <option value="pick">Vybrat poznámky ze seznamu…</option>
         </select>
         <div id="exportPickWrap" style="display:none;margin-top:10px;">
-          <div style="display:flex;gap:8px;margin-bottom:6px;">
-            <button type="button" id="exportPickAll" class="btn btn-ghost" style="font-size:0.75rem;padding:4px 10px;">Vybrat vše</button>
-            <button type="button" id="exportPickNone" class="btn btn-ghost" style="font-size:0.75rem;padding:4px 10px;">Zrušit výběr</button>
-            <span id="exportPickCount" style="font-size:0.75rem;color:var(--text-muted);margin-left:auto;align-self:center;"></span>
+          <div class="export-pick-bar">
+            <button type="button" id="exportPickAll" class="btn btn-ghost">Vybrat vše</button>
+            <button type="button" id="exportPickNone" class="btn btn-ghost">Zrušit výběr</button>
+            <span id="exportPickCount" class="export-pick-count"></span>
           </div>
           <div id="exportPickList" class="ai-notes-list"></div>
         </div>
       </div>
-      <label class="label">Zahrnout</label>
-      <div style="display:flex;flex-direction:column;gap:8px;margin:8px 0 16px;">
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportConns" checked> Propojení mezi poznámkami</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportComments"> Komentáře</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportCards" checked> Flash Cards (kartičky)</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportBoards" checked> Tabule (kresby)</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.86rem;cursor:pointer;"><input type="checkbox" id="exportEmbed" checked> Vložit obrázky do souboru <span style="color:var(--text-muted);font-size:0.76rem;">(větší soubor, ale funguje úplně bez internetu)</span></label>
+
+      <div class="export-sec">
+        <div class="export-sec-h">Zahrnout</div>
+        <div class="export-opts">
+          <label class="export-opt">
+            <input type="checkbox" id="exportCards" checked>
+            <span class="export-opt-txt"><span class="export-opt-t">Kartičky</span><span class="export-opt-h">balíčky z místnosti s režimy učení</span></span>
+          </label>
+          <label class="export-opt">
+            <input type="checkbox" id="exportBoards" checked>
+            <span class="export-opt-txt"><span class="export-opt-t">Tabule</span><span class="export-opt-h">kresby jako obrázky</span></span>
+          </label>
+          <label class="export-opt">
+            <input type="checkbox" id="exportConns" checked>
+            <span class="export-opt-txt"><span class="export-opt-t">Propojení mezi poznámkami</span><span class="export-opt-h">provázky a jejich popisky</span></span>
+          </label>
+          <label class="export-opt">
+            <input type="checkbox" id="exportComments">
+            <span class="export-opt-txt"><span class="export-opt-t">Komentáře</span></span>
+          </label>
+          <label class="export-opt">
+            <input type="checkbox" id="exportEmbed" checked>
+            <span class="export-opt-txt"><span class="export-opt-t">Vložit obrázky do souboru</span><span class="export-opt-h">větší soubor, ale funguje úplně bez internetu</span></span>
+          </label>
+        </div>
       </div>
+
       <div class="export-actions">
-        <button id="exportRunBtn" class="btn btn-primary">⬇️ Stáhnout HTML</button>
-        <button id="exportDriveBtn" class="btn btn-secondary" title="Uloží export do složky StudyBoard na tvém Google Disku">☁️ Uložit na Google Disk</button>
+        <button id="exportRunBtn" class="btn btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Stáhnout HTML</button>
+        <button id="exportDriveBtn" class="btn btn-secondary" title="Uloží export do složky StudyBoard na tvém Google Disku"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 0 0 4.5 12 3.5 3.5 0 0 0 6 19z"/></svg>Uložit na Google Disk</button>
       </div>
       <p class="hint" id="exportHint" style="text-align:center;margin-top:10px;"></p>
     </div>

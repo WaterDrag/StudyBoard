@@ -4164,8 +4164,28 @@ details[open] > summary > .allfiles-caret { transform: rotate(90deg); }
 .files-msg.ok { color: #86efac; }
 
 /* Export: stazeni a Disk vedle sebe */
+/* Export dialog (v10) */
+#exportModal .modal.modal-export { max-width: 560px; max-height: calc(100vh - 40px); overflow-y: auto; }
+.export-intro { color: var(--text-muted); font-size: 0.86rem; line-height: 1.55; margin-bottom: 18px; }
+.export-sec { margin-bottom: 18px; }
+.export-sec-h { display: block; font-size: 0.72rem; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+.export-pick-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.export-pick-bar .btn { min-height: 30px; padding: 4px 10px; font-size: 0.78rem; }
+.export-pick-count { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); }
+.export-opts { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.export-opt {
+  display: flex; align-items: flex-start; gap: 12px; padding: 11px 14px; cursor: pointer;
+  border-bottom: 1px solid var(--border); transition: background var(--transition);
+}
+.export-opt:last-child { border-bottom: none; }
+.export-opt:hover { background: var(--bg-3); }
+.export-opt input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+.export-opt-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.export-opt-t { font-size: 0.9rem; font-weight: 500; }
+.export-opt-h { font-size: 0.78rem; color: var(--text-muted); }
 .export-actions { display: flex; gap: 8px; }
-.export-actions .btn { flex: 1; justify-content: center; }
+.export-actions .btn { flex: 1; justify-content: center; min-height: 40px; }
+.export-actions .btn svg { flex-shrink: 0; }
 @media (max-width: 560px) { .export-actions { flex-direction: column; } }
 
 /* Uchopy na rozich obrazku — skutecne skalovani tazenim.
