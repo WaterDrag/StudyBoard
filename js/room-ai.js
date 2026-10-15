@@ -478,9 +478,10 @@ Write these as POOLS — the app picks a random subset of each for every attempt
 SOURCE CODE: if the notes contain programming code, make proper code cards too, and mark them so they render as code:
 - "frontLang": language id (java, python, c, cpp, csharp, js, php, sql, html, css, bash...) when the QUESTION itself is code — e.g. "What does this print?", "Find the bug", "What is the complexity?". Put the real, correctly indented code in "front".
 - "codeLang": same idea when the ANSWER is code — e.g. "Write a for-each loop over a List". Put the code in "back", and make "wrong" plausible but genuinely broken/incorrect code in the same language.
-Keep code short (max ~12 lines), keep the original indentation using real newlines, and never wrap it in markdown fences. Use the language actually used in the notes. Mix code cards with normal ones when the notes mix theory and code.
+Keep code short (max ~12 lines), keep the original line breaks and indentation (as \n inside the JSON string), and never wrap the code itself in markdown fences. Use the language actually used in the notes. Mix code cards with normal ones when the notes mix theory and code.
 ${AI_SELF_CONTAINED_RULE}
-Return ONLY a JSON array like this, nothing else: [{"front":"...","back":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"codeLang":"java"}, ...]
+OUTPUT FORMAT: reply with ONE markdown code block tagged json (start it with \`\`\`json and end it with \`\`\`) that contains ONLY the JSON array, so the user can copy it with the code block's copy button. No text before or after the code block. Use straight ASCII double quotes for all JSON keys and strings. Inside the JSON, code goes in plain strings with escaped newlines (\\n) — never put another \`\`\` fence inside it.
+The array looks like this: [{"front":"...","back":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"codeLang":"java"}, ...]
 
 NOTES:
 """
