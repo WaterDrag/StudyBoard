@@ -161,6 +161,7 @@ auth.onAuthStateChanged(async user => {
     setupWhiteboards();
     setupBoardContextMenu();
     setupBoardMinimap();
+    setupRoomBackground();
     setupMultiSelect();
     setupLightbox();
     setupGuide();

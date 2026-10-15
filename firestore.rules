@@ -208,8 +208,13 @@ service cloud.firestore {
 
       // API keys and anything else that must stay the owner's business.
       // Not readable by other members, and not by anonymous guests either.
+      // private/bg holds favourite generated pictures (recipes only) and is
+      // capped at 10 here too, not just in the client.
       match /private/{docId} {
-        allow read, write: if isAuth() && request.auth.uid == uid;
+        allow read: if isAuth() && request.auth.uid == uid;
+        allow write: if isAuth() && request.auth.uid == uid
+          && (docId != 'bg' || (request.resource.data.items is list
+                                && request.resource.data.items.size() <= 10));
       }
     }
 

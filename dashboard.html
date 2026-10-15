@@ -253,7 +253,7 @@
   <div class="modal-overlay" id="editRoomModal">
     <div class="modal">
       <div class="modal-header">
-        <h3>Upravit barvu místnosti</h3>
+        <h3>Upravit kartu místnosti</h3>
         <button class="modal-close" data-close="editRoomModal">✕</button>
       </div>
       <div class="form-group">
@@ -267,6 +267,11 @@
             <code id="editRoomColorHex" style="font-size:0.85rem;font-weight:600;color:var(--accent);">#6366f1</code>
           </div>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="label" style="display:flex;justify-content:space-between;align-items:center;">Obrázek karty
+          <button type="button" class="btn btn-ghost" id="editRoomArtReroll" style="padding:3px 10px;font-size:0.75rem;">🎲 Další</button></label>
+        <div id="editRoomArt" class="card-art-grid"></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close="editRoomModal">Zrušit</button>
@@ -342,6 +347,21 @@
           <button type="button" class="theme-opt" data-theme="serik">
             <span class="theme-opt-swatch" style="--to-bg:#191519;--to-accent:#a48ca8;"></span>Šeřík
           </button>
+          <button type="button" class="theme-opt" data-theme="malina">
+            <span class="theme-opt-swatch" style="--to-bg:#1a0f16;--to-accent:#ec4899;"></span>Malina
+          </button>
+          <button type="button" class="theme-opt" data-theme="jantar">
+            <span class="theme-opt-swatch" style="--to-bg:#1a1508;--to-accent:#f59e0b;"></span>Jantar
+          </button>
+          <button type="button" class="theme-opt" data-theme="fialka">
+            <span class="theme-opt-swatch" style="--to-bg:#130f24;--to-accent:#a855f7;"></span>Fialka
+          </button>
+          <button type="button" class="theme-opt" data-theme="cerna">
+            <span class="theme-opt-swatch" style="--to-bg:#000000;--to-accent:#38bdf8;"></span>Černá
+          </button>
+          <button type="button" class="theme-opt" data-theme="papir">
+            <span class="theme-opt-swatch" style="--to-bg:#f4eee4;--to-accent:#b45309;"></span>Papír
+          </button>
         </div>
       </div>
       <div class="form-group">
@@ -382,6 +402,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="js/config.js"></script>
+  <script>document.write('<script src="js/bggen.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>(function(){var s=document.createElement('script');s.src='js/dashboard.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>
 </html>

@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="cs" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generátor pozadí a karet místností</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#131c2e',
+                            900: '#0f172a',
+                            950: '#080c16',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #080c16;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+        }
+        /* Zachování poměru stran pro reálný canvas v náhledu bez ovlivnění jeho vnitřního rozlišení */
+        .canvas-preview-wrapper {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+            background: #050811;
+        }
+        .canvas-preview-wrapper canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .card-item:hover .canvas-preview-wrapper canvas {
+            transform: scale(1.02);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+    <!-- HLAVIČKA -->
+    <header class="border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-white tracking-tight">Ateliér Pozadí</h1>
+                    <p class="text-xs text-slate-400">Procedurální generátor tmavých pláten pro studijní místnosti</p>
+                </div>
+            </div>
+
+            <!-- PŘEPÍNAČ REŽIMŮ -->
+            <div class="flex items-center bg-slate-950 p-1.5 rounded-xl border border-slate-800 self-start md:self-auto">
+                <button id="mode-karta" onclick="switchMode('karta')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-md">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                    <span>Karta místnosti</span>
+                    <span class="text-[11px] font-mono opacity-80 bg-black/20 px-1.5 py-0.5 rounded">1200×400</span>
+                </button>
+                <button id="mode-pozadi" onclick="switchMode('pozadi')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    <span>Pozadí místnosti</span>
+                    <span class="text-[11px] font-mono opacity-70 bg-white/5 px-1.5 py-0.5 rounded">2560×1440</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- OVLÁDACÍ PANEL -->
+    <section class="bg-slate-900/40 border-b border-slate-800/60">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+                
+                <!-- Výběr stylu + zámek -->
+                <div class="lg:col-span-3 flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between">
+                        <label for="select-style" class="text-xs font-medium text-slate-300">Výtvarný styl</label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-xs text-slate-400 hover:text-indigo-400 transition-colors select-none">
+                            <input type="checkbox" id="lock-style" class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5">
+                            <span>Zamknout styl</span>
+                        </label>
+                    </div>
+                    <select id="select-style" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors">
+                        <option value="random">🎲 Náhodný styl (mix)</option>
+                    </select>
+                </div>
+
+                <!-- Výběr palety + zámek -->
+                <div class="lg:col-span-3 flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between">
+                        <label for="select-palette" class="text-xs font-medium text-slate-300">Barevná paleta (12+ tmavých)</label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-xs text-slate-400 hover:text-indigo-400 transition-colors select-none">
+                            <input type="checkbox" id="lock-palette" class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5">
+                            <span>Zamknout paletu</span>
+                        </label>
+                    </div>
+                    <select id="select-palette" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors">
+                        <option value="random">🎨 Náhodná paleta (mix)</option>
+                    </select>
+                </div>
+
+                <!-- Vlastní Seed + Šum + Ukázka textu -->
+                <div class="lg:col-span-3 flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between">
+                        <label for="custom-seed" class="text-xs font-medium text-slate-300">Vlastní semínko (Seed)</label>
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-1.5 cursor-pointer text-xs text-slate-400 hover:text-indigo-400 transition-colors select-none" title="Jemný 3% šum proti pruhování barevných přechodů">
+                                <input type="checkbox" id="toggle-grain" checked class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5">
+                                <span>Šum (3 %)</span>
+                            </label>
+                            <label class="flex items-center gap-1.5 cursor-pointer text-xs text-slate-400 hover:text-indigo-400 transition-colors select-none" title="Zobrazí ukázkový bílý text nebo lístečky pro kontrolu čitelnosti (neukládá se do souboru)">
+                                <input type="checkbox" id="toggle-overlay" class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5">
+                                <span>Test čitelnosti</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <input type="text" id="custom-seed" placeholder="Volitelné (např. A7F9K2)..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-3.5 pr-8 py-2.5 text-sm font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors">
+                        <button onclick="document.getElementById('custom-seed').value = ''" title="Vymazat seed" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Akční tlačítka -->
+                <div class="lg:col-span-3 flex items-center gap-2.5">
+                    <button id="btn-generate" onclick="generateAllSix()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2">
+                        <svg id="icon-generate" class="w-5 h-5 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        <span>Generovat 6</span>
+                    </button>
+                    <button onclick="downloadAllSix()" title="Stáhnout všech 6 vygenerovaných obrázků najednou" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-2.5 px-3.5 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 text-sm">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        <span class="hidden sm:inline">Stáhnout všech 6</span>
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Informační lišta pravidel pro aktivní režim -->
+            <div class="mt-4 pt-3 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                <div id="mode-rule-info" class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span><strong>Pravidlo Karta (1200×400 px):</strong> Levý horní roh (45 % × 60 %) je ztmavený a klidný pro nadpis; hlavní prvky vpravo a ve středovém pásu. Cíl &lt; 200 KB.</span>
+                </div>
+                <div class="font-mono text-[11px] text-slate-500" id="format-support-badge">
+                    Kontrola podpory WebP...
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- HLAVNÍ MŘÍŽKA 6 VARIANT -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div id="cards-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Sem se dynamicky vykreslí 6 karet -->
+        </div>
+    </main>
+
+    <!-- MODÁLNÍ OKNO PRO VELKÝ NÁHLED -->
+    <div id="preview-modal" class="fixed inset-0 z-50 hidden bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 md:p-10">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-6xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn">
+            
+            <!-- Hlavička modalu -->
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+                <div class="flex flex-wrap items-center gap-3">
+                    <h3 id="modal-title" class="text-base font-bold text-white">Náhled varianty</h3>
+                    <span id="modal-badge-style" class="text-xs px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium"></span>
+                    <span id="modal-badge-palette" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700"></span>
+                    <span id="modal-badge-seed" class="text-xs font-mono px-2.5 py-1 rounded-full bg-slate-950 text-slate-400 border border-slate-800"></span>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Tělo modalu s plátnem -->
+            <div class="flex-1 overflow-auto p-6 flex items-center justify-center bg-slate-950/90 relative">
+                <div id="modal-canvas-wrapper" class="relative rounded-xl overflow-hidden shadow-2xl border border-slate-800/80 max-w-full">
+                    <canvas id="modal-canvas" class="block max-w-full max-h-[62vh] w-auto h-auto object-contain"></canvas>
+                    <!-- Volitelný testovací překryv v modalu -->
+                    <div id="modal-test-overlay" class="pointer-events-none absolute inset-0 hidden"></div>
+                </div>
+            </div>
+
+            <!-- Patička modalu s informacemi o souboru a tlačítkem Stáhnout -->
+            <div class="px-6 py-4 border-t border-slate-800 bg-slate-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-400">
+                    <div>
+                        <span class="text-slate-500">Název souboru:</span>
+                        <span id="modal-filename" class="font-mono text-slate-200 ml-1"></span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500">Skutečné rozměry:</span>
+                        <span id="modal-dimensions" class="font-mono text-emerald-400 font-semibold ml-1"></span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500">Velikost souboru:</span>
+                        <span id="modal-filesize" class="font-mono text-amber-300 font-semibold ml-1"></span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                    <button id="modal-btn-use-seed" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition-colors">
+                        Použít tento seed a styl
+                    </button>
+                    <button id="modal-btn-download" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        <span>Stáhnout obrázek</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFIKAČNÍ TOAST -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm transition-all">
+        <span class="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping"></span>
+        <span id="toast-msg">Zpráva</span>
+    </div>
+
+    <script>
+        /* ============================================================================
+         * 1. DETERMINISTICKÝ GENERÁTOR NÁHODNÝCH ČÍSEL (PRNG) A ŠUMOVÉ FUNKCE
+         * ============================================================================ */
+        
+        // Hashování textového seedu na 32-bit celé číslo (xmur3)
+        function xmur3(str) {
+            let h = 1779033703 ^ str.length;
+            for (let i = 0; i < str.length; i++) {
+                h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+                h = (h << 13) | (h >>> 19);
+            }
+            return function() {
+                h = Math.imul(h ^ (h >>> 16), 2246822507);
+                h = Math.imul(h ^ (h >>> 13), 3266489909);
+                return (h ^= h >>> 16) >>> 0;
+            };
+        }
+
+        // Mulberry32 PRNG vracející čísla 0.0 až 1.0
+        function createPRNG(seedStr) {
+            const seedFunc = xmur3(String(seedStr));
+            let a = seedFunc();
+            return function() {
+                let t = (a += 0x6D2B79F5);
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        // Pomocná třída pro práci s náhodou odvozenou ze seedu
+        class SeededRandom {
+            constructor(seedStr) {
+                this.seed = String(seedStr).trim() || this.generateRandomSeedString();
+                this.next = createPRNG(this.seed);
+                // Permutační tabulka pro hladký 2D šum
+                this.perm = new Uint8Array(512);
+                for (let i = 0; i < 256; i++) this.perm[i] = i;
+                for (let i = 255; i > 0; i--) {
+                    const j = Math.floor(this.next() * (i + 1));
+                    const temp = this.perm[i];
+                    this.perm[i] = this.perm[j];
+                    this.perm[j] = temp;
+                }
+                for (let i = 0; i < 256; i++) this.perm[i + 256] = this.perm[i];
+            }
+
+            generateRandomSeedString() {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let out = '';
+                for (let i = 0; i < 6; i++) {
+                    out += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return out;
+            }
+
+            range(min, max) {
+                return min + this.next() * (max - min);
+            }
+
+            int(min, max) {
+                return Math.floor(this.range(min, max + 1));
+            }
+
+            pick(arr) {
+                return arr[Math.floor(this.next() * arr.length)];
+            }
+
+            // Hladký 2D Value Noise pro vrstevnice a vlny
+            noise2D(x, y) {
+                const xi = Math.floor(x) & 255;
+                const yi = Math.floor(y) & 255;
+                const xf = x - Math.floor(x);
+                const yf = y - Math.floor(y);
+
+                const u = xf * xf * (3.0 - 2.0 * xf);
+                const v = yf * yf * (3.0 - 2.0 * yf);
+
+                const aa = this.perm[this.perm[xi] + yi] / 255;
+                const ab = this.perm[this.perm[xi] + yi + 1] / 255;
+                const ba = this.perm[this.perm[xi + 1] + yi] / 255;
+                const bb = this.perm[this.perm[xi + 1] + yi + 1] / 255;
+
+                const x1 = aa + u * (ba - aa);
+                const x2 = ab + u * (bb - ab);
+                return x1 + v * (x2 - x1);
+            }
+
+            // Fraktální šum (FBM)
+            fbm(x, y, octaves = 3) {
+                let value = 0;
+                let amplitude = 0.5;
+                let frequency = 1;
+                for (let i = 0; i < octaves; i++) {
+                    value += amplitude * this.noise2D(x * frequency, y * frequency);
+                    frequency *= 2.02;
+                    amplitude *= 0.5;
+                }
+                return value;
+            }
+        }
+
+        /* ============================================================================
+         * 2. DEFINICE STYLŮ A 14 TMAVÝCH PALET
+         * ============================================================================ */
+
+        const STYLES = [
+            { id: 'prechody', name: 'Měkké přechody (Mesh)', slug: 'prechody' },
+            { id: 'zare', name: 'Polární záře', slug: 'polarni-zare' },
+            { id: 'mlhovina', name: 'Hvězdná obloha s mlhovinou', slug: 'mlhovina' },
+            { id: 'bokeh', name: 'Bokeh – rozmazaná světélka', slug: 'bokeh' },
+            { id: 'geometrie', name: 'Geometrie (Low-poly / šestiúhelníky)', slug: 'geometrie' },
+            { id: 'vrstevnice', name: 'Vlny a vrstevnice', slug: 'vrstevnice' },
+            { id: 'mrizka', name: 'Jemná mřížka a tečky s vinětou', slug: 'mrizka' },
+            { id: 'bloby', name: 'Abstraktní rozmazané tvary (Blob)', slug: 'bloby' }
+        ];
+
+        // 14 pečlivě vyladěných tmavých, tlumených palet s nízkým kontrastem
+        const PALETTES = [
+            {
+                id: 'modra-noc',
+                name: 'Modrá noc',
+                bg: ['#060b16', '#0b1528'],
+                colors: ['#162a4a', '#1e3a63', '#274c7e', '#1a2e4c', '#315b8a']
+            },
+            {
+                id: 'hluboky-les',
+                name: 'Hluboký les',
+                bg: ['#05100a', '#091c13'],
+                colors: ['#123122', '#1b4530', '#26593f', '#15382c', '#326b4d']
+            },
+            {
+                id: 'fialova-mlha',
+                name: 'Fialová mlha',
+                bg: ['#0c0717', '#150d28'],
+                colors: ['#251645', '#362061', '#482a7a', '#2c1c4d', '#583591']
+            },
+            {
+                id: 'tmava-malina',
+                name: 'Tmavá malina',
+                bg: ['#14060c', '#220b16'],
+                colors: ['#3b1326', '#521a35', '#692244', '#45182c', '#7d2b52']
+            },
+            {
+                id: 'jantarovy-stin',
+                name: 'Jantarový stín',
+                bg: ['#120b05', '#1f1308'],
+                colors: ['#38220f', '#4f3015', '#663e1c', '#452a14', '#7a4b24']
+            },
+            {
+                id: 'tyrkysova-hlubina',
+                name: 'Tyrkysová hlubina',
+                bg: ['#041014', '#081d24'],
+                colors: ['#0f333d', '#164754', '#1f5c6b', '#133b45', '#287082']
+            },
+            {
+                id: 'bridlice',
+                name: 'Chladná břidlice',
+                bg: ['#090d14', '#111824'],
+                colors: ['#1c2738', '#27354a', '#33445e', '#222e3d', '#405370']
+            },
+            {
+                id: 'prazena-kava',
+                name: 'Pražená káva',
+                bg: ['#0f0a08', '#1a120e'],
+                colors: ['#2b1e18', '#3d2b22', '#4f382d', '#36261e', '#614639']
+            },
+            {
+                id: 'arokticka-polnoc',
+                name: 'Arktická půlnoc',
+                bg: ['#050c14', '#091724'],
+                colors: ['#112a40', '#183c54', '#1f5069', '#14384a', '#28647d']
+            },
+            {
+                id: 'smaragdovy-mech',
+                name: 'Smaragdový mech',
+                bg: ['#06110e', '#0b1e19'],
+                colors: ['#13332b', '#1b473b', '#245c4c', '#183d33', '#2e705d']
+            },
+            {
+                id: 'indigovy-soumrak',
+                name: 'Indigový soumrak',
+                bg: ['#080818', '#10112b'],
+                colors: ['#1b1d47', '#262961', '#32367a', '#212454', '#404591']
+            },
+            {
+                id: 'bordo-samet',
+                name: 'Bordó samet',
+                bg: ['#130608', '#210a0e'],
+                colors: ['#381118', '#4f1822', '#631f2b', '#42151d', '#782735']
+            },
+            {
+                id: 'grafitovy-monolit',
+                name: 'Grafitový monolit',
+                bg: ['#08090b', '#111317'],
+                colors: ['#1b1e24', '#252932', '#303540', '#20232b', '#3b414f']
+            },
+            {
+                id: 'severska-borovice',
+                name: 'Severská borovice',
+                bg: ['#060f11', '#0b1b1e'],
+                colors: ['#132e33', '#1c4147', '#25545c', '#17373d', '#2e6670']
+            }
+        ];
+
+        // Barvy palet byly tak tmavé, že výsledek vycházel téměř černý (jas ~23/255).
+        // Zesvětlíme je násobkem RGB – odstín i sytost zůstanou, pozadí (bg) se nemění.
+        function brightenHex(hex, f) {
+            const n = parseInt(hex.slice(1), 16);
+            const ch = v => Math.min(255, Math.round(v * f)).toString(16).padStart(2, '0');
+            return '#' + ch(n >> 16) + ch((n >> 8) & 255) + ch(n & 255);
+        }
+        PALETTES.forEach(p => { p.colors = p.colors.map(c => brightenHex(c, 1.45)); });
+
+        /* ============================================================================
+         * 3. STAV APLIKACE A POMOCNÉ NÁSTROJE
+         * ============================================================================ */
+
+        let currentMode = 'karta'; // 'karta' (1200x400) nebo 'pozadi' (2560x1440)
+        let supportsWebP = true;
+        let variantsData = []; // Pole 6 vygenerovaných objektů
+        let activeModalIndex = null;
+
+        // Předgenerovaná dlaždice jemného šumu (pro rychlou aplikaci na velká plátna)
+        let grainPatternCanvas = null;
+
+        function getDimensions(mode) {
+            return mode === 'karta'
+                ? { width: 1200, height: 400 }
+                : { width: 2560, height: 1440 };
+        }
+
+        function checkWebPSupport() {
+            const c = document.createElement('canvas');
+            c.width = 2;
+            c.height = 2;
+            const data = c.toDataURL('image/webp');
+            supportsWebP = data.indexOf('data:image/webp') === 0;
+            const badge = document.getElementById('format-support-badge');
+            if (supportsWebP) {
+                badge.innerHTML = 'Formát: <span class="text-emerald-400">WebP (výchozí Q: 0.92 + auto-optimalizace KB)</span>';
+            } else {
+                badge.innerHTML = 'Formát: <span class="text-amber-400">PNG (záložní režim prohlížeče)</span>';
+            }
+        }
+
+        function hexToRgba(hex, alpha = 1) {
+            const clean = hex.replace('#', '');
+            const r = parseInt(clean.substring(0, 2), 16);
+            const g = parseInt(clean.substring(2, 4), 16);
+            const b = parseInt(clean.substring(4, 6), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        // Vytvoří dlaždici 256x256 s monochromatickým šumem
+        function getGrainTile() {
+            if (grainPatternCanvas) return grainPatternCanvas;
+            const tile = document.createElement('canvas');
+            tile.width = 256;
+            tile.height = 256;
+            const tCtx = tile.getContext('2d');
+            const imgData = tCtx.createImageData(256, 256);
+            const data = imgData.data;
+            let prng = createPRNG('GRAIN_TILE_STATIC_SEED');
+            for (let i = 0; i < data.length; i += 4) {
+                const v = prng();
+                const val = v > 0.5 ? 255 : 0;
+                data[i] = val;
+                data[i + 1] = val;
+                data[i + 2] = val;
+                data[i + 3] = Math.round(Math.abs(v - 0.5) * 2 * 255);
+            }
+            tCtx.putImageData(imgData, 0, 0);
+            grainPatternCanvas = tile;
+            return tile;
+        }
+
+        /* ============================================================================
+         * 4. PROCEDURÁLNÍ KRESLENÍ NA CANVAS (8 STYLŮ + PRAVIDLA REŽIMŮ)
+         * ============================================================================ */
+
+        /**
+         * Vrátí souřadnici X, Y podle pravidel režimu:
+         * - Karta: hlavní detaily spíše doprava (x: 0.35 - 0.96) a do středového vodorovného pásu (y: 0.22 - 0.78).
+         * - Pozadí: detaily rozprostřené rovnoměrně po celé ploše bez výrazného středu.
+         */
+        function samplePosition(rng, mode, W, H, index = 0, total = 1) {
+            if (mode === 'karta') {
+                // Posun doprava a do středního pásu
+                const rx = 0.30 + Math.pow(rng.next(), 0.75) * 0.68;
+                // Gaussovská tendence ke středu Y (0.5)
+                const ry = 0.5 + (rng.next() + rng.next() - 1.0) * 0.36;
+                return { x: rx * W, y: ry * H };
+            } else {
+                // Rovnoměrné rozprostření v mřížce s jitterem, mírně potlačující ostrý střed
+                const cols = Math.ceil(Math.sqrt(total * (W / H)));
+                const rows = Math.ceil(total / cols);
+                const col = index % cols;
+                const row = Math.floor(index / cols);
+                const cellW = W / cols;
+                const cellH = H / rows;
+                let x = (col + rng.range(0.15, 0.85)) * cellW;
+                let y = (row + rng.range(0.15, 0.85)) * cellH;
+                return { x, y };
+            }
+        }
+
+        // 1. Měkké barevné přechody (Mesh Gradient)
+        function drawMeshGradient(ctx, W, H, rng, palette, mode) {
+            const count = mode === 'karta' ? 7 : 12;
+            ctx.save();
+            for (let i = 0; i < count; i++) {
+                const pos = samplePosition(rng, mode, W, H, i, count);
+                const radius = (mode === 'karta' ? rng.range(0.35, 0.75) : rng.range(0.30, 0.60)) * Math.max(W, H);
+                const col = rng.pick(palette.colors);
+                const grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, radius);
+                grad.addColorStop(0, hexToRgba(col, mode === 'karta' ? 0.55 : 0.42));
+                grad.addColorStop(0.5, hexToRgba(col, 0.18));
+                grad.addColorStop(1, hexToRgba(palette.bg[0], 0));
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, H);
+            }
+            ctx.restore();
+        }
+
+        // 2. Polární záře (vlnité průsvitné pásy)
+        function drawAurora(ctx, W, H, rng, palette, mode) {
+            ctx.save();
+            const bands = mode === 'karta' ? 4 : 6;
+            for (let b = 0; b < bands; b++) {
+                const col = rng.pick(palette.colors);
+                const baseY = mode === 'karta'
+                    ? H * rng.range(0.32, 0.72)
+                    : H * ((b + 0.5) / bands + rng.range(-0.08, 0.08));
+                const amp = H * rng.range(0.06, 0.16);
+                const freq = rng.range(1.5, 3.5) / W;
+                const phase = rng.range(0, Math.PI * 2);
+                const thickness = H * rng.range(0.18, 0.32);
+
+                const steps = 60;
+                for (let layer = 0; layer < 3; layer++) {
+                    ctx.beginPath();
+                    const layerOffset = (layer - 1) * (thickness * 0.25);
+                    for (let i = 0; i <= steps; i++) {
+                        const x = (i / steps) * W;
+                        const y = baseY + layerOffset + Math.sin(x * freq + phase) * amp + Math.cos(x * freq * 2.1 - phase) * (amp * 0.4);
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.lineTo(W, H);
+                    ctx.lineTo(0, H);
+                    ctx.closePath();
+
+                    const grad = ctx.createLinearGradient(0, baseY - thickness, 0, baseY + thickness);
+                    grad.addColorStop(0, hexToRgba(col, 0));
+                    grad.addColorStop(0.5, hexToRgba(col, mode === 'karta' ? 0.22 : 0.15));
+                    grad.addColorStop(1, hexToRgba(col, 0));
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                }
+            }
+            ctx.restore();
+        }
+
+        // 3. Hvězdná obloha s mlhovinou
+        function drawNebulaStars(ctx, W, H, rng, palette, mode) {
+            ctx.save();
+            // Mlhovina na pozadí
+            const clouds = mode === 'karta' ? 6 : 10;
+            for (let i = 0; i < clouds; i++) {
+                const pos = samplePosition(rng, mode, W, H, i, clouds);
+                const r = Math.max(W, H) * rng.range(0.18, 0.42);
+                const col = rng.pick(palette.colors);
+                const grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, r);
+                grad.addColorStop(0, hexToRgba(col, 0.38));
+                grad.addColorStop(0.55, hexToRgba(col, 0.12));
+                grad.addColorStop(1, hexToRgba(palette.bg[0], 0));
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Tlumené hvězdy
+            const starCount = mode === 'karta' ? 110 : 260;
+            for (let s = 0; s < starCount; s++) {
+                const pos = samplePosition(rng, mode, W, H, s, starCount);
+                const radius = rng.range(0.6, mode === 'karta' ? 2.0 : 2.5);
+                const alpha = rng.range(0.12, 0.48); // Tlumené, aby nerušily bílý text
+                ctx.fillStyle = `rgba(226, 232, 240, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Občasná jemná aura kolem větší hvězdy
+                if (rng.next() > 0.88) {
+                    const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, radius * 5);
+                    glow.addColorStop(0, hexToRgba(rng.pick(palette.colors), 0.35));
+                    glow.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = glow;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, radius * 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            ctx.restore();
+        }
+
+        // 4. Bokeh – rozmazaná světélka
+        function drawBokeh(ctx, W, H, rng, palette, mode) {
+            ctx.save();
+            // Nejprve jemný podklad
+            drawMeshGradient(ctx, W, H, rng, palette, mode);
+
+            const count = mode === 'karta' ? 26 : 45;
+            for (let i = 0; i < count; i++) {
+                const pos = samplePosition(rng, mode, W, H, i, count);
+                const r = Math.min(W, H) * rng.range(0.05, 0.24);
+                const col = rng.pick(palette.colors);
+                const alpha = rng.range(0.08, 0.26);
+
+                const grad = ctx.createRadialGradient(pos.x, pos.y, r * 0.1, pos.x, pos.y, r);
+                grad.addColorStop(0, hexToRgba(col, alpha * 0.4));
+                grad.addColorStop(0.75, hexToRgba(col, alpha));
+                grad.addColorStop(0.92, hexToRgba(col, alpha * 1.15));
+                grad.addColorStop(1, hexToRgba(col, 0));
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // 5. Geometrie – trojúhelníky / šestiúhelníky / low-poly
+        function drawGeometry(ctx, W, H, rng, palette, mode) {
+            ctx.save();
+            drawMeshGradient(ctx, W, H, rng, palette, mode);
+
+            const subType = rng.next() > 0.45 ? 'lowpoly' : 'hex';
+            const cellSize = mode === 'karta' ? rng.range(65, 105) : rng.range(130, 200);
+
+            if (subType === 'lowpoly') {
+                const cols = Math.ceil(W / cellSize) + 2;
+                const rows = Math.ceil(H / cellSize) + 2;
+                const pts = [];
+
+                for (let r = -1; r < rows; r++) {
+                    pts[r] = [];
+                    for (let c = -1; c < cols; c++) {
+                        const jx = (rng.next() - 0.5) * cellSize * 0.75;
+                        const jy = (rng.next() - 0.5) * cellSize * 0.75;
+                        pts[r][c] = { x: c * cellSize + jx, y: r * cellSize + jy };
+                    }
+                }
+
+                for (let r = -1; r < rows - 1; r++) {
+                    for (let c = -1; c < cols - 1; c++) {
+                        const p1 = pts[r][c];
+                        const p2 = pts[r][c + 1];
+                        const p3 = pts[r + 1][c];
+                        const p4 = pts[r + 1][c + 1];
+
+                        // V režimu karta zvýrazníme geometrii spíše vpravo a ve středu
+                        const centerX = (p1.x + p2.x + p3.x) / 3;
+                        const centerY = (p1.y + p2.y + p3.y) / 3;
+                        let weight = 1;
+                        if (mode === 'karta') {
+                            const normX = Math.max(0, Math.min(1, centerX / W));
+                            const bandY = 1 - Math.abs((centerY / H) - 0.5) * 1.6;
+                            weight = Math.max(0.15, normX * Math.max(0.2, bandY));
+                        }
+
+                        const colA = rng.pick(palette.colors);
+                        ctx.fillStyle = hexToRgba(colA, rng.range(0.05, 0.22) * weight);
+                        ctx.strokeStyle = hexToRgba(colA, 0.12 * weight);
+                        ctx.lineWidth = 1;
+
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.lineTo(p3.x, p3.y);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+
+                        const colB = rng.pick(palette.colors);
+                        ctx.fillStyle = hexToRgba(colB, rng.range(0.04, 0.20) * weight);
+                        ctx.beginPath();
+                        ctx.moveTo(p2.x, p2.y);
+                        ctx.lineTo(p4.x, p4.y);
+                        ctx.lineTo(p3.x, p3.y);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                    }
+                }
+            } else {
+                // Šestiúhelníky
+                const r = cellSize * 0.55;
+                const dx = r * Math.sqrt(3);
+                const dy = r * 1.5;
+                const cols = Math.ceil(W / dx) + 2;
+                const rows = Math.ceil(H / dy) + 2;
+
+                for (let row = -1; row < rows; row++) {
+                    for (let col = -1; col < cols; col++) {
+                        const cx = col * dx + (row % 2 !== 0 ? dx / 2 : 0);
+                        const cy = row * dy;
+
+                        let visibility = rng.next();
+                        if (mode === 'karta') {
+                            visibility *= (cx / W) * (1 - Math.abs(cy / H - 0.5));
+                        }
+                        if (visibility < 0.22) continue;
+
+                        const cHex = rng.pick(palette.colors);
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            const angle = (Math.PI / 180) * (60 * i - 30);
+                            const vx = cx + r * Math.cos(angle);
+                            const vy = cy + r * Math.sin(angle);
+                            if (i === 0) ctx.moveTo(vx, vy);
+                            else ctx.lineTo(vx, vy);
+                        }
+                        ctx.closePath();
+                        ctx.fillStyle = hexToRgba(cHex, rng.range(0.05, 0.22));
+                        ctx.strokeStyle = hexToRgba(cHex, rng.range(0.10, 0.28));
+                        ctx.lineWidth = 1.2;
+                        ctx.fill();
+                        ctx.stroke();
+                    }
+                }
+            }
+            ctx.restore();
+        }
+
+        // 6. Vlny a vrstevnice
+        function drawWavesContours(ctx, W, H, rng, palette, mode) {
+            ctx.save();
+            drawMeshGradient(ctx, W, H, rng, palette, mode);
+
+            const lineCount = mode === 'karta' ? 22 : 34;
+            const freq = rng.range(1.2, 2.6) / W;
+            const offsetSeed = rng.range(0, 100);
+
+            for (let i = 0; i < lineCount; i++) {
+                const t = i / (lineCount - 1);
+                const baseY = mode === 'karta'
+                    ? H * (0.12 + t * 0.78)
+                    : H * (0.04 + t * 0.92);
+
+                const col = palette.colors[i % palette.colors.length];
+                ctx.strokeStyle = hexToRgba(col, mode === 'karta' ? 0.35 : 0.24);
+                ctx.lineWidth = mode === 'karta' ? 1.5 : 2.0;
+
+                ctx.beginPath();
+                const steps = 90;
+                for (let s = 0; s <= steps; s++) {
+                    const x = (s / steps) * W;
+                    const n = rng.fbm(x * freq + offsetSeed, t * 2.4 + offsetSeed, 3);
+                    const waveY = baseY + (n - 0.5) * H * (mode === 'karta' ? 0.42 : 0.28);
+                    if (s === 0) ctx.moveTo(x, waveY);
+                    else ctx.lineTo(x, waveY);
+                }
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        // 7. Jemná mřížka nebo tečky s vinětou
+        function drawGridDots(ctx, W, H, rng, palette, mode) {
+            ctx.save();
+            drawMeshGradient(ctx, W, H, rng, palette, mode);
+
+            const isDots = rng.next() > 0.45;
+            const step = mode === 'karta' ? rng.int(24, 36) : rng.int(42, 64);
+            const accentCol = rng.pick(palette.colors);
+
+            if (isDots) {
+                for (let y = step / 2; y < H; y += step) {
+                    for (let x = step / 2; x < W; x += step) {
+                        const n = rng.noise2D(x * 0.005, y * 0.005);
+                        let alpha = 0.08 + n * 0.22;
+                        if (mode === 'karta') {
+                            alpha *= Math.min(1, (x / W) * 1.25);
+                        }
+                        ctx.fillStyle = hexToRgba(accentCol, alpha);
+                        ctx.beginPath();
+                        ctx.arc(x, y, mode === 'karta' ? 1.6 : 2.2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            } else {
+                ctx.strokeStyle = hexToRgba(accentCol, 0.14);
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (let x = 0; x <= W; x += step) {
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, H);
+                }
+                for (let y = 0; y <= H; y += step) {
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(W, y);
+                }
+                ctx.stroke();
+
+                // Zvýrazněné uzlové body
+                for (let y = step; y < H; y += step) {
+                    for (let x = step; x < W; x += step) {
+                        if (rng.next() > 0.82) {
+                            ctx.fillStyle = hexToRgba(rng.pick(palette.colors), 0.35);
+                            ctx.beginPath();
+                            ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                }
+            }
+            ctx.restore();
+        }
+
+        // 8. Abstraktní rozmazané tvary (Blob)
+        function drawBlobs(ctx, W, H, rng, palette, mode) {
+            ctx.save();
+            const count = mode === 'karta' ? 6 : 10;
+            for (let i = 0; i < count; i++) {
+                const pos = samplePosition(rng, mode, W, H, i, count);
+                const baseR = Math.min(W, H) * rng.range(0.18, 0.44);
+                const col = rng.pick(palette.colors);
+
+                // Kreslení organického blobu pomocí Bezierových křivek a radiálního přechodu
+                const points = 8;
+                const coords = [];
+                for (let p = 0; p < points; p++) {
+                    const angle = (p / points) * Math.PI * 2;
+                    const r = baseR * rng.range(0.72, 1.28);
+                    coords.push({
+                        x: pos.x + Math.cos(angle) * r,
+                        y: pos.y + Math.sin(angle) * r
+                    });
+                }
+
+                const grad = ctx.createRadialGradient(pos.x, pos.y, baseR * 0.1, pos.x, pos.y, baseR * 1.3);
+                grad.addColorStop(0, hexToRgba(col, mode === 'karta' ? 0.45 : 0.32));
+                grad.addColorStop(0.65, hexToRgba(col, 0.16));
+                grad.addColorStop(1, hexToRgba(col, 0));
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                for (let p = 0; p < points; p++) {
+                    const curr = coords[p];
+                    const next = coords[(p + 1) % points];
+                    const midX = (curr.x + next.x) / 2;
+                    const midY = (curr.y + next.y) / 2;
+                    if (p === 0) {
+                        const prev = coords[points - 1];
+                        ctx.moveTo((prev.x + curr.x) / 2, (prev.y + curr.y) / 2);
+                    }
+                    ctx.quadraticCurveTo(curr.x, curr.y, midX, midY);
+                }
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        /**
+         * HLAVNÍ FUNKCE VYKRESLENÍ JEDNÉ VARIANTY NA PLÁTNO V PŘESNÝCH PIXELECH
+         */
+        function renderToCanvas(canvas, config) {
+            const { mode, style, palette, seed, grain } = config;
+            const { width: W, height: H } = getDimensions(mode);
+
+            // Nastavení přesných vnitřních rozměrů plátna v pixelech
+            if (canvas.width !== W) canvas.width = W;
+            if (canvas.height !== H) canvas.height = H;
+
+            const ctx = canvas.getContext('2d');
+            const rng = new SeededRandom(`${seed}-${style.id}-${palette.id}-${mode}`);
+
+            // 1. Základní tmavé pozadí s jemným lineárním přechodem
+            const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+            bgGrad.addColorStop(0, palette.bg[0]);
+            bgGrad.addColorStop(1, palette.bg[1]);
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, W, H);
+
+            // 2. Vykreslení zvoleného procedurálního stylu
+            switch (style.id) {
+                case 'prechody':
+                    drawMeshGradient(ctx, W, H, rng, palette, mode);
+                    break;
+                case 'zare':
+                    drawAurora(ctx, W, H, rng, palette, mode);
+                    break;
+                case 'mlhovina':
+                    drawNebulaStars(ctx, W, H, rng, palette, mode);
+                    break;
+                case 'bokeh':
+                    drawBokeh(ctx, W, H, rng, palette, mode);
+                    break;
+                case 'geometrie':
+                    drawGeometry(ctx, W, H, rng, palette, mode);
+                    break;
+                case 'vrstevnice':
+                    drawWavesContours(ctx, W, H, rng, palette, mode);
+                    break;
+                case 'mrizka':
+                    drawGridDots(ctx, W, H, rng, palette, mode);
+                    break;
+                case 'bloby':
+                    drawBlobs(ctx, W, H, rng, palette, mode);
+                    break;
+            }
+
+            // 3. DODRŽENÍ PRAVIDEL PRO REŽIMY:
+            if (mode === 'karta') {
+                // PRAVIDLO KARTA: Levý horní roh (cca 45 % šířky × 60 % výšky) musí být klidnější a tmavší
+                ctx.save();
+                ctx.translate(0, 0);
+                ctx.scale(W * 0.58, H * 0.78);
+                const tlGrad = ctx.createRadialGradient(0, 0, 0.1, 0, 0, 1.0);
+                tlGrad.addColorStop(0, hexToRgba(palette.bg[0], 0.85));
+                tlGrad.addColorStop(0.55, hexToRgba(palette.bg[0], 0.55));
+                tlGrad.addColorStop(1, hexToRgba(palette.bg[0], 0));
+                ctx.fillStyle = tlGrad;
+                ctx.fillRect(0, 0, 1.2, 1.2);
+                ctx.restore();
+
+                // Jemné ztmavení horní a spodní hrany, aby vynikla středová vodorovná pásová zóna
+                const edgeGrad = ctx.createLinearGradient(0, 0, 0, H);
+                edgeGrad.addColorStop(0, hexToRgba(palette.bg[0], 0.25));
+                edgeGrad.addColorStop(0.22, 'rgba(0,0,0,0)');
+                edgeGrad.addColorStop(0.78, 'rgba(0,0,0,0)');
+                edgeGrad.addColorStop(1, hexToRgba(palette.bg[0], 0.30));
+                ctx.fillStyle = edgeGrad;
+                ctx.fillRect(0, 0, W, H);
+            } else {
+                // PRAVIDLO POZADÍ: Celkově jemné, mírně rozostřené / utlumené a rovnoměrná viněta po obvodu
+                const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.72);
+                vig.addColorStop(0, hexToRgba(palette.bg[0], 0.05)); // Mírné sjednocení středu
+                vig.addColorStop(1, hexToRgba(palette.bg[0], 0.38));
+                ctx.fillStyle = vig;
+                ctx.fillRect(0, 0, W, H);
+            }
+
+            // Celkové utlumení kontrastu (zajišťuje 100% čitelnost bílého textu a světlých lístečků)
+            ctx.fillStyle = 'rgba(6, 9, 16, 0.06)';
+            ctx.fillRect(0, 0, W, H);
+
+            // 4. Volitelný jemný šum (grain 3 %) proti pruhování přechodů
+            if (grain) {
+                ctx.save();
+                const tile = getGrainTile();
+                const pattern = ctx.createPattern(tile, 'repeat');
+                ctx.globalAlpha = 0.035; // cca 3.5 %, normální prolnutí = skutečný dithering
+                ctx.fillStyle = pattern;
+                ctx.fillRect(0, 0, W, H);
+                ctx.restore();
+            }
+        }
+
+        /* ============================================================================
+         * 5. CHYTRÝ EXPORT A HLÍDÁNÍ VELIKOSTI SOUBORU (DO 200 KB / 700 KB)
+         * ============================================================================ */
+
+        function canvasToBlobAsync(canvas, mimeType, quality) {
+            return new Promise((resolve) => {
+                canvas.toBlob((blob) => resolve(blob), mimeType, quality);
+            });
+        }
+
+        /**
+         * Vygeneruje Blob ve formátu WebP (výchozí kvalita 0.85, záložně PNG).
+         * Pokud přesáhne cílovou velikost (karta 200 KB, pozadí 700 KB), automaticky snižuje kvalitu.
+         */
+        async function buildOptimizedFile(canvas, variant) {
+            const targetMaxKB = variant.mode === 'karta' ? 200 : 700;
+            const mime = supportsWebP ? 'image/webp' : 'image/png';
+            const ext = supportsWebP ? 'webp' : 'png';
+
+            let quality = 0.92;
+            let blob = await canvasToBlobAsync(canvas, mime, quality);
+
+            // Pokud prohlížeč vrátil PNG (neumí WebP) nebo překračuje limit u WebP, zkusíme snížit kvalitu
+            if (supportsWebP && blob) {
+                while ((blob.size / 1024) > targetMaxKB && quality > 0.35) {
+                    quality = Math.round((quality - 0.08) * 100) / 100;
+                    blob = await canvasToBlobAsync(canvas, mime, quality);
+                }
+            }
+
+            const cleanSeed = String(variant.seed)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-zA-Z0-9_-]/g, '')
+                .toLowerCase();
+
+            const prefix = variant.mode === 'karta' ? 'karta' : 'pozadi';
+            const filename = `${prefix}-${variant.style.slug}-${cleanSeed}.${ext}`;
+            const sizeKB = blob ? (blob.size / 1024).toFixed(1) : '0.0';
+
+            return {
+                blob,
+                filename,
+                sizeKB,
+                qualityUsed: supportsWebP ? quality : 1.0,
+                width: canvas.width,
+                height: canvas.height
+            };
+        }
+
+        /* ============================================================================
+         * 6. GENEROVÁNÍ MŘÍŽKY 6 VARIANT A OVLÁDÁNÍ ROZHRANÍ
+         * ============================================================================ */
+
+        function createTestOverlayHTML(mode) {
+            if (mode === 'karta') {
+                return `
+                    <div class="p-4 sm:p-5 flex flex-col justify-between h-full">
+                        <div class="max-w-[55%]">
+                            <span class="inline-block text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded bg-white/15 text-white/90 mb-1.5">Studijní místnost</span>
+                            <h4 class="text-white font-bold text-base sm:text-lg leading-tight drop-shadow-sm">Kvantová fyzika a optika</h4>
+                            <p class="text-white/75 text-xs mt-0.5">14 aktivních studentů • Zkouškové období</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] text-white/80 bg-black/30 px-2.5 py-1 rounded-lg backdrop-blur-xs">Ukázka čitelnosti bílého textu</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                return `
+                    <div class="p-5 flex flex-col justify-between h-full">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h4 class="text-white font-bold text-sm sm:text-base">Nástěnka studijní místnosti</h4>
+                                <p class="text-white/70 text-xs">Test kontrastu pro světlé lístečky a bílý text</p>
+                            </div>
+                            <div class="bg-amber-100 text-slate-900 p-2.5 rounded-lg shadow-md text-[11px] max-w-[150px] rotate-2 font-medium">
+                                📌 Nezapomenout odevzdat protokol do pátku!
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="bg-sky-100 text-slate-900 p-2 rounded-lg shadow-md text-[10px] max-w-[140px] -rotate-1 font-medium">
+                                💡 Vzorec pro výpočet vlnové délky
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        async function generateAllSix() {
+            const btnIcon = document.getElementById('icon-generate');
+            btnIcon.classList.add('rotate-180');
+            setTimeout(() => btnIcon.classList.remove('rotate-180'), 500);
+
+            const styleSelect = document.getElementById('select-style').value;
+            const paletteSelect = document.getElementById('select-palette').value;
+            const lockStyle = document.getElementById('lock-style').checked;
+            const lockPalette = document.getElementById('lock-palette').checked;
+            const customSeedInput = document.getElementById('custom-seed').value.trim();
+            const useGrain = document.getElementById('toggle-grain').checked;
+            const showOverlay = document.getElementById('toggle-overlay').checked;
+
+            const grid = document.getElementById('cards-grid');
+            grid.innerHTML = '';
+            variantsData = [];
+
+            // Příprava zamknutého stylu / palety pokud uživatel zaškrtl zámek a měl vybráno 'random'
+            const masterRng = new SeededRandom(customSeedInput || undefined);
+            let lockedStyleObj = STYLES.find(s => s.id === styleSelect);
+            if (lockStyle && !lockedStyleObj) {
+                lockedStyleObj = masterRng.pick(STYLES);
+                document.getElementById('select-style').value = lockedStyleObj.id;
+            }
+
+            let lockedPaletteObj = PALETTES.find(p => p.id === paletteSelect);
+            if (lockPalette && !lockedPaletteObj) {
+                lockedPaletteObj = masterRng.pick(PALETTES);
+                document.getElementById('select-palette').value = lockedPaletteObj.id;
+            }
+
+            // Vytvoříme 6 karet v DOMu
+            for (let i = 0; i < 6; i++) {
+                // Určení seedu pro danou kartu
+                let itemSeed;
+                if (customSeedInput) {
+                    itemSeed = i === 0 ? customSeedInput : `${customSeedInput}-${i + 1}`;
+                } else {
+                    const tempRng = new SeededRandom();
+                    itemSeed = tempRng.seed;
+                }
+
+                const itemRng = new SeededRandom(itemSeed);
+
+                // Určení stylu
+                let chosenStyle;
+                if (styleSelect !== 'random') {
+                    chosenStyle = STYLES.find(s => s.id === styleSelect);
+                } else if (lockStyle && lockedStyleObj) {
+                    chosenStyle = lockedStyleObj;
+                } else {
+                    // Aby byla šestice pestrá, mícháme styly
+                    chosenStyle = STYLES[(i + itemRng.int(0, STYLES.length - 1)) % STYLES.length];
+                }
+
+                // Určení palety
+                let chosenPalette;
+                if (paletteSelect !== 'random') {
+                    chosenPalette = PALETTES.find(p => p.id === paletteSelect);
+                } else if (lockPalette && lockedPaletteObj) {
+                    chosenPalette = lockedPaletteObj;
+                } else {
+                    chosenPalette = PALETTES[(i * 2 + itemRng.int(0, PALETTES.length - 1)) % PALETTES.length];
+                }
+
+                const variant = {
+                    index: i,
+                    mode: currentMode,
+                    style: chosenStyle,
+                    palette: chosenPalette,
+                    seed: itemSeed,
+                    grain: useGrain,
+                    canvas: null,
+                    fileInfo: null
+                };
+                variantsData.push(variant);
+
+                // Sestavení karty
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card-item bg-slate-900/90 border border-slate-800 hover:border-indigo-500/60 rounded-2xl overflow-hidden shadow-xl transition-all flex flex-col';
+                cardEl.innerHTML = `
+                    <div class="canvas-preview-wrapper cursor-pointer group" onclick="openModal(${i})">
+                        <canvas id="canvas-item-${i}"></canvas>
+                        <div class="test-overlay pointer-events-none absolute inset-0 ${showOverlay ? '' : 'hidden'}">
+                            ${createTestOverlayHTML(currentMode)}
+                        </div>
+                        <div class="absolute inset-0 bg-indigo-950/0 group-hover:bg-indigo-950/25 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <span class="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-medium text-white shadow-lg flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                Zvětšit náhled a stáhnout
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="p-4 flex flex-col gap-3 flex-1 justify-between">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-semibold text-white">${chosenStyle.name}</span>
+                                <span class="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700/80">${chosenPalette.name}</span>
+                            </div>
+                            <button onclick="copySeed('${itemSeed}')" title="Kliknutím zkopíruješ nebo vložíš seed do pole nahoře" class="text-xs font-mono text-indigo-300 hover:text-indigo-200 bg-indigo-950/50 border border-indigo-800/50 px-2 py-0.5 rounded flex items-center gap-1 transition-colors">
+                                <span>Seed: ${itemSeed}</span>
+                                <svg class="w-3 h-3 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                        </div>
+
+                        <div class="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                            <div id="meta-item-${i}" class="font-mono flex items-center gap-2">
+                                <span class="text-slate-500">Výpočet velikosti...</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="openModal(${i})" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium transition-colors">
+                                    Detail
+                                </button>
+                                <button onclick="downloadSingle(${i})" class="px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white font-medium transition-colors flex items-center gap-1">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                    <span>Stáhnout</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(cardEl);
+            }
+
+            // Vykreslení pláten a asynchronní výpočet přesné velikosti souboru v KB
+            for (let i = 0; i < 6; i++) {
+                const v = variantsData[i];
+                const canvas = document.getElementById(`canvas-item-${i}`);
+                v.canvas = canvas;
+                renderToCanvas(canvas, v);
+
+                // Výpočet WebP blobu a rozměrů
+                buildOptimizedFile(canvas, v).then(info => {
+                    v.fileInfo = info;
+                    const metaEl = document.getElementById(`meta-item-${i}`);
+                    if (metaEl) {
+                        const qBadge = info.qualityUsed < 0.92 ? ` (Q:${info.qualityUsed})` : '';
+                        metaEl.innerHTML = `
+                            <span class="text-emerald-400 font-medium">${info.width}×${info.height} px</span>
+                            <span>•</span>
+                            <span class="text-amber-300 font-medium">${info.sizeKB} KB${qBadge}</span>
+                            <span class="text-slate-500 hidden sm:inline">(${supportsWebP ? 'WebP' : 'PNG'})</span>
+                        `;
+                    }
+                });
+            }
+        }
+
+        /* ============================================================================
+         * 7. PŘEPÍNÁNÍ REŽIMŮ, DETAILNÍ NÁHLED A STAHOVÁNÍ
+         * ============================================================================ */
+
+        function switchMode(newMode) {
+            if (currentMode === newMode) return;
+            currentMode = newMode;
+
+            const btnKarta = document.getElementById('mode-karta');
+            const btnPozadi = document.getElementById('mode-pozadi');
+            const ruleInfo = document.getElementById('mode-rule-info');
+
+            if (newMode === 'karta') {
+                btnKarta.className = 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-md';
+                btnPozadi.className = 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white';
+                ruleInfo.innerHTML = `
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span><strong>Pravidlo Karta (1200×400 px):</strong> Levý horní roh (45 % × 60 %) je ztmavený a klidný pro nadpis; hlavní prvky vpravo a ve středovém pásu. Cíl &lt; 200 KB.</span>
+                `;
+            } else {
+                btnPozadi.className = 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-md';
+                btnKarta.className = 'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-400 hover:text-white';
+                ruleInfo.innerHTML = `
+                    <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                    <span><strong>Pravidlo Pozadí (2560×1440 px):</strong> Žádný rušivý motiv uprostřed, detaily rozprostřené rovnoměrně pro psaní bílého textu a lepení lístečků. Cíl &lt; 700 KB.</span>
+                `;
+            }
+
+            generateAllSix();
+        }
+
+        async function openModal(index) {
+            const v = variantsData[index];
+            if (!v) return;
+            activeModalIndex = index;
+
+            const modal = document.getElementById('preview-modal');
+            const modalCanvas = document.getElementById('modal-canvas');
+            const showOverlay = document.getElementById('toggle-overlay').checked;
+            const modalOverlay = document.getElementById('modal-test-overlay');
+
+            // Zkopírujeme přesný obsah canvasu do modalu v plném rozlišení
+            modalCanvas.width = v.canvas.width;
+            modalCanvas.height = v.canvas.height;
+            const mCtx = modalCanvas.getContext('2d');
+            mCtx.drawImage(v.canvas, 0, 0);
+
+            if (showOverlay) {
+                modalOverlay.innerHTML = createTestOverlayHTML(v.mode);
+                modalOverlay.classList.remove('hidden');
+            } else {
+                modalOverlay.classList.add('hidden');
+            }
+
+            if (!v.fileInfo) {
+                v.fileInfo = await buildOptimizedFile(v.canvas, v);
+            }
+
+            document.getElementById('modal-title').textContent = v.mode === 'karta' ? 'Karta místnosti' : 'Pozadí místnosti';
+            document.getElementById('modal-badge-style').textContent = v.style.name;
+            document.getElementById('modal-badge-palette').textContent = v.palette.name;
+            document.getElementById('modal-badge-seed').textContent = `Seed: ${v.seed}`;
+
+            document.getElementById('modal-filename').textContent = v.fileInfo.filename;
+            document.getElementById('modal-dimensions').textContent = `${v.fileInfo.width} × ${v.fileInfo.height} px`;
+            document.getElementById('modal-filesize').textContent = `${v.fileInfo.sizeKB} KB (Q: ${v.fileInfo.qualityUsed})`;
+
+            document.getElementById('modal-btn-download').onclick = () => downloadSingle(index);
+            document.getElementById('modal-btn-use-seed').onclick = () => {
+                document.getElementById('custom-seed').value = v.seed;
+                document.getElementById('select-style').value = v.style.id;
+                document.getElementById('select-palette').value = v.palette.id;
+                document.getElementById('lock-style').checked = true;
+                document.getElementById('lock-palette').checked = true;
+                closeModal();
+                showToast(`Nastaven seed ${v.seed} a uzamčen styl „${v.style.name}“`);
+            };
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('preview-modal').classList.add('hidden');
+            activeModalIndex = null;
+        }
+
+        async function downloadSingle(index) {
+            const v = variantsData[index];
+            if (!v) return;
+            if (!v.fileInfo) {
+                v.fileInfo = await buildOptimizedFile(v.canvas, v);
+            }
+            const url = URL.createObjectURL(v.fileInfo.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = v.fileInfo.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 3000);
+            showToast(`Stahuji ${v.fileInfo.filename} (${v.fileInfo.sizeKB} KB)`);
+        }
+
+        async function downloadAllSix() {
+            showToast('Připravuji stahování všech 6 obrázků...');
+            for (let i = 0; i < variantsData.length; i++) {
+                await downloadSingle(i);
+                // Krátká pauza, aby prohlížeč nezablokoval vícenásobné stahování
+                await new Promise(r => setTimeout(r, 260));
+            }
+        }
+
+        function copySeed(seedStr) {
+            document.getElementById('custom-seed').value = seedStr;
+            // Fallback pro kopírování do schránky v iFramu
+            const tempInput = document.createElement('input');
+            tempInput.value = seedStr;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            try {
+                document.execCommand('copy');
+            } catch (e) {}
+            document.body.removeChild(tempInput);
+            showToast(`Seed „${seedStr}“ vložen do pole nahoře a zkopírován`);
+        }
+
+        let toastTimeout = null;
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = msg;
+            toast.classList.remove('hidden');
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3200);
+        }
+
+        /* ============================================================================
+         * 8. INICIALIZACE PO NAČTENÍ STRÁNKY
+         * ============================================================================ */
+
+        window.addEventListener('DOMContentLoaded', () => {
+            checkWebPSupport();
+
+            // Naplnění selectu stylů
+            const styleSel = document.getElementById('select-style');
+            STYLES.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.name;
+                styleSel.appendChild(opt);
+            });
+
+            // Naplnění selectu palet
+            const palSel = document.getElementById('select-palette');
+            PALETTES.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name;
+                palSel.appendChild(opt);
+            });
+
+            // Okamžité překreslení při přepnutí šumu nebo testu čitelnosti
+            document.getElementById('toggle-grain').addEventListener('change', () => {
+                generateAllSix();
+            });
+
+            document.getElementById('toggle-overlay').addEventListener('change', (e) => {
+                const show = e.target.checked;
+                document.querySelectorAll('.test-overlay').forEach(el => {
+                    el.classList.toggle('hidden', !show);
+                });
+            });
+
+            // Zavření modalu klávesou Escape nebo kliknutím mimo
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeModal();
+            });
+            document.getElementById('preview-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'preview-modal') closeModal();
+            });
+
+            // První vygenerování 6 variant
+            generateAllSix();
+        });
+    </script>
+</body>
+</html>

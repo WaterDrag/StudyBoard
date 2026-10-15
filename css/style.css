@@ -121,6 +121,69 @@
   --board-glow:        rgba(164,140,168,0.055);
 }
 
+/* ── Další barevná témata (v9.59) ───────────────────────────── */
+[data-theme="malina"] {      /* tmavá malinová */
+  --bg:   #1a0f16;
+  --bg-2: #2a1824;
+  --bg-3: #45263b;
+  --accent:      #ec4899;
+  --accent-dark: #db2777;
+  --board-bg:          #13090f;
+  --board-grid-fine:   rgba(249,168,212,0.05);
+  --board-grid-coarse: rgba(249,168,212,0.09);
+  --board-glow:        rgba(236,72,153,0.07);
+}
+[data-theme="jantar"] {      /* teplý jantar */
+  --bg:   #1a1508;
+  --bg-2: #2a2210;
+  --bg-3: #45391c;
+  --accent:      #f59e0b;
+  --accent-dark: #d97706;
+  --board-bg:          #130f05;
+  --board-grid-fine:   rgba(252,211,77,0.045);
+  --board-grid-coarse: rgba(252,211,77,0.085);
+  --board-glow:        rgba(245,158,11,0.07);
+}
+[data-theme="fialka"] {      /* hluboká fialová */
+  --bg:   #130f24;
+  --bg-2: #1f1838;
+  --bg-3: #352a5a;
+  --accent:      #a855f7;
+  --accent-dark: #9333ea;
+  --board-bg:          #0d0a1a;
+  --board-grid-fine:   rgba(216,180,254,0.05);
+  --board-grid-coarse: rgba(216,180,254,0.09);
+  --board-glow:        rgba(168,85,247,0.08);
+}
+[data-theme="cerna"] {       /* čistá černá – OLED displeje */
+  --bg:   #000000;
+  --bg-2: #0e0e10;
+  --bg-3: #222226;
+  --border: rgba(255,255,255,0.1);
+  --accent:      #38bdf8;
+  --accent-dark: #0ea5e9;
+  --board-bg:          #000000;
+  --board-grid-fine:   rgba(255,255,255,0.04);
+  --board-grid-coarse: rgba(255,255,255,0.075);
+  --board-glow:        rgba(56,189,248,0.05);
+}
+[data-theme="papir"] {       /* světlý teplý papír */
+  --bg:   #f4eee4;
+  --bg-2: #fffaf2;
+  --bg-3: #e8dccb;
+  --border:     rgba(60,40,20,0.14);
+  --text:       #2b2118;
+  --text-muted: #7a6a58;
+  --accent:      #b45309;
+  --accent-dark: #92400e;
+  --shadow:     0 4px 24px rgba(60,40,20,0.14);
+  --board-bg:          #ebe1d1;
+  --board-grid-fine:   rgba(120,80,40,0.06);
+  --board-grid-coarse: rgba(120,80,40,0.11);
+  --board-glow:        rgba(180,83,9,0.06);
+}
+[data-theme="papir"] select { color-scheme: light; }
+
 /* Theme picker in Nastavení */
 .theme-picker { display: flex; gap: 10px; flex-wrap: wrap; }
 .theme-opt {
@@ -512,6 +575,45 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .deck-card:hover .card-edit-btn { opacity: 1; }
 .card-edit-btn:hover { background: rgba(0,0,0,0.45); }
 
+/* Generated card picture (room.cardArt → js/bggen.js). A dark wash from the
+   left keeps the title, badge and date readable; the room colour stays on
+   the border. Until the picture is drawn the normal colour gradient shows. */
+.room-card.has-art {
+  background:
+    linear-gradient(100deg, rgba(8,10,18,0.72) 0%, rgba(8,10,18,0.35) 55%, rgba(8,10,18,0.1) 100%),
+    var(--card-art, linear-gradient(145deg, color-mix(in srgb, var(--card-color) 38%, transparent) 0%, transparent 60%)),
+    var(--bg-2);
+  background-size: cover;
+  background-position: center;
+  color: #f1f5f9;
+}
+.room-card.has-art .meta-date { color: rgba(241,245,249,0.75); }
+.card-fav-btn {
+  position: absolute; top: 12px; right: 42px;
+  width: 24px; height: 24px; border: none; border-radius: 6px;
+  background: rgba(0,0,0,0.25); color: #fff;
+  font-size: 0.85rem; line-height: 24px; text-align: center; padding: 0;
+  cursor: pointer; opacity: 0; transition: var(--transition);
+}
+.card-fav-btn.on { color: #fb7185; opacity: 1; }
+.room-card:hover .card-fav-btn { opacity: 1; }
+.card-fav-btn:hover { background: rgba(0,0,0,0.45); }
+/* Viewers/editors have no pencil — the heart takes its spot. */
+.room-card:not(:has(.card-edit-btn)) .card-fav-btn { right: 12px; }
+
+/* Picker "Obrázek karty" v okně Upravit kartu místnosti */
+.card-art-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-height: 340px; overflow-y: auto; }
+.card-art-head { grid-column: 1 / -1; font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 6px; }
+.card-art-opt {
+  position: relative; display: flex; flex-direction: column; gap: 4px;
+  padding: 5px; border-radius: var(--radius-sm); border: 2px solid var(--border);
+  background: var(--bg-3); color: var(--text); font-size: 0.74rem; cursor: pointer;
+}
+.card-art-opt:hover { border-color: rgba(148,163,184,0.5); }
+.card-art-opt.selected { border-color: var(--accent); }
+.card-art-img { display: block; aspect-ratio: 3 / 1; border-radius: 4px; background: var(--bg-2) center / cover; }
+.card-art-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 22px; }
+
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
@@ -798,6 +900,90 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 /* Touch: we run our own pan/pinch on the board (see setupBoardPan) — without
    this the browser would consume the gestures as page scroll/zoom first. */
 .board-wrap { touch-action: none; }
+
+/* ── Pozadí místnosti ─────────────────────────────────────────
+   Owner picks it per room (room.bg); set as data-bg on .board-wrap by
+   applyRoomBackground. Like the default grid it sits on the scroll
+   container, so it stays put while the board pans and never scales with
+   zoom. "Dark" backgrounds keep their own colours in every theme, so text
+   that sits straight on the board (headings) is switched to light there. */
+.board-wrap[data-bg="plain"] { background-image: none; }
+.board-wrap[data-bg="dots"] {
+  background-image:
+    radial-gradient(circle, var(--board-grid-coarse) 1.4px, transparent 1.6px);
+  background-size: 26px 26px;
+}
+.board-wrap[data-bg="aurora"] {
+  background-image:
+    radial-gradient(ellipse 60% 50% at 15% 20%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%),
+    radial-gradient(ellipse 55% 45% at 85% 30%, rgba(168,85,247,0.16), transparent 70%),
+    radial-gradient(ellipse 70% 55% at 50% 100%, rgba(20,184,166,0.14), transparent 70%);
+  background-size: 100% 100%;
+}
+.board-wrap[data-bg="blueprint"] {
+  background-color: #0b2a4a;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px),
+    linear-gradient(rgba(255,255,255,0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.14) 1px, transparent 1px);
+  background-size: 24px 24px, 24px 24px, 120px 120px, 120px 120px;
+}
+.board-wrap[data-bg="chalk"] {
+  background-color: #1f3a2e;
+  background-image:
+    radial-gradient(ellipse 45% 35% at 25% 30%, rgba(255,255,255,0.05), transparent 70%),
+    radial-gradient(ellipse 40% 30% at 75% 70%, rgba(255,255,255,0.04), transparent 70%),
+    radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,0.35));
+  background-size: 100% 100%;
+}
+.board-wrap[data-bg="cork"] {
+  background-color: #6b4a2b;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(0,0,0,0.18) 1px, transparent 2px),
+    radial-gradient(circle at 70% 60%, rgba(255,220,170,0.12) 1px, transparent 2px),
+    radial-gradient(circle at 40% 80%, rgba(0,0,0,0.14) 1.5px, transparent 2.5px),
+    radial-gradient(circle at 85% 15%, rgba(255,220,170,0.1) 1px, transparent 2px),
+    radial-gradient(ellipse 120% 90% at 50% 50%, transparent 50%, rgba(0,0,0,0.35));
+  background-size: 9px 9px, 13px 13px, 17px 17px, 11px 11px, 100% 100%;
+}
+.board-wrap[data-bg^="img:"] {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.board-wrap[data-bg-tone="dark"] .heading-text { color: #f1f5f9; }
+
+/* Picker v okně „Pozadí místnosti" */
+.room-bg-section { margin-bottom: 16px; }
+.room-bg-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;
+}
+.room-bg-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.room-bg-opt {
+  position: relative;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 6px; border-radius: var(--radius-sm);
+  border: 2px solid var(--border); background: var(--bg-3);
+  color: var(--text); font-size: 0.78rem; cursor: pointer; text-align: left;
+}
+.room-bg-opt:hover { border-color: rgba(148,163,184,0.5); }
+.room-bg-opt.selected { border-color: var(--accent); }
+.room-bg-opt .board-wrap {
+  display: block;
+  position: static; height: 68px; border-radius: 5px; overflow: hidden;
+  pointer-events: none;
+}
+.room-bg-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 26px; }
+.room-bg-fav {
+  position: absolute; right: 8px; bottom: 5px;
+  background: none; border: none; cursor: pointer;
+  font-size: 1rem; line-height: 1; color: var(--text-muted); padding: 2px;
+}
+.room-bg-fav:hover, .room-bg-fav.on { color: #f43f5e; }
+.room-bg-empty { grid-column: 1 / -1; font-size: 0.8rem; color: var(--text-muted); margin: 0; }
 
 .board {
   position: relative;
@@ -1217,7 +1403,8 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   box-shadow: 0 6px 18px rgba(0,0,0,0.28);
   overflow: hidden;
 }
-:root[data-theme="light"] .whiteboard { background: rgba(255,255,255,0.96); }
+:root[data-theme="svetly"] .whiteboard,
+:root[data-theme="papir"] .whiteboard { background: rgba(255,255,255,0.96); }
 .wb-canvas {
   display: block;
   width: 100%; height: 100%;

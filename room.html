@@ -53,7 +53,10 @@
       <button id="newFolderBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;display:none;" title="Nová složka">
         📁+ Složka
       </button>
-      <button id="viewToggleBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Přepnout mezi nástěnkou a seznamem">
+      <button id="roomBgBtn" class="btn btn-ghost" style="padding:6px 9px;font-size:0.82rem;display:none;" title="Pozadí místnosti">
+        🖼️
+      </button>
+      <button id="viewToggleBtn"class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;" title="Přepnout mezi nástěnkou a seznamem">
         📋 Seznam
       </button>
       <button id="membersBtn" class="btn btn-ghost" style="padding:6px 11px;font-size:0.82rem;">
@@ -276,6 +279,17 @@
   </div>
 
   <!-- MODAL: Vložit tabulku -->
+  <div class="modal-overlay" id="roomBgModal">
+    <div class="modal" style="max-width:620px;max-height:88vh;overflow-y:auto;">
+      <div class="modal-header">
+        <h3>🖼️ Pozadí místnosti</h3>
+        <button class="modal-close" data-close="roomBgModal">✕</button>
+      </div>
+      <p id="roomBgHint" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;"></p>
+      <div class="room-bg-grid" id="roomBgGrid"></div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="tableInsertModal">
     <div class="modal" style="max-width:320px;">
       <div class="modal-header">
@@ -819,7 +833,7 @@
     // room.js je rozdělený na moduly (klasické skripty sdílející globály).
     // async=false drží pořadí spouštění; room-init.js MUSÍ být poslední —
     // registruje auth callback, který volá funkce ze všech ostatních souborů.
-    var files = ['drive.js','room-core.js','room-list.js','room-notes.js','room-export.js',
+    var files = ['bggen.js','drive.js','room-core.js','room-list.js','room-notes.js','room-export.js',
                  'room-board.js','room-whiteboard.js','room-ai.js','room-social.js',
                  'room-files.js','room-init.js'];
     files.forEach(function(f){

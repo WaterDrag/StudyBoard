@@ -619,7 +619,9 @@ function openBoardMenu(clientX, clientY) {
     <button class="context-menu-item" data-act="note">➕ Přidat poznámku</button>
     <button class="context-menu-item" data-act="guide">📖 Přidat návod</button>
     <button class="context-menu-item" data-act="board">🖊️ Přidat tabuli</button>
-    <button class="context-menu-item" data-act="heading">🔠 Přidat nadpis</button>`;
+    <button class="context-menu-item" data-act="heading">🔠 Přidat nadpis</button>${MY_ROLE === 'owner' ? `
+    <div class="context-menu-sep"></div>
+    <button class="context-menu-item" data-act="bg">🖼️ Pozadí místnosti</button>` : ''}`;
   document.body.appendChild(menu);
   menu.style.left = clientX + 'px'; menu.style.top = clientY + 'px';
   const r = menu.getBoundingClientRect();
@@ -631,6 +633,7 @@ function openBoardMenu(clientX, clientY) {
   menu.querySelector('[data-act="guide"]').addEventListener('click', () => { closeBoardMenu(); createGuide(sx, sy); });
   menu.querySelector('[data-act="board"]').addEventListener('click', () => { closeBoardMenu(); createWhiteboard(sx, sy); });
   menu.querySelector('[data-act="heading"]').addEventListener('click', () => { closeBoardMenu(); createHeading(sx, sy); });
+  menu.querySelector('[data-act="bg"]')?.addEventListener('click', () => { closeBoardMenu(); openRoomBgPicker(); });
   setTimeout(() => document.addEventListener('click', closeBoardMenu, { once: true }), 0);
 }
 
@@ -1011,3 +1014,138 @@ function setupBoardZoom() {
 }
 
 // ── AI Flash Cards from notes ───────────────────────────────────
+
+// ── Pozadí místnosti ──────────────────────────────────────────
+// The owner picks a background per room (rooms/{id}.bg); everyone in the
+// room sees it, live. Three kinds of value:
+//   ''/'dots'/…    — pure-CSS patterns ([data-bg] rules in style.css)
+//   'gen1:…'       — a generated image: only the recipe is stored and every
+//                    browser draws it itself (js/bggen.js), so it costs ~30 B
+//   (later) image files: { id: 'img:les', name: 'Les', file: 'img/bg/les.webp', dark: true }
+// "Dark" backgrounds keep their own colours, so headings switch to light.
+const ROOM_BACKGROUNDS = [
+  { id: '',          name: 'Mřížka' },
+  { id: 'dots',      name: 'Tečky' },
+  { id: 'plain',     name: 'Bez vzoru' },
+  { id: 'aurora',    name: 'Polární záře' },
+  { id: 'blueprint', name: 'Modrotisk',        dark: true },
+  { id: 'chalk',     name: 'Školní tabule',    dark: true },
+  { id: 'cork',      name: 'Korková nástěnka', dark: true },
+];
+// Images get a light dimming layer so notes and headings stay readable.
+const ROOM_BG_IMAGE_DIM = 'linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.25))';
+let ROOM_BG_VARIANTS = [];
+
+function roomBgDef(id) { return ROOM_BACKGROUNDS.find(b => b.id === id) || ROOM_BACKGROUNDS[0]; }
+
+// scale < 1 only for the small previews in the picker.
+function paintRoomBg(el, id, scale = 1) {
+  if (BgGen.isRecipe(id)) {
+    el.dataset.bg = 'img:gen';
+    el.dataset.bgTone = 'dark';
+    el.dataset.bgWant = id;
+    BgGen.toUrl(id, 'pozadi', scale).then(url => {
+      if (url && el.dataset.bgWant === id) el.style.backgroundImage = `${ROOM_BG_IMAGE_DIM}, url("${url}")`;
+    });
+    return;
+  }
+  delete el.dataset.bgWant;
+  const def = roomBgDef(id);
+  if (def.id) el.dataset.bg = def.id; else delete el.dataset.bg;
+  if (def.dark) el.dataset.bgTone = 'dark'; else delete el.dataset.bgTone;
+  el.style.backgroundImage = def.file ? `${ROOM_BG_IMAGE_DIM}, url("${def.file}")` : '';
+}
+
+function applyRoomBackground(id) {
+  const wrap = document.getElementById('boardWrap');
+  if (wrap) paintRoomBg(wrap, id);
+}
+
+function setupRoomBackground() {
+  applyRoomBackground(ROOM.bg || '');
+  db.collection('rooms').doc(ROOM_ID).onSnapshot(snap => {
+    const bg = snap.data()?.bg || '';
+    if (bg !== (ROOM.bg || '')) { ROOM.bg = bg; applyRoomBackground(bg); }
+  }, () => { /* bez živých změn — pozadí zůstane, jak se načetlo */ });
+  // Everyone may open the picker: non-owners to save a background they
+  // like into their favourites, the owner also to change it.
+  const btn = document.getElementById('roomBgBtn');
+  if (!btn || ME.isAnonymous) return;
+  btn.style.display = '';
+  btn.addEventListener('click', openRoomBgPicker);
+}
+
+function roomBgTile(id, name, { fav = false, selected = false } = {}) {
+  return `
+    <div class="room-bg-opt${selected ? ' selected' : ''}" data-bg-id="${esc(id)}" role="button" tabindex="0">
+      <span class="board-wrap"></span>
+      <span class="room-bg-name">${esc(name)}</span>
+      ${fav ? `<button type="button" class="room-bg-fav${BgFav.has('pozadi', id) ? ' on' : ''}" title="Oblíbené">${BgFav.has('pozadi', id) ? '♥' : '♡'}</button>` : ''}
+    </div>`;
+}
+
+function genName(recipe) {
+  const p = BgGen.parse(recipe);
+  return p ? `${p.style.name.replace(/ \(.*\)| –.*/, '')} · ${p.palette.name}` : '';
+}
+
+async function openRoomBgPicker() {
+  const isOwner = MY_ROLE === 'owner';
+  const cur = ROOM.bg || '';
+  await BgFav.load();
+  if (!ROOM_BG_VARIANTS.length) ROOM_BG_VARIANTS = Array.from({ length: 6 }, () => BgGen.random());
+  const favs = BgFav.items.filter(it => it.k === 'pozadi').map(it => it.r);
+  const grid = document.getElementById('roomBgGrid');
+  const section = (title, html, extra = '') =>
+    `<div class="room-bg-section"><div class="room-bg-head"><span>${title}</span>${extra}</div><div class="room-bg-tiles">${html}</div></div>`;
+
+  let html = '';
+  if (BgGen.isRecipe(cur)) {
+    html += section('Aktuální pozadí', roomBgTile(cur, genName(cur), { fav: true, selected: true }));
+  }
+  if (isOwner) {
+    html += section('Vzory', ROOM_BACKGROUNDS.map(b => roomBgTile(b.id, b.name, { selected: cur === b.id })).join(''));
+    html += section('Vygenerovat', ROOM_BG_VARIANTS.map(r => roomBgTile(r, genName(r), { fav: true, selected: cur === r })).join(''),
+      '<button type="button" class="btn btn-ghost" id="roomBgReroll" style="padding:3px 10px;font-size:0.78rem;">🎲 Další</button>');
+  }
+  html += section(`Oblíbené (${favs.length}/${BG_FAV_MAX})`, favs.length
+    ? favs.map(r => roomBgTile(r, genName(r), { fav: true, selected: cur === r })).join('')
+    : '<p class="room-bg-empty">Zatím nic. Srdíčkem ♡ si ulož pozadí, které se ti líbí — i z cizí místnosti.</p>');
+  grid.innerHTML = html;
+  document.getElementById('roomBgHint').textContent = isOwner
+    ? 'Pozadí uvidí všichni v místnosti. Vygenerované obrázky si ukládáš srdíčkem do oblíbených (max. 10).'
+    : 'Pozadí místnosti může měnit jen vlastník. Líbí-li se ti, ulož si ho srdíčkem a použij ve své místnosti.';
+
+  grid.querySelectorAll('.room-bg-opt').forEach(opt => {
+    paintRoomBg(opt.querySelector('.board-wrap'), opt.dataset.bgId, 0.25);
+    opt.querySelector('.room-bg-fav')?.addEventListener('click', async e => {
+      e.stopPropagation();
+      const msg = await BgFav.toggle('pozadi', opt.dataset.bgId);
+      if (msg) { toast(msg); return; }
+      openRoomBgPicker(); // re-render counts and hearts
+    });
+    if (!isOwner) return;
+    opt.addEventListener('click', () => setRoomBackground(opt.dataset.bgId));
+  });
+  document.getElementById('roomBgReroll')?.addEventListener('click', () => {
+    ROOM_BG_VARIANTS = Array.from({ length: 6 }, () => BgGen.random());
+    openRoomBgPicker();
+  });
+  openModal('roomBgModal');
+}
+
+async function setRoomBackground(id) {
+  const prev = ROOM.bg || '';
+  if (id === prev) return;
+  ROOM.bg = id;
+  applyRoomBackground(id);
+  document.querySelectorAll('#roomBgGrid .room-bg-opt').forEach(o => o.classList.toggle('selected', o.dataset.bgId === id));
+  try {
+    await db.collection('rooms').doc(ROOM_ID).update({ bg: id || firebase.firestore.FieldValue.delete() });
+  } catch (e) {
+    ROOM.bg = prev;
+    applyRoomBackground(prev);
+    document.querySelectorAll('#roomBgGrid .room-bg-opt').forEach(o => o.classList.toggle('selected', o.dataset.bgId === prev));
+    toast('Pozadí se nepodařilo uložit: ' + e.message);
+  }
+}

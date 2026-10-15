@@ -74,6 +74,15 @@ function setupTabs(user) {
 // ── Místnosti ───────────────────────────────────────────────────
 function loadRooms(user) {
   const grid = document.getElementById('roomsGrid');
+  // Hearts on cards need the favourites; they load in parallel and the
+  // already-rendered buttons are refreshed once they arrive.
+  if (!user.isAnonymous) BgFav.load().then(() => {
+    grid.querySelectorAll('.card-fav-btn').forEach(b => {
+      const on = BgFav.has('karta', b.dataset.art);
+      b.classList.toggle('on', on);
+      b.textContent = on ? '♥' : '♡';
+    });
+  });
   db.collection('rooms')
     .where('memberIds', 'array-contains', user.uid)
     .onSnapshot(snap => {
@@ -212,14 +221,30 @@ function buildRoomCard(id, room, role) {
   a.href = `room.html?id=${id}`;
   a.className = 'room-card';
   a.style.setProperty('--card-color', room.color || '#6366f1');
+  const art = BgGen.isRecipe(room.cardArt) ? room.cardArt : '';
+  if (art) {
+    // Only the recipe is stored on the room; the picture is drawn here.
+    a.classList.add('has-art');
+    BgGen.toUrl(art, 'karta').then(url => { if (url) a.style.setProperty('--card-art', `url("${url}")`); });
+  }
   a.innerHTML = `
-    ${role === 'owner' ? `<button class="card-edit-btn" data-edit-room="${id}" title="Upravit barvu">✏️</button>` : ''}
+    ${role === 'owner' ? `<button class="card-edit-btn" data-edit-room="${id}" title="Upravit kartu">✏️</button>` : ''}
+    ${art && !auth.currentUser?.isAnonymous ? `<button data-art="${esc(art)}" class="card-fav-btn${BgFav.has('karta', art) ? ' on' : ''}" title="Uložit obrázek do oblíbených">${BgFav.has('karta', art) ? '♥' : '♡'}</button>` : ''}
     <h3>${esc(room.name)}</h3>
     ${room.description ? `<p class="card-desc">${esc(room.description)}</p>` : ''}
     <div class="room-card-meta">
       <span class="role-badge role-${role}">${labels[role] || role}</span>
       <span class="meta-date">${fmtDate(room.createdAt)}</span>
     </div>`;
+  a.querySelector('.card-fav-btn')?.addEventListener('click', async e => {
+    e.preventDefault(); e.stopPropagation();
+    const msg = await BgFav.toggle('karta', art);
+    if (msg) { toast(msg); return; }
+    const on = BgFav.has('karta', art);
+    e.currentTarget.classList.toggle('on', on);
+    e.currentTarget.textContent = on ? '♥' : '♡';
+    toast(on ? 'Obrázek uložen do oblíbených.' : 'Odebráno z oblíbených.');
+  });
   const editBtn = a.querySelector('[data-edit-room]');
   if (editBtn) {
     editBtn.addEventListener('click', e => {
@@ -230,25 +255,81 @@ function buildRoomCard(id, room, role) {
   return a;
 }
 
+// ── Obrázek karty místnosti ─────────────────────────────────────
+// room.cardArt holds a generator recipe (js/bggen.js), never the image.
+let EDIT_ROOM_ART = '';
+let EDIT_ROOM_ART_VARIANTS = [];
+
 function setupEditRoom() {
   setupColorInput('editRoomColorInput', 'editRoomColorSwatch', 'editRoomColorHex');
+  document.getElementById('editRoomArtReroll').addEventListener('click', () => {
+    EDIT_ROOM_ART_VARIANTS = Array.from({ length: 6 }, () => BgGen.random());
+    renderEditRoomArt();
+  });
   document.getElementById('editRoomSubmit').addEventListener('click', async () => {
     const id    = document.getElementById('editRoomSubmit').dataset.roomId;
     const color = document.getElementById('editRoomColorInput').value;
     try {
-      await db.collection('rooms').doc(id).update({ color });
+      await db.collection('rooms').doc(id).update({
+        color,
+        cardArt: EDIT_ROOM_ART || firebase.firestore.FieldValue.delete(),
+      });
       closeModal('editRoomModal');
-      toast('Barva uložena!');
+      toast('Karta uložena!');
     } catch (e) { toast('Chyba: ' + e.message); }
   });
 }
 
-function openEditRoomModal(id, room) {
+function cardArtTile(recipe, label) {
+  const p = BgGen.parse(recipe);
+  const name = label || (p ? `${p.style.name.replace(/ \(.*\)| –.*/, '')} · ${p.palette.name}` : '');
+  const fav = recipe && BgFav.has('karta', recipe);
+  return `
+    <div class="card-art-opt${recipe === EDIT_ROOM_ART ? ' selected' : ''}" data-art="${esc(recipe)}" role="button" tabindex="0">
+      <span class="card-art-img"></span>
+      <span class="card-art-name">${esc(name)}</span>
+      ${recipe ? `<button type="button" class="room-bg-fav${fav ? ' on' : ''}" title="Oblíbené">${fav ? '♥' : '♡'}</button>` : ''}
+    </div>`;
+}
+
+function renderEditRoomArt() {
+  const box = document.getElementById('editRoomArt');
+  const favs = (BgFav.items || []).filter(it => it.k === 'karta').map(it => it.r);
+  const head = t => `<div class="card-art-head">${t}</div>`;
+  box.innerHTML =
+    head('Vygenerované') + cardArtTile('', 'Bez obrázku') + EDIT_ROOM_ART_VARIANTS.map(r => cardArtTile(r)).join('') +
+    (EDIT_ROOM_ART && !EDIT_ROOM_ART_VARIANTS.includes(EDIT_ROOM_ART) && !favs.includes(EDIT_ROOM_ART)
+      ? head('Aktuální') + cardArtTile(EDIT_ROOM_ART) : '') +
+    head(`Oblíbené (${favs.length}/${BG_FAV_MAX})`) +
+    (favs.length ? favs.map(r => cardArtTile(r)).join('')
+      : '<p class="room-bg-empty">Srdíčkem ♡ si ulož obrázek, který se ti líbí — i z karty cizí místnosti.</p>');
+  box.querySelectorAll('.card-art-opt').forEach(opt => {
+    const recipe = opt.dataset.art;
+    const img = opt.querySelector('.card-art-img');
+    if (recipe) BgGen.toUrl(recipe, 'karta', 0.3).then(url => { if (url) img.style.backgroundImage = `url("${url}")`; });
+    opt.addEventListener('click', () => {
+      EDIT_ROOM_ART = recipe;
+      box.querySelectorAll('.card-art-opt').forEach(o => o.classList.toggle('selected', o.dataset.art === recipe));
+    });
+    opt.querySelector('.room-bg-fav')?.addEventListener('click', async e => {
+      e.stopPropagation();
+      const msg = await BgFav.toggle('karta', recipe);
+      if (msg) { toast(msg); return; }
+      renderEditRoomArt();
+    });
+  });
+}
+
+async function openEditRoomModal(id, room) {
   document.getElementById('editRoomSubmit').dataset.roomId = id;
   const color = room.color || '#6366f1';
   document.getElementById('editRoomColorInput').value = color;
   document.getElementById('editRoomColorSwatch').style.background = color;
   document.getElementById('editRoomColorHex').textContent = color;
+  EDIT_ROOM_ART = BgGen.isRecipe(room.cardArt) ? room.cardArt : '';
+  if (!EDIT_ROOM_ART_VARIANTS.length) EDIT_ROOM_ART_VARIANTS = Array.from({ length: 6 }, () => BgGen.random());
+  await BgFav.load();
+  renderEditRoomArt();
   openModal('editRoomModal');
 }
 
