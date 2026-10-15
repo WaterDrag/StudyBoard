@@ -424,8 +424,9 @@ async function openAiCardsModal() {
       listEl.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:6px 2px;">Místnost ještě nemá žádné poznámky.</div>';
       return;
     }
-    // Nothing pre-checked — the user picks which notes to draw from. The
-    // "vybrat vše" master checkbox toggles the whole list at once.
+    // Notes marked on the board (Shift+drag) come pre-checked; with no
+    // selection nothing is, and the user picks. The "vybrat vše" master
+    // checkbox toggles the whole list at once.
     listEl.innerHTML = `<label class="ai-note-row" style="border-bottom:1px solid var(--border);margin-bottom:4px;padding-bottom:6px;">
         <input type="checkbox" id="aiNotesAll">
         <span style="font-weight:600;">Vybrat vše</span>
@@ -435,12 +436,18 @@ async function openAiCardsModal() {
         const preview = noteToPlainText(note).slice(0, 90) || '(prázdná poznámka)';
         const title = String(note.title || '').trim();
         return `<label class="ai-note-row">
-          <input type="checkbox" class="ai-note-check" data-id="${d.id}" data-color="${note.color || '#fef9c3'}">
+          <input type="checkbox" class="ai-note-check" data-id="${d.id}" data-color="${note.color || '#fef9c3'}"${SELECTED.has(d.id) ? ' checked' : ''}>
           <span class="ai-note-copy">${title ? `<strong class="ai-note-title">${esc(title)}</strong>` : ''}<span class="ai-note-preview">${esc(preview)}</span></span>
         </label>`;
       }).join('');
 
     const allChk = document.getElementById('aiNotesAll');
+    const preChecked = [...listEl.querySelectorAll('.ai-note-check:checked')];
+    if (preChecked.length) {
+      allChk.checked = preChecked.length === listEl.querySelectorAll('.ai-note-check').length;
+      preChecked[0].closest('.ai-note-row').scrollIntoView({ block: 'nearest' });
+      toast(`Předvybráno ${preChecked.length} označených poznámek.`);
+    }
     allChk.addEventListener('change', () => {
       listEl.querySelectorAll('.ai-note-check').forEach(c => { c.checked = allChk.checked; });
     });

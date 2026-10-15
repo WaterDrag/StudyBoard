@@ -772,6 +772,10 @@ function setupMultiSelect() {
     if (!SELECTED.size) return;
     openExportModal(new Set(SELECTED));
   });
+  // Same rule as the toolbar's AI button: guests can't create AI decks.
+  const aiBtn = document.getElementById('mselAi');
+  if (aiBtn && ME.isAnonymous) aiBtn.style.display = 'none';
+  aiBtn?.addEventListener('click', () => { if (SELECTED.size) openAiCardsModal(); });
 }
 
 function applySelectionRect(r, additive) {
