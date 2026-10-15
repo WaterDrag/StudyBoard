@@ -1399,7 +1399,7 @@ function renderGuide() {
   h.className = 'note-detail-title';
   const isMain = mainPage(note)?.id === page.id;
   h.textContent = ((isMain ? '★ ' : '') + pageLabel(note, page.id) + '  ' + (page.title || 'Kapitola')).trim();
-  contentEl.prepend(h);
+  putDetailTitle(contentEl, h);
   addImageClickHandlers(contentEl);
   wirePageLinks(contentEl);
   wireWebLinks(contentEl);
@@ -1471,6 +1471,16 @@ function goToPage(pageId, viaCrumb) {
   GUIDE.pageId = pageId;
   renderGuide();
   document.getElementById('detailContent').scrollTop = 0;
+}
+
+// Nadpis v detailu nesmí posunout text pod volně umístěnými obrázky: ty mají
+// px souřadnice vůči začátku textu (jako v editoru, kde nadpis není). Text se
+// proto zabalí do vlastního .note-doc a nadpis stojí nad ním.
+function putDetailTitle(contentEl, h) {
+  const doc = document.createElement('div');
+  doc.className = 'note-doc';
+  doc.append(...contentEl.childNodes);
+  contentEl.append(h, doc);
 }
 
 // Links written into the text: <a data-page="ID">…</a>
@@ -3006,7 +3016,7 @@ function openNoteDetail(el, note) {
       const h = document.createElement('h4');
       h.className = 'note-detail-title';
       h.textContent = note.title;
-      contentEl.prepend(h);
+      putDetailTitle(contentEl, h);
     }
   }
 

@@ -2468,6 +2468,9 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   margin: 0 0 10px;
   color: var(--text);
 }
+/* Text pod nadpisem: stejný začátek (16 px) jako v editoru, aby volné obrázky seděly */
+.note-doc { position: relative; padding-top: 16px; }
+.note-detail-title:has(+ .note-doc) { margin-bottom: 0; }
 .note-detail-content img {
   max-width: 100%;
   border-radius: 8px;
@@ -3814,7 +3817,7 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 /* Floated images let text run alongside; every container that renders note
    HTML needs to clear them, or the float escapes its card. */
 .note-content::after, .rich-editor::after,
-#detailContent::after, .note-detail-content::after {
+#detailContent::after, .note-detail-content::after, .note-doc::after {
   content: ''; display: table; clear: both;
 }
 .note-content img, #detailContent img, .rich-editor img, .note-detail-content img {
