@@ -112,13 +112,13 @@ const SDEFS_STATS=[
 
 /* ── Zombie types ────────────────────────────────────────── */
 const ZTYPES={
-  normal:  {emoji:'🧟', hp:60,  spd:1.1, r:16,coins:5, xp:10, dmg:4, sdmg:1, boss:false,ignP:false},
-  speeder: {emoji:'🏃', hp:30,  spd:2.6, r:13,coins:8, xp:15, dmg:3, sdmg:1, boss:false,ignP:false},
-  tank:    {emoji:'🧟‍♂️',hp:260, spd:0.48,r:22,coins:15,xp:30, dmg:9, sdmg:2, boss:false,ignP:false},
-  dog:     {emoji:'🐕', hp:22,  spd:3.3, r:12,coins:6, xp:12, dmg:3, sdmg:1, boss:false,ignP:false},
-  brute:   {emoji:'🦍', hp:210, spd:0.6, r:21,coins:20,xp:40, dmg:2, sdmg:8, boss:false,ignP:true},
-  exploder:{emoji:'💣', hp:40,  spd:1.6, r:15,coins:10,xp:20, dmg:30,sdmg:4, boss:false,ignP:false,explodes:true},
-  boss:    {emoji:'👹', hp:1200,spd:0.7, r:36,coins:80,xp:200,dmg:14,sdmg:10,boss:true, ignP:false},
+  normal:  {emoji:'🧟', hp:50,  spd:1.05,r:16,coins:8,  xp:14, dmg:4, sdmg:1, boss:false,ignP:false},
+  speeder: {emoji:'🏃', hp:28,  spd:2.25,r:13,coins:11, xp:18, dmg:3, sdmg:1, boss:false,ignP:false},
+  tank:    {emoji:'🧟‍♂️',hp:220, spd:0.48,r:22,coins:22, xp:38, dmg:8, sdmg:2, boss:false,ignP:false},
+  dog:     {emoji:'🐕', hp:20,  spd:2.75,r:12,coins:9,  xp:15, dmg:3, sdmg:1, boss:false,ignP:false},
+  brute:   {emoji:'🦍', hp:185, spd:0.58,r:21,coins:28, xp:48, dmg:3, sdmg:6, boss:false,ignP:true},
+  exploder:{emoji:'💣', hp:36,  spd:1.45,r:15,coins:14, xp:24, dmg:24,sdmg:4, boss:false,ignP:false,explodes:true},
+  boss:    {emoji:'👹', hp:950, spd:0.65,r:32,coins:120,xp:250,dmg:12,sdmg:8, boss:true, ignP:false},
 };
 
 /* ── Structure defs ──────────────────────────────────────────
@@ -159,15 +159,23 @@ const MOIST_PER_WATER=55;// kolik vláhy přidá ruční zálivka
 const IT=50;             // velikost dlaždice infrastruktury
 const POWER_REACH=58;    // dosah, na který kabel napájí volně-položený spotřebič
 const INFRA_DEFS={
-  channel:  {emoji:'🚿', name:'Kanál',       cost:12, kind:'water', key:'6'},
-  well:     {emoji:'🪣', name:'Studna',      cost:65, kind:'water', store:120, key:'7'},
-  purifier: {emoji:'💧', name:'Čistička',    cost:95, kind:'water', key:'8'},
-  plot:     {emoji:'🟫', name:'Záhon',       cost:40, kind:'farm',  key:'9'},
-  wheel:    {emoji:'⚙️', name:'Vodní kolo',  cost:120,kind:'gen',   gen:4},
-  wire:     {emoji:'🔌', name:'Kabel',       cost:7,  kind:'wire'},
-  sprinkler:{emoji:'💦', name:'Postřikovač', cost:55, kind:'dev', powerUse:1},
-  fence:    {emoji:'⚡', name:'El. plot',    cost:30, kind:'dev', powerUse:1, hp:140, zap:14},
+  channel:  {emoji:'🚿', name:'Kanál',       cost:8,  kind:'water', key:'6'},
+  well:     {emoji:'🪣', name:'Studna',      cost:45, kind:'water', store:120, key:'7'},
+  purifier: {emoji:'💧', name:'Čistička',    cost:65, kind:'water', key:'8'},
+  plot:     {emoji:'🟫', name:'Záhon',       cost:30, kind:'farm',  key:'9'},
+  wheel:    {emoji:'⚙️', name:'Vodní kolo',  cost:85, kind:'gen',   gen:6},
+  wire:     {emoji:'🔌', name:'Kabel',       cost:5,  kind:'wire'},
+  sprinkler:{emoji:'💦', name:'Postřikovač', cost:45, kind:'dev', powerUse:1},
+  fence:    {emoji:'⚡', name:'El. plot',    cost:25, kind:'dev', powerUse:1, hp:140, zap:16},
 };
+
+// Nouzové jídlo a pití — v obchodě každého kitu, když zahrada ještě nedává.
+const EMERGENCY_SHOP=[
+  {id:'snack', emoji:'🥪', name:'Svačina +45 🍖',    cost:15, type:'use', use:{hunger:45}},
+  {id:'bottle',emoji:'🧴', name:'Láhev vody +45 💧', cost:15, type:'use', use:{thirst:45}},
+];
+// Základna sama napájí věže, ploty a postřikovače v tomhle okruhu.
+const BASE_POWER_RADIUS=320;
 
 /* ── Per-kit shops ───────────────────────────────────────── */
 const KIT_SHOP={
@@ -861,6 +869,9 @@ function initGame(){
   me._infraReqDirty=false;
   me._fxq=[];           // queued visual FX to broadcast
   me._fxBatch=0;
+  // Startovní výbava: dost na první obranu i první zahrádku.
+  me.coins=150; me.hunger=100; me.thirst=100;
+  me.inv={wall:6,barricade:4,spikes:2,turret:me.kit==='engineer'?2:1,platform:2,well:1,plot:1,channel:3,wire:3};
   gs.startTime=performance.now();
   // Difficulty multiplier based on player count
   const pCount=Object.keys(gs.players).length+1;
@@ -1074,8 +1085,8 @@ function updatePlayer(dt,ts){
   if(me.eff.stealth&&ts<me.eff.stealth.end)spd*=1.25;
 
   // ── Hunger / Thirst decay ──────────────────────────────────
-  const hungerRate=gs.phase==='wave'?0.48:0.18;
-  const thirstRate=gs.phase==='wave'?0.72:0.28;
+  const hungerRate=gs.phase==='wave'?0.28:0.10;
+  const thirstRate=gs.phase==='wave'?0.40:0.14;
   me.hunger=Math.max(0,me.hunger-hungerRate*dt);
   me.thirst=Math.max(0,me.thirst-thirstRate*dt);
   // Low warnings (throttled)
@@ -1198,22 +1209,53 @@ function trialSlide(x,y,r,vx,vy,walls){
   if(collidesWithAnyWall({x:nx,y},r,walls))nx=x;
   let ny=y+vy;
   if(collidesWithAnyWall({x:nx,y:ny},r,walls))ny=y;
+  // Both axes blocked (diagonal into a corner): X then Y alone was already
+  // tried above, so try a half step — creeps right up to the wall face
+  // instead of freezing a few pixels short of it.
+  if(nx===x&&ny===y){
+    const hx=x+vx*0.5, hy=y+vy*0.5;
+    if(!collidesWithAnyWall({x:hx,y},r,walls))nx=hx;
+    else if(!collidesWithAnyWall({x,y:hy},r,walls))ny=hy;
+  }
   return [nx,ny];
 }
 
-function wallCollide(entity,r){
-  const walls=getAllWalls();
-  for(const w of walls){
-    const nx=Math.max(w.x,Math.min(w.x+w.w,entity.x));
-    const ny=Math.max(w.y,Math.min(w.y+w.h,entity.y));
-    const dist=Math.hypot(entity.x-nx,entity.y-ny);
-    if(dist<r){
-      const push=r-dist+1;
-      const ang=Math.atan2(entity.y-ny,entity.x-nx);
-      entity.x+=Math.cos(ang)*push;
-      entity.y+=Math.sin(ang)*push;
+// Push an entity out of every wall it overlaps. Up to 3 passes, because
+// leaving one wall can shove it into a neighbouring one (corners, wall
+// junctions). If the CENTRE is already inside a rectangle (a crowd shoved it
+// in), the nearest-point vector is zero and gives no direction — then it
+// leaves through the closest edge. Returns true when it moved anything.
+function unstuckFromWalls(entity,r,walls){
+  let moved=false;
+  for(let pass=0;pass<3;pass++){
+    let any=false;
+    for(const w of walls){
+      const nx=Math.max(w.x,Math.min(w.x+w.w,entity.x));
+      const ny=Math.max(w.y,Math.min(w.y+w.h,entity.y));
+      const dist=Math.hypot(entity.x-nx,entity.y-ny);
+      if(dist>=r)continue;
+      any=true;
+      if(dist>0){
+        const push=(r-dist)+0.8;
+        entity.x+=(entity.x-nx)/dist*push;
+        entity.y+=(entity.y-ny)/dist*push;
+      } else {
+        const dLeft=entity.x-w.x, dRight=w.x+w.w-entity.x, dTop=entity.y-w.y, dBottom=w.y+w.h-entity.y;
+        const m=Math.min(dLeft,dRight,dTop,dBottom);
+        if(m===dLeft)entity.x=w.x-r-0.8;
+        else if(m===dRight)entity.x=w.x+w.w+r+0.8;
+        else if(m===dTop)entity.y=w.y-r-0.8;
+        else entity.y=w.y+w.h+r+0.8;
+      }
     }
+    if(!any)break;
+    moved=true;
   }
+  return moved;
+}
+
+function wallCollide(entity,r){
+  unstuckFromWalls(entity,r,getAllWalls());
 }
 
 function getAllWalls(){
@@ -1249,7 +1291,16 @@ function getFovWalls(){
    a route LONGER or (rarely) unreachable for that variant, never wrong, and
    an unreachable pocket already falls back cleanly to straight-line +
    reactive steering + the hard stuck-watchdog, same as before this existed. */
-const FLOW_CELL=40, FLOW_PROBE_R=18, FLOW_MARGIN=300, FLOW_REBUILD_MS=1000, FLOW_VARIANTS=3;
+const FLOW_CELL=40, FLOW_PROBE_R=22, FLOW_MARGIN=300, FLOW_REBUILD_MS=800, FLOW_VARIANTS=3;
+const FLOW_DIRS=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
+// Pole cest a jeho gradient jsou ČTYŘSMĚROVÉ: v simulaci davu (60 zombíků,
+// 3 mapy, víc seedů) dorazili se 4 směry všichni a rychleji; s diagonálami
+// chodili víc oklikou a pár jich nedošlo. Diagonální pravidlo (bez řezání
+// rohů) v kódu zůstává pro případ, že se sem někdy přepne FLOW_DIRS.
+const FLOW_DIRS_FIELD=FLOW_DIRS.slice(0,4);
+// Tiny binary min-heap on [cost, idx] for the 8-directional Dijkstra below.
+function flowHeapPush(h,c,i){h.push([c,i]);let k=h.length-1;while(k>0){const p=(k-1)>>1;if(h[p][0]<=h[k][0])break;[h[p],h[k]]=[h[k],h[p]];k=p;}}
+function flowHeapPop(h){const top=h[0],last=h.pop();if(h.length){h[0]=last;let k=0;for(;;){const l=2*k+1,r=l+1;let m=k;if(l<h.length&&h[l][0]<h[m][0])m=l;if(r<h.length&&h[r][0]<h[m][0])m=r;if(m===k)break;[h[m],h[k]]=[h[k],h[m]];k=m;}}return top;}
 let _flowGrids=null,_flowNextBuild=0;
 function buildFlowGrids(){
   const ox=BARRIER.x-FLOW_MARGIN, oy=BARRIER.y-FLOW_MARGIN;
@@ -1295,23 +1346,30 @@ function buildFlowGrids(){
         }
       }
     }
+    // 8 directions (diagonal cost 1.414 → Dijkstra instead of plain BFS).
+    // A diagonal step is forbidden when either orthogonal neighbour is
+    // blocked, otherwise the route would cut through a wall's corner and the
+    // zombie would grind against it.
     const dist=new Float32Array(n).fill(Infinity);
     if(!blocked[startIdx]){
       dist[startIdx]=0;
-      const q=[startIdx]; let qi=0;
-      while(qi<q.length){
-        const idx=q[qi++],d=dist[idx];
+      const heap=[[0,startIdx]];
+      while(heap.length){
+        const [d,idx]=flowHeapPop(heap);
+        if(d>dist[idx])continue;
         const gx=idx%cols,gy=(idx-gx)/cols;
-        const nb=[[gx+1,gy],[gx-1,gy],[gx,gy+1],[gx,gy-1]];
-        for(const[nx,ny]of nb){
+        for(const[dx,dy,cost]of FLOW_DIRS_FIELD){
+          const nx=gx+dx,ny=gy+dy;
           if(nx<0||ny<0||nx>=cols||ny>=rows)continue;
           const nidx=ny*cols+nx;
-          if(blocked[nidx]||dist[nidx]!==Infinity)continue;
-          dist[nidx]=d+1; q.push(nidx);
+          if(blocked[nidx])continue;
+          if(dx&&dy&&(blocked[gy*cols+nx]||blocked[ny*cols+gx]))continue;
+          const nd=d+cost;
+          if(nd<dist[nidx]){dist[nidx]=nd;flowHeapPush(heap,nd,nidx);}
         }
       }
     }
-    _flowGrids.push({ox,oy,cols,rows,dist});
+    _flowGrids.push({ox,oy,cols,rows,dist,blocked});
   }
 }
 // Returns a unit [dx,dy] toward the base along the BFS gradient for this
@@ -1319,24 +1377,72 @@ function buildFlowGrids(){
 // caller falls back to a straight line, which reactive steering then tries).
 function flowDirectionToBase(x,y,ts,variant){
   if(!_flowGrids||ts>=_flowNextBuild){buildFlowGrids();_flowNextBuild=ts+FLOW_REBUILD_MS;}
-  const g=_flowGrids[variant]||_flowGrids[0];
+  let g=_flowGrids[variant]||_flowGrids[0];
   const gx=Math.floor((x-g.ox)/FLOW_CELL),gy=Math.floor((y-g.oy)/FLOW_CELL);
   if(gx<0||gy<0||gx>=g.cols||gy>=g.rows)return null;
   const idx=gy*g.cols+gx;
-  const d0=g.dist[idx];
-  if(d0===Infinity)return null;
-  let bestD=d0,bestGx=null,bestGy=null;
-  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+  let d0=g.dist[idx];
+  // The variant's detour blobs cut this cell off → use the plain field.
+  if(d0===Infinity&&g!==_flowGrids[0]){g=_flowGrids[0];d0=g.dist[idx];}
+  if(d0===Infinity){
+    // The zombie's centre sits in a cell blocked by a wall's margin: head
+    // for the nearest reachable cell 1–2 rings around it.
+    let best=null,bestScore=Infinity;
+    for(let rad=1;rad<=2&&!best;rad++){
+      for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){
+        if(Math.max(Math.abs(dx),Math.abs(dy))!==rad)continue;
+        const nx=gx+dx,ny=gy+dy;
+        if(nx<0||ny<0||nx>=g.cols||ny>=g.rows)continue;
+        const nd=g.dist[ny*g.cols+nx];
+        if(nd===Infinity)continue;
+        const cx=g.ox+nx*FLOW_CELL+FLOW_CELL/2, cy=g.oy+ny*FLOW_CELL+FLOW_CELL/2;
+        const score=Math.hypot(cx-x,cy-y)+nd*0.5;
+        if(score<bestScore){bestScore=score;best=[cx,cy];}
+      }
+    }
+    if(!best)return null;
+    const a=Math.atan2(best[1]-y,best[0]-x);
+    return [Math.cos(a),Math.sin(a)];
+  }
+  // Smooth gradient over all valid neighbours instead of jumping to the single
+  // best one — no zig-zag between two equally good cells at a corner.
+  let vx=0,vy=0,bestD=d0,bestDir=null;
+  for(const[dx,dy]of FLOW_DIRS_FIELD){
+    const nx=gx+dx,ny=gy+dy;
+    if(nx<0||ny<0||nx>=g.cols||ny>=g.rows)continue;
+    if(dx&&dy&&(g.blocked[gy*g.cols+nx]||g.blocked[ny*g.cols+gx]))continue; // no corner cutting
+    const nd=g.dist[ny*g.cols+nx];
+    if(nd===Infinity)continue;
+    const diff=d0-nd;
+    const l=Math.hypot(dx,dy);
+    vx+=dx/l*diff; vy+=dy/l*diff;
+    if(nd<bestD){bestD=nd;bestDir=[dx/l,dy/l];}
+  }
+  const len=Math.hypot(vx,vy);
+  if(len>0.001)return [vx/len,vy/len];
+  return bestDir; // null = already at the goal cell
+}
+
+// Failsafe helper: a free cell next to (x,y) that is closer to the base, as
+// [x,y] of its centre — or null. Used instead of shoving a stuck zombie
+// blindly forward (which pushed it deep into thick walls).
+function flowEscapeCell(x,y,r,walls){
+  const g=_flowGrids&&_flowGrids[0];
+  if(!g)return null;
+  const gx=Math.floor((x-g.ox)/FLOW_CELL),gy=Math.floor((y-g.oy)/FLOW_CELL);
+  const here=(gx>=0&&gy>=0&&gx<g.cols&&gy<g.rows)?g.dist[gy*g.cols+gx]:Infinity;
+  let best=null,bestD=here;
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
     if(!dx&&!dy)continue;
     const nx=gx+dx,ny=gy+dy;
     if(nx<0||ny<0||nx>=g.cols||ny>=g.rows)continue;
     const nd=g.dist[ny*g.cols+nx];
-    if(nd<bestD){bestD=nd;bestGx=nx;bestGy=ny;}
+    if(!(nd<bestD))continue;
+    const cx=g.ox+nx*FLOW_CELL+FLOW_CELL/2, cy=g.oy+ny*FLOW_CELL+FLOW_CELL/2;
+    if(collidesWithAnyWall({x:cx,y:cy},r,walls))continue;
+    bestD=nd;best=[cx,cy];
   }
-  if(bestGx===null)return null; // already essentially at the goal cell
-  const tx=g.ox+bestGx*FLOW_CELL+FLOW_CELL/2, ty=g.oy+bestGy*FLOW_CELL+FLOW_CELL/2;
-  const ang=Math.atan2(ty-y,tx-x);
-  return [Math.cos(ang),Math.sin(ang)];
+  return best;
 }
 
 /* ── Shooting ────────────────────────────────────────────── */
@@ -1601,7 +1707,7 @@ function startWave(){
   gs.wave++;
   gs.phase='wave';
   gs.spawnedCount=0;
-  const baseCount=8+gs.wave*3;
+  const baseCount=6+Math.round(gs.wave*2.6);
   gs.waveTotal=Math.round(baseCount*gs.difficulty);
   document.getElementById('phaseLabel').textContent='Vlna '+gs.wave;
   document.getElementById('phaseLabel').style.color='#ef4444';
@@ -1635,15 +1741,26 @@ function endWave(){
           if(c&&p.growPhases>=c.grow){p.state='ready';readyCount++;}
         } else { p.state='withered'; witherCount++; }
       }
-      // Rain top-ups every well a little + freshens
+      // Rain top-ups every well + freshens
       if(p.type==='well'){
-        p.water=Math.min(INFRA_DEFS.well.store,p.water+35);
-        p.freshness=Math.min(100,p.freshness+10);
+        p.water=Math.min(INFRA_DEFS.well.store,p.water+60);
+        p.freshness=Math.min(100,p.freshness+25);
       }
     });
     if(readyCount>0)setTimeout(()=>gToast(`🌾 ${readyCount} plodin připraveno ke sklizni! [G]`,'#84cc16'),800);
     if(witherCount>0)setTimeout(()=>gToast(`🥀 ${witherCount} plodin uschlo — chyběla voda!`,'#ef4444'),900);
   }
+  // Odměna za přežitou vlnu: mince, léčení, oprava základny
+  const waveReward=35+gs.wave*10;
+  me.coins+=waveReward;
+  me.hp=Math.min(me.maxHp,me.hp+Math.round(me.maxHp*0.25));
+  gs.baseHp=Math.min(gs.baseMaxHp,gs.baseHp+40);
+  // co-op: ostatním hráčům přijdou mince přes hostitelův snapshot
+  if(gs.isHost){
+    if(!gs._rewards)gs._rewards={};
+    Object.keys(gs.players||{}).forEach(uid=>{const r=gs._rewards[uid]||(gs._rewards[uid]={c:0,x:0});r.c+=waveReward;});
+  }
+  setTimeout(()=>gToast(`💰 +${waveReward} za vlnu · ❤️ +25 % · 🏠 +40`,'#fbbf24'),400);
   setTimeout(()=>showGameQuiz(),600);
   if(gs.bossCount>0){
     gToast('👹 Boss zabity! +300💰','#fbbf24');
@@ -1694,8 +1811,8 @@ function spawnZombie(type){
   else if(side===2){x=b.x+Math.random()*b.w;y=b.y+b.h+SPAWN_M;}
   else{x=b.x-SPAWN_M;y=b.y+Math.random()*b.h;}
 
-  const hpMult=(1+(gs.wave-1)*0.12)*(1+gs.wrongAnswers*0.15);
-  const spdMult=1+(gs.wave-1)*0.03+gs.wrongAnswers*0.05;
+  const hpMult=(1+(gs.wave-1)*0.09)*(1+Math.min(0.6,gs.wrongAnswers*0.08));
+  const spdMult=1+Math.min(0.45,(gs.wave-1)*0.02+gs.wrongAnswers*0.02);
   const id=eid();
   gs.zombies.set(id,{
     id,type,def,x,y,r:def.r,
@@ -1727,6 +1844,9 @@ function updateZombies(dt,ts){
     }
     // Stun
     if(z.stunEnd&&ts<z.stunEnd)return;
+    // Whatever pushed it there last frame (crowd, knockback), never start a
+    // move from inside a wall.
+    unstuckFromWalls(z,z.r,_frameWalls);
     const def=ZTYPES[z.type];
     let tx=CX,ty=CY; // default: base
 
@@ -1761,13 +1881,22 @@ function updateZombies(dt,ts){
     // which otherwise makes the zombie's own goal angle oscillate every frame
     // — physically it never gets blocked, it's just fighting itself.
     let ang;
-    if(tx===CX&&ty===CY){
+    // Chasing a player who is behind a wall: the straight line would just
+    // grind into it. The flow field leads to the base, so it only helps when
+    // the player is nearer the base than the zombie (the usual case — players
+    // defend the base); otherwise keep the direct line + escape probing.
+    const chaseBlocked=(tx!==CX||ty!==CY)&&!def.ignP&&
+      Math.hypot(tx-CX,ty-CY)<Math.hypot(z.x-CX,z.y-CY)&&meleeBlocked(z.x,z.y,tx,ty,_frameWalls);
+    const nearWall=collidesWithAnyWall(z,z.r+14,_frameWalls);
+    if((tx===CX&&ty===CY)||chaseBlocked){
       if(!z._flowNext||ts>=z._flowNext){
         const dir=flowDirectionToBase(z.x,z.y,ts,z._variant);
         z._flowAng=dir?Math.atan2(dir[1],dir[0]):Math.atan2(ty-z.y,tx-z.x);
         z._flowNext=ts+250;
       }
-      ang=z._flowAng+z._wobble; // personal bias so the horde doesn't all walk the identical line
+      // personal bias so the horde doesn't all walk the identical line —
+      // but not right next to a wall, where it just turns the head into it
+      ang=z._flowAng+(nearWall?0:z._wobble);
     } else {
       z._flowNext=0; // not currently flow-following — resample fresh next time it is
       ang=Math.atan2(ty-z.y,tx-z.x);
@@ -1794,12 +1923,20 @@ function updateZombies(dt,ts){
         // actually moves the farthest — this "hugs" the obstacle's edge instead
         // of bouncing between two directions that both re-enter the same wall,
         // which is what left zombies stuck dead at concave (L-shaped) corners.
-        let bestDist=Math.hypot(nx-ox,ny-oy),bestOff=null,bestX=nx,bestY=ny;
+        // Each candidate is judged by a 2.5× look-ahead (does this direction
+        // keep going, or hit the next wall right away?) and penalised for a
+        // sharp change from the previous escape direction — that flip-flop is
+        // what made zombies jitter in L-shaped corners.
+        let bestDist=Math.hypot(nx-ox,ny-oy),bestScore=bestDist,bestOff=null,bestX=nx,bestY=ny;
+        const prevOff=z.nudgeOff||0;
         for(const off of ZOMBIE_ESCAPE_OFFSETS){
           const a=ang+off;
           const [tx2,ty2]=trialSlide(ox,oy,z.r,Math.cos(a)*speed,Math.sin(a)*speed,_frameWalls);
           const d=Math.hypot(tx2-ox,ty2-oy);
-          if(d>bestDist){bestDist=d;bestOff=off;bestX=tx2;bestY=ty2;}
+          if(d<moveThresh)continue;
+          const [lx,ly]=trialSlide(ox,oy,z.r,Math.cos(a)*speed*2.5,Math.sin(a)*speed*2.5,_frameWalls);
+          const score=Math.hypot(lx-ox,ly-oy)-Math.abs(off-prevOff)*speed*0.35;
+          if(score>bestScore){bestScore=score;bestDist=d;bestOff=off;bestX=tx2;bestY=ty2;}
         }
         nx=bestX; ny=bestY;
         // Commit longer than one nudge cycle so there's time to actually clear
@@ -1809,14 +1946,20 @@ function updateZombies(dt,ts){
         z.nudgeEnd=bestDist>moveThresh?ts+900:0;
       }
       z.x=nx; z.y=ny;
-      // Hard failsafe: whatever the specific cause (a geometry the steering
-      // logic doesn't handle, a flow field gap, a stalled network snapshot),
-      // a zombie must never stay frozen indefinitely. If it hasn't covered at
-      // least one body-width in 2s, force a small step straight at its target,
-      // ignoring collision once, and reset the tracker.
+      // Hard failsafe: whatever the cause, a zombie must never stay frozen.
+      // If it hasn't covered one body-width in 1.4 s, hop it to a FREE cell
+      // nearby that is closer to the base (the old version shoved it blindly
+      // forward, straight into the wall it was stuck on).
       if(!z._pTs||Math.hypot(z.x-z._pX,z.y-z._pY)>z.r){z._pTs=ts;z._pX=z.x;z._pY=z.y;}
-      else if(ts-z._pTs>2000){
-        z.x+=Math.cos(ang)*z.r*1.5; z.y+=Math.sin(ang)*z.r*1.5;
+      else if(ts-z._pTs>1400){
+        const cell=flowEscapeCell(z.x,z.y,z.r,_frameWalls);
+        if(cell){z.x=cell[0];z.y=cell[1];}
+        else {
+          // nothing better nearby: a small COLLISION-CHECKED step at the target
+          const [fx,fy]=trialSlide(z.x,z.y,z.r,Math.cos(ang)*z.r,Math.sin(ang)*z.r,_frameWalls);
+          z.x=fx; z.y=fy;
+        }
+        z.nudgeEnd=0;
         z._pTs=ts; z._pX=z.x; z._pY=z.y;
       }
     }
@@ -1871,14 +2014,15 @@ function updateZombies(dt,ts){
     }
   });
   zombiesToKill.forEach(([zid,zz])=>{if(gs.zombies.has(zid))killZombie(zid,zz,me);});
-  applyZombieSeparation();
+  applyZombieSeparation(_frameWalls);
 }
 
 // Zombies never collided with each other, so once they all follow the same
 // flow-field route they stack into a single overlapping line — trivial to
 // funnel and predictable. A gentle push-apart when overlapping spreads them
 // into a loose crowd instead, without touching the pathfinding itself.
-function applyZombieSeparation(){
+function applyZombieSeparation(walls){
+  const _walls=walls||getAllWalls();
   const arr=[...gs.zombies.values()];
   for(let i=0;i<arr.length;i++){
     const a=arr[i];
@@ -1895,6 +2039,9 @@ function applyZombieSeparation(){
       a.x-=px; a.y-=py; b.x+=px; b.y+=py;
     }
   }
+  // The push-apart ignores walls, so the crowd used to shove the front row
+  // INTO a wall, where trialSlide then froze them. Pop everyone back out.
+  for(const z of arr) unstuckFromWalls(z,z.r,_walls);
 }
 
 function checkBaseHit(){
@@ -2299,7 +2446,7 @@ function buildShop(){
   const items=KIT_SHOP[me.kit]||KIT_SHOP.warrior;
   // Infrastructure items (place them in the world afterwards) — food/water comes from the garden.
   const infraItems=Object.entries(INFRA_DEFS).map(([id,d])=>({id,emoji:d.emoji,name:d.name,cost:d.cost,type:'infra'}));
-  [...items,...infraItems].forEach(item=>{
+  [...items,...EMERGENCY_SHOP,...infraItems].forEach(item=>{
     const cost=Math.max(1,Math.round(item.cost*(1-disc)));
     const el=document.createElement('div');
     el.className='si'+(me.coins<cost?' sd':'')+(item.type==='infra'?' si-infra':'');
@@ -2329,6 +2476,8 @@ function buyItem(item,cost){
   } else if(item.type==='use'){
     if(item.use.hp)me.hp=Math.min(me.maxHp,me.hp+item.use.hp);
     if(item.use.maxhp){me.maxHp+=item.use.maxhp;me.hp=Math.min(me.hp+item.use.maxhp,me.maxHp);}
+    if(item.use.hunger)me.hunger=Math.min(100,me.hunger+item.use.hunger);
+    if(item.use.thirst)me.thirst=Math.min(100,me.thirst+item.use.thirst);
   } else if(item.type==='struct'){
     me.inv[item.stype]=(me.inv[item.stype]||0)+item.qty;
     updateInvDisplay();
@@ -2381,22 +2530,27 @@ function updateStructures(ts){
     const def=STRUCT_DEFS[s.type];
     if(!def.turret)continue;
     if(gs.sessionId&&s.owner!==me.uid)continue; // in co-op, each player fires only their own turrets (damage is forwarded)
-    if(!s._pow)continue; // turret needs electricity (cable from a water-wheel generator)
+    // Bez proudu jede věž na záložní baterii (pomaleji, kratší dosah); s proudem
+    // (kabel od vodního kola nebo blízko základny) přejde do Overcharge.
+    const powered=s._pow===true;
+    const range=powered?280:230;
     // Find nearest zombie in range
-    let nearest=null,nearDist=250;
+    let nearest=null,nearDist=range;
     gs.zombies.forEach(z=>{
       const d=Math.hypot(z.x-(s.x+s.w/2),z.y-(s.y+s.h/2));
       if(d<nearDist){nearDist=d;nearest=z;}
     });
     const isMine=s.owner===me.uid;
-    const tCD=hasSkill('eng_a3')&&isMine?600:hasSkill('mil_b3')&&isMine?800:1200;
-    const tDmg=Math.round((20+(hasSkill('eng_a2')&&isMine?15:0))*(hasSkill('mil_b3')&&isMine?1.5:1));
+    const baseCD=hasSkill('eng_a3')&&isMine?600:hasSkill('mil_b3')&&isMine?800:1200;
+    const tCD=baseCD*(powered?0.75:1.35);
+    const tDmg=Math.round((20+(hasSkill('eng_a2')&&isMine?15:0))*(hasSkill('mil_b3')&&isMine?1.5:1)*(powered?1.2:1));
     if(nearest&&ts-s.lastShot>tCD){
       s.lastShot=ts;
       const dx=nearest.x-(s.x+s.w/2),dy=nearest.y-(s.y+s.h/2);
       const l=Math.hypot(dx,dy)||1;
+      // owner = hráč: zabití věží dává mince a XP (dřív 'turret' → odměna nikomu)
       gs.bullets.push({x:s.x+s.w/2,y:s.y+s.h/2,dx:dx/l,dy:dy/l,
-        spd:13,dmg:tDmg,range:260,dist:0,col:'#fbbf24',r:3,owner:'turret'});
+        spd:13,dmg:tDmg,range:range+10,dist:0,col:powered?'#38bdf8':'#fbbf24',r:3,owner:me.uid});
     }
   }
 }
@@ -2649,7 +2803,7 @@ function placeInfra(){
   if(rectOverlapsWall(cx,cy,IT-10,0)){gToast('Na zdi to nejde','#f59e0b');return;}
   if(type==='wheel'&&!tileTouchesRiver(gx,gy)){gToast('⚙️ Vodní kolo musí stát u řeky','#38bdf8');return;}
   const piece={key:gKey(gx,gy),gx,gy,type,owner:me.uid};
-  if(type==='well'){piece.water=0;piece.freshness=100;piece._ripple=0;}
+  if(type==='well'){piece.water=80;piece.freshness=100;piece._ripple=0;} // hned se dá napít a zalít první záhon
   if(type==='plot'){piece.state='empty';piece.crop=null;piece.growPhases=0;piece.moisture=0;piece._ripple=0;}
   gs.infra.set(piece.key,piece);
   me.inv[type]--;updateInvDisplay();
@@ -2705,6 +2859,8 @@ function recomputeInfraNetworks(){
   gs.structs.forEach(s=>{if(s.hp>0&&STRUCT_DEFS[s.type]&&STRUCT_DEFS[s.type].turret){devs.push({obj:s,cx:s.x+s.w/2,cy:s.y+s.h/2,use:1});}});
   devs.forEach(d=>{let best=-1,bd=POWER_REACH;for(const e of energ){const dist=Math.hypot(d.cx-e.ex,d.cy-e.ey);if(dist<bd){bd=dist;best=e.ci;}}d.ci=best;});
   devs.forEach(d=>{if(d.ci<0)return;const c=comps[d.ci];if(c.budget>=d.use){c.budget-=d.use;d.obj._pow=true;}});
+  // Základna má vlastní zdroj: všechno v okruhu BASE_POWER_RADIUS je napájené.
+  devs.forEach(d=>{if(!d.obj._pow&&Math.hypot(d.cx-CX,d.cy-CY)<=BASE_POWER_RADIUS)d.obj._pow=true;});
 }
 
 /* ── Infrastructure: per-frame simulation ────────────────── */
@@ -3959,7 +4115,7 @@ function applyInfraSnapshot(arr){
       if(snapKeys.has(b.key))return false; // confirmed → drop
       if(!next.has(b.key)){
         const p={key:b.key,gx:b.gx,gy:b.gy,type:b.type,owner:me.uid,_fed:false,_fresh:false,_pow:false,_ripple:0};
-        if(b.type==='well'){p.water=0;p.freshness=100;}
+        if(b.type==='well'){p.water=80;p.freshness=100;}
         if(b.type==='plot'){p.state='empty';p.crop=null;p.growPhases=0;p.moisture=0;}
         next.set(b.key,p);
       }
@@ -4126,7 +4282,7 @@ function subscribePlayerStates(){
           if(!INFRA_DEFS[b.type])return;
           gs._builtInfraKeys.add(b.key);
           const piece={key:b.key,gx:b.gx,gy:b.gy,type:b.type,owner:uid};
-          if(b.type==='well'){piece.water=0;piece.freshness=100;piece._ripple=0;}
+          if(b.type==='well'){piece.water=80;piece.freshness=100;piece._ripple=0;}
           if(b.type==='plot'){piece.state='empty';piece.crop=null;piece.growPhases=0;piece.moisture=0;piece._ripple=0;}
           gs.infra.set(b.key,piece);
         });
