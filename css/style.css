@@ -749,10 +749,13 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   padding: 20px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.18s;
+  /* Zavřené okno se vůbec nevykresluje (visibility) — 20 neviditelných
+     vrstev přes celou obrazovku zatěžovalo hlavně Android. */
+  visibility: hidden;
+  transition: opacity 0.18s, visibility 0s linear 0.18s;
   backdrop-filter: blur(3px);
 }
-.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal-overlay.open { opacity: 1; pointer-events: all; visibility: visible; transition: opacity 0.18s, visibility 0s; }
 
 .modal {
   background: var(--bg-2);
@@ -1071,7 +1074,11 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .board-wrap.panning { cursor: grabbing; }
 /* Touch: we run our own pan/pinch on the board (see setupBoardPan) — without
    this the browser would consume the gestures as page scroll/zoom first. */
-.board-wrap { touch-action: none; }
+/* Jedním prstem posouvá plochu sám prohlížeč (plynulé i na Androidu); dva prsty
+   (přiblížení) obsluhuje JS. Poznámky, které jdou tahat, a ovládání tabule
+   si dotyk berou celé. */
+.board-wrap { touch-action: pan-x pan-y; }
+.note[data-touch-draggable="true"], .wb-bar, .wb-h { touch-action: none; }
 
 /* ── Pozadí místnosti ─────────────────────────────────────────
    Owner picks it per room (room.bg); set as data-bg on .board-wrap by
@@ -4840,3 +4847,25 @@ mark.find-hit.find-cur { background: #FACC15; color: #111; box-shadow: 0 0 0 2px
   .orb.open { transform: translateZ(0) scale(0.92); }
 }
 @keyframes orbUpSolid { from { transform: translateY(60px); } to { transform: translateY(0); } }
+
+/* ===== Android (Chrome, Vivaldi …): bez rozmazání pozadí =====
+   backdrop-filter nad velkou zvětšenou nástěnkou se na Androidu přepočítává
+   při každém posunu: zasekávalo se to, horní lišta nereagovala a orb
+   mizel. Na dotykových zařízeních proto nikde žádné rozmazání, jen plné
+   pozadí. (Safari to zvládá, ale vypadá to stejně, tak platí všude.) */
+@media (hover: none) {
+  *, *::before, *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .room-nav, .dashboard-nav, .fc-nav { background: var(--bg) !important; }
+  .modal-overlay { background: rgba(5,6,9,0.72); }
+}
+
+/* ===== Srdíčko u balíčků (vedle tužky) ===== */
+.deck-card:hover .card-fav-btn, .deck-card:focus-within .card-fav-btn { opacity: 1; }
+.deck-card:not(:has(.card-edit-btn)) .card-fav-btn { right: 10px; }
+.deck-card .card-fav-btn { background: var(--bg-3); color: var(--text-muted); }
+.deck-card .card-fav-btn:hover { background: var(--bg-4); color: var(--text); }
+.deck-card .card-fav-btn.on { color: #fb7185; }
+.deck-card .card-edit-btn { background: var(--bg-3); color: var(--text-muted); }
+/* nadpis balíčku nesmí vjet pod tužku a srdíčko */
+.deck-card h3 { padding-right: 72px; }
+.deck-card:not(:has(.card-edit-btn)) h3 { padding-right: 36px; }

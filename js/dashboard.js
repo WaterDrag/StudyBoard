@@ -192,6 +192,7 @@ function loadRooms(user) {
     FAV_DECKS = new Set((snap.exists && snap.data().favDecks) || []);
     renderRoomGrid();
     renderFavDecks();
+    DASH_DECKS.forEach(d => syncDeckHearts(d.id));
   }).catch(() => {});
   db.collection('rooms')
     .where('memberIds', 'array-contains', user.uid)
@@ -828,6 +829,7 @@ async function toggleDeckFav(id) {
   const on = !FAV_DECKS.has(id);
   if (on) FAV_DECKS.add(id); else FAV_DECKS.delete(id);
   renderFavDecks();
+  syncDeckHearts(id);
   try {
     await db.collection('users').doc(uid).set({
       favDecks: on ? firebase.firestore.FieldValue.arrayUnion(id) : firebase.firestore.FieldValue.arrayRemove(id),
@@ -880,6 +882,16 @@ function wireCardMenu(el, open) {
   el.addEventListener('click', e => { if (pressed) { e.preventDefault(); pressed = false; } });
 }
 
+const ICON_HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></svg>';
+
+function syncDeckHearts(id) {
+  document.querySelectorAll(`[data-fav-deck="${id}"]`).forEach(b => {
+    const on = FAV_DECKS.has(id);
+    b.classList.toggle('on', on);
+    b.title = on ? 'Odebrat z oblíbených' : 'Přidat do oblíbených';
+  });
+}
+
 function buildDeckCard(id, deck, roomName, ownerName, myUid) {
   const a = document.createElement('a');
   a.href      = `flashcards.html?deck=${id}`;
@@ -897,11 +909,16 @@ function buildDeckCard(id, deck, roomName, ownerName, myUid) {
   const isOwner = deck.ownerUid === myUid;
   a.innerHTML = `
     ${isOwner ? `<button class="card-edit-btn" data-edit-deck="${id}" title="Upravit balíček" aria-label="Upravit balíček">${ICON_PENCIL}</button>` : ''}
+    <button class="card-fav-btn${FAV_DECKS.has(id) ? ' on' : ''}" data-fav-deck="${id}" title="${FAV_DECKS.has(id) ? 'Odebrat z oblíbených' : 'Přidat do oblíbených'}" aria-label="Oblíbený balíček">${ICON_HEART}</button>
     <h3>${esc(deck.name)}</h3>
     ${deck.description ? `<p class="card-desc">${esc(deck.description)}</p>` : ''}
     <p style="margin-bottom:8px;">${deck.cardCount || 0} karet</p>
     <div class="deck-tags">${contextTag}${ownerTag}</div>`;
   wireCardMenu(a, (x, y) => openDeckCardMenu(x, y, id, deck, isOwner));
+  a.querySelector('[data-fav-deck]').addEventListener('click', e => {
+    e.preventDefault(); e.stopPropagation();
+    toggleDeckFav(id);
+  });
   const editBtn = a.querySelector('[data-edit-deck]');
   if (editBtn) {
     editBtn.addEventListener('click', e => {

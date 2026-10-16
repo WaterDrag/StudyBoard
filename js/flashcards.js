@@ -85,6 +85,32 @@ async function loadDeckList() {
   loadSurvivalLobbies();
 }
 
+// Oblíbené balíčky (users/{uid}.favDecks) — stejné jako na hlavní stránce,
+// srdíčko vedle tužky jde zaškrtnout i tady v místnosti.
+let FC_FAV_DECKS = null;
+const FC_HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></svg>';
+async function loadFcFavDecks() {
+  if (FC_FAV_DECKS) return FC_FAV_DECKS;
+  try {
+    const snap = await db.collection('users').doc(ME.uid).get();
+    FC_FAV_DECKS = new Set((snap.exists && snap.data().favDecks) || []);
+  } catch (_) { FC_FAV_DECKS = new Set(); }
+  return FC_FAV_DECKS;
+}
+async function toggleFcFavDeck(id, btn) {
+  const favs = await loadFcFavDecks();
+  const on = !favs.has(id);
+  if (on) favs.add(id); else favs.delete(id);
+  btn.classList.toggle('on', on);
+  btn.title = on ? 'Odebrat z oblíbených' : 'Přidat do oblíbených';
+  try {
+    await db.collection('users').doc(ME.uid).set({
+      favDecks: on ? firebase.firestore.FieldValue.arrayUnion(id) : firebase.firestore.FieldValue.arrayRemove(id),
+    }, { merge: true });
+    toast(on ? 'Balíček přidán do oblíbených ♥' : 'Balíček odebrán z oblíbených.');
+  } catch (e) { toast('Nepovedlo se: ' + e.message); }
+}
+
 function renderDeckGrid(docs) {
   const grid = document.getElementById('decksGrid');
   if (!docs.length) {
@@ -109,6 +135,7 @@ function renderDeckGrid(docs) {
     a.style.setProperty('--card-color', d.color || '#6366f1');
     a.innerHTML = `
       ${isOwner ? `<button class="card-edit-btn" data-edit-deck="${doc.id}" title="Upravit balíček">✏️</button>` : ''}
+      ${ME.isAnonymous ? '' : `<button class="card-fav-btn" data-fav-deck="${doc.id}" title="Přidat do oblíbených" aria-label="Oblíbený balíček">${FC_HEART}</button>`}
       <h3>${esc(d.name)}</h3>
       ${d.description ? `<p class="card-desc">${esc(d.description)}</p>` : ''}
       <p>${d.cardCount || 0} karet</p>`;
@@ -119,8 +146,19 @@ function renderDeckGrid(docs) {
         openEditDeckModal(doc.id, d);
       });
     }
+    const favBtn = a.querySelector('[data-fav-deck]');
+    if (favBtn) favBtn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      toggleFcFavDeck(doc.id, favBtn);
+    });
     grid.appendChild(a);
   });
+  // Srdíčka rozsvítit, až dorazí seznam oblíbených.
+  loadFcFavDecks().then(favs => grid.querySelectorAll('[data-fav-deck]').forEach(b => {
+    const on = favs.has(b.dataset.favDeck);
+    b.classList.toggle('on', on);
+    b.title = on ? 'Odebrat z oblíbených' : 'Přidat do oblíbených';
+  }));
 }
 
 function setupEditDeckModal() {

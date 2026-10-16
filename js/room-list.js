@@ -191,17 +191,23 @@ function openPinMenu(x, y, id) {
   const pop = document.createElement('div');
   pop.className = 'context-menu';
   pop.id = 'pinMenu';
-  pop.innerHTML = `<button class="context-menu-item">📌 ${on ? 'Odepnout' : 'Připnout nahoru'}</button>`;
+  const isFolder = FOLDERS_MAP.has(id);
+  const canMove = MY_ROLE !== 'viewer';
+  pop.innerHTML = `<button class="context-menu-item" data-pm="pin">📌 ${on ? 'Odepnout' : 'Připnout nahoru'}</button>` +
+    (canMove ? `<button class="context-menu-item" data-pm="move">📁 Přesunout do složky…</button>` : '');
   document.body.appendChild(pop);
   pop.style.left = x + 'px';
   pop.style.top  = y + 'px';
   const r = pop.getBoundingClientRect();
   if (r.right  > window.innerWidth)  pop.style.left = (window.innerWidth  - r.width  - 8) + 'px';
   if (r.bottom > window.innerHeight) pop.style.top  = (y - r.height) + 'px';
-  pop.querySelector('button').addEventListener('click', e => {
+  pop.addEventListener('click', e => {
+    const act = e.target.closest('[data-pm]')?.dataset.pm;
+    if (!act) return;
     e.stopPropagation();
     closePinMenu();
-    togglePin(id);
+    if (act === 'pin') togglePin(id);
+    if (act === 'move') { if (isFolder) openMoveFolderPicker(id); else openMoveToFolderModal(id); }
   });
   setTimeout(() => {
     document.addEventListener('click', closePinMenu, { once: true });
@@ -555,6 +561,9 @@ function wireListMarks(el) {
 // pod ní dlaždice — nejdřív složky, pak poznámky. Klik na složku = vejít
 // dovnitř, přetáhnout dlaždici na složku (nebo na kus cesty) = přesunout.
 // Složky jdou takhle i do složek.
+// Na dotykovém displeji žádné HTML5 tažení: Android z podržení udělá tažení
+// a přestane jít posouvat seznam. Přesun jde přes podržení → menu.
+const TOUCH_ONLY = window.matchMedia('(hover: none)').matches;
 let LIST_LAYOUT = (() => { try { return localStorage.getItem('sb_list_layout') || 'grid'; } catch (_) { return 'grid'; } })();
 let GRID_FOLDER = null;
 let DRAGGING_FROM_GRID = false;
@@ -594,7 +603,7 @@ function renderNotesGrid(el) {
     `</nav>`;
 
   const folderTile = f => `
-    <div class="grid-tile grid-folder" data-open-folder="${f.id}" data-drop-folder data-folder-id="${f.id}" draggable="${MY_ROLE !== 'viewer'}" style="--fc:${f.color || '#6366f1'}" title="${esc(f.name)}">
+    <div class="grid-tile grid-folder" data-open-folder="${f.id}" data-drop-folder data-folder-id="${f.id}" draggable="${MY_ROLE !== 'viewer' && !TOUCH_ONLY}" style="--fc:${f.color || '#6366f1'}" title="${esc(f.name)}">
       <div class="gt-icon">${FOLDER_SVG}<span class="gt-count">${count(f)}</span></div>
       <div class="gt-name">${esc(f.name)}</div>
       ${markHtml(f.id, marks)}
@@ -604,7 +613,7 @@ function renderNotesGrid(el) {
     const title = n.title || (chapters ? n.pages[0].title : '') || noteToPlainText(n).slice(0, 70) || noteBlankLabel(n) || '(prázdná poznámka)';
     const cb = commentBadgeInfo(n.id);
     return `
-    <div class="grid-tile grid-note" data-note="${n.id}" draggable="${MY_ROLE !== 'viewer'}" style="--nc:${n.color || '#fef9c3'}" title="${esc(title)}">
+    <div class="grid-tile grid-note" data-note="${n.id}" draggable="${MY_ROLE !== 'viewer' && !TOUCH_ONLY}" style="--nc:${n.color || '#fef9c3'}" title="${esc(title)}">
       <div class="gt-paper"><span class="gt-paper-lines"></span>${chapters ? `<span class="gt-chip">📖 ${chapters}</span>` : ''}${cb.count ? `<span class="gt-chip gt-cchip${cb.unread ? ' unread' : ''}">💬 ${cb.count}</span>` : ''}</div>
       <div class="gt-name">${esc(title)}</div>
       ${markHtml(n.id, marks)}
@@ -619,7 +628,7 @@ function renderNotesGrid(el) {
   el.innerHTML = crumbs + pinned + (tiles
     ? `<div class="grid-tiles">${tiles}</div>`
     : `<div class="grid-empty">${GRID_FOLDER ? 'Složka je prázdná — přetáhni sem poznámky nebo jiné složky.' : 'Zatím žádné poznámky.'}</div>`) +
-    (MY_ROLE !== 'viewer' ? '<div class="grid-hint">Tip: přetáhni dlaždici na složku (nebo na kus cesty nahoře) a přesune se tam — i složka do složky.</div>' : '');
+    (MY_ROLE !== 'viewer' ? `<div class="grid-hint">${TOUCH_ONLY ? 'Tip: podrž dlaždici → „Přesunout do složky…“ (i složku do složky).' : 'Tip: přetáhni dlaždici na složku (nebo na kus cesty nahoře) a přesune se tam — i složka do složky.'}</div>` : '');
 
   el.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { GRID_FOLDER = b.dataset.go || null; renderNotesListView(); }));
   el.querySelectorAll('[data-open-folder]').forEach(t => t.addEventListener('click', e => {
@@ -701,6 +710,7 @@ function setupListDragDrop(body) {
   const startDrag = () => listView.classList.add('dnd-active');   // reveals the top-level drop zone
   const endDrag   = () => { listView.classList.remove('dnd-active'); DRAGGING = null; };
 
+  if (TOUCH_ONLY) return;      // dotyk: přesun přes podržení → „Přesunout do složky…“
   body.querySelectorAll('.notes-list-row').forEach(row => {
     row.setAttribute('draggable', 'true');
     row.addEventListener('dragstart', e => {

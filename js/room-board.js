@@ -1026,11 +1026,9 @@ function setupBoardPan() {
       wrap.style.willChange = 'transform';
       touchPan = null;
       e.preventDefault();
-    } else if (e.touches.length === 1 &&
-               !e.target.closest('.wb-bar, .wb-h, .note[data-touch-draggable="true"]')) {
-      const t = e.touches[0];
-      touchPan = { x: t.clientX, y: t.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop, moved: false };
     }
+    // Jeden prst: posouvá nativně prohlížeč (touch-action: pan-x pan-y),
+    // JS do toho nesahá — dřív to dělal ručně a na Androidu to trhalo.
   }, { passive: false });
 
   wrap.addEventListener('touchmove', e => {
