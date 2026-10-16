@@ -519,36 +519,39 @@ function dueByDeck() {
 }
 
 const DECK_NAME_CACHE = {};
+// "K opakování dnes" — na kartě Místnosti (vedle „Naposledy otevřené“) i
+// nahoře na kartě Flash Cards. V Místnostech jen 4 nejvíc zralé balíčky a
+// tlačítko na všechny; ve Flash Cards celý seznam.
 async function renderReview() {
   updateDashSummary();
-  const panel = document.getElementById('reviewPanel');
-  if (!panel) return;
-  if (USER_LEARN === null) { panel.innerHTML = '<span class="eyebrow">K opakování dnes</span><div class="review-empty">Načítám…</div>'; return; }
-  const due = Object.entries(dueByDeck()).sort((a, b) => b[1] - a[1]).slice(0, 4);
-  if (!due.length) {
-    panel.innerHTML = `<span class="eyebrow">K opakování dnes</span>
-      <div class="review-empty">Dnes nemáš nic k opakování.</div>
-      <button type="button" class="btn btn-secondary review-all" data-goto-tab="flash">Otevřít Flash Cards</button>`;
-  } else {
-    await Promise.all(due.map(async ([id]) => {
-      if (DECK_NAME_CACHE[id]) return;
-      try {
-        const snap = await db.collection('decks').doc(id).get();
-        DECK_NAME_CACHE[id] = snap.exists ? { name: snap.data().name, color: snap.data().color } : { gone: true };
-      } catch (_) { DECK_NAME_CACHE[id] = { gone: true }; }
-    }));
-    const rows = due.filter(([id]) => !DECK_NAME_CACHE[id]?.gone);
-    panel.innerHTML = `<span class="eyebrow">K opakování dnes</span>
-      ${rows.map(([id, n]) => `
+  const panels = [
+    { el: document.getElementById('reviewPanel'), max: 4, link: true },
+    { el: document.getElementById('reviewPanelFlash'), max: 12, link: false },
+  ].filter(p => p.el);
+  if (!panels.length) return;
+  const head = '<span class="eyebrow">K opakování dnes</span>';
+  if (USER_LEARN === null) { panels.forEach(p => { p.el.innerHTML = head + '<div class="review-empty">Načítám…</div>'; }); return; }
+  const allDue = Object.entries(dueByDeck()).sort((a, b) => b[1] - a[1]);
+  await Promise.all(allDue.slice(0, 12).map(async ([id]) => {
+    if (DECK_NAME_CACHE[id]) return;
+    try {
+      const snap = await db.collection('decks').doc(id).get();
+      DECK_NAME_CACHE[id] = snap.exists ? { name: snap.data().name, color: snap.data().color } : { gone: true };
+    } catch (_) { DECK_NAME_CACHE[id] = { gone: true }; }
+  }));
+  const live = allDue.filter(([id]) => !DECK_NAME_CACHE[id]?.gone);
+  panels.forEach(p => {
+    const rows = live.slice(0, p.max);
+    p.el.innerHTML = head + (rows.map(([id, n]) => `
         <a class="review-row" href="quiz.html?deck=${encodeURIComponent(id)}&smart=1">
           <span class="review-dot" style="background:${esc(DECK_NAME_CACHE[id]?.color || '#8B93FF')}"></span>
           <span class="review-name">${esc(DECK_NAME_CACHE[id]?.name || 'Balíček')}</span>
           <span class="review-count">${n} ${plural(n, 'karta', 'karty', 'karet')}</span>
-        </a>`).join('') || '<div class="review-empty">Dnes nemáš nic k opakování.</div>'}
-      <button type="button" class="btn btn-secondary review-all" data-goto-tab="flash">Všechny balíčky</button>`;
-  }
-  panel.querySelector('[data-goto-tab]')?.addEventListener('click', () =>
-    document.querySelector('.tab-btn[data-tab="flash"]')?.click());
+        </a>`).join('') || '<div class="review-empty">Dnes nemáš nic k opakování.</div>') +
+      (p.link ? `<button type="button" class="btn btn-secondary review-all" data-goto-tab="flash">${rows.length ? 'Všechny balíčky' : 'Otevřít Flash Cards'}</button>` : '');
+    p.el.querySelector('[data-goto-tab]')?.addEventListener('click', () =>
+      document.querySelector('.tab-btn[data-tab="flash"]')?.click());
+  });
 }
 
 function buildRoomCard(id, room, role) {
