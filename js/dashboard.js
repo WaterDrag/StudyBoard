@@ -184,13 +184,13 @@ function renderAllFiles() {
 // ── Místnosti ───────────────────────────────────────────────────
 function loadRooms(user) {
   const grid = document.getElementById('roomsGrid');
-  // Hearts on cards need the favourites; they load in parallel and the
-  // already-rendered buttons are refreshed once they arrive.
-  if (!user.isAnonymous) BgFav.load().then(() => {
-    grid.querySelectorAll('.card-fav-btn').forEach(b => {
-      b.classList.toggle('on', BgFav.has('karta', b.dataset.art));
-    });
-  });
+  // Favourites are needed by the card menu (right click); pinned rooms come
+  // from the user's own profile and re-sort the grid when they arrive.
+  if (!user.isAnonymous) BgFav.load();
+  db.collection('users').doc(user.uid).get().then(snap => {
+    PINNED_ROOMS = new Set((snap.exists && snap.data().pinnedRooms) || []);
+    renderRoomGrid();
+  }).catch(() => {});
   db.collection('rooms')
     .where('memberIds', 'array-contains', user.uid)
     .onSnapshot(snap => {
@@ -333,7 +333,6 @@ let ROOM_SORT = 'recent';
 try { ROOM_SORT = localStorage.getItem('sb_room_sort') === 'az' ? 'az' : 'recent'; } catch (_) {}
 
 const ICON_PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>';
-const ICON_HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></svg>';
 
 // Czech plural: 1 místnost · 2–4 místnosti · 5+ místností
 function plural(n, one, few, many) { return n === 1 ? one : (n >= 2 && n <= 4 ? few : many); }
@@ -377,12 +376,71 @@ function applyDashSearch() {
   if (cont) cont.style.display = q ? 'none' : '';
 }
 
+// Rooms the user pinned (right click on a card) stay at the top.
+let PINNED_ROOMS = new Set();
+
 function sortDashRooms() {
   const opened = roomOpenedMap();
   const created = r => r.room.createdAt?.toMillis?.() || 0;
-  DASH_ROOMS.sort(ROOM_SORT === 'az'
-    ? (a, b) => String(a.room.name || '').localeCompare(String(b.room.name || ''), 'cs')
-    : (a, b) => (opened[b.id] || 0) - (opened[a.id] || 0) || created(b) - created(a));
+  const pin = r => (PINNED_ROOMS.has(r.id) ? 1 : 0);
+  DASH_ROOMS.sort((a, b) => pin(b) - pin(a) || (ROOM_SORT === 'az'
+    ? String(a.room.name || '').localeCompare(String(b.room.name || ''), 'cs')
+    : (opened[b.id] || 0) - (opened[a.id] || 0) || created(b) - created(a)));
+}
+
+async function toggleRoomPin(id) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  const on = !PINNED_ROOMS.has(id);
+  if (on) PINNED_ROOMS.add(id); else PINNED_ROOMS.delete(id);
+  renderRoomGrid();
+  try {
+    await db.collection('users').doc(uid).set({
+      pinnedRooms: on ? firebase.firestore.FieldValue.arrayUnion(id) : firebase.firestore.FieldValue.arrayRemove(id),
+    }, { merge: true });
+    toast(on ? 'Místnost připnuta nahoru.' : 'Místnost odepnuta.');
+  } catch (e) { toast('Nepovedlo se: ' + e.message); }
+}
+
+// Right click (long press on a phone) on a room card.
+function openRoomCardMenu(x, y, id, room, role) {
+  document.getElementById('roomCardMenu')?.remove();
+  const art = BgGen.isRecipe(room.cardArt) ? room.cardArt : '';
+  const anon = auth.currentUser?.isAnonymous;
+  const fav = art && BgFav.has('karta', art);
+  const items = [
+    ['open', 'Otevřít'],
+    ['tab', 'Otevřít v nové kartě'],
+    ['pin', PINNED_ROOMS.has(id) ? '📌 Odepnout' : '📌 Připnout nahoru'],
+    ...(art && !anon ? [['fav', fav ? '♥ Odebrat obrázek z oblíbených' : '♡ Uložit obrázek do oblíbených']] : []),
+    ...(role === 'owner' ? [['edit', '✏️ Upravit kartu']] : []),
+  ];
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'roomCardMenu';
+  menu.innerHTML = items.map(([a, t]) => `<button type="button" class="context-menu-item" data-a="${a}">${esc(t)}</button>`).join('');
+  document.body.appendChild(menu);
+  menu.style.left = Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+  menu.style.top  = Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8)) + 'px';
+  menu.addEventListener('click', async e => {
+    const a = e.target.closest('[data-a]')?.dataset.a;
+    if (!a) return;
+    menu.remove();
+    const href = 'room.html?id=' + encodeURIComponent(id);
+    if (a === 'open') location.href = href;
+    if (a === 'tab') window.open(href, '_blank', 'noopener');
+    if (a === 'pin') toggleRoomPin(id);
+    if (a === 'edit') openEditRoomModal(id, room);
+    if (a === 'fav') {
+      const msg = await BgFav.toggle('karta', art);
+      if (msg) { toast(msg); return; }
+      toast(BgFav.has('karta', art) ? 'Obrázek uložen do oblíbených.' : 'Odebráno z oblíbených.');
+    }
+  });
+  setTimeout(() => {
+    const away = ev => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('pointerdown', away, true); } };
+    document.addEventListener('pointerdown', away, true);
+  }, 0);
 }
 
 function renderRoomGrid() {
@@ -498,7 +556,7 @@ function buildRoomCard(id, room, role) {
   a.innerHTML = `
     <div class="room-card-art"><span class="room-card-dot"></span></div>
     ${role === 'owner' ? `<button class="card-edit-btn" data-edit-room="${id}" title="Upravit kartu" aria-label="Upravit kartu">${ICON_PENCIL}</button>` : ''}
-    ${art && !auth.currentUser?.isAnonymous ? `<button data-art="${esc(art)}" class="card-fav-btn${BgFav.has('karta', art) ? ' on' : ''}" title="Uložit obrázek do oblíbených" aria-label="Uložit obrázek do oblíbených">${ICON_HEART}</button>` : ''}
+    ${PINNED_ROOMS.has(id) ? '<span class="card-pin" title="Připnutá místnost">📌</span>' : ''}
     <div class="room-card-body">
       <h3>${esc(room.name)}</h3>
       ${room.description ? `<p class="card-desc">${esc(room.description)}</p>` : ''}
@@ -507,14 +565,16 @@ function buildRoomCard(id, room, role) {
         <span class="meta-date">${esc(meta)}</span>
       </div>
     </div>`;
-  a.querySelector('.card-fav-btn')?.addEventListener('click', async e => {
-    e.preventDefault(); e.stopPropagation();
-    const msg = await BgFav.toggle('karta', art);
-    if (msg) { toast(msg); return; }
-    const on = BgFav.has('karta', art);
-    e.currentTarget.classList.toggle('on', on);
-    toast(on ? 'Obrázek uložen do oblíbených.' : 'Odebráno z oblíbených.');
-  });
+  a.addEventListener('contextmenu', e => { e.preventDefault(); openRoomCardMenu(e.clientX, e.clientY, id, room, role); });
+  // Telefon: podržet prst = stejné menu.
+  let pressT = null, pressed = false;
+  a.addEventListener('touchstart', e => {
+    pressed = false;
+    const t = e.touches[0];
+    pressT = setTimeout(() => { pressed = true; openRoomCardMenu(t.clientX, t.clientY, id, room, role); }, 550);
+  }, { passive: true });
+  ['touchend', 'touchmove', 'touchcancel'].forEach(ev => a.addEventListener(ev, () => clearTimeout(pressT), { passive: true }));
+  a.addEventListener('click', e => { if (pressed) { e.preventDefault(); pressed = false; } });
   const editBtn = a.querySelector('[data-edit-room]');
   if (editBtn) {
     editBtn.addEventListener('click', e => {

@@ -38,15 +38,37 @@ Stránka obsahuje nejvýše 200 poznámek. Když odpověď vrátí `nextCursor`,
 GET /rooms/{roomId}/notes/{noteId}
 ```
 
+### Mřížka plochy (rozmístění poznámek)
+
+Aby poznámky od agenta stály v úhledných sloupcích a nepřekrývaly se, je plocha rozdělená na mřížku: **8 sloupců**, buňka **260 × 180 px**. Řádek 0 je pro nadpisy sloupců.
+
+```http
+GET /rooms/{roomId}/layout
+```
+
+Vrátí rozměry mřížky a pro každý sloupec `nextFreeRow` (kam padne další poznámka). Doporučený postup: jedno téma = jeden sloupec.
+
+1. nadpis sloupce: `{"kind":"heading","title":"MO1 · Programování","col":0}`
+2. poznámky do něj: `{"title":"Algoritmus","content":"…","col":0}` — každá se postaví pod předchozí.
+
+Varianty pozice v těle `POST /notes`:
+
+- `{"col":N}` — další volný řádek ve sloupci N,
+- `{"col":N,"row":R}` — přesně daná buňka,
+- `{"x":…, "y":…}` — ruční souřadnice (nekombinovat s col/row),
+- nic — první volná buňka zleva doprava.
+
+Odpověď obsahuje i výsledné `x` a `y`.
+
 ### Vytvořit nebo upravit textovou poznámku
 
-Jen pokud pozvánka zahrnuje `notes:write`. Obsah je prostý text bezpečně zobrazený v aplikaci; jedno volání může přidat poznámku nebo změnit její obsah/název. Poznámky lze vytvořit na volitelných souřadnic tabule, výchozí pozice je `(60, 60)`.
+Jen pokud pozvánka zahrnuje `notes:write`. Obsah je prostý text bezpečně zobrazený v aplikaci; jedno volání může přidat poznámku nebo změnit její obsah/název. Poznámky se umisťují do mřížky (viz výše); bez pozice padnou do první volné buňky.
 
 ```http
 POST /rooms/{roomId}/notes
 Content-Type: application/json
 
-{"title":"Nový pojem","content":"Vysvětlení pojmu","x":100,"y":120}
+{"title":"Nový pojem","content":"Vysvětlení pojmu","col":0}
 ```
 
 ```http

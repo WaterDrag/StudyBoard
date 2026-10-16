@@ -245,6 +245,7 @@ function renderAnswers(card, opts) {
   const multi = opts.filter(opt => opt.correct).length > 1;
   if (hint)       hint.style.display = multi ? 'block' : 'none';
   if (confirmBtn) {
+    confirmBtn.textContent = 'Potvrdit odpověď';
     confirmBtn.style.display = multi ? 'inline-flex' : 'none';
     confirmBtn.disabled = true;
     confirmBtn.onclick = () => submitMulti(card);
@@ -275,7 +276,7 @@ document.addEventListener('keydown', e => {
   if (/^[1-9]$/.test(e.key)) {
     const btn = wrap.querySelector(`.quiz-answer-btn[data-key="${e.key}"]`);
     if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
-  } else if (e.key === 'Enter') {
+  } else if (e.key === 'Enter' || (e.key === ' ' && document.getElementById('quizConfirmBtn')?.textContent === 'Další →')) {
     const confirmBtn = document.getElementById('quizConfirmBtn');
     if (confirmBtn && confirmBtn.style.display !== 'none' && !confirmBtn.disabled) { e.preventDefault(); confirmBtn.click(); }
   }
@@ -318,7 +319,16 @@ function finishAnswer(ok, card) {
   updateStreak();
   updateScoreNav();
   QUIZ_IDX++;
-  setTimeout(showQuestion, ok ? 1200 : 1900);
+  if (ok) { setTimeout(showQuestion, 1200); return; }
+  // Spatne: nech cas si v klidu precist spravnou odpoved — dal az na klik / Enter.
+  const next = document.getElementById('quizConfirmBtn');
+  if (!next) { setTimeout(showQuestion, 1900); return; }
+  document.getElementById('quizMultiHint').style.display = 'none';
+  next.textContent = 'Další →';
+  next.style.display = 'inline-flex';
+  next.disabled = false;
+  next.onclick = () => showQuestion();
+  setTimeout(() => next.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
 }
 
 // ── Handle answer pick ────────────────────────────────────────

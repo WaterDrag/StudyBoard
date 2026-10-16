@@ -181,8 +181,8 @@ auth.onAuthStateChanged(async user => {
     // Start the view just inside the padded origin — content sits with a
     // comfortable empty margin to its left/top that can be panned into.
     const wrap = document.getElementById('boardWrap');
-    wrap.scrollLeft = BOARD_PAD - 280;
-    wrap.scrollTop  = BOARD_PAD - 220;
+    wrap.scrollLeft = BOARD_PAD_X - 280;
+    wrap.scrollTop  = BOARD_PAD_Y - 220;
 
     // Deep link from the dashboard inbox (?note=ID): centre on that note and
     // open its detail once the first notes snapshot has landed.

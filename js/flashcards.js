@@ -789,6 +789,10 @@ function showStudyCard() {
   else fEl.textContent = card.front;
   if (card.codeLang)  bEl.innerHTML = codeBlockHtml(card.back, card.codeLang);
   else bEl.textContent = card.back;
+  // Výkladová karta (AI typ „info“) nic nezkouší — „XAML je …“ ⟷ informace.
+  const [fLbl, bLbl] = [fEl, bEl].map(e => e.parentElement.querySelector('.fc-face-lbl'));
+  if (fLbl) fLbl.textContent = card.kind === 'info' ? 'Pojem' : 'Otázka';
+  if (bLbl) bLbl.textContent = card.kind === 'info' ? 'Informace' : 'Odpověď';
   document.getElementById('studyIdx').textContent   = STUDY_IDX + 1;
   document.getElementById('studyTotal').textContent = STUDY_QUEUE.length;
   document.getElementById('studyProgFill').style.width = (STUDY_IDX / STUDY_QUEUE.length * 100) + '%';

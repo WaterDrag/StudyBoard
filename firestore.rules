@@ -117,6 +117,16 @@ service cloud.firestore {
         allow update: if isAuth() && (
           isRoomOwner(roomId) ||
           (roomRole(roomId) == 'editor' && resource.data.authorId == request.auth.uid) ||
+          // Autor může poznámku pustit k úpravám: všem editorům (shareEdit)
+          // nebo vybraným (editorIds). Oprávnění samotná ale mění jen autor
+          // a vlastník.
+          (roomRole(roomId) == 'editor' &&
+           (resource.data.get('shareEdit', false) == true ||
+            request.auth.uid in resource.data.get('editorIds', [])) &&
+           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authorId', 'shareEdit', 'editorIds'])) ||
+          // Posunout poznámku smí každý editor — jen poloha, nic jiného.
+          (canEditRoom(roomId) &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['x', 'y', 'updatedAt'])) ||
           // Any member may touch ONLY the denormalised comment counter — it's
           // what lets the 💬 badge work without re-reading every thread, and
           // viewers can comment, so viewers must be able to bump it too.

@@ -21,8 +21,16 @@ function setupNotes() {
 }
 function canEdit(note) {
   if (MY_ROLE === 'owner')  return true;
-  if (MY_ROLE === 'editor' && note.authorId === ME.uid) return true;
-  return false;
+  if (MY_ROLE !== 'editor' || !note) return false;
+  return note.authorId === ME.uid || note.shareEdit === true || (note.editorIds || []).includes(ME.uid);
+}
+// Posouvat smí každý, kdo v místnosti může psát — i cizí poznámky.
+function canMove(note) {
+  return !!note && (MY_ROLE === 'owner' || (MY_ROLE === 'editor' && !ME.isAnonymous));
+}
+// Kdo smí měnit, kdo poznámku upravuje: autor a vlastník.
+function canManageNote(note) {
+  return !!note && (MY_ROLE === 'owner' || (MY_ROLE === 'editor' && note.authorId === ME.uid));
 }
 
 function setNoteContent(contentEl, note) {
@@ -208,7 +216,7 @@ function renderNote(id, note) {
     <div class="note-pin"><div class="pin-head"></div><div class="pin-needle"></div></div>
     <div class="note-header">
       <span class="note-author">${esc(note.authorName || 'Anon')}</span>
-      <div class="note-btns">${editBtnsHTML(canEdit(note))}</div>
+      <div class="note-btns">${editBtnsHTML(canEdit(note), note)}</div>
     </div>
     <div class="note-content"></div>
     <div class="note-time">${fmtTs(note.updatedAt || note.createdAt)}</div>`;
@@ -216,7 +224,7 @@ function renderNote(id, note) {
   setNoteCardContent(el.querySelector('.note-content'), note);
   wireNoteButtons(el, id, note);
 
-  if (canEdit(note)) makeDraggable(el, id);
+  if (canMove(note)) makeDraggable(el, id);
   else el.style.cursor = 'pointer';
 
   el.addEventListener('click', e => {
@@ -260,7 +268,8 @@ function openNoteMenu(x, y, noteId) {
   if (canWrite)       items.push(`<button class="context-menu-item" data-act="move">📁 Přesunout do složky</button>`);
   items.push(`<button class="context-menu-item" data-act="fact">🔎 Ověřit fakta</button>`);
   items.push(`<button class="context-menu-item" data-act="export">⬇️ Exportovat tuhle poznámku</button>`);
-  if (canEdit(note))  items.push(`<button class="context-menu-item" data-act="del" style="color:#fca5a5;">🗑️ Smazat</button>`);
+  if (canManageNote(note) && !isHeading(note)) items.push(`<button class="context-menu-item" data-act="perm">🔑 Kdo může upravovat…${note.shareEdit || (note.editorIds || []).length ? ' <span class="perm-dot"></span>' : ''}</button>`);
+  if (canManageNote(note))  items.push(`<button class="context-menu-item" data-act="del" style="color:#fca5a5;">🗑️ Smazat</button>`);
 
   const menu = document.createElement('div');
   menu.className = 'context-menu';
@@ -282,9 +291,63 @@ function openNoteMenu(x, y, noteId) {
     else if (act === 'move') openMoveToFolderModal(noteId);
     else if (act === 'fact') factCheckNote(noteId);
     else if (act === 'export') openExportModal(new Set([noteId]));
+    else if (act === 'perm') openNotePerms(noteId);
     else if (act === 'del')  deleteNote(noteId);
   });
   setTimeout(() => document.addEventListener('click', closeNoteMenu, { once: true }), 0);
+}
+
+// ── Oprávnění k jedné poznámce ────────────────────────────────
+// Autor (nebo vlastník) rozhodne, kdo kromě něj smí poznámku upravovat:
+// nikdo / všichni editoři / vybraní lidé. Posouvat po ploše smí každý
+// editor vždycky, to žádné nastavení nepotřebuje.
+function openNotePerms(noteId) {
+  const note = NOTES_MAP.get(noteId);
+  if (!note || !canManageNote(note)) return;
+  document.getElementById('notePermModal')?.remove();
+  const roles = ROOM.roles || {};
+  const editors = (ROOM.memberIds || []).filter(uid => uid !== note.authorId && roles[uid] === 'editor');
+  const picked = new Set(note.editorIds || []);
+  const mode = note.shareEdit ? 'all' : (picked.size ? 'some' : 'me');
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-overlay open';
+  wrap.id = 'notePermModal';
+  wrap.style.zIndex = '700';
+  wrap.innerHTML = `
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header"><h3>🔑 Kdo může upravovat</h3><button class="modal-close" data-x>✕</button></div>
+      <p class="perm-note">„${esc(note.title || noteToPlainText(note).slice(0, 50) || 'Poznámka')}“ · posouvat po ploše může každý editor vždycky.</p>
+      <label class="perm-opt"><input type="radio" name="pm" value="me" ${mode === 'me' ? 'checked' : ''}><span><b>Jen autor${MY_ROLE === 'owner' ? ' a vlastník' : ' (a vlastník místnosti)'}</b></span></label>
+      <label class="perm-opt"><input type="radio" name="pm" value="all" ${mode === 'all' ? 'checked' : ''}><span><b>Všichni editoři</b><small>každý, kdo má v místnosti roli editor</small></span></label>
+      <label class="perm-opt"><input type="radio" name="pm" value="some" ${mode === 'some' ? 'checked' : ''}><span><b>Vybraní lidé</b></span></label>
+      <div class="perm-people">${editors.length ? editors.map(uid => `
+        <label class="perm-person"><input type="checkbox" value="${esc(uid)}" ${picked.has(uid) ? 'checked' : ''}><span>${esc(memberName(uid))}</span></label>`).join('')
+        : '<div class="perm-empty">V místnosti zatím není žádný další editor. Roli editor nastavíš v panelu Členové.</div>'}</div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-x>Zrušit</button><button class="btn btn-primary" data-save>Uložit</button></div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const people = wrap.querySelector('.perm-people');
+  const sync = () => {
+    const m = wrap.querySelector('input[name=pm]:checked').value;
+    people.classList.toggle('off', m !== 'some');
+  };
+  wrap.querySelectorAll('input[name=pm]').forEach(r => r.addEventListener('change', sync));
+  people.addEventListener('change', () => { wrap.querySelector('input[value=some]').checked = true; sync(); });
+  sync();
+  const close = () => wrap.remove();
+  wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-x]')) close(); });
+  wrap.querySelector('[data-save]').addEventListener('click', async () => {
+    const m = wrap.querySelector('input[name=pm]:checked').value;
+    const ids = m === 'some' ? [...people.querySelectorAll('input:checked')].map(c => c.value) : [];
+    try {
+      await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(noteId).update({
+        shareEdit: m === 'all',
+        editorIds: ids,
+      });
+      toast(m === 'me' ? 'Upravovat může jen autor.' : m === 'all' ? 'Upravovat můžou všichni editoři.' : `Upravovat může ${ids.length} ${ids.length === 1 ? 'vybraný člověk' : 'vybraných lidí'}.`);
+      close();
+    } catch (e) { toast('Nepovedlo se: ' + e.message); }
+  });
 }
 
 // Copy of a note placed slightly offset, authored by me (rules require
@@ -331,16 +394,18 @@ function patchNote(id, note) {
 
   const btns = el.querySelector('.note-btns');
   if (btns) {
-    btns.innerHTML = editBtnsHTML(canEdit(note));
+    btns.innerHTML = editBtnsHTML(canEdit(note), note);
     wireNoteButtons(el, id, note);
   }
 }
 
-function editBtnsHTML(editable) {
+function editBtnsHTML(editable, note) {
   if (!editable) return '';
+  // Smazat smí jen autor a vlastník — sdílené úpravy mazání nezahrnují.
   return `
-    <button class="note-btn" data-action="edit"   title="Upravit">✏️</button>
-    <button class="note-btn" data-action="delete" title="Smazat">🗑️</button>`;
+    <button class="note-btn" data-action="edit"   title="Upravit">✏️</button>` +
+    (canManageNote(note) ? `
+    <button class="note-btn" data-action="delete" title="Smazat">🗑️</button>` : '');
 }
 
 function wireNoteButtons(el, id, note) {
@@ -377,13 +442,16 @@ function renderHeadingNote(id, note) {
     t.addEventListener('mousedown', e => { if (t.isContentEditable) e.stopPropagation(); });
     el.addEventListener('dblclick', e => { e.preventDefault(); startHeadingEdit(id, e.clientX, e.clientY); });
     makeDraggable(el, id);
+  }
+  if (!editable && canMove(note)) makeDraggable(el, id);
+  if (editable) {
     el.addEventListener('click', e => {
       if (el.dataset.dragged === 'true') return;
       if (t.isContentEditable) return;      // prave se pise, listu nevytahuj
       openHeadingBar(el, id);
     });
   } else {
-    el.style.cursor = 'default';
+    el.style.cursor = canMove(note) ? 'grab' : 'default';
   }
 
   document.getElementById('board').appendChild(el);
@@ -507,8 +575,8 @@ function makeDraggable(el, noteId) {
     const onMove = mv => {
       moved = true;
       el.dataset.dragged = 'true';
-      const dx = mv.clientX - startX;
-      const dy = mv.clientY - startY;
+      const dx = (mv.clientX - startX) / BOARD_ZOOM;   // deska je zvětšená přes CSS zoom
+      const dy = (mv.clientY - startY) / BOARD_ZOOM;
       if (group) {
         group.forEach(g => {
           g.gel.style.left = Math.max(0, g.gl + dx) + 'px';
@@ -777,6 +845,30 @@ function setImgWrap(img, mode, editor) {
   if (mode === 'inline') { img.style.cssFloat = 'none';  img.style.display = 'inline'; img.style.margin = '0 3px'; img.style.verticalAlign = 'bottom'; }
 }
 
+// Volný obrázek musí zůstat ve sloupci textu: jinak trčí z editoru ven a v
+// detailu leží jinde. Starší poznámky vznikly v širším editoru, proto se to
+// srovná i při otevření.
+function clampFreeImages(editor) {
+  const W = editor.clientWidth;
+  // Na úzkém displeji (telefon) nic neměnit — jinak by se obrázek natrvalo
+  // zmenšil i pro počítač.
+  if (W < 600) return;
+  editor.querySelectorAll('img').forEach(img => {
+    if (!imgIsFree(img)) return;
+    let w = img.offsetWidth;
+    if (w > W) {
+      const h = img.offsetHeight;
+      img.style.width = W + 'px';
+      if (h) img.style.height = Math.round(h * W / w) + 'px';
+      w = W;
+    }
+    const l = parseFloat(img.style.left) || 0, t = parseFloat(img.style.top) || 0;
+    const nl = Math.min(Math.max(0, l), Math.max(0, W - w));
+    if (nl !== l) img.style.left = Math.round(nl) + 'px';
+    if (t < 0) img.style.top = '0px';
+  });
+}
+
 // Tazeni volne umisteneho obrazku po plose poznamky.
 function dragFreeImg(img, editor, e, after) {
   if (!imgIsFree(img)) return;
@@ -791,6 +883,8 @@ function dragFreeImg(img, editor, e, after) {
   const up = () => {
     document.removeEventListener('mousemove', move);
     document.removeEventListener('mouseup', up);
+    clampFreeImages(editor);
+    after?.();
   };
   document.addEventListener('mousemove', move);
   document.addEventListener('mouseup', up);
@@ -1404,6 +1498,7 @@ function renderGuide() {
   wirePageLinks(contentEl);
   wireWebLinks(contentEl);
   renderHotspots(contentEl, note, goToPage);
+  if (FIND) setTimeout(refreshFind, 0);
 
   // Every arrow leaving this chapter, as a button. These are the branches you
   // drew in the map — one chapter can offer several, and they can lead
@@ -2605,7 +2700,7 @@ function setupEditorExtras(editor, toolbar) {
     status.innerHTML = `<span>${words} ${w}</span><span>${chars} znaků</span>` +
       '<span class="rt-hint">Tip: <kbd>-</kbd> + mezera = odrážky · <kbd>#</kbd> = nadpis · <kbd>Ctrl+K</kbd> = odkaz</span>';
   };
-  new MutationObserver(() => { if (!pending) { pending = true; requestAnimationFrame(count); } })
+  new MutationObserver(() => { if (!pending) { pending = true; requestAnimationFrame(() => { count(); clampFreeImages(editor); }); } })
     .observe(editor, { childList: true, characterData: true, subtree: true });
   count();
 }
@@ -2995,6 +3090,10 @@ function openNoteDetail(el, note) {
   // the caller handed us a bare doc.data().
   if (!note.id && el?.id?.startsWith('n-')) note = { ...note, id: el.id.slice(2) };
   if (!note.id) { toast('Poznámku se nepodařilo otevřít.'); return; }
+  // Hledání přežije jen přechod mezi poznámkami v otevřeném detailu nebo
+  // otevření z okna hledání — jinak by se lišta objevila u běžného kliknutí.
+  if (FIND && !FIND.fresh && !document.getElementById('noteDetailModal').classList.contains('open')) FIND = null;
+  if (FIND) FIND.fresh = false;
   const box = document.getElementById('noteDetailBox');
   box.style.setProperty('--note-accent', note.color || '#fef9c3');
 
@@ -3026,6 +3125,7 @@ function openNoteDetail(el, note) {
   openModal('noteDetailModal');
   try { loadComments(note.id); }
   catch (e) { console.warn('Komentáře se nenačetly:', e); }
+  refreshFind();
 }
 
 // ── Comments on notes ─────────────────────────────────────────
@@ -3178,7 +3278,11 @@ function loadComments(noteId) {
 function renderComments(docs) {
   const listEl = document.getElementById('commentsList');
   if (!listEl) return;
-  if (!docs.length) { listEl.innerHTML = '<div class="comments-empty">Zatím žádné komentáře. Buď první!</div>'; return; }
+  if (!docs.length) {
+    listEl.innerHTML = '<div class="comments-empty">Zatím žádné komentáře. Buď první!</div>';
+    reconcileCommentCount(0);                 // smazaný poslední komentář → odznak pryč
+    return;
+  }
   listEl.innerHTML = docs.map(d => {
     const c = d.data();
     const canDel = c.authorId === ME.uid || MY_ROLE === 'owner';
@@ -3199,18 +3303,23 @@ function renderComments(docs) {
   }));
   listEl.scrollTop = listEl.scrollHeight;
 
-  // Viewing the thread marks it read, and is our chance to reconcile the
-  // denormalised counter against the real number of comments.
-  if (DETAIL_NOTE_ID) {
-    const nid = DETAIL_NOTE_ID;
-    COMMENT_COUNTS.set(nid, docs.length);
-    if (NOTES_MAP.get(nid)?.commentCount !== docs.length) setNoteCommentCount(nid, docs.length);
-    if ((LIST_PREFS.commentSeen || {})[nid] !== docs.length) {
-      LIST_PREFS.commentSeen[nid] = docs.length;
-      persistListPrefs();
-    }
-    applyCommentBadges();
+  reconcileCommentCount(docs.length);
+}
+
+// Viewing the thread marks it read, and is our chance to reconcile the
+// denormalised counter against the real number of comments.
+function reconcileCommentCount(n) {
+  if (!DETAIL_NOTE_ID) return;
+  const nid = DETAIL_NOTE_ID;
+  COMMENT_COUNTS.set(nid, n);
+  if (NOTES_MAP.get(nid)?.commentCount !== n) setNoteCommentCount(nid, n);
+  LIST_PREFS.commentSeen = LIST_PREFS.commentSeen || {};
+  if (LIST_PREFS.commentSeen[nid] !== n) {
+    LIST_PREFS.commentSeen[nid] = n;
+    persistListPrefs();
   }
+  applyCommentBadges();
+  if (VIEW_MODE === 'list') renderNotesListView();
 }
 
 // ── Export (document with functional flash cards) ─────────────

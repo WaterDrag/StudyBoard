@@ -227,7 +227,10 @@ function agentInviteInstructions(item) {
     `GET /rooms/${encodeURIComponent(item.roomId)}/notes — číst poznámky (limit 1–200, cursor pro další stránku)`,
     `GET /rooms/${encodeURIComponent(item.roomId)}/notes/{noteId} — číst jednu poznámku`,
     ...(canWriteNotes ? [
-      `POST /rooms/${encodeURIComponent(item.roomId)}/notes — vytvořit textovou poznámku, JSON tělo: {"title":"Název","content":"Obsah","x":60,"y":60}`,
+      `GET /rooms/${encodeURIComponent(item.roomId)}/layout — mřížka plochy: kolik je sloupců a kde je v každém volné místo`,
+      `POST /rooms/${encodeURIComponent(item.roomId)}/notes — vytvořit textovou poznámku, JSON tělo: {"title":"Název","content":"Obsah","col":0}`,
+      'ROZMÍSTĚNÍ: plocha je mřížka (8 sloupců, buňka 260×180 px). Nepočítej x/y sám — pošli "col" (0–7) a poznámka se sama postaví pod poslední ve sloupci, bez překryvů. Jedno téma = jeden sloupec.',
+      `Nadpis sloupce: POST /rooms/${encodeURIComponent(item.roomId)}/notes s {"kind":"heading","title":"MO1 · Programování","col":0} (sedne do řádku 0). Poznámky pak posílej se stejným "col".`,
       `PATCH /rooms/${encodeURIComponent(item.roomId)}/notes/{noteId} — upravit title a/nebo content, JSON tělo: {"content":"Nový obsah"}`,
       'Úpravy přijímají prostý text; mazání poznámek není povoleno.',
     ] : []),
@@ -479,7 +482,7 @@ function setupPresence() {
     const r = wrap.getBoundingClientRect();
     const x = Math.round((wrap.scrollLeft + e.clientX - r.left) / BOARD_ZOOM);
     const y = Math.round((wrap.scrollTop  + e.clientY - r.top)  / BOARD_ZOOM);
-    meRef.child('cur').set({ x, y }).catch(() => {});
+    meRef.child('cur').set({ x, y, sx: toStoreX(x), sy: toStoreY(y) }).catch(() => {});
   }, { passive: true });
   wrap.addEventListener('mouseleave', () => { meRef.child('cur').remove().catch(() => {}); });
 }
@@ -502,8 +505,9 @@ function renderLiveCursors(map) {
       c.innerHTML = '<div class="lc-dot"></div><div class="lc-name"></div>';
       board.appendChild(c);
     }
-    c.style.left = p.cur.x + 'px';
-    c.style.top  = p.cur.y + 'px';
+    // sx/sy = uložené souřadnice (nezávislé na tom, jak moc kdo plochu rozšířil)
+    c.style.left = (typeof p.cur.sx === 'number' ? toRenderX(p.cur.sx) : p.cur.x) + 'px';
+    c.style.top  = (typeof p.cur.sy === 'number' ? toRenderY(p.cur.sy) : p.cur.y) + 'px';
     c.style.setProperty('--lc', `hsl(${uidHue(uid)} 80% 60%)`);
     c.querySelector('.lc-name').textContent = p.name || '';
   });

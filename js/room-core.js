@@ -16,11 +16,13 @@ let EDIT_ID   = null;
 // pinned to the top-left origin with nothing to scroll into. Only the
 // store↔render boundary converts; everything reading a note's live
 // el.style.left works in rendered coordinates and needs no change.
-const BOARD_PAD = 1500;
-const toRenderX = x => (x || 60) + BOARD_PAD;
-const toRenderY = y => (y || 60) + BOARD_PAD;
-const toStoreX  = renderedLeft => renderedLeft - BOARD_PAD;
-const toStoreY  = renderedTop  => renderedTop  - BOARD_PAD;
+// The pad GROWS when you pan past the left/top edge (see growBoard in
+// room-board.js), which is what makes the board endless in every direction.
+let BOARD_PAD_X = 1500, BOARD_PAD_Y = 1500;
+const toRenderX = x => (x || 60) + BOARD_PAD_X;
+const toRenderY = y => (y || 60) + BOARD_PAD_Y;
+const toStoreX  = renderedLeft => renderedLeft - BOARD_PAD_X;
+const toStoreY  = renderedTop  => renderedTop  - BOARD_PAD_Y;
 
 // Connection state
 let CONNECT_MODE  = false;

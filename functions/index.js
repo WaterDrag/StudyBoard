@@ -19,6 +19,49 @@ const NOTE_FIELDS = [
   'x', 'y', 'color', 'hsize', 'hcolor',
 ];
 const MAX_NOTE_CONTENT_LENGTH = 100_000;
+
+// Mřížka pro agenty: plocha je rozdělená na buňky, aby poznámky od agenta
+// stály v úhledných sloupcích a nepřekrývaly se. Lísteček je 220 px široký,
+// buňka má rezervu na mezery. Řádek 0 je určený pro nadpisy sloupců.
+const GRID = { originX: 60, originY: 60, cellW: 260, cellH: 180, cols: 8, maxRows: 400 };
+const cellToXY = (col, row) => ({ x: GRID.originX + col * GRID.cellW, y: GRID.originY + row * GRID.cellH });
+
+// Které buňky už něco zabírá. Lísteček bez názvu ukazuje na ploše celý text,
+// takže počítáme, že zabere dvě buňky pod sebou.
+async function occupiedCells(roomId) {
+  const snap = await db.collection('rooms').doc(roomId).collection('notes').select('x', 'y', 'title', 'kind').get();
+  const taken = new Set();
+  snap.docs.forEach(doc => {
+    const n = doc.data();
+    const col = Math.round(((n.x || 60) - GRID.originX) / GRID.cellW);
+    const row = Math.round(((n.y || 60) - GRID.originY) / GRID.cellH);
+    const rows = n.kind === 'heading' || n.title ? 1 : 2;
+    for (let r = 0; r < rows; r++) taken.add(col + ':' + (row + r));
+  });
+  return taken;
+}
+
+function freeRowInColumn(taken, col, fromRow) {
+  for (let r = fromRow; r < GRID.maxRows; r++) if (!taken.has(col + ':' + r)) return r;
+  throw new ApiError(409, 'Ve sloupci už není volné místo.');
+}
+
+async function getLayout(req, res, roomId) {
+  await requireAgent(req, roomId, 'notes:read');
+  const taken = await occupiedCells(roomId);
+  const columns = [];
+  for (let c = 0; c < GRID.cols; c++) {
+    let used = 0;
+    for (let r = 0; r < GRID.maxRows; r++) if (taken.has(c + ':' + r)) used = r + 1;
+    columns.push({ col: c, nextFreeRow: freeRowInColumn(taken, c, 1), usedRows: used });
+  }
+  res.json({
+    grid: { cellWidth: GRID.cellW, cellHeight: GRID.cellH, columns: GRID.cols, headingRow: 0 },
+    howTo: 'POST note with {"col":N} → placed at the next free row of column N. {"col":N,"row":R} → exact cell. ' +
+      '{"kind":"heading","title":"...","col":N} → column heading in row 0. Without col/row/x/y → next free cell, left to right.',
+    columns,
+  });
+}
 const MAX_NOTE_TITLE_LENGTH = 300;
 
 class ApiError extends Error {
@@ -302,17 +345,38 @@ async function getNote(req, res, roomId, noteId) {
 async function createAgentNote(req, res, roomId) {
   const invite = await requireAgent(req, roomId, 'notes:write');
   const body = req.body;
-  validateObjectBody(body, new Set(['title', 'content', 'x', 'y', 'color']));
-  const title = validateTitle(body);
-  const content = validateContent(body, true);
+  validateObjectBody(body, new Set(['title', 'content', 'x', 'y', 'color', 'col', 'row', 'kind']));
+  const has = k => Object.prototype.hasOwnProperty.call(body, k);
+  const heading = body.kind === 'heading';
+  if (has('kind') && !heading) throw new ApiError(400, 'kind může být jen "heading" (nadpis sloupce).');
+  const title = validateTitle(body, heading);
+  const content = heading ? '' : validateContent(body, true);
   let x = 60;
   let y = 60;
-  if (Object.prototype.hasOwnProperty.call(body, 'x') || Object.prototype.hasOwnProperty.call(body, 'y')) {
+  const isCell = v => Number.isInteger(v) && v >= 0;
+  if (has('col') || has('row')) {
+    if (has('x') || has('y')) throw new ApiError(400, 'Pošli buď col/row, nebo x/y — ne obojí.');
+    if (has('col') && (!isCell(body.col) || body.col >= GRID.cols)) throw new ApiError(400, `col musí být celé číslo 0–${GRID.cols - 1}.`);
+    if (has('row') && (!isCell(body.row) || body.row >= GRID.maxRows)) throw new ApiError(400, `row musí být celé číslo 0–${GRID.maxRows - 1}.`);
+    const col = has('col') ? body.col : 0;
+    let row = has('row') ? body.row : null;
+    if (row === null) row = heading ? 0 : freeRowInColumn(await occupiedCells(roomId), col, 1);
+    ({ x, y } = cellToXY(col, row));
+  } else if (has('x') || has('y')) {
     if (!Number.isFinite(body.x) || !Number.isFinite(body.y) || Math.abs(body.x) > 100_000 || Math.abs(body.y) > 100_000) {
       throw new ApiError(400, 'Souřadnice x a y musí být čísla v rozsahu −100 000 až 100 000.');
     }
     x = Math.round(body.x);
     y = Math.round(body.y);
+  } else {
+    // Bez pozice: první volná buňka zleva doprava, shora dolů (řádek 0 nechá nadpisům).
+    const taken = await occupiedCells(roomId);
+    let found = null;
+    for (let r = heading ? 0 : 1; r < GRID.maxRows && !found; r++) {
+      for (let c = 0; c < GRID.cols; c++) if (!taken.has(c + ':' + r)) { found = { c, r }; break; }
+    }
+    if (!found) throw new ApiError(409, 'Na ploše už není volné místo.');
+    ({ x, y } = cellToXY(found.c, found.r));
   }
   const color = body.color === undefined ? '#fef9c3' : body.color;
   if (typeof color !== 'string' || !/^#[\da-f]{6}$/i.test(color)) {
@@ -322,8 +386,9 @@ async function createAgentNote(req, res, roomId) {
   const noteRef = db.collection('rooms').doc(roomId).collection('notes').doc();
   await noteRef.create({
     title: title || null,
-    content: plainTextToSafeHtml(content),
+    content: heading ? '' : plainTextToSafeHtml(content),
     contentType: 'html',
+    ...(heading ? { kind: 'heading', hsize: 30 } : {}),
     color,
     x,
     y,
@@ -332,7 +397,7 @@ async function createAgentNote(req, res, roomId) {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
-  res.status(201).json({ ok: true, noteId: noteRef.id });
+  res.status(201).json({ ok: true, noteId: noteRef.id, x, y });
 }
 
 async function updateAgentNote(req, res, roomId, noteId) {
@@ -410,6 +475,11 @@ exports.agentApi = onRequest({
       if (parts.length === 4 && req.method === 'GET') return await listAgentInvites(req, res, roomId);
       if (parts.length === 5 && req.method === 'DELETE') return await revokeAgentInvite(req, res, roomId, parts[4]);
       throw new ApiError(405, 'Tato metoda není pro pozvánky podporována.');
+    }
+
+    if (parts[1] === 'rooms' && parts[2] && parts[3] === 'layout' && parts.length === 4) {
+      if (req.method === 'GET') return await getLayout(req, res, parts[2]);
+      throw new ApiError(405, 'Tato metoda není pro rozložení podporována.');
     }
 
     if (parts[1] === 'rooms' && parts[2] && parts[3] === 'notes') {

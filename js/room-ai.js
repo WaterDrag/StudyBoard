@@ -121,9 +121,55 @@ function codeBlockHtml(code, lang) {
   return `<pre class="code-block"${lang ? ` data-lang="${esc(lang)}"` : ''}><code>${esc(code || '')}</code></pre>`;
 }
 
+// ── Typ kartiček ──────────────────────────────────────────────
+// quiz  = otázka + možnosti (správné i špatné) — kvíz
+// learn = klasické flash cards: pojem/otázka ⟷ krátká odpověď
+// info  = výkladové: „XAML je …“ ⟷ celá informace; nic se nezkouší
+function aiCardKind() {
+  return document.querySelector('input[name="aiKind"]:checked')?.value || 'quiz';
+}
+
+// Podle stavby vybraných poznámek doporučí typ: slovníček pojmů → učební,
+// souvislý výklad → výkladové, kód / výčty faktů → kvíz.
+function recommendAiKind(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const defs = lines.filter(l => /^[-•*\d.)\s]*[^\s].{0,48}?\s[–—:=-]\s+\S/.test(l)).length;
+  const code = lines.filter(l => /[{};]$|^(public|private|class|def|function|for|if|while|<\w+[\s>])/.test(l)).length;
+  const prose = lines.filter(l => l.length > 110).length;
+  if (code >= 4 && code / lines.length > 0.12)
+    return { kind: 'quiz', why: 'V poznámkách je hodně kódu — kvíz prověří, jestli mu rozumíš (co vypíše, kde je chyba…).' };
+  if (defs >= 4 && defs / lines.length > 0.25)
+    return { kind: 'learn', why: `Poznámky jsou hlavně pojmy s definicí (${defs}×) — na ty jsou nejlepší klasické učební kartičky.` };
+  if (prose >= 3 && prose / lines.length > 0.3)
+    return { kind: 'info', why: 'Poznámky jsou souvislý výklad — výkladové karty z něj udělají krátké informace na první čtení.' };
+  return { kind: 'quiz', why: 'Poznámky jsou výčty faktů — kvíz z nich udělá otázky s možnostmi.' };
+}
+
+function updateAiKindRecommendation() {
+  const ids = [...document.querySelectorAll('.ai-note-check:checked')].map(c => c.dataset.id);
+  const text = ids.map(id => NOTES_MAP.get(id)).filter(Boolean).map(noteToPlainText).join('\n');
+  const rec = recommendAiKind(text);
+  document.querySelectorAll('.ai-kind').forEach(k => {
+    k.querySelector('.ai-kind-rec').hidden = !rec || k.querySelector('input').value !== rec.kind;
+  });
+  const why = document.getElementById('aiKindWhy');
+  if (why) why.textContent = rec ? '💡 ' + rec.why : '';
+  // Doporučení se samo vybere jen dokud si člověk nevybral sám.
+  if (rec && !AI_KIND_TOUCHED) {
+    const r = document.querySelector(`input[name="aiKind"][value="${rec.kind}"]`);
+    if (r) r.checked = true;
+  }
+}
+let AI_KIND_TOUCHED = false;
+
 function setupAiCards() {
   const btn = document.getElementById('aiCardsBtn');
   if (!btn) return;
+  document.querySelectorAll('input[name="aiKind"]').forEach(r => r.addEventListener('change', () => { AI_KIND_TOUCHED = true; }));
+  document.getElementById('aiNotesList')?.addEventListener('change', e => {
+    if (e.target.matches('.ai-note-check, #aiNotesAll')) setTimeout(updateAiKindRecommendation, 0);
+  });
   // Anonymous guests can't create AI decks — they'd outlive the guest.
   if (ME.isAnonymous) { btn.style.display = 'none'; return; }
   btn.addEventListener('click', openAiCardsModal);
@@ -162,7 +208,7 @@ async function copyAiCardsPrompt() {
   try {
     const text = await selectedNotesText(ids);
     if (!text.trim()) { aiManualMsg('Vybrané poznámky jsou prázdné.', 'err'); return; }
-    const prompt = buildAiCardsPrompt(text, count, automatic);
+    const prompt = buildAiCardsPrompt(text, count, automatic, aiCardKind());
     const box = document.getElementById('aiPromptBox');
     try {
       await copyToClipboard(prompt);
@@ -216,7 +262,7 @@ function useAiCardsPaste() {
     return;
   }
   AI_GENERATED_CARDS = cards;
-  AI_JOB = { ...AI_JOB, status: 'ready', cards };
+  AI_JOB = { ...AI_JOB, status: 'ready', cards, kind: aiCardKind() };
   renderAiCardsPreview(cards);
   document.getElementById('aiSaveBtn').style.display = 'inline-flex';
   document.getElementById('aiGenerateBtn').style.display = 'none';
@@ -362,7 +408,20 @@ function startAiExam(questions) {
       });
       if (ok) score++;
       if (confirmBtn) confirmBtn.disabled = true;
-      setTimeout(next, ok ? 1100 : 1700);
+      if (ok) { setTimeout(next, 1100); return; }
+      // Spatne: cekej, az si clovek prectet spravnou odpoved.
+      const v = document.createElement('div');
+      v.style.cssText = 'margin-top:8px;padding:8px 10px;border-radius:8px;font-size:0.82rem;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.5);';
+      v.textContent = '✕ Špatně — správná odpověď je zeleně.';
+      const go = document.createElement('button');
+      go.className = 'btn btn-primary';
+      go.style.cssText = 'margin-top:8px;font-size:0.82rem;';
+      go.textContent = 'Další →';
+      go.addEventListener('click', next);
+      confirmBtn?.remove();
+      box.after(v, go);
+      go.focus({ preventScroll: true });
+      go.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     };
     opts.forEach((o, i) => {
       const b = document.createElement('button');
@@ -372,7 +431,7 @@ function startAiExam(questions) {
       b.textContent = (multi ? '☐  ' : '') + o.text;
       b.addEventListener('click', () => {
         if (answered) return;
-        if (!multi) { reveal(o.correct); return; }
+        if (!multi) { b.dataset.sel = '1'; reveal(o.correct); return; }
         b.dataset.sel = b.dataset.sel ? '' : '1';
         b.textContent = (b.dataset.sel ? '☑  ' : '☐  ') + o.text;
         confirmBtn.disabled = ![...box.children].some(x => x.dataset.sel);
@@ -416,6 +475,8 @@ async function openAiCardsModal() {
   const examArea = document.getElementById('aiExamArea');
   if (examArea) { examArea.style.display = 'none'; examArea.innerHTML = ''; }
   document.getElementById('aiDeckName').value = 'AI karty ze zápisků';
+  AI_KIND_TOUCHED = false;
+  updateAiKindRecommendation();
   openModal('aiCardsModal');
 
   try {
@@ -456,24 +517,42 @@ async function openAiCardsModal() {
       const boxes = [...listEl.querySelectorAll('.ai-note-check')];
       allChk.checked = boxes.every(b => b.checked);
     }));
+    updateAiKindRecommendation();
   } catch (e) {
     listEl.innerHTML = `<div style="color:#fca5a5;font-size:.85rem;">Chyba při načítání poznámek: ${esc(e.message)}</div>`;
   }
 }
 
+// What each card must contain, per kind. Both the API path and the
+// copy-paste path use it, so a chat gives the same cards as the API.
+function aiKindFieldRules(kind) {
+  if (kind === 'info') return `CARD TYPE: explanatory "info cards" — the student READS them to learn, nothing is being tested.
+- "front": the start of a statement that names the concept and ends with " …", e.g. "XAML je …", "Metoda Add() v kolekci List …", "OSI model má …". Never a question.
+- "back": the full information completing it — 1 to 3 clear sentences that would make sense on their own, with the key facts, numbers and examples from the notes.
+- "alsoCorrect": []
+- "wrong": []`;
+  if (kind === 'learn') return `CARD TYPE: classic recall flash cards — the student sees the front, recalls, flips.
+- "front": a term, or a short direct question (e.g. "XAML", "Co dělá x:Name?")
+- "back": the short precise answer or definition (max ~2 sentences) — exactly what the student should recall
+- "alsoCorrect": 0-2 other genuinely correct short answers, usually empty
+- "wrong": 3-4 plausible but clearly WRONG answers in the same format (used if the deck is later played as a quiz)`;
+  return `CARD TYPE: quiz cards — multiple choice, the app shows "back" (+ "alsoCorrect") mixed with "wrong".
+- "front": a short question or term
+- "back": the single best correct answer or definition
+- "alsoCorrect": 0-4 OTHER independently correct choices that should be selected together with "back" when they appear in the quiz (for example, members of a set when "front" asks which items belong to it). If the notes clearly support several, make "front" explicitly ask for all / which items and put one choice in "back" plus the others here. Do NOT list synonyms, paraphrases, mutually exclusive alternatives, or choices when the question asks for just one. Leave empty for a genuinely single-answer question; never pad with half-truths.
+- "wrong": an array of 4-6 plausible but clearly WRONG answers, in the same format/length/language as "back", not variations of each other and not accidentally correct.`;
+}
+
 // Zadani i rozebrani odpovedi jsou zvlast, protoze je pouzivaji DVE cesty:
 // primo pres API s klicem, a rezim bez klice (zkopiruj zadani -> vloz odpoved).
-function buildAiCardsPrompt(text, count, automatic = false) {
+function buildAiCardsPrompt(text, count, automatic = false, kind = 'quiz') {
   return `You are creating study flashcards from the notes below. Keep the SAME language as the notes (they may be in Czech).
 ${automatic
     ? `Choose the suitable number of flashcards yourself (2 to ${AI_CARD_MAX}). Cover every separately defined term and important concept; do not stop at an arbitrary small number. Prefer one clear card per distinct term, and merge only genuinely inseparable concepts.`
     : `Create exactly ${count} flashcards covering the key facts, terms, and concepts.`}
 Each flashcard:
-- "front": a short question or term
-- "back": the single best correct answer or definition
-- "alsoCorrect": 0-4 OTHER independently correct choices that should be selected together with "back" when they appear in the quiz (for example, members of a set when "front" asks which items belong to it). If the notes clearly support several, make "front" explicitly ask for all / which items and put one choice in "back" plus the others here. Do NOT list synonyms, paraphrases, mutually exclusive alternatives, or choices when the question asks for just one. Leave empty for a genuinely single-answer question; never pad with half-truths.
-- "wrong": an array of 4-6 plausible but clearly WRONG answers, in the same format/length/language as "back", not variations of each other and not accidentally correct.
-Write these as POOLS — the app picks a random subset of each for every attempt, so more is better as long as every entry is honestly right (or honestly wrong).
+${aiKindFieldRules(kind)}
+Write "alsoCorrect" and "wrong" as POOLS — the app picks a random subset of each for every attempt, so more is better as long as every entry is honestly right (or honestly wrong).
 
 SOURCE CODE: if the notes contain programming code, make proper code cards too, and mark them so they render as code:
 - "frontLang": language id (java, python, c, cpp, csharp, js, php, sql, html, css, bash...) when the QUESTION itself is code — e.g. "What does this print?", "Find the bug", "What is the complexity?". Put the real, correctly indented code in "front".
@@ -527,14 +606,11 @@ function parseAiCardPlan(raw) {
   return targets;
 }
 
-function buildAiCardBatchPrompt(targets) {
+function buildAiCardBatchPrompt(targets, kind = 'quiz') {
   return `Create exactly one study flashcard for EACH target below, in the same order. Keep the same language as the notes. Cover the named target directly, use its evidence, and do not add facts that the evidence does not support. Do not repeat a card for another target.
 For each card return:
-- "front": a short question or term
-- "back": the best correct answer or definition
-- "alsoCorrect": 0-4 OTHER independently correct choices that should be selected together with "back" when shown. When evidence supports a set/list, phrase "front" as a multiple-answer question (e.g. "Which ...?") and provide its distinct correct members here. Do NOT include synonyms, paraphrases, mutually exclusive alternatives, or answers to a question asking for only one. Leave empty for a genuinely single-answer target.
-- "wrong": 4-6 plausible but clearly incorrect answers
-- "frontLang" when the question itself contains code; "codeLang" when the answer contains code
+${aiKindFieldRules(kind)}
+- "frontLang" when the front itself contains code; "codeLang" when the back contains code
 For code, keep real indentation and do not use markdown fences.
 ${AI_SELF_CONTAINED_RULE}
 The code you may show is the code given in the evidence; if a target's evidence has none, do not ask about the exact behaviour of a specific named method or class.
@@ -591,7 +667,7 @@ async function generateAiCardBatches(targets) {
       if (index >= batches.length) return;
       const batch = batches[index];
       try {
-        results[index] = await aiGenerate(buildAiCardBatchPrompt(batch), {
+        results[index] = await aiGenerate(buildAiCardBatchPrompt(batch, AI_JOB.kind || 'quiz'), {
           temperature: 0.45,
           maxOutputTokens: 5000,
           statusElementId: null,
@@ -672,7 +748,7 @@ async function generateAiCards() {
   btn.disabled = true; btn.textContent = '⏳ Připravuji…';
   const previewEl = document.getElementById('aiCardsPreview');
   AI_SOURCE_COLOR = document.querySelector('.ai-note-check:checked')?.dataset.color || '#6366f1';
-  AI_JOB = { status: 'running', done: 0, total: 0, cards: [], message: 'Načítám vybrané poznámky…', noteIds: checkedIds };
+  AI_JOB = { status: 'running', done: 0, total: 0, cards: [], message: 'Načítám vybrané poznámky…', noteIds: checkedIds, kind: aiCardKind() };
   previewEl.innerHTML = '<div id="aiStatusMsg" style="font-size:.82rem;color:var(--text-muted);margin-top:10px;"></div>';
   setAiCardsStatus('Načítám vybrané poznámky…');
 
@@ -770,6 +846,7 @@ async function saveAiCards() {
         codeLang: c.codeLang || null,     // answer is code, in this language
         distractors: c.distractors || [],
         answerCount: c.answerCount || 4,
+        kind: AI_JOB.kind || aiCardKind(),   // quiz / learn / info
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
     });

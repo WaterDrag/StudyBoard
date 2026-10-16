@@ -45,6 +45,11 @@ function setupViewToggle() {
   document.querySelectorAll('.room-view-seg [data-view]').forEach(b => b.addEventListener('click', () => {
     if (b.dataset.view === 'list') goToList(); else goToBoard();
   }));
+  document.querySelectorAll('.list-layout-seg [data-layout]').forEach(b => b.addEventListener('click', () => {
+    LIST_LAYOUT = b.dataset.layout;
+    try { localStorage.setItem('sb_list_layout', LIST_LAYOUT); } catch (_) {}
+    renderNotesListView();
+  }));
   // Top-left nav "Zpět": on the board it's the normal dashboard link; in the
   // list view it returns to the board instead (same label, context-aware).
   document.getElementById('navBackBtn').addEventListener('click', e => {
@@ -293,9 +298,11 @@ function setupFolderModal() {
         // by dragging it in the list, not from this dialog.
         await foldersCol.doc(PENDING_FOLDER_ID).update({ name, color });
       } else {
-        // New folders start at the top level; drag them into a parent after.
+        // In the icon grid a new folder lands in the folder you are in;
+        // in the tree list it starts at the top level.
+        const parentId = LIST_LAYOUT === 'grid' && GRID_FOLDER && FOLDERS_MAP.has(GRID_FOLDER) ? GRID_FOLDER : null;
         await foldersCol.add({
-          name, parentId: null, color, noteIds: [],
+          name, parentId, color, noteIds: [],
           authorId: ME.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
       }
@@ -397,6 +404,9 @@ function openMoveFolderPicker(folderId) {
 
 function renderNotesListView() {
   const el = document.getElementById('notesListBody');
+  document.querySelectorAll('.list-layout-seg [data-layout]').forEach(b => b.classList.toggle('active', b.dataset.layout === LIST_LAYOUT));
+  document.getElementById('notesListView').classList.toggle('layout-grid', LIST_LAYOUT === 'grid');
+  if (LIST_LAYOUT === 'grid') { renderNotesGrid(el); return; }
   // Nadpisy jsou popisky nastenky, ne poznamky — v seznamu nemaji co delat.
   const notes = [...NOTES_MAP.values()].filter(n => !isHeading(n));
 
@@ -491,6 +501,29 @@ function renderNotesListView() {
   // long-press on touch, where right-click doesn't exist — opens the color
   // picker. Saved per-user. preventDefault stops a folder summary from
   // toggling / a note from opening.
+  wireListMarks(el);
+
+  // Připínáčky: no visible button — pinning is offered on RIGHT-click (or a
+  // long-press on touch, where right-click doesn't exist) on any note row or
+  // folder header. A pinned item gets a full interactive copy in the top
+  // "Připnuté" section.
+  el.querySelectorAll('.notes-list-row').forEach(row => wirePinTrigger(row, row.dataset.id));
+  el.querySelectorAll('.notes-folder-summary').forEach(sum =>
+    wirePinTrigger(sum, sum.closest('.notes-folder').dataset.folderId));
+
+  // Remember which folders each user leaves open/closed.
+  el.querySelectorAll('.notes-folder').forEach(d => {
+    d.addEventListener('toggle', () => {
+      const set = getCollapsedFolders();
+      if (d.open) set.delete(d.dataset.folderId); else set.add(d.dataset.folderId);
+      saveCollapsedFolders(set);
+    });
+  });
+
+  if (MY_ROLE !== 'viewer') setupListDragDrop(el);
+}
+
+function wireListMarks(el) {
   el.querySelectorAll('.list-mark').forEach(btn => {
     let lpTimer = null, lpFired = false;
     btn.addEventListener('click', e => {
@@ -515,25 +548,113 @@ function renderNotesListView() {
     ['touchend', 'touchmove', 'touchcancel'].forEach(ev =>
       btn.addEventListener(ev, () => clearTimeout(lpTimer), { passive: true }));
   });
+}
 
-  // Připínáčky: no visible button — pinning is offered on RIGHT-click (or a
-  // long-press on touch, where right-click doesn't exist) on any note row or
-  // folder header. A pinned item gets a full interactive copy in the top
-  // "Připnuté" section.
-  el.querySelectorAll('.notes-list-row').forEach(row => wirePinTrigger(row, row.dataset.id));
-  el.querySelectorAll('.notes-folder-summary').forEach(sum =>
-    wirePinTrigger(sum, sum.closest('.notes-folder').dataset.folderId));
+// ── Ikony (jako plocha ve Windows) ────────────────────────────
+// Jedna složka na obrazovce: nahoře cesta (Místnost › Složka › Podsložka),
+// pod ní dlaždice — nejdřív složky, pak poznámky. Klik na složku = vejít
+// dovnitř, přetáhnout dlaždici na složku (nebo na kus cesty) = přesunout.
+// Složky jdou takhle i do složek.
+let LIST_LAYOUT = (() => { try { return localStorage.getItem('sb_list_layout') || 'grid'; } catch (_) { return 'grid'; } })();
+let GRID_FOLDER = null;
+let DRAGGING_FROM_GRID = false;
 
-  // Remember which folders each user leaves open/closed.
-  el.querySelectorAll('.notes-folder').forEach(d => {
-    d.addEventListener('toggle', () => {
-      const set = getCollapsedFolders();
-      if (d.open) set.delete(d.dataset.folderId); else set.add(d.dataset.folderId);
-      saveCollapsedFolders(set);
+const FOLDER_SVG = '<svg viewBox="0 0 48 40" aria-hidden="true"><path d="M3 8a4 4 0 0 1 4-4h11l4 4h19a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" fill="var(--fc)" opacity=".55"/><path d="M3 14a4 4 0 0 1 4-4h34a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" fill="var(--fc)"/></svg>';
+
+function gridFolderPath(id) {
+  const out = [];
+  let f = id ? FOLDERS_MAP.get(id) : null;
+  while (f) { out.unshift(f); f = f.parentId ? FOLDERS_MAP.get(f.parentId) : null; }
+  return out;
+}
+
+function renderNotesGrid(el) {
+  if (GRID_FOLDER && !FOLDERS_MAP.has(GRID_FOLDER)) GRID_FOLDER = null;
+  const marks = getMarks();
+  const pins = getPins();
+  const notes = [...NOTES_MAP.values()].filter(n => !isHeading(n));
+  const filedIds = new Set();
+  FOLDERS_MAP.forEach(f => (f.noteIds || []).forEach(id => filedIds.add(id)));
+  const count = f => (f.noteIds || []).filter(id => NOTES_MAP.has(id)).length +
+    [...FOLDERS_MAP.values()].filter(c => c.parentId === f.id).length;
+
+  const isTop = f => !f.parentId || !FOLDERS_MAP.has(f.parentId);
+  const folders = [...FOLDERS_MAP.values()]
+    .filter(f => GRID_FOLDER ? f.parentId === GRID_FOLDER : isTop(f))
+    .sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+  const here = GRID_FOLDER
+    ? (FOLDERS_MAP.get(GRID_FOLDER).noteIds || []).map(id => NOTES_MAP.get(id)).filter(n => n && !isHeading(n))
+    : notes.filter(n => !filedIds.has(n.id));
+  here.sort((a, b) => noteRecency(b) - noteRecency(a));
+
+  const path = gridFolderPath(GRID_FOLDER);
+  const crumbs = `<nav class="grid-crumbs">
+      <button type="button" class="grid-crumb${GRID_FOLDER ? '' : ' on'}" data-go="" data-drop-folder data-folder-id="">🏠 ${esc(ROOM?.name || 'Místnost')}</button>` +
+    path.map(f => `<span class="grid-crumb-sep">›</span><button type="button" class="grid-crumb${f.id === GRID_FOLDER ? ' on' : ''}" data-go="${f.id}" data-drop-folder data-folder-id="${f.id}">${esc(f.name)}</button>`).join('') +
+    `</nav>`;
+
+  const folderTile = f => `
+    <div class="grid-tile grid-folder" data-open-folder="${f.id}" data-drop-folder data-folder-id="${f.id}" draggable="${MY_ROLE !== 'viewer'}" style="--fc:${f.color || '#6366f1'}" title="${esc(f.name)}">
+      <div class="gt-icon">${FOLDER_SVG}<span class="gt-count">${count(f)}</span></div>
+      <div class="gt-name">${esc(f.name)}</div>
+      ${markHtml(f.id, marks)}
+    </div>`;
+  const noteTile = n => {
+    const chapters = Array.isArray(n.pages) ? n.pages.length : 0;
+    const title = n.title || (chapters ? n.pages[0].title : '') || noteToPlainText(n).slice(0, 70) || noteBlankLabel(n) || '(prázdná poznámka)';
+    const cb = commentBadgeInfo(n.id);
+    return `
+    <div class="grid-tile grid-note" data-note="${n.id}" draggable="${MY_ROLE !== 'viewer'}" style="--nc:${n.color || '#fef9c3'}" title="${esc(title)}">
+      <div class="gt-paper"><span class="gt-paper-lines"></span>${chapters ? `<span class="gt-chip">📖 ${chapters}</span>` : ''}${cb.count ? `<span class="gt-chip gt-cchip${cb.unread ? ' unread' : ''}">💬 ${cb.count}</span>` : ''}</div>
+      <div class="gt-name">${esc(title)}</div>
+      ${markHtml(n.id, marks)}
+    </div>`;
+  };
+
+  const pinnedIds = GRID_FOLDER ? [] : [...pins].filter(id => NOTES_MAP.has(id) || FOLDERS_MAP.has(id));
+  const pinned = pinnedIds.length ? `<div class="grid-section-title">📌 Připnuté</div><div class="grid-tiles">` +
+    pinnedIds.map(id => NOTES_MAP.has(id) ? noteTile(NOTES_MAP.get(id)) : folderTile(FOLDERS_MAP.get(id))).join('') + `</div><div class="grid-section-title">Vše</div>` : '';
+
+  const tiles = folders.map(folderTile).join('') + here.map(noteTile).join('');
+  el.innerHTML = crumbs + pinned + (tiles
+    ? `<div class="grid-tiles">${tiles}</div>`
+    : `<div class="grid-empty">${GRID_FOLDER ? 'Složka je prázdná — přetáhni sem poznámky nebo jiné složky.' : 'Zatím žádné poznámky.'}</div>`) +
+    (MY_ROLE !== 'viewer' ? '<div class="grid-hint">Tip: přetáhni dlaždici na složku (nebo na kus cesty nahoře) a přesune se tam — i složka do složky.</div>' : '');
+
+  el.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { GRID_FOLDER = b.dataset.go || null; renderNotesListView(); }));
+  el.querySelectorAll('[data-open-folder]').forEach(t => t.addEventListener('click', e => {
+    if (e.target.closest('.list-mark')) return;
+    GRID_FOLDER = t.dataset.openFolder; renderNotesListView();
+    document.getElementById('notesListView').scrollTop = 0;
+  }));
+  el.querySelectorAll('[data-note]').forEach(t => t.addEventListener('click', e => {
+    if (e.target.closest('.list-mark')) return;
+    const note = NOTES_MAP.get(t.dataset.note);
+    if (note) openNoteDetail(null, note);
+  }));
+  el.querySelectorAll('.grid-note').forEach(t => wirePinTrigger(t, t.dataset.note));
+  el.querySelectorAll('.grid-folder').forEach(t => wirePinTrigger(t, t.dataset.folderId));
+  wireListMarks(el);
+
+  if (MY_ROLE === 'viewer') return;
+  const listView = document.getElementById('notesListView');
+  el.querySelectorAll('.grid-tile[draggable="true"]').forEach(t => {
+    t.addEventListener('dragstart', e => {
+      const isFolder = t.classList.contains('grid-folder');
+      DRAGGING = { type: isFolder ? 'folder' : 'note', id: isFolder ? t.dataset.folderId : t.dataset.note };
+      DRAGGING_FROM_GRID = true;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', DRAGGING.type + ':' + DRAGGING.id);
+      t.classList.add('dragging');
+      listView.classList.add('dnd-active');
+    });
+    t.addEventListener('dragend', () => {
+      t.classList.remove('dragging');
+      listView.classList.remove('dnd-active');
+      DRAGGING = null; DRAGGING_FROM_GRID = false;
     });
   });
-
-  if (MY_ROLE !== 'viewer') setupListDragDrop(el);
+  setupListDragDrop(el);
 }
 
 // Is `folderId` the same as, or nested somewhere under, `ancestorId`?
@@ -614,7 +735,7 @@ function setupListDragDrop(body) {
   // A folder target is invalid for a folder-drag if it IS the dragged folder
   // or one of its descendants.
   const targetValid = targetFolderEl => {
-    if (!DRAGGING || DRAGGING.type !== 'folder' || !targetFolderEl) return true;
+    if (!DRAGGING || DRAGGING.type !== 'folder' || !targetFolderEl || !targetFolderEl.dataset.folderId) return true;
     return !isFolderInside(targetFolderEl.dataset.folderId, DRAGGING.id);
   };
 
@@ -627,7 +748,7 @@ function setupListDragDrop(body) {
 
   container.addEventListener('dragover', e => {
     if (!DRAGGING) return; // ignore drags that didn't start in the list
-    const folderEl = e.target.closest('.notes-folder');
+    const folderEl = e.target.closest('.notes-folder, [data-drop-folder]');
     if (!targetValid(folderEl)) { e.dataTransfer.dropEffect = 'none'; clearHighlight(); return; }
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -653,8 +774,10 @@ function setupListDragDrop(body) {
     clearHighlight();
     const data = e.dataTransfer.getData('text/plain');
     if (!data) return;
-    const folderEl = e.target.closest('.notes-folder');
-    const targetId = folderEl ? folderEl.dataset.folderId : null;
+    const folderEl = e.target.closest('.notes-folder, [data-drop-folder]');
+    if (!folderEl && LIST_LAYOUT === 'grid') return;             // mřížka: pustit vedle = nic
+    const targetId = folderEl ? (folderEl.dataset.folderId || null) : null;
+    if (DRAGGING_FROM_GRID && targetId === (GRID_FOLDER || null) && data.startsWith('note:')) return;
     if (data.startsWith('note:')) {
       moveNoteToFolder(data.slice(5), targetId);
     } else if (data.startsWith('folder:')) {
@@ -717,36 +840,47 @@ function setupSearch() {
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { const first = document.querySelector('#searchResults [data-note-id]'); if (first) first.click(); }
   });
+  setupFindInNote();
 }
 
-function renderSearchResults(q) {
-  const el = document.getElementById('searchResults');
+// All notes matching q, with a snippet around the first hit. Shared by the
+// search window and the result list kept beside an opened note.
+function searchHits(q) {
   const nq = searchNormalize(q.trim());
-  if (!nq) { el.innerHTML = `<div style="color:var(--text-muted);font-size:.85rem;padding:10px 2px;">Napiš, co hledáš — prohledají se názvy i obsah poznámek.</div>`; return; }
-
+  if (!nq) return [];
   const hits = [];
   NOTES_MAP.forEach(note => {
     if (isHeading(note)) return;
     const title = note.title || '';
-    const text = noteToPlainText(note);
-    const hay = searchNormalize(title + ' ' + text);
-    const at = hay.indexOf(nq);
-    if (at === -1) return;
-    // Snippet around the first match (from the ORIGINAL text so accents show).
-    const combined = (title ? title + ' — ' : '') + text;
+    const combined = (title ? title + ' — ' : '') + noteToPlainText(note);
     const nCombined = searchNormalize(combined);
     const pos = nCombined.indexOf(nq);
-    const start = Math.max(0, pos - 30);
-    const snippet = (start > 0 ? '…' : '') + combined.slice(start, pos + nq.length + 40).trim() + '…';
-    hits.push({ note, title: title || '(bez názvu)', snippet });
+    if (pos === -1) return;
+    let count = 0;
+    for (let i = pos; i !== -1; i = nCombined.indexOf(nq, i + nq.length)) count++;
+    // Fixed window around the START of the match, so the snippet doesn't
+    // grow letter by letter while typing.
+    const start = Math.max(0, pos - 32);
+    const end = Math.min(combined.length, pos + 80);
+    const snippet = (start > 0 ? '…' : '') + esc(combined.slice(start, pos)) +
+      '<mark>' + esc(combined.slice(pos, pos + nq.length)) + '</mark>' +
+      esc(combined.slice(pos + nq.length, end)) + (end < combined.length ? '…' : '');
+    hits.push({ note, title: title || '(bez názvu)', snippet: snippet.replace(/\s+/g, ' '), count });
   });
+  return hits;
+}
+
+function renderSearchResults(q) {
+  const el = document.getElementById('searchResults');
+  if (!q.trim()) { el.innerHTML = `<div style="color:var(--text-muted);font-size:.85rem;padding:10px 2px;">Napiš, co hledáš — prohledají se názvy i obsah poznámek.</div>`; return; }
+  const hits = searchHits(q);
 
   if (!hits.length) { el.innerHTML = `<div style="color:var(--text-muted);font-size:.85rem;padding:10px 2px;">Nic nenalezeno.</div>`; return; }
 
   el.innerHTML = hits.slice(0, 40).map(h => `
     <div class="search-hit" data-note-id="${h.note.id}" style="padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--border);margin-bottom:6px;--row-color:${h.note.color || '#fef9c3'};border-left:3px solid var(--row-color);">
-      <div style="font-weight:600;font-size:0.88rem;">${esc(h.title)}</div>
-      <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">${esc(h.snippet)}</div>
+      <div style="font-weight:600;font-size:0.88rem;display:flex;gap:8px;"><span style="flex:1;min-width:0;">${esc(h.title)}</span>${h.count > 1 ? `<span class="search-count">${h.count}×</span>` : ''}</div>
+      <div class="search-snip">${h.snippet}</div>
     </div>`).join('') + (hits.length > 40 ? `<div style="color:var(--text-muted);font-size:.75rem;padding:6px 2px;">…a další (${hits.length - 40})</div>` : '');
 
   el.querySelectorAll('[data-note-id]').forEach(row => {
@@ -755,8 +889,136 @@ function renderSearchResults(q) {
       if (!note) return;
       closeModal('searchModal');
       if (VIEW_MODE === 'board') centerOnNote(note);
+      FIND = { q: document.getElementById('searchInput').value.trim(), side: true, idx: 0, fresh: true };
       openNoteDetail(document.getElementById('n-' + note.id), note);
     });
   });
 }
 
+
+// ── Hledání v otevřené poznámce (jako Ctrl+F) ─────────────────
+// Otevřeno z hledání: vlevo zůstane seznam všech nalezených poznámek, nahoře
+// lišta "2 / 5 ▲▼" a výskyty jsou v textu zvýrazněné. Ctrl+F v otevřené
+// poznámce otevře jen lištu.
+let FIND = null;   // { q, side, idx }
+
+function setupFindInNote() {
+  const input = document.getElementById('findInput');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    if (!FIND) FIND = { q: '', side: false, idx: 0 };
+    FIND.q = input.value; FIND.idx = 0;
+    refreshFind();
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeFind(); }
+  });
+  document.getElementById('findNext').addEventListener('click', () => stepFind(1));
+  document.getElementById('findPrev').addEventListener('click', () => stepFind(-1));
+  document.getElementById('findClose').addEventListener('click', closeFind);
+  document.addEventListener('keydown', e => {
+    const open = document.getElementById('noteDetailModal')?.classList.contains('open');
+    if (!open || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'f') return;
+    e.preventDefault();
+    if (!FIND) FIND = { q: '', side: false, idx: 0 };
+    refreshFind();
+    input.focus(); input.select();
+  });
+  // Detail se zavírá křížkem nebo klikem vedle — hledání s ním končí.
+  document.querySelector('[data-close="noteDetailModal"]')?.addEventListener('click', () => { FIND = null; });
+  document.getElementById('noteDetailModal')?.addEventListener('click', e => {
+    if (e.target.id === 'noteDetailModal') FIND = null;
+  });
+}
+
+function closeFind() {
+  FIND = null;
+  refreshFind();
+}
+
+// Called after the detail content is (re)rendered: opening a note, switching
+// chapters, typing into the bar.
+function refreshFind() {
+  const bar = document.getElementById('findBar');
+  const side = document.getElementById('findSide');
+  const contentEl = document.getElementById('detailContent');
+  if (!bar || !contentEl) return;
+  unmarkFind(contentEl);
+  if (!FIND) { bar.hidden = true; side.hidden = true; return; }
+  bar.hidden = false;
+  const input = document.getElementById('findInput');
+  if (input.value !== FIND.q) input.value = FIND.q;
+  const marks = markFind(contentEl, FIND.q);
+  const cnt = document.getElementById('findCount');
+  if (!FIND.q.trim()) cnt.textContent = '';
+  else if (!marks.length) cnt.textContent = 'nic';
+  else {
+    FIND.idx = ((FIND.idx % marks.length) + marks.length) % marks.length;
+    cnt.textContent = (FIND.idx + 1) + ' / ' + marks.length;
+    marks[FIND.idx].classList.add('find-cur');
+    marks[FIND.idx].scrollIntoView({ block: 'center' });
+  }
+  renderFindSide(side);
+}
+
+function stepFind(d) {
+  if (!FIND) return;
+  FIND.idx += d;
+  refreshFind();
+}
+
+function unmarkFind(root) {
+  root.querySelectorAll('mark.find-hit').forEach(m => m.replaceWith(...m.childNodes));
+  root.normalize();
+}
+
+// Wrap every occurrence (diacritics- and case-insensitive) in <mark>. Only
+// the shown copy of the note is touched — nothing is saved.
+function markFind(root, q) {
+  const nq = searchNormalize(q.trim());
+  if (!nq) return [];
+  const nodes = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: n => n.parentElement.closest('script, style') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  });
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  const out = [];
+  nodes.forEach(node => {
+    const norm = searchNormalize(node.data);
+    if (norm.length !== node.data.length) return;          // exotic text — offsets would not line up
+    let at = norm.indexOf(nq), cur = node;
+    let base = 0;
+    while (at !== -1) {
+      const hit = cur.splitText(at - base);
+      const rest = hit.splitText(nq.length);
+      const m = document.createElement('mark');
+      m.className = 'find-hit';
+      hit.replaceWith(m); m.appendChild(hit);
+      out.push(m);
+      base = at + nq.length;
+      cur = rest;
+      at = norm.indexOf(nq, base);
+    }
+  });
+  return out;
+}
+
+function renderFindSide(side) {
+  if (!FIND || !FIND.side || !FIND.q.trim()) { side.hidden = true; return; }
+  const hits = searchHits(FIND.q);
+  side.hidden = !hits.length;
+  side.innerHTML = `<div class="find-side-head">Nalezeno v ${hits.length} ${hits.length === 1 ? 'poznámce' : 'poznámkách'}</div>` +
+    hits.slice(0, 60).map(h => `
+    <button type="button" class="find-side-item${h.note.id === DETAIL_NOTE_ID ? ' on' : ''}" data-id="${h.note.id}" style="--row-color:${h.note.color || '#fef9c3'}">
+      <span class="fsi-title">${esc(h.title)}${h.count > 1 ? ` <span class="search-count">${h.count}×</span>` : ''}</span>
+      <span class="fsi-snip">${h.snippet}</span>
+    </button>`).join('');
+  side.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => {
+    const note = NOTES_MAP.get(b.dataset.id);
+    if (!note || note.id === DETAIL_NOTE_ID) return;
+    FIND.idx = 0;
+    openNoteDetail(document.getElementById('n-' + note.id), note);
+  }));
+  side.querySelector('.on')?.scrollIntoView({ block: 'nearest' });
+}

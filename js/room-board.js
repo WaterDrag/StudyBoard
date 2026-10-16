@@ -651,38 +651,112 @@ function updateMinimap() {
   _mmRaf = requestAnimationFrame(() => { _mmRaf = 0; drawMinimapNow(); });
 }
 
+// The minimap shows the CONTENT (plus a margin), not the whole endless board:
+// wander off and the map stays put, with the viewport box sliding out of it.
+function minimapWorld(mm) {
+  const b = contentBounds() || { minX: BOARD_PAD_X, minY: BOARD_PAD_Y, maxX: BOARD_PAD_X + 1600, maxY: BOARD_PAD_Y + 1000 };
+  const m = 500;
+  const x0 = b.minX - m, y0 = b.minY - m, w = b.maxX - b.minX + 2 * m, h = b.maxY - b.minY + 2 * m;
+  const s = Math.min(mm.width / w, mm.height / h);
+  // centre the world in the canvas
+  return { s, ox: (mm.width - w * s) / 2 - x0 * s, oy: (mm.height - h * s) / 2 - y0 * s, x0, y0, w, h };
+}
+
 function drawMinimapNow() {
   const mm = document.getElementById('boardMinimap');
   if (!mm || VIEW_MODE !== 'board') return;
   const wrap = document.getElementById('boardWrap');
-  const board = document.getElementById('board');
-  const bw = parseInt(board.style.width)  || board.offsetWidth  || 3200;
-  const bh = parseInt(board.style.height) || board.offsetHeight || 2200;
-  const s = Math.min(mm.width / bw, mm.height / bh);
+  const W = minimapWorld(mm), s = W.s;
+  const X = x => W.ox + x * s;
+  const Y = y => W.oy + y * s;
   const ctx = mm.getContext('2d');
   ctx.clearRect(0, 0, mm.width, mm.height);
   ctx.fillStyle = 'rgba(15,23,42,0.85)';
-  ctx.fillRect(0, 0, bw * s, bh * s);
+  ctx.fillRect(X(W.x0), Y(W.y0), W.w * s, W.h * s);
 
   // Whiteboards (muted slabs)
   ctx.fillStyle = 'rgba(226,232,240,0.35)';
   WHITEBOARDS_MAP.forEach(wb => {
-    ctx.fillRect(toRenderX(wb.x) * s, toRenderY(wb.y) * s, Math.max(2, wb.w * s), Math.max(2, wb.h * s));
+    ctx.fillRect(X(toRenderX(wb.x)), Y(toRenderY(wb.y)), Math.max(2, wb.w * s), Math.max(2, wb.h * s));
   });
 
   // Notes (their colors)
   NOTES_MAP.forEach(n => {
     if (isHeading(n)) return;
     ctx.fillStyle = n.color || '#fef9c3';
-    ctx.fillRect(toRenderX(n.x) * s, toRenderY(n.y) * s, Math.max(3, 220 * s), Math.max(2, 150 * s));
+    ctx.fillRect(X(toRenderX(n.x)), Y(toRenderY(n.y)), Math.max(3, 220 * s), Math.max(2, 150 * s));
   });
 
   // Viewport box (scroll offsets are in zoomed px → back to rendered coords)
   const z = BOARD_ZOOM;
   ctx.strokeStyle = '#818cf8';
   ctx.lineWidth = 1.5;
-  ctx.strokeRect(wrap.scrollLeft / z * s, wrap.scrollTop / z * s,
-                 wrap.clientWidth / z * s, wrap.clientHeight / z * s);
+  ctx.strokeRect(X(wrap.scrollLeft / z), Y(wrap.scrollTop / z), wrap.clientWidth / z * s, wrap.clientHeight / z * s);
+  updateBackToContent();
+}
+
+// "Zpět na plochu": appears in the middle of the screen only once nothing
+// of the content is in view.
+function updateBackToContent() {
+  const btn = document.getElementById('backToContent');
+  if (!btn) return;
+  const b = contentBounds();
+  const wrap = document.getElementById('boardWrap');
+  const z = BOARD_ZOOM;
+  const vx0 = wrap.scrollLeft / z, vy0 = wrap.scrollTop / z;
+  const vx1 = vx0 + wrap.clientWidth / z, vy1 = vy0 + wrap.clientHeight / z;
+  const away = !!b && VIEW_MODE === 'board' && (b.maxX < vx0 || b.minX > vx1 || b.maxY < vy0 || b.minY > vy1);
+  btn.hidden = !away;
+}
+
+// ── Nekonečná plocha ──────────────────────────────────────────
+// The board is a big scrollable box. Pan close to an edge and it grows by a
+// screen in that direction; on the left/top that means a bigger pad, so
+// every element moves right/down by the same amount and the scroll position
+// follows — nothing visibly jumps. Stored coordinates never change.
+let _growT = 0;
+let _pointerDown = false;
+function growBoard() {
+  if (VIEW_MODE !== 'board' || _pointerDown) return;
+  const wrap = document.getElementById('boardWrap');
+  const board = document.getElementById('board');
+  const z = BOARD_ZOOM;
+  const vw = wrap.clientWidth / z, vh = wrap.clientHeight / z;
+  let bw = parseInt(board.style.width) || board.offsetWidth;
+  let bh = parseInt(board.style.height) || board.offsetHeight;
+  const vx = wrap.scrollLeft / z, vy = wrap.scrollTop / z;
+  const dx = vx < vw * 0.6 ? Math.ceil(vw) : 0;
+  const dy = vy < vh * 0.6 ? Math.ceil(vh) : 0;
+  if (dx || dy) {
+    [...board.children].forEach(ch => {
+      if (ch.id === 'connSvg') return;
+      if (dx && ch.style.left) ch.style.left = (parseFloat(ch.style.left) + dx) + 'px';
+      if (dy && ch.style.top)  ch.style.top  = (parseFloat(ch.style.top)  + dy) + 'px';
+    });
+    BOARD_PAD_X += dx; BOARD_PAD_Y += dy;
+    bw += dx; bh += dy;
+    board.style.width = bw + 'px'; board.style.height = bh + 'px';
+    wrap.scrollLeft += dx * z; wrap.scrollTop += dy * z;
+    redrawConnections();
+  }
+  const right = (wrap.scrollLeft + wrap.clientWidth) / z, bottom = (wrap.scrollTop + wrap.clientHeight) / z;
+  if (bw - right < vw * 0.6) board.style.width  = Math.ceil(bw + vw) + 'px';
+  if (bh - bottom < vh * 0.6) board.style.height = Math.ceil(bh + vh) + 'px';
+  updateMinimap();
+  updateBackToContent();
+}
+
+function setupInfiniteBoard() {
+  const wrap = document.getElementById('boardWrap');
+  const later = () => { clearTimeout(_growT); _growT = setTimeout(growBoard, 120); };
+  wrap.addEventListener('scroll', later, { passive: true });
+  window.addEventListener('resize', later);
+  document.addEventListener('mousedown', () => { _pointerDown = true; }, true);
+  document.addEventListener('mouseup', () => { _pointerDown = false; later(); }, true);
+  document.addEventListener('touchstart', () => { _pointerDown = true; }, { capture: true, passive: true });
+  document.addEventListener('touchend', () => { _pointerDown = false; later(); }, { capture: true, passive: true });
+  document.getElementById('backToContent')?.addEventListener('click', () => { travelFitAll(); updateZoomLabel(); });
+  setTimeout(growBoard, 400);
 }
 
 function setupBoardMinimap() {
@@ -693,13 +767,10 @@ function setupBoardMinimap() {
 
   // Click / drag → center the viewport on that spot
   const jump = e => {
-    const board = document.getElementById('board');
-    const bw = parseInt(board.style.width)  || board.offsetWidth  || 3200;
-    const bh = parseInt(board.style.height) || board.offsetHeight || 2200;
-    const s = Math.min(mm.width / bw, mm.height / bh);
+    const W = minimapWorld(mm);
     const r = mm.getBoundingClientRect();
-    const rx = (e.clientX - r.left) / s;   // rendered board coords
-    const ry = (e.clientY - r.top) / s;
+    const rx = ((e.clientX - r.left) * (mm.width / r.width) - W.ox) / W.s;   // rendered board coords
+    const ry = ((e.clientY - r.top) * (mm.height / r.height) - W.oy) / W.s;
     wrap.scrollLeft = rx * BOARD_ZOOM - wrap.clientWidth / 2;
     wrap.scrollTop  = ry * BOARD_ZOOM - wrap.clientHeight / 2;
     updateMinimap();
@@ -802,7 +873,7 @@ async function deleteSelection() {
   let ok = 0, skipped = 0;
   for (const id of ids) {
     const n = NOTES_MAP.get(id);
-    if (n && canEdit(n)) { await doDeleteNote(id, false, true); ok++; }
+    if (n && canManageNote(n)) { await doDeleteNote(id, false, true); ok++; }
     else skipped++;
   }
   clearSelection();
@@ -1217,4 +1288,117 @@ function setupRoomChrome() {
   document.getElementById('zoomPct').addEventListener('click', () => { setBoardZoom(1); updateZoomLabel(); });
   document.getElementById('zoomFitBtn').addEventListener('click', () => { travelFitAll(); updateZoomLabel(); });
   updateZoomLabel();
+  setupMobileOrb();
+  setupInfiniteBoard();
+}
+
+// ── Mobil: orb ────────────────────────────────────────────────
+// Na telefonu se horní lišta ani nástroje nevejdou. Orb (jako v Opeře GX)
+// je jedno kulaté tlačítko dole; ťuknutí otevře panel se VŠÍM, co je na
+// počítači v liště a v nástrojích vlevo. Položky jen klikají na původní
+// tlačítka, takže se chovají přesně stejně. Orb jde přetáhnout jinam.
+const ORB_GROUPS = [
+  ['Vytvořit', [
+    ['toolNote', 'Poznámka'], ['toolHeading', 'Nadpis'], ['toolGuide', 'Návod'],
+    ['toolBoard', 'Tabule'], ['connectBtn', 'Propojit'], ['newFolderBtn', 'Složka'],
+  ]],
+  ['Místnost', [
+    ['searchBtn', 'Hledat'], ['travelMenuBtn', 'Přejít na…'], ['filesBtn', 'Soubory'],
+    ['aiCardsBtn', 'AI'], ['flashcardsBtn', 'Kartičky'], ['membersBtn', 'Členové'],
+    ['shareTopBtn', 'Sdílet'], ['exportBtn', 'Export'], ['roomBgBtn', 'Pozadí'],
+  ]],
+  ['Zobrazení', [
+    ['@board', 'Nástěnka'], ['@list', 'Seznam'], ['zoomOutBtn', 'Oddálit'],
+    ['zoomInBtn', 'Přiblížit'], ['zoomFitBtn', 'Celá plocha'], ['navBackBtn', 'Místnosti'],
+  ]],
+];
+const ORB_ICON = {
+  '@board': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  '@list': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+  zoomOutBtn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/></svg>',
+  zoomInBtn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6M11 8v6"/></svg>',
+};
+
+function orbTargetUsable(id) {
+  if (id.startsWith('@')) return true;
+  const el = document.getElementById(id);
+  if (!el) return false;
+  // Inline display:none = schované kódem (práva, režim seznamu) — to platí i tady.
+  // Schované jen kvůli úzkému displeji (CSS) naopak do orbu patří.
+  if (el.style.display === 'none' && id !== 'newFolderBtn') return false;
+  if (id === 'newFolderBtn') return document.body.classList.contains('view-list') && document.body.classList.contains('can-write');
+  if (id.startsWith('tool') || id === 'connectBtn') return document.body.classList.contains('can-write') && !document.body.classList.contains('view-list');
+  if (id.startsWith('zoom')) return !document.body.classList.contains('view-list');
+  return true;
+}
+
+function renderOrbSheet() {
+  const sheet = document.getElementById('orbSheet');
+  const view = document.body.classList.contains('view-list') ? 'list' : 'board';
+  sheet.innerHTML = '<div class="orb-grip"></div>' + ORB_GROUPS.map(([title, items]) => {
+    const btns = items.filter(([id]) => orbTargetUsable(id)).map(([id, label]) => {
+      const src = id.startsWith('@') ? null : document.getElementById(id);
+      const icon = ORB_ICON[id] || src?.querySelector('svg')?.outerHTML || '';
+      const on = id === '@' + view ? ' on' : '';
+      const badge = id === 'membersBtn' ? (document.getElementById('memberCount')?.textContent || '') : '';
+      return `<button type="button" class="orb-item${on}" data-orb="${id}">${icon}<span>${esc(label)}</span>${badge ? `<i class="orb-badge">${esc(badge)}</i>` : ''}</button>`;
+    }).join('');
+    return btns ? `<div class="orb-group"><div class="orb-gtitle">${title}</div><div class="orb-grid">${btns}</div></div>` : '';
+  }).join('');
+}
+
+function setOrbOpen(open) {
+  const orb = document.getElementById('mobileOrb');
+  const sheet = document.getElementById('orbSheet');
+  const back = document.getElementById('orbBackdrop');
+  if (open) renderOrbSheet();
+  sheet.hidden = !open; back.hidden = !open;
+  orb.classList.toggle('open', open);
+  orb.setAttribute('aria-expanded', String(open));
+}
+
+function setupMobileOrb() {
+  const orb = document.getElementById('mobileOrb');
+  const sheet = document.getElementById('orbSheet');
+  if (!orb || !sheet) return;
+  // Uložená pozice (přetažení prstem); jinak vpravo dole.
+  try {
+    const p = JSON.parse(localStorage.getItem('sb_orb_pos') || 'null');
+    if (p) { orb.style.left = p.x + 'px'; orb.style.top = p.y + 'px'; orb.style.right = 'auto'; orb.style.bottom = 'auto'; }
+  } catch (_) {}
+  let drag = null, moved = false;
+  orb.addEventListener('touchstart', e => {
+    const t = e.touches[0], r = orb.getBoundingClientRect();
+    drag = { dx: t.clientX - r.left, dy: t.clientY - r.top, x0: t.clientX, y0: t.clientY };
+    moved = false;
+  }, { passive: true });
+  orb.addEventListener('touchmove', e => {
+    if (!drag) return;
+    const t = e.touches[0];
+    if (!moved && Math.hypot(t.clientX - drag.x0, t.clientY - drag.y0) < 10) return;
+    moved = true;
+    e.preventDefault();
+    const x = Math.min(Math.max(6, t.clientX - drag.dx), window.innerWidth - orb.offsetWidth - 6);
+    const y = Math.min(Math.max(60, t.clientY - drag.dy), window.innerHeight - orb.offsetHeight - 6);
+    Object.assign(orb.style, { left: x + 'px', top: y + 'px', right: 'auto', bottom: 'auto' });
+  }, { passive: false });
+  orb.addEventListener('touchend', () => {
+    if (moved) {
+      try { localStorage.setItem('sb_orb_pos', JSON.stringify({ x: parseInt(orb.style.left), y: parseInt(orb.style.top) })); } catch (_) {}
+    }
+    drag = null;
+  });
+  orb.addEventListener('click', e => {
+    if (moved) { moved = false; e.preventDefault(); return; }
+    setOrbOpen(sheet.hidden);
+  });
+  document.getElementById('orbBackdrop').addEventListener('click', () => setOrbOpen(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheet.hidden) setOrbOpen(false); });
+  sheet.addEventListener('click', e => {
+    const id = e.target.closest('[data-orb]')?.dataset.orb;
+    if (!id) return;
+    setOrbOpen(false);
+    if (id.startsWith('@')) { document.querySelector(`.room-view-seg [data-view="${id.slice(1)}"]`)?.click(); return; }
+    document.getElementById(id)?.click();
+  });
 }
