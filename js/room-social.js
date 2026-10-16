@@ -324,6 +324,54 @@ function memberName(uid) {
   return m.displayName || m.email || 'další člen';
 }
 
+// ── Členové živě ──────────────────────────────────────────────
+// Místnost se dřív načetla jednou: kdo se připojil, objevil se vlastníkovi až
+// po obnovení stránky (a nešlo mu hned dát práva). Teď se členství drží
+// podle živého dokumentu místnosti.
+function syncRoomMembership(d) {
+  const key = x => JSON.stringify([x.memberIds || [], x.roles || {}, x.members || {}, x.memberExpiry || {}, x.ownerId || '']);
+  if (key(d) === key(ROOM)) return;
+  const myOld = MY_ROLE;
+  ['memberIds', 'roles', 'members', 'memberExpiry', 'ownerId', 'tempInvites'].forEach(k => { if (k in d) ROOM[k] = d[k]; });
+  updateMemberCount();
+  if (document.getElementById('panelBack')?.classList.contains('open')) renderMembers();
+  if (!ME.isAnonymous && !(ROOM.memberIds || []).includes(ME.uid)) {
+    toast('Už nejsi členem této místnosti.');
+    setTimeout(() => (window.location.href = 'dashboard.html'), 1600);
+    return;
+  }
+  const myNew = (ROOM.roles || {})[ME.uid];
+  if (myNew && myOld && myNew !== myOld && !(ME.isAnonymous && myNew !== 'owner')) {
+    toastAction(`Tvoje role je teď: ${roleLabel(myNew)}.`, 'Obnovit', () => location.reload());
+  }
+}
+
+// U člena chybí jméno (starší připojení, účet bez jména) → doplnit z jeho
+// profilu (users/{uid} je čitelný pro přihlášené) místo zobrazení interního ID.
+const _nameFetches = new Set();
+async function fillMissingMemberNames(ids) {
+  const members = ROOM.members || {};
+  const missing = ids.filter(uid => !(members[uid] || {}).displayName && !(members[uid] || {}).email && !_nameFetches.has(uid));
+  if (!missing.length) return false;
+  missing.forEach(uid => _nameFetches.add(uid));
+  let changed = false;
+  await Promise.all(missing.map(async uid => {
+    try {
+      const snap = await db.collection('users').doc(uid).get();
+      const p = snap.exists ? snap.data() : null;
+      const name = p && (p.displayName || p.email);
+      if (!name) return;
+      ROOM.members = { ...(ROOM.members || {}), [uid]: { ...(ROOM.members || {})[uid], displayName: name, email: p.email || null, photoURL: p.photoURL || null } };
+      changed = true;
+      // Opravit i v dokumentu místnosti (smí vlastník, nebo člověk sám za sebe).
+      if (MY_ROLE === 'owner' || uid === ME.uid) {
+        db.collection('rooms').doc(ROOM_ID).update({ [`members.${uid}.displayName`]: name }).catch(() => {});
+      }
+    } catch (_) { /* profil nejde přečíst — zůstane obecný popisek */ }
+  }));
+  return changed;
+}
+
 // The actual leave write, shared by the button and the expiry auto-kick.
 // `successorOverride` lets the owner hand ownership to a specific member;
 // without it, pickSuccessor() chooses automatically. Returns false when
@@ -802,6 +850,7 @@ async function renderMembers() {
   // that happens.
   const ids = (ROOM.memberIds || []).filter(uid => !memberExpired(uid));
   if (MY_ROLE === 'owner') purgeExpiredMembers();
+  if (await fillMissingMemberNames(ids)) Object.assign(members, ROOM.members || {});
 
   // Friend states drive the "add friend" buttons, the editor-only-for-friends
   // guard on the role select, and the incoming-requests section.
@@ -849,7 +898,7 @@ async function renderMembers() {
     row.innerHTML = `
       <div class="m-avatar${online ? ' online' : ''}">${m.photoURL ? `<img src="${m.photoURL}" alt="">` : initial(m.displayName || m.email || '?')}</div>
       <div class="m-info">
-        <div class="m-name">${esc(m.displayName || m.email || uid)}${isMe ? ' <span style="color:var(--text-muted);font-weight:400;">(ty)</span>' : ''}${online ? ' <span style="color:#22c55e;font-size:0.7rem;">● online</span>' : ''}</div>
+        <div class="m-name">${esc(m.displayName || m.email || (m.isAnon ? 'Host' : 'Člen bez jména'))}${isMe ? ' <span style="color:var(--text-muted);font-weight:400;">(ty)</span>' : ''}${online ? ' <span style="color:#22c55e;font-size:0.7rem;">● online</span>' : ''}</div>
         <div class="m-email">${esc(m.email || '')}</div>
         ${expLabel}
       </div>

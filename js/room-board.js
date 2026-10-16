@@ -1137,8 +1137,10 @@ function applyRoomBackground(id) {
 function setupRoomBackground() {
   applyRoomBackground(ROOM.bg || '');
   db.collection('rooms').doc(ROOM_ID).onSnapshot(snap => {
-    const bg = snap.data()?.bg || '';
+    const d = snap.data() || {};
+    const bg = d.bg || '';
     if (bg !== (ROOM.bg || '')) { ROOM.bg = bg; applyRoomBackground(bg); }
+    syncRoomMembership(d);
   }, () => { /* bez živých změn — pozadí zůstane, jak se načetlo */ });
   // Everyone may open the picker: non-owners to save a background they
   // like into their favourites, the owner also to change it.
