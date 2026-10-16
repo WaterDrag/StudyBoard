@@ -73,8 +73,66 @@ function setupTabs(user) {
       btn.classList.add('active');
       document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
       if (btn.dataset.tab === 'flash') loadDecks(user);
+      if (btn.dataset.tab === 'games') loadGames(user);
     });
   });
+}
+
+// ── Hry ─────────────────────────────────────────────────────────
+// Dobyvatel: hry přátel (lobby nebo rozehraná, kde hraju). Zombie Survival:
+// otevřené čekárny. Načítá se až při otevření záložky.
+let _gamesLoaded = false;
+function loadGames(user) {
+  if (_gamesLoaded) return;
+  _gamesLoaded = true;
+  const dob = document.getElementById('dobLobbies');
+  db.collection('conquest').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
+    const games = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(g => (g.status === 'lobby' && g.hostUid !== user.uid) || (g.status !== 'end' && (g.playerIds || []).includes(user.uid)))
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)).slice(0, 6);
+    const maps = { cesko: 'Česko', nemecko: 'Německo', evropa: 'Evropa', usa: 'USA', svet: 'Svět' };
+    dob.innerHTML = games.length ? games.map(g => {
+      const mine = (g.playerIds || []).includes(user.uid);
+      return `<a class="game-lobby" href="dobyvatel.html?g=${g.id}"><span><b>${esc(g.hostName || 'Hra')}</b><small>${esc(maps[g.settings?.map] || '')} · ${Object.keys(g.players || {}).length} hráčů · ${g.status === 'play' ? 'hraje se' : 'čeká'}</small></span><span class="btn btn-secondary btn-sm">${mine ? 'Vrátit se' : 'Připojit'}</span></a>`;
+    }).join('') : '<div class="game-empty">Teď nikdo z přátel nemá otevřenou hru.</div>';
+    updateGamesBadge();
+  }, () => { dob.innerHTML = '<div class="game-empty">Hry se nepodařilo načíst.</div>'; });
+
+  const surv = document.getElementById('survivalLobbies');
+  const STALE_MS = 3 * 60 * 60 * 1000;
+  db.collection('survival_lobbies').where('status', '==', 'waiting').limit(8).onSnapshot(snap => {
+    const rows = [];
+    snap.forEach(doc => {
+      const d = doc.data();
+      const ageMs = d.createdAt?.toMillis ? Date.now() - d.createdAt.toMillis() : 0;
+      if (d.hostId === user.uid && ageMs > STALE_MS) { doc.ref.delete().catch(() => {}); return; }
+      const n = Object.keys(d.players || {}).length;
+      rows.push(`<div class="game-lobby"><span><b>🧟 ${esc(d.hostName || 'Hráč')}</b><small>vlna ${d.wave || 0} · ${n}/4 hráčů</small></span>
+        ${d.hostId === user.uid ? `<button type="button" class="btn btn-ghost btn-sm" data-cancel="${doc.id}" title="Zrušit">✕</button>` : ''}
+        <a class="btn btn-secondary btn-sm" href="game.html?lobby=${doc.id}">Připojit</a></div>`);
+    });
+    surv.innerHTML = rows.length ? rows.join('') : '<div class="game-empty">Žádná otevřená hra — založ novou.</div>';
+    surv.querySelectorAll('[data-cancel]').forEach(b => b.addEventListener('click', () =>
+      db.collection('survival_lobbies').doc(b.dataset.cancel).delete().catch(e => toast('Nepodařilo se zrušit: ' + e.message))));
+  }, () => { surv.innerHTML = '<div class="game-empty">Hry se nepodařilo načíst.</div>'; });
+
+  document.getElementById('newSurvivalBtn').addEventListener('click', async e => {
+    const btn = e.currentTarget; btn.disabled = true;
+    try {
+      const name = user.displayName || user.email?.split('@')[0] || 'Hráč';
+      const ref = await db.collection('survival_lobbies').add({
+        hostId: user.uid, hostName: name, status: 'waiting', wave: 0, mapId: 0,
+        players: { [user.uid]: { uid: user.uid, name, ready: false } },
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      location.href = `game.html?lobby=${ref.id}`;
+    } catch (err) { toast('Chyba: ' + err.message); btn.disabled = false; }
+  });
+}
+function updateGamesBadge() {
+  const n = document.querySelectorAll('#dobLobbies a.game-lobby').length;
+  const b = document.getElementById('gamesCountBadge');
+  if (b) b.textContent = n || '';
 }
 
 // ── Soubory ze všech místností ──────────────────────────────────
@@ -1044,6 +1102,8 @@ function loadFriends(user) {
 
   // Otevřený přes pozvánkový odkaz (?addFriend=CODE) — přepni na záložku
   // Přátelé a předvyplň kód, ať jen kliknou na "Odeslat žádost".
+  const wantTab = new URLSearchParams(window.location.search).get('tab');
+  if (wantTab) document.querySelector(`.tab-btn[data-tab="${wantTab}"]`)?.click();
   const addFriendCode = new URLSearchParams(window.location.search).get('addFriend');
   if (addFriendCode) {
     document.querySelector('.tab-btn[data-tab="friends"]')?.click();

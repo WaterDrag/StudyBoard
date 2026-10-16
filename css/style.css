@@ -5021,3 +5021,20 @@ button.dob-opt:hover:not(:disabled) { border-color: var(--accent); }
   .dob-log { display: none; }
 }
 .dob-label { font-size: 9px; text-anchor: middle; fill: rgba(255,255,255,.82); paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2.5px; font-family: var(--font); font-weight: 600; pointer-events: none; }
+
+/* ===== Hlavní stránka: záložka Hry ===== */
+.games-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.game-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+.game-art { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 3.4rem;
+  background: radial-gradient(circle at 25% 30%, color-mix(in srgb, var(--g1) 55%, transparent), transparent 60%), radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--g2) 45%, transparent), transparent 60%), var(--bg-3); }
+.game-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.game-body h3 { font-size: 1.1rem; }
+.game-body p { color: var(--text-muted); font-size: 0.88rem; line-height: 1.5; }
+.game-actions { display: flex; gap: 8px; }
+.game-lobbies-title { font: 600 0.7rem var(--font); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); margin-top: 4px; }
+.game-lobbies { display: flex; flex-direction: column; gap: 6px; }
+.game-lobby { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; color: var(--text); text-decoration: none; }
+.game-lobby > span:first-child { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.game-lobby small { color: var(--text-muted); font-size: 0.74rem; }
+a.game-lobby:hover { border-color: var(--accent); }
+.game-empty { color: var(--text-muted); font-size: 0.84rem; }

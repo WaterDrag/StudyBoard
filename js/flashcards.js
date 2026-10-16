@@ -82,7 +82,6 @@ async function loadDeckList() {
   setupNewDeckModal();
   setupEditDeckModal();
   setupModalClose();
-  loadSurvivalLobbies();
 }
 
 // Oblíbené balíčky (users/{uid}.favDecks) — stejné jako na hlavní stránce,
@@ -325,11 +324,6 @@ async function loadDeck() {
       setupDeleteModal();
       setupEditDeckModal();
     }
-
-    // Survival is started from the room's lobby list (loadSurvivalLobbies
-    // below), whose deck picker already covers any deck — personal or
-    // room-linked, one or several at once — so a per-deck shortcut here is
-    // redundant no matter which kind of deck this is.
 
     // Real-time karty
     db.collection('decks').doc(DECK_ID).collection('cards')
@@ -928,58 +922,6 @@ function showResults() {
   document.getElementById('onlyWrongBtn').textContent = `Opakovat neznámé (${wrongCount})`;
 }
 
-// ── Survival lobbies ───────────────────────────────────────────
-function loadSurvivalLobbies() {
-  const section  = document.getElementById('survivalSection');
-  const lobbyDiv = document.getElementById('survivalLobbies');
-  const createBtn = document.getElementById('createLobbyBtn');
-  if (!section) return;
-
-  // Listen for open lobbies
-  db.collection('survival_lobbies')
-    .where('status', '==', 'waiting')
-    .limit(8)
-    .onSnapshot(snap => {
-      section.style.display = 'block';
-      lobbyDiv.innerHTML = '';
-
-      if (snap.empty) {
-        lobbyDiv.innerHTML = '<span style="color:var(--text-muted);font-size:.8rem;">Žádné aktivní hry — vytvoř novou!</span>';
-      } else {
-        const STALE_MS = 3 * 60 * 60 * 1000; // 3h — auto-clear abandoned lobbies you hosted
-        snap.forEach(doc => {
-          const d = doc.data();
-          const isMine = d.hostId === ME.uid;
-          // Silent best-effort cleanup: an old lobby you host that never
-          // started is just clutter (e.g. from testing). Removing it here
-          // means the fix applies retroactively — no manual Firestore work.
-          const ageMs = d.createdAt?.toMillis ? Date.now() - d.createdAt.toMillis() : 0;
-          if (isMine && ageMs > STALE_MS) { doc.ref.delete().catch(() => {}); return; }
-
-          const playerCount = Object.keys(d.players || {}).length;
-          const card = document.createElement('div');
-          card.style.cssText = 'background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:180px;max-width:220px;position:relative;';
-          card.innerHTML = `
-            ${isMine ? `<button class="btn btn-ghost lobby-cancel-btn" title="Zrušit hru" data-lid="${doc.id}" style="position:absolute;top:6px;right:6px;padding:2px 7px;font-size:.75rem;line-height:1;">✕</button>` : ''}
-            <div style="font-weight:700;font-size:.85rem;margin-bottom:4px;">🧟 Vlna ${d.wave || 0}</div>
-            <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:4px;">Hostitel: ${esc(d.hostName || 'Hráč')}</div>
-            <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;">👥 ${playerCount}/4 hráčů</div>
-            <button class="btn btn-primary" style="font-size:.75rem;padding:5px 12px;width:100%;" data-lid="${doc.id}">Připojit se</button>`;
-          card.querySelector('.lobby-cancel-btn')?.addEventListener('click', e => {
-            e.stopPropagation();
-            doc.ref.delete().catch(err => toast('Nepodařilo se zrušit hru: ' + err.message));
-          });
-          card.querySelector('.btn-primary').addEventListener('click', () => joinSurvivalLobby(doc.id));
-          lobbyDiv.appendChild(card);
-        });
-      }
-    }, () => { section.style.display = 'none'; });
-
-  createBtn.addEventListener('click', createSurvivalLobby);
-  const dob = document.getElementById('dobyvatelLink');
-  if (dob && ROOM_ID) dob.href = 'dobyvatel.html?room=' + encodeURIComponent(ROOM_ID);
-}
-
 // ── Learning stats (spaced repetition) ─────────────────────────
 // Reads users/{uid}.learn[deckId] written by quiz.js and shows: totals,
 // due-now count, Leitner box distribution, last-7-days activity and the
@@ -1093,30 +1035,6 @@ async function openLearnStats() {
     <label class="label">Posledních 7 dní</label>
     <div style="display:flex;gap:6px;margin:6px 0 16px;">${daysHtml}</div>
     ${worst.length ? `<label class="label">Nejvíc potřebují procvičit</label><div style="margin-top:6px;">${worstHtml}</div>` : ''}`;
-}
-
-async function createSurvivalLobby() {
-  const btn = document.getElementById('createLobbyBtn');
-  btn.disabled = true; btn.textContent = '⏳';
-  try {
-    const ref = await db.collection('survival_lobbies').add({
-      hostId:   ME.uid,
-      hostName: ME.displayName || ME.email?.split('@')[0] || 'Hráč',
-      status:   'waiting',
-      wave:     0,
-      mapId:    0,
-      players:  { [ME.uid]: { uid: ME.uid, name: ME.displayName || 'Hráč', ready: false } },
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    window.location.href = `game.html?lobby=${ref.id}`;
-  } catch (e) {
-    toast('Chyba: ' + e.message);
-    btn.disabled = false; btn.textContent = '+ Nová hra';
-  }
-}
-
-function joinSurvivalLobby(lobbyId) {
-  window.location.href = `game.html?lobby=${lobbyId}`;
 }
 
 // ── Modal helpers ──────────────────────────────────────────────

@@ -659,7 +659,7 @@ auth.onAuthStateChanged(user=>{
     document.getElementById('startBtn').onclick=startSolo;
   }
   document.getElementById('overReplay').onclick=()=>location.reload();
-  document.getElementById('overExit').onclick=()=>location.href='flashcards.html';
+  document.getElementById('overExit').onclick=()=>location.href='dashboard.html?tab=games';
   document.getElementById('shopClose').onclick=()=>closeOv('shopOv');
   document.getElementById('gardenClose').onclick=()=>closeOv('gardenOv');
   document.getElementById('helpClose').onclick=()=>closeOv('helpOv');
@@ -4164,7 +4164,7 @@ async function leaveLobby(){
       else await ref.update({[`players.${me.uid}`]:firebase.firestore.FieldValue.delete()});
     }
   }catch(e){ console.warn('[leaveLobby]',e); } // best-effort — always let the player leave
-  location.href='flashcards.html';
+  location.href='dashboard.html?tab=games';
 }
 
 async function joinLobby(lobbyId){

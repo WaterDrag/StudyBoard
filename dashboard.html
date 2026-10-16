@@ -77,6 +77,10 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         Flash Cards
       </button>
+      <button class="tab-btn" data-tab="games">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="4"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r="1" fill="currentColor"/><circle cx="17.5" cy="13" r="1" fill="currentColor"/></svg>
+        Hry <span class="tab-count" id="gamesCountBadge"></span>
+      </button>
       <button class="tab-btn" data-tab="files">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
         Soubory <span class="tab-count" id="filesCountBadge"></span>
@@ -127,7 +131,6 @@
           <p>Osobní balíčky karet pro učení</p>
         </div>
         <div class="dashboard-actions">
-          <a href="dobyvatel.html" class="btn btn-secondary" title="Dobyvatel — hra s přáteli na mapě">🗺️ Dobyvatel</a>
           <button id="newDeckBtn" class="btn btn-primary">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -146,6 +149,35 @@
         <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:12px;padding:60px;color:var(--text-muted);">
           <div class="spinner"></div> Načítám...
         </div>
+      </div>
+    </div>
+
+    <!-- TAB: Hry -->
+    <div class="tab-panel" id="tab-games">
+      <div class="dashboard-header" style="margin-bottom:22px;">
+        <div><h2>Hry</h2><p>Uč se hraním — s přáteli nebo proti botům, otázky z tvých kartiček</p></div>
+      </div>
+      <div class="games-grid">
+        <section class="game-card" style="--g1:#6366f1;--g2:#22c55e">
+          <div class="game-art">🗺️</div>
+          <div class="game-body">
+            <h3>Dobyvatel</h3>
+            <p>Zabírej území tipováním, dobývej sousedy otázkami z kartiček a zbourej soupeřům hrady. Česko, Německo, Evropa, USA i celý svět. 2–6 hráčů, i boti.</p>
+            <div class="game-actions"><a class="btn btn-primary" href="dobyvatel.html">Hrát Dobyvatele</a></div>
+            <div class="game-lobbies-title">Hry přátel</div>
+            <div class="game-lobbies" id="dobLobbies"><div class="game-empty">Načítám…</div></div>
+          </div>
+        </section>
+        <section class="game-card" style="--g1:#ef4444;--g2:#f59e0b">
+          <div class="game-art">🧟</div>
+          <div class="game-body">
+            <h3>Zombie Survival</h3>
+            <p>Bráníš základnu před vlnami zombíků, staviš zdi, věže a zahradu. Mezi vlnami kvíz z kartiček — za špatné odpovědi je další vlna silnější. Sám nebo až ve 4.</p>
+            <div class="game-actions"><button type="button" class="btn btn-primary" id="newSurvivalBtn">Nová hra</button></div>
+            <div class="game-lobbies-title">Otevřené hry</div>
+            <div class="game-lobbies" id="survivalLobbies"><div class="game-empty">Načítám…</div></div>
+          </div>
+        </section>
       </div>
     </div>
 
