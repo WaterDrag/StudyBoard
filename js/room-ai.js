@@ -121,6 +121,24 @@ function codeBlockHtml(code, lang) {
   return `<pre class="code-block"${lang ? ` data-lang="${esc(lang)}"` : ''}><code>${esc(code || '')}</code></pre>`;
 }
 
+// Code cards often carry the actual question as a comment under the code
+// ("// Co vypíše …?"). Pull it out so it can be shown as the question itself.
+function splitCodeQuestion(code) {
+  const lines = String(code || '').replace(/\s+$/, '').split('\n');
+  const q = [];
+  const take = i => { const m = lines[i].trim().match(/^(?:\/\/+|#|--)\s*(.*)$/); return m && m[1] ? m[1] : null; };
+  while (lines.length && take(lines.length - 1) !== null) { q.unshift(take(lines.length - 1)); lines.pop(); }
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  const question = q.join(' ').trim();
+  // Only a real question counts — a trailing "// konec třídy" stays in the code.
+  if (!question.includes('?') || !lines.length) return { code: String(code || ''), question: '' };
+  return { code: lines.join('\n'), question };
+}
+function codeQuestionHtml(code, lang) {
+  const { code: c, question } = splitCodeQuestion(code);
+  return (question ? `<div class="code-q">${esc(question)}</div>` : '') + codeBlockHtml(c, lang);
+}
+
 // ── Typ kartiček ──────────────────────────────────────────────
 // quiz  = otázka + možnosti (správné i špatné) — kvíz
 // learn = klasické flash cards: pojem/otázka ⟷ krátká odpověď
@@ -391,7 +409,7 @@ function startAiExam(questions) {
         <div style="display:flex;justify-content:space-between;font-size:0.74rem;color:var(--text-muted);margin-bottom:8px;">
           <span>Otázka ${idx + 1} / ${order.length}</span><span>Skóre ${score}</span>
         </div>
-        <div style="font-weight:600;margin-bottom:10px;">${q.lang ? codeBlockHtml(q.q, q.lang) : esc(q.q)}</div>
+        <div style="font-weight:600;margin-bottom:10px;">${q.lang ? codeQuestionHtml(q.q, q.lang) : esc(q.q)}</div>
         ${multi ? '<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:8px;">☑️ Zaškrtni <b>všechny</b> správné — může jich být i víc.</div>' : ''}
         <div id="aiExamOpts"></div>
         ${multi ? '<button class="btn btn-primary" id="aiExamConfirm" style="margin-top:8px;font-size:0.82rem;" disabled>Potvrdit</button>' : ''}
@@ -803,7 +821,7 @@ function renderAiCardsPreview(cards) {
     cards.map((c, i) => `
       <label class="ai-card-row">
         <input type="checkbox" class="ai-card-check" data-i="${i}" checked>
-        <span>${c.frontLang ? `<b>Kód (${esc(c.frontLang)}):</b>${codeBlockHtml(c.front, c.frontLang)}` : `<b>${esc(c.front)}</b>`}<br><span style="color:var(--text-muted);">${c.codeLang ? codeBlockHtml(c.back, c.codeLang) : esc(c.back)}</span>
+        <span>${c.frontLang ? `<b>Kód (${esc(c.frontLang)}):</b>${codeQuestionHtml(c.front, c.frontLang)}` : `<b>${esc(c.front)}</b>`}<br><span style="color:var(--text-muted);">${c.codeLang ? codeBlockHtml(c.back, c.codeLang) : esc(c.back)}</span>
           ${(c.corrects && c.corrects.length)
             ? `<br><span style="font-size:0.74rem;color:#86efac;">✔ také správně: ${c.corrects.map(esc).join(' · ')}</span>`
             : ''}

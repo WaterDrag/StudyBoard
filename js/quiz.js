@@ -72,6 +72,20 @@ function dueCards() {
     .sort((a, b) => ((LEARN.cards[a.id]?.box) || 0) - ((LEARN.cards[b.id]?.box) || 0));
 }
 
+// Code cards often carry the actual question as a comment under the code
+// ("// Co vypíše …?"). Pull it out so it can be shown as the question itself.
+function splitCodeQuestion(code) {
+  const lines = String(code || '').replace(/\s+$/, '').split('\n');
+  const q = [];
+  const take = i => { const m = lines[i].trim().match(/^(?:\/\/+|#|--)\s*(.*)$/); return m && m[1] ? m[1] : null; };
+  while (lines.length && take(lines.length - 1) !== null) { q.unshift(take(lines.length - 1)); lines.pop(); }
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  const question = q.join(' ').trim();
+  // Only a real question counts — a trailing "// konec třídy" stays in the code.
+  if (!question.includes('?') || !lines.length) return { code: String(code || ''), question: '' };
+  return { code: lines.join('\n'), question };
+}
+
 // ── Auth guard ────────────────────────────────────────────────
 auth.onAuthStateChanged(user => {
   if (!user) { window.location.href = 'index.html'; return; }
@@ -178,8 +192,16 @@ function showQuestion() {
 
   // Question text
   const qEl = document.getElementById('quizQText');
-  if (card.frontLang) qEl.innerHTML = `<pre class="code-block" data-lang="${esc(card.frontLang)}"><code>${esc(card.front)}</code></pre>`;
-  else qEl.textContent = card.front;
+  let codeQ = '';
+  if (card.frontLang) {
+    const sp = splitCodeQuestion(card.front);
+    codeQ = sp.question;
+    qEl.innerHTML = (codeQ ? `<div class="code-q">${esc(codeQ)}</div>` : '') +
+      `<pre class="code-block" data-lang="${esc(card.frontLang)}"><code>${esc(sp.code)}</code></pre>`;
+  } else qEl.textContent = card.front;
+  // Otázka z komentáře v kódu nahradí nápis „Otázka“.
+  const qLbl = document.querySelector('#quizCard .quiz-q-label');
+  if (qLbl) qLbl.hidden = !!codeQ;
 
   // Reset card visuals
   const cardEl = document.getElementById('quizCard');

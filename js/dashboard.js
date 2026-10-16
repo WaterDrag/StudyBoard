@@ -369,23 +369,23 @@ function setupDashHero(user) {
 
 function applyDashSearch() {
   const q = document.getElementById('dashSearch').value.trim().toLowerCase();
-  document.querySelectorAll('#roomsGrid .room-card, #decksGrid .deck-card').forEach(card => {
+  document.querySelectorAll('#roomsGrid .room-card, #favRoomsGrid .room-card, #decksGrid .deck-card').forEach(card => {
     card.style.display = !q || card.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
   const cont = document.getElementById('dashContinue');
   if (cont) cont.style.display = q ? 'none' : '';
 }
 
-// Rooms the user pinned (right click on a card) stay at the top.
+// Oblíbené místnosti (pravé kliknutí na kartu) mají vlastní sekci nad
+// „Všemi místnostmi“. Uložené jsou v users/{uid}.pinnedRooms.
 let PINNED_ROOMS = new Set();
 
 function sortDashRooms() {
   const opened = roomOpenedMap();
   const created = r => r.room.createdAt?.toMillis?.() || 0;
-  const pin = r => (PINNED_ROOMS.has(r.id) ? 1 : 0);
-  DASH_ROOMS.sort((a, b) => pin(b) - pin(a) || (ROOM_SORT === 'az'
-    ? String(a.room.name || '').localeCompare(String(b.room.name || ''), 'cs')
-    : (opened[b.id] || 0) - (opened[a.id] || 0) || created(b) - created(a)));
+  DASH_ROOMS.sort(ROOM_SORT === 'az'
+    ? (a, b) => String(a.room.name || '').localeCompare(String(b.room.name || ''), 'cs')
+    : (a, b) => (opened[b.id] || 0) - (opened[a.id] || 0) || created(b) - created(a));
 }
 
 async function toggleRoomPin(id) {
@@ -398,7 +398,7 @@ async function toggleRoomPin(id) {
     await db.collection('users').doc(uid).set({
       pinnedRooms: on ? firebase.firestore.FieldValue.arrayUnion(id) : firebase.firestore.FieldValue.arrayRemove(id),
     }, { merge: true });
-    toast(on ? 'Místnost připnuta nahoru.' : 'Místnost odepnuta.');
+    toast(on ? 'Přidáno do oblíbených.' : 'Odebráno z oblíbených.');
   } catch (e) { toast('Nepovedlo se: ' + e.message); }
 }
 
@@ -411,8 +411,8 @@ function openRoomCardMenu(x, y, id, room, role) {
   const items = [
     ['open', 'Otevřít'],
     ['tab', 'Otevřít v nové kartě'],
-    ['pin', PINNED_ROOMS.has(id) ? '📌 Odepnout' : '📌 Připnout nahoru'],
-    ...(art && !anon ? [['fav', fav ? '♥ Odebrat obrázek z oblíbených' : '♡ Uložit obrázek do oblíbených']] : []),
+    ['pin', PINNED_ROOMS.has(id) ? '♥ Odebrat z oblíbených' : '♡ Přidat do oblíbených'],
+    ...(art && !anon ? [['fav', fav ? '🖼 Odebrat obrázek pozadí z uložených' : '🖼 Uložit obrázek pozadí']] : []),
     ...(role === 'owner' ? [['edit', '✏️ Upravit kartu']] : []),
   ];
   const menu = document.createElement('div');
@@ -434,7 +434,7 @@ function openRoomCardMenu(x, y, id, room, role) {
     if (a === 'fav') {
       const msg = await BgFav.toggle('karta', art);
       if (msg) { toast(msg); return; }
-      toast(BgFav.has('karta', art) ? 'Obrázek uložen do oblíbených.' : 'Odebráno z oblíbených.');
+      toast(BgFav.has('karta', art) ? 'Obrázek pozadí uložen — najdeš ho při úpravě karty.' : 'Obrázek pozadí odebrán z uložených.');
     }
   });
   setTimeout(() => {
@@ -448,7 +448,18 @@ function renderRoomGrid() {
   if (!DASH_ROOMS.length) return;
   sortDashRooms();
   grid.innerHTML = '';
-  DASH_ROOMS.forEach(r => grid.appendChild(buildRoomCard(r.id, r.room, r.role)));
+  const favWrap = document.getElementById('favRoomsWrap');
+  const favGrid = document.getElementById('favRoomsGrid');
+  const favs = DASH_ROOMS.filter(r => PINNED_ROOMS.has(r.id));
+  if (favWrap && favGrid) {
+    favWrap.hidden = !favs.length;
+    favGrid.innerHTML = '';
+    favs.forEach(r => favGrid.appendChild(buildRoomCard(r.id, r.room, r.role)));
+  }
+  // Oblíbené už jsou nahoře — ve „Všech“ se neopakují.
+  DASH_ROOMS.filter(r => !favWrap || !PINNED_ROOMS.has(r.id))
+    .forEach(r => grid.appendChild(buildRoomCard(r.id, r.room, r.role)));
+  if (!grid.children.length) grid.innerHTML = '<div class="rooms-all-fav">Všechny místnosti máš v oblíbených ♥</div>';
   applyDashSearch();
 }
 
@@ -556,7 +567,6 @@ function buildRoomCard(id, room, role) {
   a.innerHTML = `
     <div class="room-card-art"><span class="room-card-dot"></span></div>
     ${role === 'owner' ? `<button class="card-edit-btn" data-edit-room="${id}" title="Upravit kartu" aria-label="Upravit kartu">${ICON_PENCIL}</button>` : ''}
-    ${PINNED_ROOMS.has(id) ? '<span class="card-pin" title="Připnutá místnost">📌</span>' : ''}
     <div class="room-card-body">
       <h3>${esc(room.name)}</h3>
       ${room.description ? `<p class="card-desc">${esc(room.description)}</p>` : ''}

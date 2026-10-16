@@ -709,7 +709,6 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .room-card:hover .card-fav-btn, .room-card:focus-within .card-fav-btn { opacity: 1; }
 .card-edit-btn:hover, .card-fav-btn:hover { background: rgba(10,11,15,0.8); }
 .card-fav-btn { right: 46px; }
-.card-pin { position: absolute; top: 10px; left: 10px; z-index: 2; font-size: 0.85rem; line-height: 1; padding: 5px 6px; border-radius: 8px; background: rgba(10,11,15,0.55); backdrop-filter: blur(4px); pointer-events: none; }
 .card-fav-btn.on { opacity: 1; color: #fb7185; }
 .card-fav-btn.on svg { fill: currentColor; }
 .room-card:not(:has(.card-edit-btn)) .card-fav-btn { right: 10px; }
@@ -789,7 +788,9 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
    a .rich-editor spolkne všechno, co zbude (proto max-height: none — jinak by
    ho 280px z .rich-editor stropovalo bez ohledu na velikost okna). */
 .modal-editor {
-  max-width: 980px;
+  /* Přesně na sloupec textu (--doc-w) + úzký okraj, ať vedle textu nezůstávají
+     prázdné pruhy, které vypadají, že se do nich dá něco dát. */
+  max-width: calc(var(--doc-w) + 28px + 50px);
   /* Musí to být height, ne max-height: flex rozdává jen PŘEBYTEK místa, a
      dokud je výška modalu daná obsahem, žádný přebytek nevznikne a editor
      zůstane na svém min-height. */
@@ -2823,7 +2824,7 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   min-height: 150px;
   max-height: 280px;
   overflow-y: auto;
-  width: min(var(--doc-w), 100% - 40px);
+  width: min(var(--doc-w), 100% - 28px);
   margin: 0 auto;
   padding: 16px 0 24px;
   background: transparent;
@@ -4813,3 +4814,14 @@ mark.find-hit.find-cur { background: #FACC15; color: #111; box-shadow: 0 0 0 2px
 .info-tip-box b { display: block; margin-bottom: 4px; font-weight: 600; }
 .info-tip-box br + b { display: inline; }
 .info-tip:hover .info-tip-box, .info-tip:focus .info-tip-box { opacity: 1; visibility: visible; transform: none; }
+
+/* Otázka vytažená z komentáře pod kódem — stojí nad kódem místo nápisu „Otázka“ */
+.code-q { font-size: 1.15rem; font-weight: 600; line-height: 1.4; letter-spacing: -0.01em; color: var(--text); margin: 0 0 12px; text-align: left; }
+.quiz-q-text .code-q { font-size: 1.2rem; text-align: center; }
+.card-row .code-q, .ai-card-row .code-q { font-size: 0.9rem; margin: 4px 0 6px; }
+.quiz-q-label[hidden], .fc-face-lbl[hidden] { display: none; }
+
+/* Oblíbené místnosti — vlastní sekce nad „Všemi místnostmi“ */
+#favRoomsWrap[hidden] { display: none; }
+#favRoomsWrap .rooms-grid { margin-bottom: 28px; }
+.rooms-all-fav { grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--text-muted); font-size: 0.86rem; border: 1px dashed var(--border-strong); border-radius: 12px; }

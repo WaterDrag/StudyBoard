@@ -338,6 +338,24 @@ function codeBlockHtml(code, lang) {
   return `<pre class="code-block"${lang ? ` data-lang="${esc(lang)}"` : ''}><code>${esc(code || '')}</code></pre>`;
 }
 
+// Code cards often carry the actual question as a comment under the code
+// ("// Co vypíše …?"). Pull it out so it can be shown as the question itself.
+function splitCodeQuestion(code) {
+  const lines = String(code || '').replace(/\s+$/, '').split('\n');
+  const q = [];
+  const take = i => { const m = lines[i].trim().match(/^(?:\/\/+|#|--)\s*(.*)$/); return m && m[1] ? m[1] : null; };
+  while (lines.length && take(lines.length - 1) !== null) { q.unshift(take(lines.length - 1)); lines.pop(); }
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  const question = q.join(' ').trim();
+  // Only a real question counts — a trailing "// konec třídy" stays in the code.
+  if (!question.includes('?') || !lines.length) return { code: String(code || ''), question: '' };
+  return { code: lines.join('\n'), question };
+}
+function codeQuestionHtml(code, lang) {
+  const { code: c, question } = splitCodeQuestion(code);
+  return (question ? `<div class="code-q">${esc(question)}</div>` : '') + codeBlockHtml(c, lang);
+}
+
 function renderCardContent(card) {
   if (card.codeLang) return codeBlockHtml(card.back, card.codeLang);
   if (card.tableData) {
@@ -373,7 +391,7 @@ function renderCardsList() {
       <div class="card-sides">
         <div>
           <div class="card-side-lbl">Přední</div>
-          ${card.frontLang ? codeBlockHtml(card.front, card.frontLang) : `<div class="card-side-txt">${esc(card.front)}</div>`}
+          ${card.frontLang ? codeQuestionHtml(card.front, card.frontLang) : `<div class="card-side-txt">${esc(card.front)}</div>`}
         </div>
         <div>
           <div class="card-side-lbl">Zadní</div>
@@ -785,13 +803,15 @@ function showStudyCard() {
 
   const card = STUDY_QUEUE[STUDY_IDX];
   const fEl = document.getElementById('studyFront'), bEl = document.getElementById('studyBack');
-  if (card.frontLang) fEl.innerHTML = codeBlockHtml(card.front, card.frontLang);
+  if (card.frontLang) fEl.innerHTML = codeQuestionHtml(card.front, card.frontLang);
   else fEl.textContent = card.front;
   if (card.codeLang)  bEl.innerHTML = codeBlockHtml(card.back, card.codeLang);
   else bEl.textContent = card.back;
   // Výkladová karta (AI typ „info“) nic nezkouší — „XAML je …“ ⟷ informace.
   const [fLbl, bLbl] = [fEl, bEl].map(e => e.parentElement.querySelector('.fc-face-lbl'));
   if (fLbl) fLbl.textContent = card.kind === 'info' ? 'Pojem' : 'Otázka';
+  // Otázka vytažená z komentáře v kódu nahradí nápis „Otázka“.
+  if (fLbl) fLbl.hidden = !!fEl.querySelector('.code-q');
   if (bLbl) bLbl.textContent = card.kind === 'info' ? 'Informace' : 'Odpověď';
   document.getElementById('studyIdx').textContent   = STUDY_IDX + 1;
   document.getElementById('studyTotal').textContent = STUDY_QUEUE.length;

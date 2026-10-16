@@ -958,6 +958,7 @@ function buildExportHtml(data, opts) {
   #ovClose:hover { color:var(--text); background:var(--bg); }
   #barWrap { height:6px; background:var(--bd); border-radius:3px; overflow:hidden; margin-bottom:18px; }
   #bar { height:100%; width:0%; background:var(--ac); transition:width .25s; }
+  .code-q { font-size:1.1rem; font-weight:600; line-height:1.4; margin:0 0 12px; }
   #qText { font-size:1.2rem; font-weight:600; letter-spacing:-.01em; margin-bottom:16px; min-height:40px; }
   .qopt { display:block; width:100%; text-align:left; padding:12px 16px; margin:8px 0; border:1px solid var(--bd); border-radius:10px; background:var(--panel); color:var(--text); cursor:pointer; font-size:.93rem; }
   .qopt:hover:not(:disabled) { border-color:var(--ac); background:color-mix(in srgb, var(--ac) 6%, var(--panel)); }
@@ -1355,10 +1356,24 @@ function ovBody(html){ document.getElementById('ovBody').innerHTML = html; }
 function ovActions(html){ document.getElementById('ovActions').innerHTML = html; }
 function ovScore(txt){ document.getElementById('ovScore').textContent = txt; }
 function pre(txt){ var p = document.createElement('pre'); p.className = 'code-block'; var c = document.createElement('code'); c.textContent = txt; p.appendChild(c); return p; }
+/* Otázka napsaná jako komentář pod kódem („// Co vypíše …?“) jde nad kód */
+function splitCodeQ(code){
+  var lines = String(code || '').replace(/\\s+$/, '').split('\\n'), q = [];
+  function take(i){ var m = lines[i].trim().match(/^(?:\\/\\/+|#|--)\\s*(.*)$/); return m && m[1] ? m[1] : null; }
+  while (lines.length && take(lines.length - 1) !== null){ q.unshift(take(lines.length - 1)); lines.pop(); }
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  var question = q.join(' ').trim();
+  if (question.indexOf('?') === -1 || !lines.length) return { code: String(code || ''), q: '' };
+  return { code: lines.join('\\n'), q: question };
+}
 function setQ(card){
   var box = document.createElement('div');
   box.id = 'qText';
-  if (card.frontLang) box.appendChild(pre(card.front));
+  if (card.frontLang){
+    var sp = splitCodeQ(card.front);
+    if (sp.q){ var h = document.createElement('div'); h.className = 'code-q'; h.textContent = sp.q; box.appendChild(h); }
+    box.appendChild(pre(sp.code));
+  }
   else box.textContent = card.front;
   var body = document.getElementById('ovBody');
   body.innerHTML = '';
