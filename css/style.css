@@ -4789,3 +4789,27 @@ mark.find-hit.find-cur { background: #FACC15; color: #111; box-shadow: 0 0 0 2px
 .ai-kind-desc { font-size: 0.76rem; color: var(--text-muted); line-height: 1.4; }
 .ai-kind-ex { font: 500 0.7rem var(--font-mono); color: var(--text-faint); line-height: 1.4; }
 .ai-kind-why { font-size: 0.78rem; color: var(--text-muted); margin-top: 8px; min-height: 1em; }
+
+/* ===== Statistiky učení: „i“ s vysvětlením krabiček ===== */
+.stats-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.stats-head .label { margin: 0; }
+.info-tip {
+  position: relative; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--border-strong); color: var(--text-muted);
+  font: italic 600 0.74rem/1 Georgia, serif; cursor: help; user-select: none;
+}
+.info-tip:hover, .info-tip:focus { color: var(--accent); border-color: var(--accent); outline: none; }
+.info-tip-box {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 20;
+  width: min(290px, 80vw); padding: 12px 14px;
+  background: var(--bg-3); color: var(--text); border: 1px solid var(--border-strong); border-radius: 10px;
+  box-shadow: var(--shadow);
+  font: 400 0.78rem/1.5 var(--font); text-align: left; font-style: normal;
+  opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .15s, transform .15s, visibility .15s;
+  pointer-events: none;
+}
+.info-tip-box b { display: block; margin-bottom: 4px; font-weight: 600; }
+.info-tip-box br + b { display: inline; }
+.info-tip:hover .info-tip-box, .info-tip:focus .info-tip-box { opacity: 1; visibility: visible; transform: none; }

@@ -1015,7 +1015,20 @@ async function openLearnStats() {
         <div style="font-size:0.68rem;color:var(--text-muted);">k opakování</div>
       </div>
     </div>
-    <label class="label">Krabičky (1 = neumím · 5 = umím)</label>
+    <div class="stats-head">
+      <label class="label">Krabičky (1 = neumím · 5 = umím)</label>
+      <span class="info-tip" tabindex="0" role="button" aria-label="Jak fungují krabičky">i
+        <span class="info-tip-box" role="tooltip">
+          <b>Jak to funguje</b>
+          Každá kartička leží v jedné krabičce.<br>
+          ✓ Správná odpověď ji posune o krabičku výš.<br>
+          ✗ Špatná ji vrátí do krabičky 1.<br><br>
+          Čím vyšší krabička, tím později se zase zeptá:<br>
+          1 → za 10 minut · 2 → zítra · 3 → za 3 dny · 4 → za týden · 5 → za 16 dní<br><br>
+          <b>Tip:</b> pouštěj „Chytře“ — ptá se jen na to, co je zrovna na řadě, nejdřív na to, co ti nejde.
+        </span>
+      </span>
+    </div>
     <div style="display:flex;gap:6px;margin:6px 0 16px;">${boxHtml}</div>
     <label class="label">Posledních 7 dní</label>
     <div style="display:flex;gap:6px;margin:6px 0 16px;">${daysHtml}</div>
