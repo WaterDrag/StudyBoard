@@ -4824,4 +4824,19 @@ mark.find-hit.find-cur { background: #FACC15; color: #111; box-shadow: 0 0 0 2px
 /* Oblíbené místnosti — vlastní sekce nad „Všemi místnostmi“ */
 #favRoomsWrap[hidden] { display: none; }
 #favRoomsWrap .rooms-grid { margin-bottom: 28px; }
-.rooms-all-fav { grid-column: 1 / -1; padding: 18px; text-align: center; color: var(--text-muted); font-size: 0.86rem; border: 1px dashed var(--border-strong); border-radius: 12px; }
+
+#favDecksWrap[hidden] { display: none; }
+#favDecksWrap .decks-grid { margin-bottom: 28px; }
+
+/* Telefony: backdrop-filter (rozmazání) dělá na Androidu chyby skládání vrstev —
+   orb i jeho panel pod rozmazaným pozadím zmizely a lišta tabule se při
+   přibližování odtrhávala. Na dotyku proto bez rozmazání, jen ztmavení,
+   a panel se vysouvá bez průhlednosti. */
+@media (hover: none), (max-width: 760px) {
+  .orb-backdrop:not([hidden]) { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(5,6,9,.62); }
+  .wb-bar { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-2); }
+  .orb-sheet:not([hidden]) { animation-name: orbUpSolid; }
+  .orb, .orb-sheet { transform: translateZ(0); }
+  .orb.open { transform: translateZ(0) scale(0.92); }
+}
+@keyframes orbUpSolid { from { transform: translateY(60px); } to { transform: translateY(0); } }

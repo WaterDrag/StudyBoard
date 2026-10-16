@@ -1549,6 +1549,26 @@ function renderQuiz(){
 
 /* ── 3) Write: type the answer (diacritics/case/spacing forgiven) ── */
 function wnorm(s){ return norm(s).replace(/[^a-z0-9]+/g, ' ').trim(); }
+/* Levenshtein: kolik písmen je potřeba změnit/přidat/ubrat */
+function editDist(a, b){
+  if (Math.abs(a.length - b.length) > 6) return 99;
+  var prev = [], cur, i, j;
+  for (j = 0; j <= b.length; j++) prev[j] = j;
+  for (i = 1; i <= a.length; i++){
+    cur = [i];
+    for (j = 1; j <= b.length; j++){
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+/* Krátká slova musí sedět přesně, delší snesou ~1 chybu na 7 písmen (max 4) */
+function typoOk(right, mine){
+  var n = right.length;
+  var tol = n <= 3 ? 0 : n <= 7 ? 1 : Math.min(4, Math.floor(n / 7));
+  return tol > 0 && editDist(right, mine) <= tol;
+}
 function renderWrite(){
   var x = S.list[S.i], card = x.c;
   var body = setQ(card);
@@ -1563,9 +1583,18 @@ function renderWrite(){
     done = true;
     var accept = [card.back].concat(card.corrects || []);
     var mine = wnorm(inp.value);
-    var ok = mine.length > 0 && accept.some(function(a){ return wnorm(a) === mine; });
+    var exact = mine.length > 0 && accept.some(function(a){ return wnorm(a) === mine; });
+    /* Překlep (vedlejší písmeno, chybějící/navíc písmeno) se počítá jako správně */
+    var near = !exact && mine.length > 0 && accept.filter(function(a){ return typoOk(wnorm(a), mine); })[0];
+    var ok = exact || !!near;
     v.className = 'verdict ' + (ok ? 'ok' : 'bad');
-    if (ok) v.textContent = '✓ Správně!';
+    if (exact) v.textContent = '✓ Správně!';
+    else if (near) {
+      v.textContent = '✓ Správně, jen malý překlep — přesně: ';
+      var sb = document.createElement('b');
+      sb.textContent = near;
+      v.appendChild(sb);
+    }
     else {
       v.textContent = '✕ Správná odpověď: ';
       var strong = document.createElement('b');

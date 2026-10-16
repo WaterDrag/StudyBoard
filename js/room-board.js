@@ -989,14 +989,41 @@ function setupBoardPan() {
   const touchDist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   const touchMid = t => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
 
+  // Pinch: while the fingers move, the whole viewport is only SCALED with a
+  // GPU transform (cheap, smooth). The real CSS zoom — which re-lays-out the
+  // entire board and made it flicker, tear and drop whiteboards — is applied
+  // once, when the fingers lift.
+  const pinchScale = () => Math.min(2.2, Math.max(0.15, pinch.zoom * pinch.k)) / pinch.zoom;
+  const commitPinch = () => {
+    if (!pinch) return;
+    const rect = { left: pinch.rl, top: pinch.rt };   // ne getBoundingClientRect — ten je teď posunutý transformem
+    const k = pinchScale();
+    // Board point that was under the fingers at the start …
+    const bx = (pinch.sl + pinch.x - rect.left) / pinch.zoom;
+    const by = (pinch.st + pinch.y - rect.top) / pinch.zoom;
+    wrap.style.transform = '';
+    wrap.style.willChange = '';
+    BOARD_ZOOM = pinch.zoom * k;
+    document.getElementById('board').style.zoom = BOARD_ZOOM;
+    // … stays under where the fingers are now.
+    wrap.scrollLeft = bx * BOARD_ZOOM - (pinch.mx - rect.left);
+    wrap.scrollTop  = by * BOARD_ZOOM - (pinch.my - rect.top);
+    updateZoomLabel();
+    updateMinimap();
+  };
+
   wrap.addEventListener('touchstart', e => {
     if (e.touches.length === 2) {
       const mid = touchMid(e.touches);
       pinch = {
         dist: Math.max(1, touchDist(e.touches)), zoom: BOARD_ZOOM,
         x: mid.x, y: mid.y, sl: wrap.scrollLeft, st: wrap.scrollTop,
+        mx: mid.x, my: mid.y, k: 1,
+        rl: wrap.getBoundingClientRect().left, rt: wrap.getBoundingClientRect().top,
         moved: !!touchPan?.moved,
       };
+      wrap.style.transformOrigin = '0 0';
+      wrap.style.willChange = 'transform';
       touchPan = null;
       e.preventDefault();
     } else if (e.touches.length === 1 &&
@@ -1010,23 +1037,22 @@ function setupBoardPan() {
     if (pinch && e.touches.length === 2) {
       e.preventDefault();
       const mid = touchMid(e.touches);
-      const rect = wrap.getBoundingClientRect();
       if (Math.hypot(mid.x - pinch.x, mid.y - pinch.y) > 8 ||
           Math.abs(touchDist(e.touches) - pinch.dist) > 8) {
         pinch.moved = true;
         suppressGestureClick();
       }
-      const boardX = (pinch.sl + pinch.x - rect.left) / pinch.zoom;
-      const boardY = (pinch.st + pinch.y - rect.top) / pinch.zoom;
-      BOARD_ZOOM = Math.min(2.2, Math.max(0.15, pinch.zoom * (touchDist(e.touches) / pinch.dist)));
-      document.getElementById('board').style.zoom = BOARD_ZOOM;
-      updateZoomLabel();
-      // Keep the original board point under the moving finger midpoint. This
-      // makes a two-finger drag pan the board even when pinch distance stays
-      // the same, and combines translation + zoom without jumping.
-      wrap.scrollLeft = boardX * BOARD_ZOOM - (mid.x - rect.left);
-      wrap.scrollTop  = boardY * BOARD_ZOOM - (mid.y - rect.top);
-      updateMinimap();
+      const rectP = { left: pinch.rl, top: pinch.rt };
+      pinch.k = touchDist(e.touches) / pinch.dist;
+      pinch.mx = mid.x; pinch.my = mid.y;
+      const k = pinchScale();
+      // Keep the start point under the moving finger midpoint: this pans with
+      // two fingers too, and combines translation + zoom without jumping.
+      const p0x = pinch.x - rectP.left, p0y = pinch.y - rectP.top;
+      const tx = (mid.x - rectP.left) - p0x * k, ty = (mid.y - rectP.top) - p0y * k;
+      wrap.style.transform = `translate(${tx}px, ${ty}px) scale(${k})`;
+      const pct = document.getElementById('zoomPct');
+      if (pct) pct.textContent = Math.round(pinch.zoom * k * 100) + ' %';
     } else if (touchPan && e.touches.length === 1) {
       e.preventDefault();
       const t = e.touches[0];
@@ -1042,6 +1068,7 @@ function setupBoardPan() {
   const endTouch = e => {
     if (e.touches.length < 2 && pinch) {
       if (pinch.moved) suppressGestureClick();
+      commitPinch();
       pinch = null;
     }
     if (e.touches.length === 0 && touchPan) {
@@ -1368,6 +1395,15 @@ function setupMobileOrb() {
     const p = JSON.parse(localStorage.getItem('sb_orb_pos') || 'null');
     if (p) { orb.style.left = p.x + 'px'; orb.style.top = p.y + 'px'; orb.style.right = 'auto'; orb.style.bottom = 'auto'; }
   } catch (_) {}
+  // Po otočení telefonu / jiném displeji nesmí zůstat mimo obrazovku.
+  const keepOnScreen = () => {
+    if (!orb.style.left) return;
+    const x = Math.min(Math.max(6, parseInt(orb.style.left)), window.innerWidth - 64);
+    const y = Math.min(Math.max(60, parseInt(orb.style.top)), window.innerHeight - 64);
+    orb.style.left = x + 'px'; orb.style.top = y + 'px';
+  };
+  keepOnScreen();
+  window.addEventListener('resize', keepOnScreen);
   let drag = null, moved = false;
   orb.addEventListener('touchstart', e => {
     const t = e.touches[0], r = orb.getBoundingClientRect();

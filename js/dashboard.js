@@ -189,7 +189,9 @@ function loadRooms(user) {
   if (!user.isAnonymous) BgFav.load();
   db.collection('users').doc(user.uid).get().then(snap => {
     PINNED_ROOMS = new Set((snap.exists && snap.data().pinnedRooms) || []);
+    FAV_DECKS = new Set((snap.exists && snap.data().favDecks) || []);
     renderRoomGrid();
+    renderFavDecks();
   }).catch(() => {});
   db.collection('rooms')
     .where('memberIds', 'array-contains', user.uid)
@@ -369,7 +371,7 @@ function setupDashHero(user) {
 
 function applyDashSearch() {
   const q = document.getElementById('dashSearch').value.trim().toLowerCase();
-  document.querySelectorAll('#roomsGrid .room-card, #favRoomsGrid .room-card, #decksGrid .deck-card').forEach(card => {
+  document.querySelectorAll('#roomsGrid .room-card, #favRoomsGrid .room-card, #decksGrid .deck-card, #favDecksGrid .deck-card').forEach(card => {
     card.style.display = !q || card.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
   const cont = document.getElementById('dashContinue');
@@ -456,10 +458,8 @@ function renderRoomGrid() {
     favGrid.innerHTML = '';
     favs.forEach(r => favGrid.appendChild(buildRoomCard(r.id, r.room, r.role)));
   }
-  // Oblíbené už jsou nahoře — ve „Všech“ se neopakují.
-  DASH_ROOMS.filter(r => !favWrap || !PINNED_ROOMS.has(r.id))
-    .forEach(r => grid.appendChild(buildRoomCard(r.id, r.room, r.role)));
-  if (!grid.children.length) grid.innerHTML = '<div class="rooms-all-fav">Všechny místnosti máš v oblíbených ♥</div>';
+  // Oblíbené jsou jen zástupci — ve „Všech“ zůstávají taky.
+  DASH_ROOMS.forEach(r => grid.appendChild(buildRoomCard(r.id, r.room, r.role)));
   applyDashSearch();
 }
 
@@ -575,16 +575,7 @@ function buildRoomCard(id, room, role) {
         <span class="meta-date">${esc(meta)}</span>
       </div>
     </div>`;
-  a.addEventListener('contextmenu', e => { e.preventDefault(); openRoomCardMenu(e.clientX, e.clientY, id, room, role); });
-  // Telefon: podržet prst = stejné menu.
-  let pressT = null, pressed = false;
-  a.addEventListener('touchstart', e => {
-    pressed = false;
-    const t = e.touches[0];
-    pressT = setTimeout(() => { pressed = true; openRoomCardMenu(t.clientX, t.clientY, id, room, role); }, 550);
-  }, { passive: true });
-  ['touchend', 'touchmove', 'touchcancel'].forEach(ev => a.addEventListener(ev, () => clearTimeout(pressT), { passive: true }));
-  a.addEventListener('click', e => { if (pressed) { e.preventDefault(); pressed = false; } });
+  wireCardMenu(a, (x, y) => openRoomCardMenu(x, y, id, room, role));
   const editBtn = a.querySelector('[data-edit-room]');
   if (editBtn) {
     editBtn.addEventListener('click', e => {
@@ -798,17 +789,95 @@ async function loadDecks(user) {
     }
 
     grid.innerHTML = '';
+    DASH_DECKS = [];
     sorted.forEach(doc => {
       const deck      = doc.data();
       const room      = deck.roomId ? roomMap[deck.roomId] : null;
       const ownerName = room ? (room.members?.[deck.ownerUid]?.displayName || null) : null;
+      DASH_DECKS.push({ id: doc.id, deck, roomName: room?.name || null, ownerName });
       grid.appendChild(buildDeckCard(doc.id, deck, room?.name || null, ownerName, user.uid));
     });
+    renderFavDecks();
   } catch (e) {
     if (e.code !== 'permission-denied') {
       grid.innerHTML = `<div style="grid-column:1/-1;color:var(--text-muted);padding:40px;text-align:center;">Chyba: ${e.message}</div>`;
     }
   }
+}
+
+// ── Oblíbené balíčky ──────────────────────────────────────────
+// Pravé kliknutí (na telefonu podržení) na balíček → „Přidat do oblíbených“.
+// Zástupce nahoře v sekci Oblíbené; balíček zůstává i ve Všech.
+let FAV_DECKS = new Set();
+let DASH_DECKS = [];
+
+function renderFavDecks() {
+  const wrap = document.getElementById('favDecksWrap');
+  const grid = document.getElementById('favDecksGrid');
+  if (!wrap || !grid) return;
+  const favs = DASH_DECKS.filter(d => FAV_DECKS.has(d.id));
+  wrap.hidden = !favs.length;
+  grid.innerHTML = '';
+  const uid = auth.currentUser?.uid;
+  favs.forEach(d => grid.appendChild(buildDeckCard(d.id, d.deck, d.roomName, d.ownerName, uid)));
+}
+
+async function toggleDeckFav(id) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  const on = !FAV_DECKS.has(id);
+  if (on) FAV_DECKS.add(id); else FAV_DECKS.delete(id);
+  renderFavDecks();
+  try {
+    await db.collection('users').doc(uid).set({
+      favDecks: on ? firebase.firestore.FieldValue.arrayUnion(id) : firebase.firestore.FieldValue.arrayRemove(id),
+    }, { merge: true });
+    toast(on ? 'Balíček přidán do oblíbených.' : 'Balíček odebrán z oblíbených.');
+  } catch (e) { toast('Nepovedlo se: ' + e.message); }
+}
+
+function openDeckCardMenu(x, y, id, deck, isOwner) {
+  document.getElementById('roomCardMenu')?.remove();
+  const items = [
+    ['open', 'Otevřít'],
+    ['tab', 'Otevřít v nové kartě'],
+    ['fav', FAV_DECKS.has(id) ? '♥ Odebrat z oblíbených' : '♡ Přidat do oblíbených'],
+    ...(isOwner ? [['edit', '✏️ Upravit balíček']] : []),
+  ];
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'roomCardMenu';
+  menu.innerHTML = items.map(([a, t]) => `<button type="button" class="context-menu-item" data-a="${a}">${esc(t)}</button>`).join('');
+  document.body.appendChild(menu);
+  menu.style.left = Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+  menu.style.top  = Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8)) + 'px';
+  menu.addEventListener('click', e => {
+    const a = e.target.closest('[data-a]')?.dataset.a;
+    if (!a) return;
+    menu.remove();
+    const href = 'flashcards.html?deck=' + encodeURIComponent(id);
+    if (a === 'open') location.href = href;
+    if (a === 'tab') window.open(href, '_blank', 'noopener');
+    if (a === 'fav') toggleDeckFav(id);
+    if (a === 'edit') openEditDeckModal(id, deck);
+  });
+  setTimeout(() => {
+    const away = ev => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('pointerdown', away, true); } };
+    document.addEventListener('pointerdown', away, true);
+  }, 0);
+}
+
+// Pravé kliknutí + podržení prstem na kartě (místnost i balíček).
+function wireCardMenu(el, open) {
+  el.addEventListener('contextmenu', e => { e.preventDefault(); open(e.clientX, e.clientY); });
+  let pressT = null, pressed = false;
+  el.addEventListener('touchstart', e => {
+    pressed = false;
+    const t = e.touches[0];
+    pressT = setTimeout(() => { pressed = true; open(t.clientX, t.clientY); }, 550);
+  }, { passive: true });
+  ['touchend', 'touchmove', 'touchcancel'].forEach(ev => el.addEventListener(ev, () => clearTimeout(pressT), { passive: true }));
+  el.addEventListener('click', e => { if (pressed) { e.preventDefault(); pressed = false; } });
 }
 
 function buildDeckCard(id, deck, roomName, ownerName, myUid) {
@@ -832,6 +901,7 @@ function buildDeckCard(id, deck, roomName, ownerName, myUid) {
     ${deck.description ? `<p class="card-desc">${esc(deck.description)}</p>` : ''}
     <p style="margin-bottom:8px;">${deck.cardCount || 0} karet</p>
     <div class="deck-tags">${contextTag}${ownerTag}</div>`;
+  wireCardMenu(a, (x, y) => openDeckCardMenu(x, y, id, deck, isOwner));
   const editBtn = a.querySelector('[data-edit-deck]');
   if (editBtn) {
     editBtn.addEventListener('click', e => {
