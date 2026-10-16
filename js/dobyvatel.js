@@ -14,9 +14,9 @@ const MAP_LIST = [
   { id: 'usa',     name: 'USA',     emoji: '🗽', desc: '50 států' },
   { id: 'svet',    name: 'Svět',    emoji: '🌍', desc: '173 zemí' },
 ];
-const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b'];
-const BOT_NAMES = ['Bot Karel', 'Bot Eva', 'Bot Ondra'];
-const MAX_PLAYERS = 4;
+const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ec4899'];
+const BOT_NAMES = ['Bot Karel', 'Bot Eva', 'Bot Ondra', 'Bot Jana', 'Bot Petr'];
+const MAX_PLAYERS = 6;
 const VAL_LAND = 200, VAL_CASTLE = 1000, VAL_DEFEND = 100;
 const REVEAL_MS = 4500;
 const POOL_MAX_CARDS = 400;
@@ -71,6 +71,47 @@ function regionGraph(map, region) {
   }
   return { ids, adj };
 }
+// Hrad smí stát jen na OKRAJI mapy (pobřeží / hranice mapy — příznak e z dat —
+// nebo na kraji zvoleného výřezu) a nikdy hned vedle jiného hradu: mezi hrady
+// musí být aspoň jedno území.
+function isEdge(id) {
+  const t = MAP && MAP.t.find(x => x.id === id);
+  return !!t && (t.e === 1 || t.n.some(n => !REGION.ids.has(n)));
+}
+function castleOptions(st) {
+  const castles = Object.values(st.castles || {});
+  const blocked = new Set(castles.flatMap(c => [c, ...REGION.adj.get(c)]));
+  const free = [...REGION.ids].filter(t => !st.own[t]);
+  const strict = free.filter(t => isEdge(t) && !blocked.has(t));
+  if (strict.length) return strict;
+  const apart = free.filter(t => !blocked.has(t));   // okraj už nezbyl → aspoň ne vedle hradu
+  return apart.length ? apart : free;
+}
+// Kolik hradů se do výřezu vejde podle pravidel (hladově, nejdřív okrajová
+// území s nejmenším počtem sousedů) → kolik hráčů tu může hrát.
+function maxCastles() {
+  if (!REGION) return 0;
+  const edge = [...REGION.ids].filter(isEdge).sort((a, b) => REGION.adj.get(a).size - REGION.adj.get(b).size || a.localeCompare(b));
+  const picked = new Set(), blocked = new Set();
+  edge.forEach(t => { if (!blocked.has(t)) { picked.add(t); blocked.add(t); REGION.adj.get(t).forEach(n => blocked.add(n)); } });
+  if (picked.size >= MAX_PLAYERS) return picked.size;
+  // hladový odhad bývá o kus pod skutečností → zkusit najít víc (omezené hledání)
+  let best = picked.size, steps = 0;
+  const dfs = (i, chosen, block) => {
+    if (++steps > 40000 || best >= MAX_PLAYERS) return;
+    if (chosen > best) best = chosen;
+    if (chosen + (edge.length - i) <= best) return;
+    for (let j = i; j < edge.length; j++) {
+      const t = edge[j];
+      if (block.has(t)) continue;
+      const nb = new Set(block); nb.add(t); REGION.adj.get(t).forEach(n => nb.add(n));
+      dfs(j + 1, chosen + 1, nb);
+    }
+  };
+  dfs(0, 0, new Set());
+  return best;
+}
+
 async function ensureRegion() {
   const s = GAME.settings || {};
   const key = s.map + '|' + (s.region || 'all');
@@ -203,7 +244,7 @@ function wireLobby() {
   $('addBotBtn').addEventListener('click', () => {
     if (!isHost()) return;
     const n = Object.keys(GAME.players).length;
-    if (n >= MAX_PLAYERS) { toast('Víc než 4 hráči to nejde.'); return; }
+    if (n >= MAX_PLAYERS) { toast(`Víc než ${MAX_PLAYERS} hráčů to nejde.`); return; }
     const used = new Set(Object.values(GAME.players).map(p => p.color));
     const usedNames = new Set(Object.values(GAME.players).map(p => p.name));
     const id = 'bot' + Date.now().toString(36);
@@ -258,7 +299,8 @@ function renderLobby() {
   $('lobbyRegion').disabled = !host || !Object.keys(groups).length;
   const n = REGION ? REGION.ids.size : 0;
   const sc = expandScale(n, Math.max(2, players.length));
-  $('regionInfo').textContent = n ? `${n} území · za tipovačku ${sc.k1} + ${sc.k2} území` : '';
+  const maxP = Math.min(MAX_PLAYERS, maxCastles());
+  $('regionInfo').textContent = n ? `${n} území · za tipovačku ${sc.k1} + ${sc.k2} území · hráči: nejvýš ${maxP}` : '';
   $('lobbyRounds').value = String(s.rounds || 4); $('lobbyRounds').disabled = !host;
   $('lobbyTimer').value = String(s.timer || 20); $('lobbyTimer').disabled = !host;
   $('lobbyAi').checked = !!s.ai; $('lobbyAi').disabled = !host;
@@ -279,10 +321,11 @@ function renderLobby() {
   const parts = players.length;
   const okDecks = total >= 6;
   $('startBtn').hidden = !host;
-  $('startBtn').disabled = !(parts >= 2 && okDecks && n >= parts * 2);
+  $('startBtn').disabled = !(parts >= 2 && okDecks && n >= parts * 2 && parts <= maxP);
   $('startHint').textContent = !host ? 'Čeká se, až hostitel spustí hru…'
     : parts < 2 ? 'Potřebuješ aspoň 2 hráče (klidně bota).'
     : !okDecks ? 'Přidej kartičky (aspoň 6).'
+    : parts > maxP ? `Na tuhle mapu se vejdou jen ${maxP} ${maxP === 1 ? 'hrad' : maxP < 5 ? 'hrady' : 'hradů'} (okraj mapy, ne vedle sebe) — uber hráče nebo zvol větší mapu.`
     : n < parts * 2 ? 'Výřez je na tolik hráčů moc malý.' : '';
 }
 
@@ -356,9 +399,9 @@ async function hostStart() {
   H.guess = shuffle(DOB_GUESS.map((q, i) => ({ t: q[0], a: q[1], id: 'b' + i })));
   if (GAME.settings.ai) hostAiGuesses();
   const st = {
-    phase: 'castle', step: 1, order, castleQueue: order.slice(), turn: order[0], deadline: Date.now() + 25000,
+    phase: 'q', step: 1, order, castleQueue: [], turn: null, deadline: 0,
     own: {}, val: {}, castles: {}, towers: {}, out: {}, round: 0, rounds: GAME.settings.rounds || 4,
-    log: ['🏰 Vyberte si hrady — jeden po druhém.'], q: null, reveal: null, ctx: null,
+    log: ['🎯 První tipovačka rozhodne, kdo si vybírá hrad první.'], q: null, reveal: null, ctx: null,
   };
   await ref().update({ status: 'play', st, answers: {}, req: {} });
 }
@@ -415,6 +458,8 @@ function hostTick() {
   const st = GAME.st; if (!st) return;
   if (H.actedStep === st.step) return;   // na tenhle krok už je zápis na cestě
   const now = Date.now();
+  // úplně první otázka (pořadí výběru hradů) se položí hned po startu
+  if (st.phase === 'q' && !st.q) return hostAsk(stCopy(), 'guess', st.order.slice(), { type: 'order' });
   if (st.phase === 'castle') return hostCastle(st, now);
   if (st.phase === 'q') return hostQuestion(st, now);
   if (st.phase === 'reveal') { if (now >= st.revealUntil) return hostAfterReveal(st); return; }
@@ -441,11 +486,50 @@ function graphDist(from, targets) {
   while (q.length) { if (q.some(x => tset.has(x))) return d; const nq = []; q.forEach(x => REGION.adj.get(x).forEach(n => { if (!seen.has(n)) { seen.add(n); nq.push(n); } })); q = nq; d++; }
   return 99;
 }
+// Bot / vypršený čas: vybrat hrad tak, aby po něm zbylo ostatním co nejvíc
+// míst na okraji (jinak by poslední hráč nemusel mít kam), a teprve pak co
+// nejdál od ostatních hradů.
+// Kolik dalších hradů se ještě dá postavit na okraji (max. `need`), když už
+// stojí hrady `castles` — omezené hledání, stačí zjistit, jestli se vejdou.
+function edgeCapacity(castles, own, need) {
+  const blocked = new Set(castles.flatMap(c => [c, ...REGION.adj.get(c)]));
+  const cand = [...REGION.ids].filter(t => !own[t] && isEdge(t) && !blocked.has(t))
+    .sort((a, b) => REGION.adj.get(a).size - REGION.adj.get(b).size || a.localeCompare(b));
+  let best = 0, steps = 0;
+  const dfs = (i, chosen, block) => {
+    if (++steps > 4000 || best >= need) return;
+    if (chosen > best) best = chosen;
+    if (chosen + (cand.length - i) <= best) return;
+    for (let j = i; j < cand.length; j++) {
+      const t = cand[j]; if (block.has(t)) continue;
+      const nb = new Set(block); nb.add(t); REGION.adj.get(t).forEach(n => nb.add(n));
+      dfs(j + 1, chosen + 1, nb);
+    }
+  };
+  dfs(0, 0, new Set());
+  return best;
+}
+// Co může hráč na tahu vybrat: okrajová místa, po kterých se hrad ještě
+// vejde všem, kdo jsou ve frontě za ním. Když to nejde, aspoň okraj / ne vedle.
+function castleChoices(st) {
+  const base = castleOptions(st);
+  const need = Math.max(0, (st.castleQueue ? st.castleQueue.length : 1) - 1);
+  if (!need || !base.every(isEdge)) return base;
+  const taken = Object.values(st.castles || {});
+  const ok = base.filter(t => edgeCapacity([...taken, t], { ...st.own, [t]: '_' }, need) >= need);
+  return ok.length ? ok : base;
+}
 function autoCastle(st) {
   const taken = Object.values(st.castles);
-  const free = freeIds(st);
-  let best = [], bd = -1;
-  free.forEach(t => { const d = graphDist(t, taken); if (d > bd) { bd = d; best = [t]; } else if (d === bd) best.push(t); });
+  const free = castleChoices(st);
+  const need = Math.max(0, (st.castleQueue ? st.castleQueue.length : MAX_PLAYERS) - 1);
+  const left = t => edgeCapacity([...taken, t], { ...st.own, [t]: '_' }, need);
+  let best = [], bk = null;
+  free.forEach(t => {
+    const k = [left(t), graphDist(t, taken)];
+    if (!bk || k[0] > bk[0] || (k[0] === bk[0] && k[1] > bk[1])) { bk = k; best = [t]; }
+    else if (k[0] === bk[0] && k[1] === bk[1]) best.push(t);
+  });
   return best[Math.floor(Math.random() * best.length)];
 }
 function hostCastle(st, now) {
@@ -453,7 +537,7 @@ function hostCastle(st, now) {
   if (!p) return hostStartExpand(stCopy());
   let tid = null;
   const r = reqFor(st, p);
-  if (r && REGION.ids.has(r.tid) && !st.own[r.tid]) tid = r.tid;
+  if (r && castleChoices(st).includes(r.tid)) tid = r.tid;
   else if (GAME.players[p]?.bot && botReady(st, p)) tid = autoCastle(st);
   else if (now > st.deadline) tid = autoCastle(st);
   if (!tid) return;
@@ -559,6 +643,17 @@ function hostAfterReveal(st) {
   const s = nextStep(stCopy());
   const { res, rank } = st.reveal;
   const ctx = st.ctx || {};
+  if (ctx.type === 'order') {
+    // pořadí: nejblíž první, při shodě rychlejší; kdo netipoval, jde na konec
+    const answered = rank.filter(p => res[p].d !== null);
+    const rest = shuffle(rank.filter(p => res[p].d === null));
+    s.order = [...answered, ...rest];
+    s.castleQueue = s.order.slice();
+    s.turn = s.castleQueue[0]; s.deadline = Date.now() + 25000; s.phase = 'castle';
+    addLog(s, `🎯 Správně ${st.reveal.correct}. Pořadí výběru hradů: ${s.order.map(pname).join(', ')}.`);
+    addLog(s, '🏰 Hrad jen na okraji mapy a ne hned vedle jiného hradu.');
+    return hostWrite({ st: s, req: {} });
+  }
   if (ctx.type === 'expand') {
     const answered = rank.filter(p => res[p].d !== null);
     if (!answered.length) { addLog(s, '😶 Nikdo netipoval — další otázka.'); return hostAsk(s, 'guess', alive(s), { type: 'expand' }); }
@@ -795,7 +890,7 @@ function wireGame() {
 
 function myOptions(st) {
   if (!st || st.turn !== ME.uid) return [];
-  if (st.phase === 'castle') return freeIds(st);
+  if (st.phase === 'castle') return castleChoices(st);
   if (st.phase === 'pick' && st.pickQueue?.[0]?.p === ME.uid) return pickable(st, ME.uid);
   if (st.phase === 'attack') return attackTargets(st, ME.uid);
   return [];
@@ -850,12 +945,13 @@ function renderPhase(st) {
   const box = $('phaseBox');
   const me = st.turn === ME.uid;
   let txt = '';
-  if (st.phase === 'castle') txt = me ? '🏰 <b>Vyber si hrad</b> — klikni na volné území.' : `🏰 ${esc(pname(st.turn))} vybírá hrad…`;
+  if (st.phase === 'castle') txt = me ? '🏰 <b>Vyber si hrad</b> — svítí území na okraji mapy, která nejsou vedle jiného hradu.' : `🏰 ${esc(pname(st.turn))} vybírá hrad…`;
   else if (st.phase === 'pick') { const c = st.pickQueue?.[0]; txt = c && c.p === ME.uid ? `🗺️ <b>Zaber ${c.n} ${c.n === 1 ? 'území' : 'území'}</b> — svítí ta, která můžeš.` : `🗺️ ${esc(pname(c?.p))} zabírá území (${c?.n || 0})…`; }
   else if (st.phase === 'attack') txt = me ? '⚔️ <b>Tvůj útok</b> — vyber cizí území u svých hranic.' : `⚔️ ${esc(pname(st.turn))} vybírá, kam zaútočí…`;
   else if (st.phase === 'q' || st.phase === 'reveal') {
     const b = st.battle;
-    txt = st.ctx?.type === 'expand' ? '🎯 Expanze — tipovačka pro všechny'
+    txt = st.ctx?.type === 'order' ? '🎯 Kdo bude blíž (a rychlejší), vybírá hrad první'
+      : st.ctx?.type === 'expand' ? '🎯 Expanze — tipovačka pro všechny'
       : b ? `⚔️ ${esc(pname(b.att))} → ${esc(terrName(b.tid))} (${esc(pname(b.def))})${b.castle ? ` · hrad, věží ${st.towers[b.def]}` : ''}${st.ctx?.type === 'tie' ? ' · rozstřel' : ''}` : '';
   } else if (st.phase === 'end') txt = '🏆 Hra skončila';
   const roundTxt = st.round ? `<span class="dob-round">Kolo ${Math.min(st.round, st.rounds)}/${st.rounds}</span>` : '<span class="dob-round">Rozdělování</span>';
