@@ -1,4 +1,4 @@
-const APP_VERSION = '10.8.7';
+const APP_VERSION = '10.9';
 
 // Apply the saved theme immediately — this file is the very first script in
 // every page's <head> (loaded with a Date.now() cache-buster), so setting

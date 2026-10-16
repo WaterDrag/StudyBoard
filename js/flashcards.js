@@ -976,6 +976,8 @@ function loadSurvivalLobbies() {
     }, () => { section.style.display = 'none'; });
 
   createBtn.addEventListener('click', createSurvivalLobby);
+  const dob = document.getElementById('dobyvatelLink');
+  if (dob && ROOM_ID) dob.href = 'dobyvatel.html?room=' + encodeURIComponent(ROOM_ID);
 }
 
 // ── Learning stats (spaced repetition) ─────────────────────────

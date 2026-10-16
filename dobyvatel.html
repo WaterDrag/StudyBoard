@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Dobyvatel – StudyBoard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%97%BA%EF%B8%8F</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body class="dob-body">
+
+  <nav class="fc-nav">
+    <a id="backBtn" href="dashboard.html" class="icon-btn" aria-label="Zpět" title="Zpět"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <span class="fc-nav-title" id="navTitle">🗺️ Dobyvatel</span>
+    <div style="display:flex;gap:8px;" id="navActions"></div>
+  </nav>
+
+  <!-- ═══ ÚVOD: založit hru / připojit se ═══ -->
+  <main class="dob-home" id="screenHome" hidden>
+    <div class="dob-hero">
+      <h1>Dobyvatel</h1>
+      <p>Zabírej území tipováním, dobývej sousedy otázkami z vašich kartiček a zbourej soupeřům hrady. Hraje se s přáteli i proti botům.</p>
+    </div>
+    <div class="dob-home-grid">
+      <section class="dob-card">
+        <h2>Nová hra</h2>
+        <label class="label">Mapa</label>
+        <div class="dob-maps" id="newMap"></div>
+        <label class="label" style="margin-top:14px;">Kdo se může připojit</label>
+        <div class="seg dob-seg" id="newVis">
+          <button type="button" class="seg-btn active" data-v="friends">Přátelé</button>
+          <button type="button" class="seg-btn" data-v="invite">Jen s pozvánkou</button>
+        </div>
+        <button type="button" class="btn btn-primary dob-create" id="createBtn">Založit hru</button>
+      </section>
+      <section class="dob-card">
+        <h2>Hry přátel</h2>
+        <div id="openGames" class="dob-open"><div class="dob-muted">Načítám…</div></div>
+        <label class="label" style="margin-top:16px;">Máš pozvánku?</label>
+        <div style="display:flex;gap:8px;">
+          <input id="joinCode" class="input" placeholder="Vlož odkaz nebo kód hry" autocomplete="off">
+          <button type="button" class="btn btn-secondary" id="joinBtn">Připojit</button>
+        </div>
+      </section>
+    </div>
+    <section class="dob-card dob-rules">
+      <h2>Jak se hraje</h2>
+      <ol>
+        <li><b>Hrady:</b> každý si vybere jedno území jako hrad (3 věže, 1000 bodů).</li>
+        <li><b>Expanze:</b> všichni tipují číslo. Nejbližší zabere nejvíc území, druhý méně, ostatní nic. Opakuje se, dokud je co brát.</li>
+        <li><b>Bitvy:</b> hráči se střídají v útocích na sousední území. Útočník i obránce odpoví na otázku z kartiček. Kdo odpoví správně a soupeř ne, vyhrává. Když oba stejně, rozhodne tipovačka.</li>
+        <li><b>Hrad</b> padne jen po 3 výhrách v řadě. Kdo o hrad přijde, vypadává a jeho území bere dobyvatel.</li>
+        <li>Po nastaveném počtu kol vyhrává <b>nejvíc bodů</b> (území 200, ubráněné +100, hrad 1000).</li>
+      </ol>
+    </section>
+  </main>
+
+  <!-- ═══ LOBBY ═══ -->
+  <main class="dob-lobby" id="screenLobby" hidden>
+    <div class="dob-lobby-grid">
+      <section class="dob-card">
+        <div class="dob-head-row"><h2>Hráči</h2><span class="dob-muted" id="lobbyCount"></span></div>
+        <div id="lobbyPlayers" class="dob-players"></div>
+        <div class="dob-bot-row" id="botRow">
+          <button type="button" class="btn btn-secondary btn-sm" id="addBotBtn">+ Přidat bota</button>
+          <select id="botLevel" class="input dob-select" title="Obtížnost botů">
+            <option value="0.45">Bot: lehký</option>
+            <option value="0.65" selected>Bot: střední</option>
+            <option value="0.85">Bot: těžký</option>
+          </select>
+        </div>
+        <div class="dob-invite">
+          <label class="label">Pozvánka</label>
+          <div style="display:flex;gap:8px;">
+            <input id="inviteLink" class="input" readonly>
+            <button type="button" class="btn btn-secondary" id="copyInvite">Kopírovat</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="dob-card">
+        <h2>Nastavení</h2>
+        <label class="label">Mapa</label>
+        <div class="dob-maps" id="lobbyMap"></div>
+        <label class="label" style="margin-top:12px;">Výřez mapy</label>
+        <select id="lobbyRegion" class="input"></select>
+        <div class="dob-muted dob-small" id="regionInfo"></div>
+        <div class="dob-two">
+          <div>
+            <label class="label">Kol bitev</label>
+            <select id="lobbyRounds" class="input"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>8</option></select>
+          </div>
+          <div>
+            <label class="label">Čas na odpověď</label>
+            <select id="lobbyTimer" class="input"><option value="15">15 s</option><option value="20" selected>20 s</option><option value="30">30 s</option><option value="45">45 s</option></select>
+          </div>
+        </div>
+        <label class="dob-check"><input type="checkbox" id="lobbyAi"> Dogenerovat tipovačky přes AI k tématu kartiček <span class="dob-muted" id="aiNote"></span></label>
+      </section>
+
+      <section class="dob-card dob-decks-card">
+        <div class="dob-head-row"><h2>Kartičky do hry</h2><span class="dob-muted" id="poolCount"></span></div>
+        <p class="dob-muted dob-small">Bitevní otázky jsou z těchto balíčků. Přidat může hostitel a ti, komu to dovolí.</p>
+        <div id="poolList" class="dob-pool"></div>
+        <div id="myDecksWrap">
+          <label class="label" style="margin-top:12px;">Přidat moje balíčky</label>
+          <div id="myDecks" class="dob-mydecks"><div class="dob-muted">Načítám…</div></div>
+        </div>
+      </section>
+    </div>
+    <div class="dob-lobby-foot">
+      <button type="button" class="btn btn-secondary" id="leaveBtn">Opustit</button>
+      <span class="dob-muted" id="startHint"></span>
+      <button type="button" class="btn btn-primary" id="startBtn">Spustit hru</button>
+    </div>
+  </main>
+
+  <!-- ═══ HRA ═══ -->
+  <main class="dob-game" id="screenGame" hidden>
+    <div class="dob-map-wrap" id="mapWrap">
+      <svg id="mapSvg" class="dob-map" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="dob-map-tools">
+        <button type="button" class="icon-btn" id="zoomIn" aria-label="Přiblížit">+</button>
+        <button type="button" class="icon-btn" id="zoomOut" aria-label="Oddálit">−</button>
+        <button type="button" class="icon-btn" id="zoomFit" aria-label="Celá mapa">⤢</button>
+      </div>
+      <div class="dob-tip" id="mapTip" hidden></div>
+    </div>
+    <aside class="dob-side">
+      <div class="dob-scores" id="scores"></div>
+      <div class="dob-phase" id="phaseBox"></div>
+      <div class="dob-qbox" id="qBox"></div>
+      <div class="dob-log" id="logBox"></div>
+    </aside>
+  </main>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>document.write('<script src="js/ai.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/dobyvatel-questions.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>(function(){var s=document.createElement('script');s.src='js/dobyvatel.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>

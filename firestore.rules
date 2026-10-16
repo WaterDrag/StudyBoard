@@ -283,6 +283,48 @@ service cloud.firestore {
       }
     }
 
+    // ── Dobyvatel: lobby + celý stav hry v jednom dokumentu ─────
+    // Hru řídí hostitel (jeho prohlížeč hodnotí odpovědi a posouvá fáze).
+    // Ostatní smí: připojit/odpojit SEBE, zapsat SVOU odpověď (answers.{uid})
+    // a SVOU volbu území (req.{uid}); s povolením od hostitele i seznam
+    // balíčků. Dokument má náhodné id = kdo má odkaz, smí ho přečíst.
+    match /conquest/{gid} {
+      function cq() { return get(/databases/$(database)/documents/conquest/$(gid)).data; }
+      function only(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+      function mapOnlyMe(field) {
+        return request.resource.data[field].diff(resource.data.get(field, {})).affectedKeys().hasOnly([request.auth.uid]);
+      }
+      allow get: if isAuth();
+      allow list: if isAuth() && (request.auth.uid in resource.data.allowedUids || request.auth.uid in resource.data.playerIds);
+      allow create: if isAuth() && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+                    && request.resource.data.hostUid == request.auth.uid
+                    && request.resource.data.status == 'lobby';
+      allow delete: if isAuth() && resource.data.hostUid == request.auth.uid;
+      allow update: if isAuth() && (
+        resource.data.hostUid == request.auth.uid ||
+        // připojit se / odejít (jen v lobby, jen sám sebe)
+        (resource.data.status == 'lobby' && only(['playerIds', 'players']) && mapOnlyMe('players')
+          && (resource.data.visibility == 'invite' || request.auth.uid in resource.data.allowedUids)
+          && request.resource.data.playerIds.toSet().difference(resource.data.playerIds.toSet()).union(
+               resource.data.playerIds.toSet().difference(request.resource.data.playerIds.toSet())).hasOnly([request.auth.uid])) ||
+        // odpověď na otázku / volba území během hry
+        (request.auth.uid in resource.data.playerIds && only(['answers']) && mapOnlyMe('answers')) ||
+        (request.auth.uid in resource.data.playerIds && only(['req']) && mapOnlyMe('req')) ||
+        // seznam balíčků — s povolením od hostitele
+        (resource.data.status == 'lobby' && resource.data.get('deckPerm', {}).get(request.auth.uid, false) == true && only(['decks']))
+      );
+      // správná odpověď aktuální otázky — jen pro hostitele
+      match /secret/{doc} {
+        allow read, write: if isAuth() && cq().hostUid == request.auth.uid;
+      }
+      // kartičky zkopírované do hry
+      match /pool/{deckId} {
+        allow read: if isAuth() && (request.auth.uid in cq().playerIds || cq().hostUid == request.auth.uid);
+        allow write: if isAuth() && (cq().hostUid == request.auth.uid
+          || (cq().status == 'lobby' && cq().get('deckPerm', {}).get(request.auth.uid, false) == true));
+      }
+    }
+
     // ── Survival co-op lobby (jen metadata; živý stav je v RTDB) ──
     match /survival_lobbies/{lobbyId} {
       allow read:   if isAuth();
