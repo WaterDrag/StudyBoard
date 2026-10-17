@@ -54,6 +54,7 @@
       <div>
         <h1 id="dashGreeting">Ahoj</h1>
         <p id="dashSummary"></p>
+        <button type="button" class="garden-chip" id="gardenChip" hidden></button>
       </div>
       <div class="dashboard-actions">
         <button id="joinBtn" class="btn btn-secondary">
@@ -169,6 +170,24 @@
             <div class="game-lobbies" id="dailyFriends"><div class="game-empty">Načítám…</div></div>
           </div>
         </section>
+        <section class="game-card" style="--g1:#06b6d4;--g2:#a855f7">
+          <div class="game-art">⏱️</div>
+          <div class="game-body">
+            <h3>Spojovačka</h3>
+            <p>Spojuj pojmy s odpověďmi na čas. Rychlá správná spojení za sebou zvedají násobič až na ×5, chyba stojí 3 sekundy. Na pár minut, i na mobilu.</p>
+            <div class="game-status" id="spStatus"></div>
+            <div class="game-actions"><a class="btn btn-primary" href="spojovacka.html">Hrát Spojovačku</a></div>
+          </div>
+        </section>
+        <section class="game-card" style="--g1:#64748b;--g2:#ef4444">
+          <div class="game-art">🔤</div>
+          <div class="game-body">
+            <h3>Šibenice</h3>
+            <p>Podle otázky nebo definice z kartičky hádej pojem písmeno po písmenu. 10 slov, na každé 8 chyb. Háčky neřešíš, „C“ odkryje i „Č“.</p>
+            <div class="game-status" id="hgStatus"></div>
+            <div class="game-actions"><a class="btn btn-primary" href="sibenice.html">Hrát Šibenici</a></div>
+          </div>
+        </section>
         <section class="game-card" style="--g1:#1e3a8a;--g2:#eab308">
           <div class="game-art">💰</div>
           <div class="game-body">
@@ -230,6 +249,8 @@
               • Zombie Survival: <b>5 b</b> za každou přežitou vlnu<br>
               • Denní výzva: <b>10 b</b> + <b>3 b</b> za každou správnou<br>
               • Milionář: <b>2 b</b> za každou správnou otázku, milion <b>+20 b</b><br>
+              • Spojovačka: <b>1 b</b> za každou spojenou dvojici<br>
+              • Šibenice: <b>2 b</b> za každý uhádnutý pojem<br>
               🔥 = kolik dní v řadě ses učil(a)</span>
           </span>
         </div>
@@ -516,6 +537,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="js/config.js"></script>
+  <script>document.write('<script src="js/garden.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/pomodoro.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/bggen.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>(function(){var s=document.createElement('script');s.src='js/dashboard.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>

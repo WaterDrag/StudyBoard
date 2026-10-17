@@ -51,6 +51,7 @@ async function init(user) {
   setupSettings(user);
 
   setupTabs(user);
+  initGarden(user);
   setupAllFiles();
   loadRooms(user);
   loadDecks(user);
@@ -136,6 +137,10 @@ async function loadDailyCard(user) {
   try {
     const best = +localStorage.getItem('mil_best') || 0;
     document.getElementById('milStatus').innerHTML = best ? `🏆 Rekord: <b>${best.toLocaleString('cs-CZ')} Kč</b>` : '';
+    const hg = +localStorage.getItem('sib_best') || 0;
+    document.getElementById('hgStatus').innerHTML = hg ? `🏆 Rekord: <b>${hg} b</b>` : '';
+    const sp = +localStorage.getItem('spoj_best') || 0;
+    document.getElementById('spStatus').innerHTML = sp ? `🏆 Rekord: <b>${sp.toLocaleString('cs-CZ')} b</b>` : '';
   } catch (_) { /* nic */ }
   const st = document.getElementById('dailyStatus'), fr = document.getElementById('dailyFriends');
   if (user.isAnonymous) { st.textContent = 'Jen pro přihlášené.'; fr.innerHTML = ''; return; }
@@ -1200,7 +1205,7 @@ async function renderLeaderboard(myUid, friendIds, nicknames) {
     const rows = docs.filter(d => d.exists).map(d => {
       const p = d.data();
       const name = (nicknames[d.id] || {}).nickname || p.displayName || 'Přítel';
-      return { uid: d.id, name, photo: p.photoURL, ...weeklyScore(p) };
+      return { uid: d.id, name, photo: p.photoURL, tree: typeof gardenEmoji === 'function' ? gardenEmoji(p.garden) : '', ...weeklyScore(p) };
     }).sort((a, b) => b.points - a.points || b.streak - a.streak);
     if (rows.length < 2) {
       el.innerHTML = rows.map(r => lbRow(r, 0, myUid)).join('') + '<div class="lb-empty">Přidej si přátele a soutěžte, kdo se tento týden naučí víc.</div>';
@@ -1215,7 +1220,7 @@ function lbRow(r, i, myUid) {
   return `<div class="lb-row${r.uid === myUid ? ' me' : ''}">
     <span class="lb-medal">${medal}</span>
     <span class="lb-av">${r.photo ? `<img src="${esc(r.photo)}" alt="">` : esc((r.name || '?')[0].toUpperCase())}</span>
-    <span class="lb-name"><b>${esc(r.name)}${r.uid === myUid ? ' <small>(ty)</small>' : ''}</b>
+    <span class="lb-name"><b>${esc(r.name)}${r.uid === myUid ? ' <small>(ty)</small>' : ''}${r.tree ? ` <span class="lb-tree" title="Zahrada">${r.tree}</span>` : ''}</b>
       <small>${r.answers} odpovědí${acc !== null ? ` · ${acc} % správně` : ''}${r.games ? ` · ${r.games} b ze her` : ''}${r.focusMin ? ` · 🍅 ${r.focusMin >= 60 ? Math.floor(r.focusMin / 60) + ' h ' + (r.focusMin % 60) : r.focusMin} min` : ''}</small></span>
     ${r.streak ? `<span class="lb-streak" title="${r.streak} dní v řadě">🔥 ${r.streak}</span>` : ''}
     <span class="lb-points">${r.points}<small> b</small></span>

@@ -110,3 +110,28 @@ async function mcFriends() {
   b.docs.forEach(d => { const r = d.data(); if (r.status === 'accepted') out.add(r.fromUid); });
   return [...out];
 }
+
+// Výběr balíčků na úvodní obrazovce hry (zaškrtávátka, „Vybrat vše“,
+// zapamatovaný výběr). opts: { list, all, start, hint, key, decks, hintFor(n, ds) }
+function mcDeckPicker(o) {
+  const el = $(o.list);
+  if (!o.decks.length) { el.innerHTML = '<div class="mc-muted">Nemáš žádné balíčky s kartičkami. Vytvoř si nějaký ve Flash Cards.</div>'; return () => []; }
+  let sel;
+  try { sel = new Set(JSON.parse(localStorage.getItem(o.key) || '[]')); } catch (_) { sel = new Set(); }
+  el.innerHTML = o.decks.map(d => `<label class="mc-deck"><input type="checkbox" value="${d.id}"${sel.has(d.id) ? ' checked' : ''}>
+    <span><b>${esc(d.name)}</b><small>${d.cardCount || 0} karet${d.roomName ? ' · ' + esc(d.roomName) : ''}</small></span></label>`).join('');
+  const chosen = () => [...el.querySelectorAll('input:checked')].map(i => o.decks.find(d => d.id === i.value)).filter(Boolean);
+  const update = () => {
+    const ds = chosen(), n = ds.reduce((s, d) => s + (d.cardCount || 0), 0);
+    $(o.start).disabled = !ds.length;
+    $(o.hint).textContent = ds.length ? (o.hintFor ? o.hintFor(n, ds) : `${n} karet k dispozici.`) : 'Vyber aspoň jeden balíček.';
+  };
+  el.addEventListener('change', update);
+  $(o.all).onclick = () => {
+    const boxes = [...el.querySelectorAll('input')], all = boxes.every(b => b.checked);
+    boxes.forEach(b => { b.checked = !all; });
+    update();
+  };
+  update();
+  return () => { const ds = chosen(); try { localStorage.setItem(o.key, JSON.stringify(ds.map(d => d.id))); } catch (_) { /* nic */ } return ds; };
+}
