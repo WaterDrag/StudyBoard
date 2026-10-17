@@ -368,6 +368,7 @@ async function loadDeck() {
 
     showView('cards');
     document.getElementById('deckTitle').textContent = esc(DECK.name);
+    LEARN_LOADING = loadLearn();
 
     if (canAddCards()) {
       document.getElementById('addCardForm').style.display = 'block';
@@ -384,6 +385,8 @@ async function loadDeck() {
     actions.classList.add('deck-actions');
     actions.innerHTML = `
       <button class="btn btn-primary" id="studyBtn">${ICO('<path d="M7 4v16l13-8z"/>')}Studovat</button>
+      <button class="btn btn-secondary" id="typeBtn" title="Napíšeš odpověď a aplikace ji zkontroluje">${ICO('<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>')}Psaní</button>
+      <button class="btn btn-secondary" id="clozeBtn" style="display:none;" title="Z výkladových karet se vynechají slova a ty je doplníš">${ICO('<rect x="3" y="10" width="7" height="4" rx="1"/><path d="M13 12h8M3 6h18M3 18h12"/>')}Doplňovačka</button>
       <a class="btn btn-secondary" id="quizBtn" href="${quizHref}">${ICO('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>')}Kvíz</a>
       <a class="btn btn-secondary" id="smartBtn" href="${smartHref}" title="Chytré procvičování — opakuje hlavně to, co ti nejde">${ICO('<path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/><path d="M9 21h6"/>')}Chytře</a>
       ${canAddCards() ? `<button class="btn btn-ghost" id="bulkDistractorsBtn" title="Vygeneruje špatné odpovědi (možnosti do kvízu) ke všem kartám, které je ještě nemají">🤖 AI odpovědi ke všem</button>` : ''}
@@ -397,8 +400,10 @@ async function loadDeck() {
       </div>`;
     document.getElementById('studyBtn').addEventListener('click', () => {
       if (isSetDeck()) runSetStep(nextSetStep(['info', 'learn']) || 'learn');
-      else startStudy(false, null);
+      else startStudy(false, null, 'flip');
     });
+    document.getElementById('typeBtn').addEventListener('click', () => startStudy(false, isSetDeck() ? 'learn' : null, 'type'));
+    document.getElementById('clozeBtn').addEventListener('click', () => startStudy(false, isSetDeck() ? 'info' : null, 'cloze'));
     document.getElementById('statsBtn').addEventListener('click', openLearnStats);
     document.getElementById('bulkDistractorsBtn')?.addEventListener('click', bulkGenerateDistractors);
     const moreBtn = document.getElementById('deckMoreBtn'), moreMenu = document.getElementById('deckMoreMenu');
@@ -434,6 +439,9 @@ async function loadDeck() {
         // Disable study if no cards
         const sb = document.getElementById('studyBtn');
         if (sb) sb.disabled = ALL_CARDS.length === 0;
+        const tb = document.getElementById('typeBtn'), cb = document.getElementById('clozeBtn');
+        if (tb) tb.style.display = ALL_CARDS.some(c => !isInfo(c)) ? '' : 'none';
+        if (cb) cb.style.display = ALL_CARDS.some(c => isInfo(c) && clozeCandidates(c.back).length) ? '' : 'none';
       });
 
   } catch (e) {
@@ -934,7 +942,7 @@ function nextSetStep(only) {
 }
 function runSetStep(kind) {
   if (kind === 'quiz') { window.location.href = quizHrefBase() + '&kind=quiz'; return; }
-  startStudy(false, kind);
+  startStudy(false, kind, 'flip');
 }
 function renderSetPath() {
   const el = document.getElementById('setPath');
@@ -942,6 +950,8 @@ function renderSetPath() {
   const steps = setSteps();
   if (!isSetDeck() || steps.length < 2) { el.style.display = 'none'; return; }
   const done = setProgress(), next = nextSetStep();
+  const canCloze = ALL_CARDS.some(c => isInfo(c) && clozeCandidates(c.back).length);
+  const canType = ALL_CARDS.some(c => !isInfo(c));
   el.style.display = '';
   el.innerHTML = `<div class="set-path-h">🧩 Celý set <span>vyber, co chceš dělat — doporučené pořadí je zleva doprava</span></div>
     <div class="set-steps">` + steps.map((st, i) => `
@@ -950,29 +960,123 @@ function renderSetPath() {
         <b>${st.name}</b>
         <small>${st.desc}</small>
         <em>${st.count} karet</em>
-      </button>`).join('') + '</div>';
+      </button>`).join('') + '</div>' +
+    (canCloze || canType ? `<div class="set-alt"><span>Nebo jinak:</span>
+      ${canCloze ? '<button type="button" class="btn btn-ghost" data-alt="cloze" title="Z výkladu se vynechají slova a ty je doplníš">🧩 Doplňovačka z výkladu</button>' : ''}
+      ${canType ? '<button type="button" class="btn btn-ghost" data-alt="type" title="Odpověď napíšeš a aplikace ji zkontroluje">✍️ Psát odpovědi</button>' : ''}</div>` : '');
   el.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => runSetStep(b.dataset.step)));
+  el.querySelector('[data-alt="cloze"]')?.addEventListener('click', () => startStudy(false, 'info', 'cloze'));
+  el.querySelector('[data-alt="type"]')?.addEventListener('click', () => startStudy(false, 'learn', 'type'));
+}
+
+// ── Kontrola napsané odpovědi ──────────────────────────────────
+// Velikost písmen, háčky a interpunkce se nepočítají a drobný překlep se
+// odpustí. Dlouhou odpověď (věta, definice) přesně netrefí nikdo — tam
+// aplikace jen ukáže obě a ohodnotíš se sám.
+const normAns = t => fold(t).replace(/[.,;:!?„“”"'()[\]{}]/g, ' ').replace(/\s+/g, ' ').trim();
+function levenshtein(a, b) {
+  if (Math.abs(a.length - b.length) > 8) return 99;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function answerMatches(val, card) {
+  const v = normAns(val);
+  if (!v) return false;
+  return [card.back, ...(card.corrects || [])].some(t => {
+    const n = normAns(t);
+    if (!n) return false;
+    if (v === n) return true;
+    return n.length <= 60 && levenshtein(v, n) <= Math.max(1, Math.floor(n.length * 0.15));
+  });
+}
+
+// ── Doplňovačka z výkladových karet ────────────────────────────
+// Žádné pevné karty: pokaždé se z textu výkladu vynechají jiná slova
+// (hlavně zkratky, čísla, názvy a delší odborná slova) a ta jsou odpověď.
+const CLOZE_STOP = new Set(('a i o u v ve z ze k ke s se na do od po pro při za je jsou být byl byla bylo byly který která které '
+  + 'kterou kterým kteří že aby nebo ale jako tak to ten ta ty tím tento tato toto této tyto jeho její jejich si sebe jen už ještě '
+  + 'také když pokud než mezi podle pod nad před bez přes jak co kde kdy tedy proto může mohou musí lze není nejsou jsme jste '
+  + 'další dalších jiné jiný jejím jehož každý každá každé svůj své svým the of and or is are to in on for with by an as at be it this that').split(' '));
+const clozeTokens = text => String(text || '').split(/(\s+)/);
+function clozeCore(tok) {
+  const m = tok.match(/^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}+#]*)$/u);
+  return m ? [m[1], m[2], m[3]] : ['', tok, ''];
+}
+function clozeCandidates(text) {
+  const toks = clozeTokens(text), out = [];
+  toks.forEach((t, i) => {
+    if (!t.trim()) return;
+    const core = clozeCore(t)[1];
+    if (!core || core.length > 24 || CLOZE_STOP.has(core.toLowerCase())) return;
+    const digit = /\d/.test(core);
+    const caps  = /^[\p{Lu}\d]{2,}$/u.test(core) && /\p{Lu}/u.test(core);
+    const sentenceStart = i === 0 || /[.!?:]$/.test((toks[i - 2] || '').trim());
+    const cap   = /^\p{Lu}/u.test(core) && !sentenceStart;
+    if (!(digit || caps || core.length >= 5 || (cap && core.length >= 3))) return;
+    out.push({ i, w: (digit ? 3 : 0) + (caps ? 3 : 0) + (cap ? 2 : 0) + (core.length >= 8 ? 2 : 1) });
+  });
+  return out;
+}
+function pickCloze(text) {
+  const toks = clozeTokens(text), pool = clozeCandidates(text);
+  const words = toks.filter(t => t.trim()).length;
+  const n = Math.max(1, Math.min(3, Math.round(words / 12), pool.length));
+  const picked = [];
+  while (picked.length < n && pool.length) {
+    let r = Math.random() * pool.reduce((s, c) => s + c.w, 0);
+    const k = Math.max(0, pool.findIndex(c => (r -= c.w) <= 0));
+    const c = pool.splice(k, 1)[0];
+    if (picked.some(p => Math.abs(p - c.i) < 4)) continue;   // ne dvě díry hned vedle sebe
+    picked.push(c.i);
+  }
+  return { toks, picked: new Set(picked) };
+}
+function clozeMatch(val, ans) {
+  const v = normAns(val), a = normAns(ans);
+  return !!v && (v === a || (a.length >= 5 && levenshtein(v, a) <= 1));
 }
 
 // ── Study mode ─────────────────────────────────────────────────
+// Režimy: flip = klasické otáčení (výkladová karta se jen čte),
+// type = napíšeš odpověď, cloze = doplňuješ slova do výkladu.
 // Výkladové karty (kind „info“) jsou jednostranné: pojem i informace na
 // jedné straně, žádné otáčení ani hodnocení — jen se čte dál.
 const isInfo = c => !!c && cardKind(c) === 'info';
-function startStudy(wrongOnly = false, kind) {
-  if (kind !== undefined) STUDY_KIND = kind;
-  let source = wrongOnly
-    ? STUDY_QUEUE.filter(c => !c._known && !isInfo(c))
-    : ALL_CARDS.filter(c => !STUDY_KIND || cardKind(c) === STUDY_KIND);
-  // Set bez klasických kartiček: procvičuje se na kartách z kvízu.
-  if (!wrongOnly && STUDY_KIND === 'learn' && !source.length) source = ALL_CARDS.filter(c => !isInfo(c));
+let STUDY_MODE = 'flip';
+let CHECKED = false;          // type / cloze: odpověď už je zkontrolovaná
+let LEARN_LOADING = null;     // krabičky se musí načíst dřív, než se do nich zapíše
 
-  if (!source.length) {
-    toast(wrongOnly ? '🎉 Žádné neznámé karty, vše znáš!' : 'Balíček nemá žádné karty.');
-    return;
+async function startStudy(wrongOnly = false, kind, mode) {
+  if (kind !== undefined) STUDY_KIND = kind;
+  if (mode !== undefined) STUDY_MODE = mode;
+  let source;
+  if (wrongOnly) source = STUDY_QUEUE.filter(c => !c._known && (STUDY_MODE === 'cloze' || !isInfo(c)));
+  else if (STUDY_MODE === 'cloze') source = ALL_CARDS.filter(c => isInfo(c) && clozeCandidates(c.back).length);
+  else if (STUDY_MODE === 'type') {
+    source = ALL_CARDS.filter(c => !isInfo(c) && (!STUDY_KIND || cardKind(c) === STUDY_KIND));
+    if (!source.length) source = ALL_CARDS.filter(c => !isInfo(c));
+  } else {
+    source = ALL_CARDS.filter(c => !STUDY_KIND || cardKind(c) === STUDY_KIND);
+    // Set bez klasických kartiček: procvičuje se na kartách z kvízu.
+    if (STUDY_KIND === 'learn' && !source.length) source = ALL_CARDS.filter(c => !isInfo(c));
   }
 
+  if (!source.length) {
+    toast(wrongOnly ? '🎉 Žádné neznámé karty, vše znáš!'
+      : STUDY_MODE === 'cloze' ? 'Tady nejsou výkladové karty, ze kterých by šla doplňovačka.'
+      : 'Balíček nemá žádné karty.');
+    return;
+  }
+  if (LEARN_LOADING) await LEARN_LOADING;
+  source.forEach(c => { delete c._known; });
+
   // Výklad se čte popořadě, zkoušení se míchá.
-  STUDY_QUEUE = source.every(isInfo) ? source.slice() : shuffle(source);
+  STUDY_QUEUE = STUDY_MODE === 'flip' && source.every(isInfo) ? source.slice() : shuffle(source);
   STUDY_IDX   = 0;
   KNOWN       = 0;
   showView('study');
@@ -982,6 +1086,7 @@ function startStudy(wrongOnly = false, kind) {
 
 function showStudyCard() {
   IS_FLIPPED = false;
+  CHECKED = false;
   const inner = document.getElementById('flashcardInner');
   // Snap back to the front WITHOUT the flip animation — otherwise the next
   // card's answer is visible on the turning back face for half a second.
@@ -991,15 +1096,27 @@ function showStudyCard() {
   inner.classList.remove('no-anim');
 
   const card = STUDY_QUEUE[STUDY_IDX];
-  const info = isInfo(card);
+  const reading = STUDY_MODE === 'flip' && isInfo(card);
+  const cloze = STUDY_MODE === 'cloze', typing = STUDY_MODE === 'type';
   const fEl = document.getElementById('studyFront'), bEl = document.getElementById('studyBack');
   const [fLbl, bLbl] = [fEl, bEl].map(e => e.parentElement.querySelector('.fc-face-lbl'));
-  document.getElementById('flashcardWrap').classList.toggle('fc-reading', info);
-  if (info) {
+  document.getElementById('flashcardWrap').classList.toggle('fc-reading', reading || cloze);
+  document.getElementById('flashcardWrap').classList.toggle('fc-typing', typing || cloze);
+  if (reading) {
     fEl.innerHTML = `<div class="fc-info-term">${esc(card.front)}</div>` +
       (card.codeLang ? codeBlockHtml(card.back, card.codeLang) : `<div class="fc-info-body">${esc(card.back)}</div>`);
     bEl.textContent = '';
     if (fLbl) { fLbl.textContent = 'Výklad'; fLbl.hidden = false; }
+  } else if (cloze) {
+    const { toks, picked } = pickCloze(card.back);
+    const body = toks.map((t, i) => {
+      if (!picked.has(i)) return esc(t);
+      const [pre, core, post] = clozeCore(t);
+      return `${esc(pre)}<input type="text" class="cloze-in" data-answer="${esc(core)}" style="width:${Math.max(3, core.length + 1)}ch" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Chybějící slovo">${esc(post)}`;
+    }).join('');
+    fEl.innerHTML = `<div class="fc-info-term">${esc(card.front)}</div><div class="fc-info-body">${body}</div>`;
+    bEl.textContent = '';
+    if (fLbl) { fLbl.textContent = 'Doplň chybějící slova'; fLbl.hidden = false; }
   } else {
     if (card.frontLang) fEl.innerHTML = codeQuestionHtml(card.front, card.frontLang);
     else fEl.textContent = card.front;
@@ -1014,12 +1131,23 @@ function showStudyCard() {
   document.getElementById('studyTotal').textContent = STUDY_QUEUE.length;
   document.getElementById('studyProgFill').style.width = (STUDY_IDX / STUDY_QUEUE.length * 100) + '%';
 
-  document.getElementById('studyBtns').style.display = 'none';
-  document.getElementById('studyHint').style.display  = info ? 'none' : 'block';
-  document.getElementById('readBtns').style.display   = info ? 'flex' : 'none';
-  document.getElementById('skipBtn').style.display    = info ? 'none' : '';
-  document.getElementById('readPrevBtn').disabled     = STUDY_IDX === 0;
+  const show = (id, on, disp = 'flex') => { document.getElementById(id).style.display = on ? disp : 'none'; };
+  show('studyBtns', false);
+  show('studyHint', !reading && !typing && !cloze, 'block');
+  show('readBtns', reading);
+  show('skipBtn', !reading, '');
+  show('typeBox', typing || cloze);
+  show('typeVerdict', false, 'block');
+  show('nextBtns', false);
+  document.getElementById('readPrevBtn').disabled = STUDY_IDX === 0;
   document.getElementById('readNextBtn').firstChild.textContent = STUDY_IDX === STUDY_QUEUE.length - 1 ? 'Hotovo' : 'Další';
+  const ti = document.getElementById('typeInput');
+  ti.style.display = typing ? '' : 'none';
+  ti.value = '';
+  ti.placeholder = card.codeLang ? 'Napiš kód…' : 'Napiš odpověď…';
+  document.getElementById('clozeHintBtn').style.display = cloze ? '' : 'none';
+  // Na telefonu by klávesnice hned zakryla půl karty — tam se ťukne sám.
+  if (matchMedia('(hover: hover)').matches) (typing ? ti : fEl.querySelector('.cloze-in'))?.focus();
 }
 
 function readStep(d) {
@@ -1027,10 +1155,75 @@ function readStep(d) {
   gradeCard('read');
 }
 
+function nextCard() {
+  STUDY_IDX++;
+  if (STUDY_IDX >= STUDY_QUEUE.length) showResults();
+  else showStudyCard();
+}
+
+// Psaní: přesná (nebo skoro přesná) odpověď se uzná sama, jinak se ukážou
+// obě a hodnotí se jako u otáčení. Doplňovačka se vyhodnotí vždy sama.
+function checkTyped() {
+  if (CHECKED) return;
+  const card = STUDY_QUEUE[STUDY_IDX];
+  const verdict = document.getElementById('typeVerdict');
+  CHECKED = true;
+  document.getElementById('typeBox').style.display = 'none';
+  document.getElementById('skipBtn').style.display = 'none';
+  document.activeElement?.blur?.();
+  if (STUDY_MODE === 'cloze') {
+    const inputs = [...document.querySelectorAll('#studyFront .cloze-in')];
+    let good = 0;
+    inputs.forEach(inp => {
+      const ans = inp.dataset.answer, ok = clozeMatch(inp.value, ans);
+      if (ok) good++;
+      const span = document.createElement('span');
+      span.className = 'cloze-res ' + (ok ? 'ok' : 'bad');
+      span.innerHTML = ok ? esc(ans) : (inp.value.trim() ? `<s>${esc(inp.value.trim())}</s> ` : '') + esc(ans);
+      inp.replaceWith(span);
+    });
+    const all = good === inputs.length;
+    card._known = all;
+    if (all) KNOWN++;
+    recordAnswer(card.id, all, true);   // výklad nemá krabičku, jen statistika
+    verdict.className = 'type-verdict ' + (all ? 'ok' : 'bad');
+    verdict.textContent = all ? '✓ Všechno správně' : `Správně ${good} z ${inputs.length}`;
+    verdict.style.display = 'block';
+    document.getElementById('nextBtns').style.display = 'flex';
+    return;
+  }
+  const val = document.getElementById('typeInput').value.trim();
+  const ok = answerMatches(val, card);
+  IS_FLIPPED = true;
+  document.getElementById('flashcardInner').classList.add('flipped');
+  verdict.style.display = 'block';
+  if (ok) {
+    card._known = true;
+    KNOWN++;
+    recordAnswer(card.id, true);
+    const exact = normAns(val) === normAns(card.back);
+    verdict.className = 'type-verdict ok';
+    verdict.innerHTML = '✓ Správně' + (exact ? '' : ` <span>— tvoje odpověď: ${esc(val)}</span>`);
+    document.getElementById('nextBtns').style.display = 'flex';
+  } else {
+    verdict.className = 'type-verdict bad';
+    verdict.innerHTML = (val ? `Tvoje odpověď: <b>${esc(val)}</b>` : 'Bez odpovědi.') + ' <span>Porovnej se správnou a ohodnoť se:</span>';
+    document.getElementById('studyBtns').style.display = 'flex';
+  }
+}
+
+function clozeHint() {
+  const inputs = [...document.querySelectorAll('#studyFront .cloze-in')];
+  const t = inputs.includes(document.activeElement) ? document.activeElement : inputs.find(i => !i.value.trim()) || inputs[0];
+  if (!t) return;
+  t.value = t.dataset.answer.slice(0, Math.min(t.dataset.answer.length - 1, (t.value.length || 0) + 1)) || t.dataset.answer[0];
+  t.focus();
+}
+
 function setupStudyControls() {
-  // Flip on card click (výkladová karta se neotáčí)
+  // Flip on card click (výkladová karta se neotáčí, psaní se otočí samo)
   document.getElementById('flashcardWrap').onclick = () => {
-    if (IS_FLIPPED || isInfo(STUDY_QUEUE[STUDY_IDX])) return;
+    if (IS_FLIPPED || STUDY_MODE !== 'flip' || isInfo(STUDY_QUEUE[STUDY_IDX])) return;
     IS_FLIPPED = true;
     document.getElementById('flashcardInner').classList.add('flipped');
     document.getElementById('studyBtns').style.display = 'flex';
@@ -1039,10 +1232,17 @@ function setupStudyControls() {
 
   document.getElementById('knowBtn').onclick     = () => gradeCard(true);
   document.getElementById('dontKnowBtn').onclick = () => gradeCard(false);
-  document.getElementById('almostBtn').onclick   = () => gradeCard(false);
+  document.getElementById('almostBtn').onclick   = () => gradeCard('almost');
   document.getElementById('skipBtn').onclick     = () => gradeCard(null);
   document.getElementById('readPrevBtn').onclick = () => readStep(-1);
   document.getElementById('readNextBtn').onclick = () => readStep(1);
+  document.getElementById('typeCheckBtn').onclick = checkTyped;
+  document.getElementById('clozeHintBtn').onclick = clozeHint;
+  document.getElementById('nextCardBtn').onclick  = nextCard;
+  document.getElementById('typeInput').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); checkTyped(); } };
+  document.getElementById('studyFront').onkeydown = e => {
+    if (e.key === 'Enter' && e.target.matches('.cloze-in')) { e.preventDefault(); checkTyped(); }
+  };
 
   document.getElementById('restartBtn').onclick    = () => startStudy(false);
   document.getElementById('onlyWrongBtn').onclick  = () => startStudy(true);
@@ -1050,42 +1250,49 @@ function setupStudyControls() {
 }
 
 // Keyboard while studying: Space/Enter flips, 1–3 grade, → skips.
-// Výklad: mezerník / Enter / → dál, ← zpět.
+// Výklad: mezerník / Enter / → dál, ← zpět. Psaní a doplňovačka: Enter
+// zkontroluje (v políčku), po kontrole Enter dál.
 document.addEventListener('keydown', e => {
   if (document.getElementById('viewStudy')?.style.display === 'none') return;
   if (e.target instanceof Element && e.target.closest('input, textarea, [contenteditable="true"]') || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (isInfo(STUDY_QUEUE[STUDY_IDX])) {
+  const shown = id => document.getElementById(id).style.display !== 'none';
+  if (STUDY_MODE === 'flip' && isInfo(STUDY_QUEUE[STUDY_IDX])) {
     if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); readStep(1); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); readStep(-1); }
+    return;
+  }
+  if (STUDY_MODE !== 'flip') {
+    if (!CHECKED) { if (e.key === 'ArrowRight') gradeCard(null); return; }
+    if (shown('nextBtns') && (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight')) { e.preventDefault(); nextCard(); }
+    else if (shown('studyBtns') && ['1', '2', '3'].includes(e.key)) gradeCard(e.key === '3' ? true : e.key === '2' ? 'almost' : false);
     return;
   }
   if (e.key === ' ' || e.key === 'Enter') {
     e.preventDefault();
     if (!IS_FLIPPED) document.getElementById('flashcardWrap').click();
   } else if (IS_FLIPPED && e.key === '1') gradeCard(false);
-  else if (IS_FLIPPED && e.key === '2') gradeCard(false);
+  else if (IS_FLIPPED && e.key === '2') gradeCard('almost');
   else if (IS_FLIPPED && e.key === '3') gradeCard(true);
   else if (e.key === 'ArrowRight') gradeCard(null);
 });
 
+// Umím / Skoro / Nevím jde do krabiček stejně jako odpověď v kvízu, takže
+// Chytré procvičování a „K opakování dnes“ vědí i o tom, co se učíš tady.
 function gradeCard(known) {
+  const card = STUDY_QUEUE[STUDY_IDX];
   if (known === true) {
-    STUDY_QUEUE[STUDY_IDX]._known = true;
+    card._known = true;
     KNOWN++;
-  } else if (known === false) {
-    STUDY_QUEUE[STUDY_IDX]._known = false;
+  } else if (known === false || known === 'almost') {
+    card._known = false;
   }
-  STUDY_IDX++;
-  if (STUDY_IDX >= STUDY_QUEUE.length) {
-    showResults();
-  } else {
-    showStudyCard();
-  }
+  if ((known === true || known === false || known === 'almost') && !isInfo(card)) recordAnswer(card.id, known);
+  nextCard();
 }
 
 function showResults() {
   showView('results');
-  const read  = STUDY_QUEUE.filter(isInfo).length;
+  const read  = STUDY_MODE === 'flip' ? STUDY_QUEUE.filter(isInfo).length : 0;
   const total = STUDY_QUEUE.length - read;            // výklad se nehodnotí
   const pct   = total > 0 ? Math.round(KNOWN / total * 100) : 0;
   const sub   = document.querySelector('#viewResults .results-sub');
@@ -1093,18 +1300,19 @@ function showResults() {
   if (sub) sub.textContent = total ? 'znáš' : 'přečteno';
   document.getElementById('studyProgFill').style.width = '100%';
 
+  const what = STUDY_MODE === 'cloze' ? 'výkladů bez chyby' : 'karet';
   let title, desc;
   if (!total)           { title = '📘 Výklad přečtený'; desc = `Prošel jsi ${read} karet výkladu.`; }
-  else if (pct === 100) { title = '🎉 Perfektní!';      desc = `Znáš všech ${total} karet. Skvělá práce!`; }
-  else if (pct >= 75)   { title = '💪 Skoro tam!';      desc = `${KNOWN} z ${total} karet. Ještě trochu procvičit.`; }
-  else if (pct >= 50)   { title = '📚 Pokrok!';         desc = `${KNOWN} z ${total} karet. Zaměř se na ty červené.`; }
-  else                  { title = '💡 Učit se dál!';    desc = `${KNOWN} z ${total} karet. Nevzdávej to, opakování je klíč.`; }
+  else if (pct === 100) { title = '🎉 Perfektní!';      desc = `Všech ${total} ${what}. Skvělá práce!`; }
+  else if (pct >= 75)   { title = '💪 Skoro tam!';      desc = `${KNOWN} z ${total} ${what}. Ještě trochu procvičit.`; }
+  else if (pct >= 50)   { title = '📚 Pokrok!';         desc = `${KNOWN} z ${total} ${what}. Zaměř se na ty červené.`; }
+  else                  { title = '💡 Učit se dál!';    desc = `${KNOWN} z ${total} ${what}. Nevzdávej to, opakování je klíč.`; }
 
   document.getElementById('resTitle').textContent = title;
   document.getElementById('resDesc').textContent  = desc;
   document.getElementById('restartBtn').textContent = total ? 'Opakovat znova' : 'Přečíst znovu';
 
-  const wrongCount = STUDY_QUEUE.filter(c => !c._known && !isInfo(c)).length;
+  const wrongCount = STUDY_QUEUE.filter(c => !c._known && (STUDY_MODE === 'cloze' || !isInfo(c))).length;
   const ow = document.getElementById('onlyWrongBtn');
   ow.style.display = total ? '' : 'none';
   ow.disabled = wrongCount === 0;
@@ -1120,7 +1328,7 @@ function showResults() {
     if (nxt) {
       nb.textContent = `Další krok: ${nxt.ico} ${nxt.name}`;
       nb.href = nxt.kind === 'quiz' ? quizHrefBase() + '&kind=quiz' : '#';
-      nb.onclick = nxt.kind === 'quiz' ? null : e => { e.preventDefault(); startStudy(false, nxt.kind); };
+      nb.onclick = nxt.kind === 'quiz' ? null : e => { e.preventDefault(); startStudy(false, nxt.kind, 'flip'); };
       nb.style.display = '';
     }
   }

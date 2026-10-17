@@ -1147,10 +1147,17 @@ function weeklyScore(profile) {
     if ((v.p || 0) > 0) active.add(k);
     if (days.includes(k)) games += v.p || 0;
   });
+  // 🍅 pomodoro: sekundy učení za den (pomodoro.js)
+  let focus = 0;
+  Object.entries(profile.focus || {}).forEach(([k, v]) => {
+    if ((v || 0) >= 300) active.add(k);
+    if (days.includes(k)) focus += v || 0;
+  });
+  const focusMin = Math.floor(focus / 60);
   // dní v řadě (dnes, nebo když dnes ještě nic, tak od včerejška)
   let streak = 0, i = active.has(allDays[0]) ? 0 : 1;
   for (; i < allDays.length && active.has(allDays[i]); i++) streak++;
-  return { points: answers + 2 * correct + games, answers, correct, games, streak };
+  return { points: answers + 2 * correct + games + Math.floor(focusMin / 5), answers, correct, games, focusMin, streak };
 }
 async function renderLeaderboard(myUid, friendIds, nicknames) {
   const el = document.getElementById('lbList');
@@ -1177,7 +1184,7 @@ function lbRow(r, i, myUid) {
     <span class="lb-medal">${medal}</span>
     <span class="lb-av">${r.photo ? `<img src="${esc(r.photo)}" alt="">` : esc((r.name || '?')[0].toUpperCase())}</span>
     <span class="lb-name"><b>${esc(r.name)}${r.uid === myUid ? ' <small>(ty)</small>' : ''}</b>
-      <small>${r.answers} odpovědí${acc !== null ? ` · ${acc} % správně` : ''}${r.games ? ` · ${r.games} b ze her` : ''}</small></span>
+      <small>${r.answers} odpovědí${acc !== null ? ` · ${acc} % správně` : ''}${r.games ? ` · ${r.games} b ze her` : ''}${r.focusMin ? ` · 🍅 ${r.focusMin >= 60 ? Math.floor(r.focusMin / 60) + ' h ' + (r.focusMin % 60) : r.focusMin} min` : ''}</small></span>
     ${r.streak ? `<span class="lb-streak" title="${r.streak} dní v řadě">🔥 ${r.streak}</span>` : ''}
     <span class="lb-points">${r.points}<small> b</small></span>
   </div>`;
