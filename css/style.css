@@ -5257,3 +5257,55 @@ body.pres-open { overflow: hidden; }
   font: 600 0.82rem var(--font-mono); box-shadow: var(--shadow); cursor: pointer;
 }
 .pomo-float.brk { border-color: color-mix(in srgb, #4ade80 40%, var(--border)); }
+
+/* ═══ Bloky kódu: vždy tmavé jako v editoru kódu, barvy z highlight.js ═══ */
+.code-block {
+  background: #0d1117; border-color: #262c36; color: #e6edf3;
+}
+.code-block code { color: #e6edf3; background: none; padding: 0; }
+.note-detail-content pre, .rich-editor pre, .pres-content pre {
+  margin: 10px 0; padding: 12px 14px; border-radius: 10px; overflow-x: auto;
+  background: #0d1117; border: 1px solid #262c36; color: #e6edf3; position: relative;
+  font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', monospace; font-size: 0.85rem; line-height: 1.5;
+  white-space: pre; tab-size: 4;
+}
+.note-detail-content pre code, .rich-editor pre code, .pres-content pre code {
+  font: inherit; font-size: inherit; white-space: pre; display: block; min-height: 1.5em;
+}
+.rich-editor pre { caret-color: #fff; }
+.rich-editor pre[data-lang]::after, .note-detail-content pre[data-lang]::after, .pres-content pre[data-lang]::after {
+  content: attr(data-lang); position: absolute; top: 4px; right: 10px;
+  font: 600 0.6rem var(--font); letter-spacing: .05em; text-transform: uppercase; color: #8b949e; pointer-events: none;
+}
+.note .code-block, .note pre { font-size: 0.7rem; padding: 6px 8px; }
+.code-wrap { position: relative; }
+.code-wrap > pre[data-lang]::after { right: 40px; }
+.code-copy {
+  position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; display: grid; place-items: center;
+  border: 1px solid #30363d; border-radius: 7px; background: #161b22; color: #8b949e; cursor: pointer;
+  opacity: 0; transition: opacity var(--transition), color var(--transition);
+}
+.code-copy svg { width: 14px; height: 14px; }
+.code-wrap:hover .code-copy, .code-copy:focus-visible { opacity: 1; }
+@media (hover: none) { .code-copy { opacity: 0.85; } }
+.code-copy:hover { color: #e6edf3; }
+.code-copy.done { color: #3fb950; opacity: 1; }
+.code-copy.done svg { display: none; }
+.code-copy.done::after { content: '✓'; font-size: 0.9rem; }
+.code-lang-menu { max-height: min(60vh, 420px); overflow-y: auto; min-width: 180px; }
+.code-lang-h { padding: 6px 12px 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.code-lang-menu .context-menu-item.on { color: var(--accent); font-weight: 600; }
+/* highlight.js — barvy podle GitHub Dark */
+.hljs-comment, .hljs-quote { color: #8b949e; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-type, .hljs-doctag, .hljs-template-tag, .hljs-meta .hljs-keyword { color: #ff7b72; }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-meta .hljs-string { color: #a5d6ff; }
+.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet, .hljs-variable.constant_ { color: #79c0ff; }
+.hljs-title, .hljs-title.function_, .hljs-section { color: #d2a8ff; }
+.hljs-title.class_, .hljs-title.class_.inherited__, .hljs-built_in { color: #ffa657; }
+.hljs-attr, .hljs-attribute, .hljs-property, .hljs-variable, .hljs-template-variable, .hljs-selector-class, .hljs-selector-id { color: #79c0ff; }
+.hljs-name, .hljs-tag, .hljs-selector-pseudo { color: #7ee787; }
+.hljs-params { color: #e6edf3; }
+.hljs-meta { color: #d2a8ff; }
+.hljs-deletion { color: #ffa198; background: #490202; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }

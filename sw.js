@@ -15,7 +15,7 @@ const SHELL = [
   'index.html', 'dashboard.html', 'room.html', 'flashcards.html', 'quiz.html',
   'css/style.css',
   'js/version.js', 'js/config.js', 'js/auth.js', 'js/dashboard.js', 'js/bggen.js',
-  'js/flashcards.js', 'js/quiz.js', 'js/learn.js', 'js/pomodoro.js',
+  'js/flashcards.js', 'js/quiz.js', 'js/learn.js', 'js/pomodoro.js', 'js/codehl.js',
   'js/room-core.js', 'js/room-list.js', 'js/room-notes.js', 'js/room-export.js',
   'js/room-board.js', 'js/room-whiteboard.js', 'js/room-ai.js',
   'js/room-social.js', 'js/room-import.js', 'js/room-present.js', 'js/room-init.js',

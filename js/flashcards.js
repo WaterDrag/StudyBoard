@@ -434,8 +434,12 @@ async function loadDeck() {
         const qb = document.getElementById('quizBtn');
         if (qb) qb.href = quizHref + (isSetDeck() ? '&kind=quiz' : '');
         // Aktualizuj počet a druh v deck doc
-        const kinds = kindCounts(ALL_CARDS);
-        if (isOwner) db.collection('decks').doc(DECK_ID).update({ cardCount: ALL_CARDS.length, kinds, kind: kindFromCounts(kinds) }).catch(() => {});
+        // (jen když se opravdu změnil — zbytečný zápis při každé změně karet)
+        const kinds = kindCounts(ALL_CARDS), kind = kindFromCounts(kinds);
+        if (isOwner && (DECK.cardCount !== ALL_CARDS.length || DECK.kind !== kind || JSON.stringify(DECK.kinds || {}) !== JSON.stringify(kinds))) {
+          Object.assign(DECK, { cardCount: ALL_CARDS.length, kinds, kind });
+          db.collection('decks').doc(DECK_ID).update({ cardCount: ALL_CARDS.length, kinds, kind }).catch(() => {});
+        }
         // Disable study if no cards
         const sb = document.getElementById('studyBtn');
         if (sb) sb.disabled = ALL_CARDS.length === 0;

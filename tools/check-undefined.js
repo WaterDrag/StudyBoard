@@ -3,7 +3,7 @@
 // exactly how five functions once vanished in a rewrite and nothing complained.
 const fs = require('fs');
 const dir = 'C:/Users/zitka/Desktop/StudyBoard/js/';
-const files = ['ai.js', 'bggen.js', 'drive.js', 'room-core.js', 'room-list.js', 'room-notes.js', 'room-export.js', 'room-import.js', 'room-present.js',
+const files = ['ai.js', 'bggen.js', 'drive.js', 'codehl.js', 'room-core.js', 'room-list.js', 'room-notes.js', 'room-export.js', 'room-import.js', 'room-present.js',
                'room-board.js', 'room-whiteboard.js', 'room-ai.js', 'room-social.js', 'room-files.js', 'room-init.js'];
 
 // Odstrani komentare a OBSAH retezcu vcetne template literalu, aby se proza

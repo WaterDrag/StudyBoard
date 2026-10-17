@@ -2595,6 +2595,243 @@ function cleanPastedHtml(html, keepLook) {
   return body.innerHTML.trim();
 }
 
+// ── Bloky kódu v editoru ──────────────────────────────────────
+// Ukládá se <pre class="code-block" data-lang="java"><code>čistý text</code></pre>,
+// barvy přidá až zobrazení (codehl.js). Uvnitř bloku: Enter = nový řádek
+// (odsazení se zachová), Tab / Shift+Tab = odsadit, Enter na prázdném
+// posledním řádku nebo Ctrl+Enter = ven z bloku, vkládá se jen čistý text.
+// ``` + mezerník (```java rovnou s jazykem) na začátku řádku blok vytvoří.
+function setupCodeBlocks(editor, toolbar) {
+  if (!editor || editor._codeWired) return;
+  editor._codeWired = true;
+  const sel = () => window.getSelection();
+  const caretPre = () => {
+    const s = sel();
+    if (!s.rangeCount) return null;
+    const n = s.anchorNode;
+    const pre = (n?.nodeType === 1 ? n : n?.parentElement)?.closest?.('pre');
+    return pre && editor.contains(pre) ? pre : null;
+  };
+  const codeOf = pre => {
+    let c = pre.querySelector(':scope > code');
+    if (!c) {   // starší / vložený <pre> bez <code>
+      c = document.createElement('code');
+      c.textContent = preText(pre);
+      pre.textContent = '';
+      pre.appendChild(c);
+    }
+    return c;
+  };
+  const caretOffset = code => {
+    const r = sel().getRangeAt(0).cloneRange();
+    r.setStart(code, 0);
+    return r.toString().length;
+  };
+  const setCaret = (code, off) => {
+    const w = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+    let n, left = off;
+    while ((n = w.nextNode())) {
+      if (left <= n.data.length) { const r = document.createRange(); r.setStart(n, left); r.collapse(true); sel().removeAllRanges(); sel().addRange(r); return; }
+      left -= n.data.length;
+    }
+    const r = document.createRange(); r.selectNodeContents(code); r.collapse(false);
+    sel().removeAllRanges(); sel().addRange(r);
+  };
+  // Obsah bloku jako jeden textový uzel (žádné <br>/<div> od prohlížeče).
+  const flatten = code => { const t = preText(code); if (code.childNodes.length !== 1 || code.firstChild.nodeType !== 3) code.textContent = t; return t; };
+  const replaceText = (code, text, caret) => { code.textContent = text; setCaret(code, caret); editor.dispatchEvent(new Event('input', { bubbles: true })); };
+  const paraAfter = pre => {
+    let p = pre.nextElementSibling;
+    if (!p || p.matches('pre, table, hr, img')) { p = document.createElement('p'); p.innerHTML = '<br>'; pre.after(p); }
+    const r = document.createRange(); r.setStart(p, 0); r.collapse(true);
+    sel().removeAllRanges(); sel().addRange(r);
+  };
+
+  // Rovnou do DOM: insertHTML v Chrome blok <pre> slije s okolním odstavcem.
+  function insertCodeBlock(lang, text) {
+    editor.focus();
+    const s = sel();
+    let r = s.rangeCount && editor.contains(s.anchorNode) ? s.getRangeAt(0) : null;
+    if (!r) { r = document.createRange(); r.selectNodeContents(editor); r.collapse(false); }
+    const body = (text || '').replace(/\r\n?/g, '\n').replace(/\n$/, '');
+    const pre = document.createElement('pre');
+    pre.className = 'code-block';
+    if (lang) pre.dataset.lang = lang;
+    const code = document.createElement('code');
+    code.textContent = body + '\n';
+    pre.appendChild(code);
+    // Řádek pod kurzorem: odstavec / položka / nadpis… se rozdělí, prázdný se nahradí.
+    let blk = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
+    blk = blk.closest('p, div, h1, h2, h3, h4, blockquote');
+    if (blk && (blk === editor || !editor.contains(blk))) blk = null;
+    if (blk && !blk.textContent.trim() && !blk.querySelector('img')) blk.replaceWith(pre);
+    else if (blk) {
+      const tail = document.createRange();
+      tail.setStart(r.startContainer, r.startOffset);
+      tail.setEnd(blk, blk.childNodes.length);
+      const rest = tail.extractContents();
+      blk.after(pre);
+      if (rest.textContent.trim() || rest.querySelector?.('img')) { const b2 = blk.cloneNode(false); b2.appendChild(rest); pre.after(b2); }
+    } else {
+      r.insertNode(pre);
+      // <br> těsně za blokem by dělal prázdný řádek navíc
+      if (pre.nextSibling?.nodeName === 'BR') pre.nextSibling.remove();
+    }
+    if (!pre.nextSibling || (pre.nextSibling.nodeType === 3 && !pre.nextSibling.data.trim() && !pre.nextSibling.nextSibling)) {
+      const p = document.createElement('p'); p.innerHTML = '<br>'; pre.after(p);
+    }
+    setCaret(code, body.length);
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function unwrapCode(pre) {
+    const lines = preText(codeOf(pre)).replace(/\n$/, '').split('\n');
+    const frag = document.createDocumentFragment();
+    lines.forEach(l => { const p = document.createElement('p'); if (l) p.textContent = l; else p.innerHTML = '<br>'; frag.appendChild(p); });
+    const first = frag.firstChild;
+    pre.replaceWith(frag);
+    const r = document.createRange(); r.setStart(first, 0); r.collapse(true);
+    sel().removeAllRanges(); sel().addRange(r);
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  // Tlačítko </> v liště: vložit blok, nebo změnit jazyk bloku pod kurzorem.
+  const btn = toolbar?.querySelector('.rt-code');
+  let savedRange = null;
+  if (btn) {
+    btn.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const s = sel();
+      savedRange = s.rangeCount && editor.contains(s.anchorNode) ? s.getRangeAt(0).cloneRange() : null;
+    });
+    btn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      if (savedRange) { sel().removeAllRanges(); sel().addRange(savedRange); }
+      const pre = caretPre();
+      const selected = !pre && savedRange && !savedRange.collapsed ? savedRange.toString() : '';
+      document.getElementById('codeLangMenu')?.remove();
+      const m = document.createElement('div');
+      m.className = 'context-menu code-lang-menu';
+      m.id = 'codeLangMenu';
+      const cur = pre ? (pre.dataset.lang || '') : null;
+      m.innerHTML = `<div class="code-lang-h">${pre ? 'Jazyk tohoto bloku' : 'Vložit blok kódu'}</div>` +
+        CODE_LANGS.map(([k, label]) => `<button type="button" class="context-menu-item${cur === k ? ' on' : ''}" data-lang="${k}">${label}</button>`).join('') +
+        (pre ? '<button type="button" class="context-menu-item danger" data-unwrap="1">Zrušit blok kódu</button>' : '');
+      document.body.appendChild(m);
+      const r = btn.getBoundingClientRect();
+      m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.left)) + 'px';
+      m.style.top = (r.bottom + m.offsetHeight + 8 > window.innerHeight ? Math.max(8, r.top - m.offsetHeight - 4) : r.bottom + 4) + 'px';
+      const close = () => { m.remove(); document.removeEventListener('mousedown', outside, true); };
+      const outside = ev => { if (!m.contains(ev.target)) close(); };
+      setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
+      m.addEventListener('mousedown', ev => ev.preventDefault());
+      m.addEventListener('click', ev => {
+        const b = ev.target.closest('button');
+        if (!b) return;
+        close();
+        if (savedRange) { editor.focus(); sel().removeAllRanges(); sel().addRange(savedRange); }
+        if (b.dataset.unwrap && pre) return unwrapCode(pre);
+        const lang = b.dataset.lang;
+        if (pre) {
+          if (lang) pre.dataset.lang = lang; else pre.removeAttribute('data-lang');
+          editor.dispatchEvent(new Event('input', { bubbles: true }));
+          return;
+        }
+        if (selected) document.execCommand('delete');
+        insertCodeBlock(lang, selected);
+      });
+    });
+  }
+
+  editor.addEventListener('keydown', e => {
+    const pre = caretPre();
+    if (!pre) {
+      // ``` + mezerník / Enter na začátku řádku → blok kódu
+      if ((e.key === ' ' || e.key === 'Enter') && !e.shiftKey && !e.ctrlKey && !e.metaKey && sel().isCollapsed) {
+        const n = sel().anchorNode;
+        if (n?.nodeType !== 3) return;
+        const before = n.data.slice(0, sel().anchorOffset);
+        const off = sel().anchorOffset;
+        const m = before.match(/^\x60{3}([\w#+-]{0,12})$/);   // ``` (zapsané kódem, ať to neplete kontrolní skript)
+        const prev = n.previousSibling;
+        if (!m || n.data.slice(off).trim() || (prev && prev.nodeName !== 'BR')) return;
+        e.preventDefault();
+        const r = sel().getRangeAt(0);
+        r.setStart(n, off - m[0].length);
+        sel().removeAllRanges(); sel().addRange(r);
+        document.execCommand('delete');
+        insertCodeBlock(m[1].toLowerCase(), '');
+      }
+      return;
+    }
+    const code = codeOf(pre);
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); paraAfter(pre); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault(); e.stopPropagation();
+      if (!sel().isCollapsed) document.execCommand('delete');
+      const text = flatten(code), off = caretOffset(code);
+      const before = text.slice(0, off), after = text.slice(off);
+      // Prázdný (i jen odsazený) poslední řádek + Enter = konec bloku
+      const nl = before.lastIndexOf('\n');
+      if (!after.replace(/\n/g, '') && !before.slice(nl + 1).trim() && (nl >= 0 || !before.trim())) {
+        const kept = nl >= 0 ? before.slice(0, nl) : '';
+        code.textContent = kept + '\n';
+        if (!kept.trim()) { const p = document.createElement('p'); p.innerHTML = '<br>'; pre.replaceWith(p); const r = document.createRange(); r.setStart(p, 0); sel().removeAllRanges(); sel().addRange(r); }
+        else paraAfter(pre);
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
+      const line = before.slice(before.lastIndexOf('\n') + 1);
+      // odsazení jako na předchozím řádku, za { ( [ nebo : (Python) o úroveň víc
+      const indent = (line.match(/^[ \t]*/) || [''])[0] + (/[{([:]\s*$/.test(line) ? '    ' : '');
+      // Na úplném konci musí za kurzorem zůstat \n, jinak prohlížeč nový řádek nevykreslí.
+      const tail = after ? after : '\n';
+      replaceText(code, before + '\n' + indent + tail, off + 1 + indent.length);
+      return;
+    }
+    // } na řádku jen s odsazením → o úroveň zpátky (jako v editoru kódu)
+    if ((e.key === '}' || e.key === ']' || e.key === ')') && sel().isCollapsed) {
+      const text = flatten(code), off = caretOffset(code);
+      const ls = text.lastIndexOf('\n', off - 1) + 1, line = text.slice(ls, off);
+      if (line.length >= 4 && !line.trim()) {
+        e.preventDefault(); e.stopPropagation();
+        replaceText(code, text.slice(0, off - 4) + e.key + text.slice(off), off - 3);
+      }
+      return;
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault(); e.stopPropagation();
+      const text = flatten(code), off = caretOffset(code);
+      const ls = text.lastIndexOf('\n', off - 1) + 1;
+      if (e.shiftKey) {
+        const n = (text.slice(ls).match(/^ {1,4}|^\t/) || [''])[0].length;
+        if (n) replaceText(code, text.slice(0, ls) + text.slice(ls + n), Math.max(ls, off - n));
+      } else {
+        replaceText(code, text.slice(0, off) + '    ' + text.slice(off), off + 4);
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown' && !pre.nextElementSibling && !flatten(code).slice(caretOffset(code)).replace(/\n/g, '')) { e.preventDefault(); paraAfter(pre); return; }
+    if (e.key === 'ArrowUp' && !pre.previousElementSibling && !flatten(code).slice(0, caretOffset(code)).includes('\n')) {
+      e.preventDefault();
+      const p = document.createElement('p'); p.innerHTML = '<br>'; pre.before(p);
+      const r = document.createRange(); r.setStart(p, 0); sel().removeAllRanges(); sel().addRange(r);
+    }
+  }, true);
+
+  // Vložení do bloku = čistý text (bez formátování z webu / IDE).
+  editor.addEventListener('paste', e => {
+    const pre = caretPre();
+    if (!pre) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    const code = codeOf(pre);
+    const add = (e.clipboardData?.getData('text/plain') || '').replace(/\r\n?/g, '\n').replace(/\t/g, '    ');
+    if (!sel().isCollapsed) document.execCommand('delete');
+    const text = flatten(code), off = caretOffset(code);
+    const after = text.slice(off);
+    replaceText(code, text.slice(0, off) + add + (after || '\n'), off + add.length);
+  }, true);
+}
+
 function setupEditorExtras(editor, toolbar) {
   if (!editor || editor._extrasWired) return;
   editor._extrasWired = true;
@@ -2884,6 +3121,7 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
   setupPageLinkButton(editor, toolbar);
   setupHighlighter(editor, toolbar);
   setupEditorExtras(editor, toolbar);
+  setupCodeBlocks(editor, toolbar);
 
   // Image upload
   const imgLabel = toolbar.querySelector('.rt-img-label');
