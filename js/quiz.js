@@ -2,6 +2,7 @@ const params  = new URLSearchParams(window.location.search);
 const DECK_ID = params.get('deck');
 const ROOM_ID = params.get('room');
 const SMART   = params.get('smart') === '1';   // spaced-repetition practice mode
+const KIND    = params.get('kind');            // jen karty jednoho druhu (krok z celého setu)
 
 
 let ME       = null;
@@ -120,6 +121,10 @@ async function loadDeck() {
     const cardsSnap = await db.collection('decks').doc(DECK_ID)
       .collection('cards').orderBy('createdAt', 'asc').get();
     ALL_CARDS = cardsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Výkladové karty nic nezkouší — do kvízu jdou, jen když balíček nic jiného nemá.
+    const testable = ALL_CARDS.filter(c => c.kind !== 'info');
+    if (KIND && ALL_CARDS.some(c => c.kind === KIND)) ALL_CARDS = ALL_CARDS.filter(c => c.kind === KIND);
+    else if (testable.length >= 2) ALL_CARDS = testable;
 
     if (ALL_CARDS.length < 2) {
       document.getElementById('quizLoading').innerHTML =
@@ -375,6 +380,10 @@ function showResults() {
 
   const total = QUIZ_QUEUE.length;
   const pct   = Math.round((SCORE / total) * 100);
+  if (KIND) try {   // fajfka u kroku setu (flashcards.js → setProgress)
+    const p = JSON.parse(localStorage.getItem('sb_set_' + DECK_ID) || '{}') || {};
+    p[KIND] = Date.now(); localStorage.setItem('sb_set_' + DECK_ID, JSON.stringify(p));
+  } catch (_) { /* jen fajfka */ }
 
   let stars, title;
   if      (pct >= 90) { stars = '⭐⭐⭐'; title = 'Perfektní!'; }

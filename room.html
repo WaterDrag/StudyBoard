@@ -460,7 +460,11 @@
       <div class="form-group">
         <label class="label">Typ kartiček</label>
         <div class="ai-kinds" id="aiKinds" role="radiogroup" aria-label="Typ kartiček">
-          <label class="ai-kind"><input type="radio" name="aiKind" value="quiz" checked>
+          <label class="ai-kind ai-kind-set"><input type="radio" name="aiKind" value="set" checked>
+            <span class="ai-kind-head"><span class="ai-kind-ico">🧩</span><b>Celý set</b><i class="ai-kind-rec">Nejlepší na učení</i></span>
+            <span class="ai-kind-desc">Všechny tři typy naráz v jednom balíčku: nejdřív si přečteš výklad, pak se otestuješ na kartičkách a na konec zkusíš kvíz. V balíčku si vybereš, co chceš dělat.</span>
+            <span class="ai-kind-ex">📘 výklad → 🧠 kartičky → 🎯 kvíz</span></label>
+          <label class="ai-kind"><input type="radio" name="aiKind" value="quiz">
             <span class="ai-kind-head"><span class="ai-kind-ico">🎯</span><b>Kvíz</b><i class="ai-kind-rec" hidden>Doporučeno</i></span>
             <span class="ai-kind-desc">Otázka + víc možností, jedna nebo víc správných. Prověří, jestli tomu rozumíš.</span>
             <span class="ai-kind-ex">„Co dělá x:Name?“ → A / B / C / D</span></label>
@@ -470,7 +474,7 @@
             <span class="ai-kind-ex">„XAML“ ⟷ „značkovací jazyk pro popis UI“</span></label>
           <label class="ai-kind"><input type="radio" name="aiKind" value="info">
             <span class="ai-kind-head"><span class="ai-kind-ico">📘</span><b>Výkladové karty</b><i class="ai-kind-rec" hidden>Doporučeno</i></span>
-            <span class="ai-kind-desc">Rovnou informace, žádné zkoušení: „XAML je …“ a na druhé straně celé vysvětlení. Na první čtení látky.</span>
+            <span class="ai-kind-desc">Jen na čtení, nic se nezkouší: jednostranná karta „XAML je …“ i s celým vysvětlením. Na první seznámení s látkou.</span>
             <span class="ai-kind-ex">„XAML je …“ ⟷ „… značkovací jazyk, kterým se ve WPF/MAUI popisuje vzhled.“</span></label>
         </div>
         <div class="ai-kind-why" id="aiKindWhy"></div>

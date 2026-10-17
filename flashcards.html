@@ -56,6 +56,9 @@
         <div style="display:flex;gap:9px;" id="deckActions"></div>
       </div>
 
+      <!-- Celý set: výklad → kartičky → kvíz -->
+      <div id="setPath" class="set-path" style="display:none;"></div>
+
       <!-- Add card form (owner only) -->
       <div id="addCardForm" style="display:none;margin-bottom:22px;">
         <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;">
@@ -111,6 +114,11 @@
           <button class="grade-btn grade-good" id="knowBtn">Umím<span class="kbd">3</span></button>
         </div>
 
+        <div class="study-btns" id="readBtns" style="display:none;">
+          <button class="grade-btn" id="readPrevBtn">← Zpět<span class="kbd">←</span></button>
+          <button class="grade-btn grade-good" id="readNextBtn">Další<span class="kbd">→</span></button>
+        </div>
+
         <button class="btn btn-ghost study-skip" id="skipBtn">Přeskočit<span class="kbd">→</span></button>
       </div>
     </div>
@@ -128,6 +136,7 @@
           <button class="btn btn-primary"   id="restartBtn">Opakovat znova</button>
           <button class="btn btn-secondary" id="onlyWrongBtn">Opakovat neznámé</button>
           <button class="btn btn-ghost"     id="backToCardsBtn">Zpět na balíček</button>
+          <a class="btn btn-primary" id="nextStepBtn" style="display:none;"></a>
         </div>
       </div>
     </div>

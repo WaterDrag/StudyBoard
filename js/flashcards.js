@@ -11,6 +11,7 @@ let STUDY_QUEUE = [];
 let STUDY_IDX  = 0;
 let KNOWN      = 0;
 let IS_FLIPPED = false;
+let STUDY_KIND = null;   // u setu: který krok se právě dělá (info / learn)
 
 // ── Auth guard ─────────────────────────────────────────────────
 auth.onAuthStateChanged(user => {
@@ -110,8 +111,92 @@ async function toggleFcFavDeck(id, btn) {
   } catch (e) { toast('Nepovedlo se: ' + e.message); }
 }
 
+// ── Druhy balíčků ─────────────────────────────────────────────
+// deck.kind: info = výkladové (jen čtení), learn = klasické, quiz = kvíz,
+// set = celý set od AI (výklad + kartičky + kvíz v jednom balíčku).
+// Starší balíčky druh nemají — dopočítá se z karet a vlastník ho uloží.
+const DECK_KINDS = {
+  info:  { ico: '📘', name: 'Výkladové' },
+  learn: { ico: '🧠', name: 'Klasické' },
+  quiz:  { ico: '🎯', name: 'Kvíz' },
+  set:   { ico: '🧩', name: 'Celý set' },
+};
+const cardKind = c => (c.kind === 'info' || c.kind === 'quiz') ? c.kind : 'learn';
+function kindCounts(cards) {
+  const out = { info: 0, learn: 0, quiz: 0 };
+  cards.forEach(c => { out[cardKind(c)]++; });
+  return out;
+}
+function kindFromCounts(k) {
+  const used = Object.keys(k).filter(x => k[x] > 0);
+  return used.length > 1 ? 'set' : (used[0] || 'learn');
+}
+const DECK_KIND_CACHE = new Map();   // deckId → { kind, kinds }
+async function inferDeckKind(doc) {
+  try {
+    const snap = await db.collection('decks').doc(doc.id).collection('cards').get();
+    const kinds = kindCounts(snap.docs.map(d => d.data()));
+    const kind = kindFromCounts(kinds);
+    DECK_KIND_CACHE.set(doc.id, { kind, kinds });
+    if (doc.data().ownerUid === ME.uid) db.collection('decks').doc(doc.id).update({ kind, kinds }).catch(() => {});
+  } catch (_) { DECK_KIND_CACHE.set(doc.id, { kind: 'learn' }); }
+}
+function deckKindOf(doc) {
+  const d = doc.data();
+  return d.kind || DECK_KIND_CACHE.get(doc.id)?.kind || null;
+}
+const fold = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+let DECK_DOCS = [];
+let DECK_FILTER = 'all';
+let DECK_QUERY = '';
 function renderDeckGrid(docs) {
+  DECK_DOCS = docs;
+  // Druh chybí → dopočítat (jednou na balíček) a pak překreslit.
+  const missing = docs.filter(d => !d.data().kind && !DECK_KIND_CACHE.has(d.id));
+  missing.forEach(d => DECK_KIND_CACHE.set(d.id, { kind: null }));
+  if (missing.length) Promise.all(missing.map(inferDeckKind)).then(() => drawDeckGrid());
+  drawDeckGrid();
+}
+
+function setupDeckTools() {
+  if (document.getElementById('deckTools')) return;
+  const bar = document.createElement('div');
+  bar.id = 'deckTools';
+  bar.className = 'deck-tools';
+  bar.innerHTML = `
+    <label class="deck-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="deckSearch" placeholder="Hledat balíček…" autocomplete="off" aria-label="Hledat balíček"></label>
+    <div class="deck-filters" id="deckFilters" role="group" aria-label="Druh balíčku"></div>`;
+  document.getElementById('decksGrid').before(bar);
+  document.getElementById('deckSearch').addEventListener('input', e => { DECK_QUERY = e.target.value; drawDeckGrid(); });
+  document.getElementById('deckFilters').addEventListener('click', e => {
+    const b = e.target.closest('[data-kind]');
+    if (!b) return;
+    DECK_FILTER = b.dataset.kind;
+    drawDeckGrid();
+  });
+}
+
+function drawDeckGrid() {
+  setupDeckTools();
+  const all = DECK_DOCS;
+  const counts = { all: all.length, info: 0, learn: 0, quiz: 0, set: 0 };
+  all.forEach(d => { const k = deckKindOf(d); if (k) counts[k]++; });
+  if (DECK_FILTER !== 'all' && !counts[DECK_FILTER]) DECK_FILTER = 'all';
+  document.getElementById('deckFilters').innerHTML =
+    [['all', 'Vše'], ...Object.entries(DECK_KINDS).map(([k, v]) => [k, v.ico + ' ' + v.name])]
+      .filter(([k]) => k === 'all' || counts[k])
+      .map(([k, label]) => `<button type="button" class="deck-filter${DECK_FILTER === k ? ' on' : ''}" data-kind="${k}">${label} <span>${counts[k]}</span></button>`).join('');
+  document.getElementById('deckTools').hidden = all.length < 2;
+  const q = fold(DECK_QUERY.trim());
+  const docs = all.filter(d => (DECK_FILTER === 'all' || deckKindOf(d) === DECK_FILTER) &&
+    (!q || fold(d.data().name + ' ' + (d.data().description || '')).includes(q)));
   const grid = document.getElementById('decksGrid');
+  if (all.length && !docs.length) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><h3>Nic nenalezeno</h3><p>Zkus jiné slovo nebo jiný filtr.</p></div>';
+    return;
+  }
   if (!docs.length) {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1;">
@@ -127,6 +212,9 @@ function renderDeckGrid(docs) {
   grid.innerHTML = '';
   docs.forEach(doc => {
     const d = doc.data();
+    const kind = deckKindOf(doc), K = kind && DECK_KINDS[kind];
+    const kinds = d.kinds || DECK_KIND_CACHE.get(doc.id)?.kinds;
+    const parts = kind === 'set' && kinds ? ['info', 'learn', 'quiz'].filter(k => kinds[k]).map(k => `${DECK_KINDS[k].ico} ${kinds[k]}`).join(' · ') : '';
     const isOwner = d.ownerUid === ME.uid;
     const a = document.createElement('a');
     a.href      = `flashcards.html?deck=${doc.id}${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
@@ -137,7 +225,7 @@ function renderDeckGrid(docs) {
       ${ME.isAnonymous ? '' : `<button class="card-fav-btn" data-fav-deck="${doc.id}" title="Přidat do oblíbených" aria-label="Oblíbený balíček">${FC_HEART}</button>`}
       <h3>${esc(d.name)}</h3>
       ${d.description ? `<p class="card-desc">${esc(d.description)}</p>` : ''}
-      <p>${d.cardCount || 0} karet</p>`;
+      <p class="deck-meta">${K ? `<span class="deck-kind k-${kind}">${K.ico} ${K.name}</span>` : ''}<span>${parts || (d.cardCount || 0) + ' karet'}</span></p>`;
     const editBtn = a.querySelector('[data-edit-deck]');
     if (editBtn) {
       editBtn.addEventListener('click', e => {
@@ -307,7 +395,10 @@ async function loadDeck() {
           <button type="button" class="nav-menu-item danger" id="deleteDeckBtn" role="menuitem">🗑️<span>Smazat balíček</span></button>` : ''}
         </div>
       </div>`;
-    document.getElementById('studyBtn').addEventListener('click', () => startStudy(false));
+    document.getElementById('studyBtn').addEventListener('click', () => {
+      if (isSetDeck()) runSetStep(nextSetStep(['info', 'learn']) || 'learn');
+      else startStudy(false, null);
+    });
     document.getElementById('statsBtn').addEventListener('click', openLearnStats);
     document.getElementById('bulkDistractorsBtn')?.addEventListener('click', bulkGenerateDistractors);
     const moreBtn = document.getElementById('deckMoreBtn'), moreMenu = document.getElementById('deckMoreMenu');
@@ -329,11 +420,17 @@ async function loadDeck() {
     db.collection('decks').doc(DECK_ID).collection('cards')
       .orderBy('createdAt', 'asc')
       .onSnapshot(snap => {
-        ALL_CARDS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Karty uložené jednou dávkou (AI) mají stejný čas — pořadí drží „order“.
+        ALL_CARDS = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9));
         renderCardsList();
+        renderSetPath();
         document.getElementById('deckCardCount').textContent = `${ALL_CARDS.length} karet`;
-        // Aktualizuj počet v deck doc
-        if (isOwner) db.collection('decks').doc(DECK_ID).update({ cardCount: ALL_CARDS.length }).catch(() => {});
+        const qb = document.getElementById('quizBtn');
+        if (qb) qb.href = quizHref + (isSetDeck() ? '&kind=quiz' : '');
+        // Aktualizuj počet a druh v deck doc
+        const kinds = kindCounts(ALL_CARDS);
+        if (isOwner) db.collection('decks').doc(DECK_ID).update({ cardCount: ALL_CARDS.length, kinds, kind: kindFromCounts(kinds) }).catch(() => {});
         // Disable study if no cards
         const sb = document.getElementById('studyBtn');
         if (sb) sb.disabled = ALL_CARDS.length === 0;
@@ -413,16 +510,20 @@ function renderCardsList() {
     return;
   }
   list.innerHTML = '';
-  ALL_CARDS.forEach(card => {
+  const setDeck = isSetDeck();
+  const order = { info: 0, learn: 1, quiz: 2 };
+  (setDeck ? ALL_CARDS.slice().sort((a, b) => order[cardKind(a)] - order[cardKind(b)]) : ALL_CARDS).forEach(card => {
     const row = document.createElement('div');
     row.className = 'card-row';
     const editable = canManageCard(card);
+    const K = DECK_KINDS[cardKind(card)];
+    const tag = setDeck ? ` · ${K.ico} ${K.name}` : '';
     const distractorBadge = (card.distractors && card.distractors.length)
       ? `<div class="card-distractors-row">❌ ${card.distractors.map(d=>`<span class="distractor-badge">${esc(d)}</span>`).join(' ')}</div>` : '';
     row.innerHTML = `
       <div class="card-sides">
         <div>
-          <div class="card-side-lbl">Přední</div>
+          <div class="card-side-lbl">Přední${tag}</div>
           ${card.frontLang ? codeQuestionHtml(card.front, card.frontLang) : `<div class="card-side-txt">${esc(card.front)}</div>`}
         </div>
         <div>
@@ -804,18 +905,74 @@ async function deleteDeck() {
   } catch (e) { toast('Chyba: ' + e.message); }
 }
 
+// ── Celý set: výklad → kartičky → kvíz ─────────────────────────
+// Doporučené pořadí, ale vybrat si jde cokoli. Hotové kroky si pamatuje
+// prohlížeč (jen pro fajfku, nic důležitého).
+const SET_STEPS = [
+  { kind: 'info',  ico: '📘', name: 'Přečti si výklad', desc: 'Krátké informace na první seznámení — jen čteš, nic se nezkouší.' },
+  { kind: 'learn', ico: '🧠', name: 'Procvič kartičky', desc: 'Otázka → odpovíš v duchu → otočíš a ohodnotíš se.' },
+  { kind: 'quiz',  ico: '🎯', name: 'Otestuj se kvízem', desc: 'Na konec možnosti A/B/C/D — ukáže, co opravdu umíš.' },
+];
+const quizHrefBase = () => `quiz.html?deck=${DECK_ID}${ROOM_ID ? '&room=' + ROOM_ID : ''}`;
+function setProgress() {
+  try { return JSON.parse(localStorage.getItem('sb_set_' + DECK_ID) || '{}') || {}; } catch (_) { return {}; }
+}
+function markSetStep(kind) {
+  const p = setProgress(); p[kind] = Date.now();
+  try { localStorage.setItem('sb_set_' + DECK_ID, JSON.stringify(p)); } catch (_) { /* jen fajfka */ }
+}
+function isSetDeck() {
+  return DECK?.kind === 'set' || kindFromCounts(kindCounts(ALL_CARDS)) === 'set';
+}
+function setSteps() {
+  const counts = kindCounts(ALL_CARDS);
+  return SET_STEPS.filter(st => counts[st.kind]).map(st => ({ ...st, count: counts[st.kind] }));
+}
+function nextSetStep(only) {
+  const done = setProgress();
+  return setSteps().find(st => !done[st.kind] && (!only || only.includes(st.kind)))?.kind || null;
+}
+function runSetStep(kind) {
+  if (kind === 'quiz') { window.location.href = quizHrefBase() + '&kind=quiz'; return; }
+  startStudy(false, kind);
+}
+function renderSetPath() {
+  const el = document.getElementById('setPath');
+  if (!el) return;
+  const steps = setSteps();
+  if (!isSetDeck() || steps.length < 2) { el.style.display = 'none'; return; }
+  const done = setProgress(), next = nextSetStep();
+  el.style.display = '';
+  el.innerHTML = `<div class="set-path-h">🧩 Celý set <span>vyber, co chceš dělat — doporučené pořadí je zleva doprava</span></div>
+    <div class="set-steps">` + steps.map((st, i) => `
+      <button type="button" class="set-step${done[st.kind] ? ' done' : ''}${st.kind === next ? ' next' : ''}" data-step="${st.kind}">
+        <span class="set-step-top"><span class="set-step-n">${done[st.kind] ? '✓' : i + 1}</span><span class="set-step-ico">${st.ico}</span>${st.kind === next ? '<i>Na řadě</i>' : ''}</span>
+        <b>${st.name}</b>
+        <small>${st.desc}</small>
+        <em>${st.count} karet</em>
+      </button>`).join('') + '</div>';
+  el.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => runSetStep(b.dataset.step)));
+}
+
 // ── Study mode ─────────────────────────────────────────────────
-function startStudy(wrongOnly = false) {
-  const source = wrongOnly
-    ? STUDY_QUEUE.filter(c => !c._known)
-    : [...ALL_CARDS];
+// Výkladové karty (kind „info“) jsou jednostranné: pojem i informace na
+// jedné straně, žádné otáčení ani hodnocení — jen se čte dál.
+const isInfo = c => !!c && cardKind(c) === 'info';
+function startStudy(wrongOnly = false, kind) {
+  if (kind !== undefined) STUDY_KIND = kind;
+  let source = wrongOnly
+    ? STUDY_QUEUE.filter(c => !c._known && !isInfo(c))
+    : ALL_CARDS.filter(c => !STUDY_KIND || cardKind(c) === STUDY_KIND);
+  // Set bez klasických kartiček: procvičuje se na kartách z kvízu.
+  if (!wrongOnly && STUDY_KIND === 'learn' && !source.length) source = ALL_CARDS.filter(c => !isInfo(c));
 
   if (!source.length) {
     toast(wrongOnly ? '🎉 Žádné neznámé karty, vše znáš!' : 'Balíček nemá žádné karty.');
     return;
   }
 
-  STUDY_QUEUE = shuffle(source);
+  // Výklad se čte popořadě, zkoušení se míchá.
+  STUDY_QUEUE = source.every(isInfo) ? source.slice() : shuffle(source);
   STUDY_IDX   = 0;
   KNOWN       = 0;
   showView('study');
@@ -834,29 +991,46 @@ function showStudyCard() {
   inner.classList.remove('no-anim');
 
   const card = STUDY_QUEUE[STUDY_IDX];
+  const info = isInfo(card);
   const fEl = document.getElementById('studyFront'), bEl = document.getElementById('studyBack');
-  if (card.frontLang) fEl.innerHTML = codeQuestionHtml(card.front, card.frontLang);
-  else fEl.textContent = card.front;
-  if (card.codeLang)  bEl.innerHTML = codeBlockHtml(card.back, card.codeLang);
-  else bEl.textContent = card.back;
-  // Výkladová karta (AI typ „info“) nic nezkouší — „XAML je …“ ⟷ informace.
   const [fLbl, bLbl] = [fEl, bEl].map(e => e.parentElement.querySelector('.fc-face-lbl'));
-  if (fLbl) fLbl.textContent = card.kind === 'info' ? 'Pojem' : 'Otázka';
-  // Otázka vytažená z komentáře v kódu nahradí nápis „Otázka“.
-  if (fLbl) fLbl.hidden = !!fEl.querySelector('.code-q');
-  if (bLbl) bLbl.textContent = card.kind === 'info' ? 'Informace' : 'Odpověď';
+  document.getElementById('flashcardWrap').classList.toggle('fc-reading', info);
+  if (info) {
+    fEl.innerHTML = `<div class="fc-info-term">${esc(card.front)}</div>` +
+      (card.codeLang ? codeBlockHtml(card.back, card.codeLang) : `<div class="fc-info-body">${esc(card.back)}</div>`);
+    bEl.textContent = '';
+    if (fLbl) { fLbl.textContent = 'Výklad'; fLbl.hidden = false; }
+  } else {
+    if (card.frontLang) fEl.innerHTML = codeQuestionHtml(card.front, card.frontLang);
+    else fEl.textContent = card.front;
+    if (card.codeLang)  bEl.innerHTML = codeBlockHtml(card.back, card.codeLang);
+    else bEl.textContent = card.back;
+    if (fLbl) fLbl.textContent = 'Otázka';
+    // Otázka vytažená z komentáře v kódu nahradí nápis „Otázka“.
+    if (fLbl) fLbl.hidden = !!fEl.querySelector('.code-q');
+    if (bLbl) bLbl.textContent = 'Odpověď';
+  }
   document.getElementById('studyIdx').textContent   = STUDY_IDX + 1;
   document.getElementById('studyTotal').textContent = STUDY_QUEUE.length;
   document.getElementById('studyProgFill').style.width = (STUDY_IDX / STUDY_QUEUE.length * 100) + '%';
 
   document.getElementById('studyBtns').style.display = 'none';
-  document.getElementById('studyHint').style.display  = 'block';
+  document.getElementById('studyHint').style.display  = info ? 'none' : 'block';
+  document.getElementById('readBtns').style.display   = info ? 'flex' : 'none';
+  document.getElementById('skipBtn').style.display    = info ? 'none' : '';
+  document.getElementById('readPrevBtn').disabled     = STUDY_IDX === 0;
+  document.getElementById('readNextBtn').firstChild.textContent = STUDY_IDX === STUDY_QUEUE.length - 1 ? 'Hotovo' : 'Další';
+}
+
+function readStep(d) {
+  if (d < 0) { if (STUDY_IDX > 0) { STUDY_IDX--; showStudyCard(); } return; }
+  gradeCard('read');
 }
 
 function setupStudyControls() {
-  // Flip on card click
+  // Flip on card click (výkladová karta se neotáčí)
   document.getElementById('flashcardWrap').onclick = () => {
-    if (IS_FLIPPED) return;
+    if (IS_FLIPPED || isInfo(STUDY_QUEUE[STUDY_IDX])) return;
     IS_FLIPPED = true;
     document.getElementById('flashcardInner').classList.add('flipped');
     document.getElementById('studyBtns').style.display = 'flex';
@@ -867,16 +1041,24 @@ function setupStudyControls() {
   document.getElementById('dontKnowBtn').onclick = () => gradeCard(false);
   document.getElementById('almostBtn').onclick   = () => gradeCard(false);
   document.getElementById('skipBtn').onclick     = () => gradeCard(null);
+  document.getElementById('readPrevBtn').onclick = () => readStep(-1);
+  document.getElementById('readNextBtn').onclick = () => readStep(1);
 
   document.getElementById('restartBtn').onclick    = () => startStudy(false);
   document.getElementById('onlyWrongBtn').onclick  = () => startStudy(true);
-  document.getElementById('backToCardsBtn').onclick = () => showView('cards');
+  document.getElementById('backToCardsBtn').onclick = () => { showView('cards'); renderSetPath(); };
 }
 
 // Keyboard while studying: Space/Enter flips, 1–3 grade, → skips.
+// Výklad: mezerník / Enter / → dál, ← zpět.
 document.addEventListener('keydown', e => {
   if (document.getElementById('viewStudy')?.style.display === 'none') return;
   if (e.target instanceof Element && e.target.closest('input, textarea, [contenteditable="true"]') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (isInfo(STUDY_QUEUE[STUDY_IDX])) {
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); readStep(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); readStep(-1); }
+    return;
+  }
   if (e.key === ' ' || e.key === 'Enter') {
     e.preventDefault();
     if (!IS_FLIPPED) document.getElementById('flashcardWrap').click();
@@ -903,23 +1085,45 @@ function gradeCard(known) {
 
 function showResults() {
   showView('results');
-  const total = STUDY_QUEUE.length;
+  const read  = STUDY_QUEUE.filter(isInfo).length;
+  const total = STUDY_QUEUE.length - read;            // výklad se nehodnotí
   const pct   = total > 0 ? Math.round(KNOWN / total * 100) : 0;
-  document.getElementById('resPct').textContent  = pct + '%';
+  const sub   = document.querySelector('#viewResults .results-sub');
+  document.getElementById('resPct').textContent  = total ? pct + '%' : '✓';
+  if (sub) sub.textContent = total ? 'znáš' : 'přečteno';
   document.getElementById('studyProgFill').style.width = '100%';
 
   let title, desc;
-  if (pct === 100) { title = '🎉 Perfektní!';      desc = `Znáš všech ${total} karet. Skvělá práce!`; }
-  else if (pct >= 75) { title = '💪 Skoro tam!';   desc = `${KNOWN} z ${total} karet. Ještě trochu procvičit.`; }
-  else if (pct >= 50) { title = '📚 Pokrok!';      desc = `${KNOWN} z ${total} karet. Zaměř se na ty červené.`; }
-  else                { title = '💡 Učit se dál!'; desc = `${KNOWN} z ${total} karet. Nevzdávej to, opakování je klíč.`; }
+  if (!total)           { title = '📘 Výklad přečtený'; desc = `Prošel jsi ${read} karet výkladu.`; }
+  else if (pct === 100) { title = '🎉 Perfektní!';      desc = `Znáš všech ${total} karet. Skvělá práce!`; }
+  else if (pct >= 75)   { title = '💪 Skoro tam!';      desc = `${KNOWN} z ${total} karet. Ještě trochu procvičit.`; }
+  else if (pct >= 50)   { title = '📚 Pokrok!';         desc = `${KNOWN} z ${total} karet. Zaměř se na ty červené.`; }
+  else                  { title = '💡 Učit se dál!';    desc = `${KNOWN} z ${total} karet. Nevzdávej to, opakování je klíč.`; }
 
   document.getElementById('resTitle').textContent = title;
   document.getElementById('resDesc').textContent  = desc;
+  document.getElementById('restartBtn').textContent = total ? 'Opakovat znova' : 'Přečíst znovu';
 
-  const wrongCount = STUDY_QUEUE.filter(c => !c._known).length;
-  document.getElementById('onlyWrongBtn').disabled = wrongCount === 0;
-  document.getElementById('onlyWrongBtn').textContent = `Opakovat neznámé (${wrongCount})`;
+  const wrongCount = STUDY_QUEUE.filter(c => !c._known && !isInfo(c)).length;
+  const ow = document.getElementById('onlyWrongBtn');
+  ow.style.display = total ? '' : 'none';
+  ow.disabled = wrongCount === 0;
+  ow.textContent = `Opakovat neznámé (${wrongCount})`;
+
+  // Set: krok splněn → nabídni další.
+  const nb = document.getElementById('nextStepBtn');
+  nb.style.display = 'none';
+  if (isSetDeck() && STUDY_KIND) {
+    markSetStep(STUDY_KIND);
+    const steps = setSteps();
+    const nxt = steps[steps.findIndex(st => st.kind === STUDY_KIND) + 1];
+    if (nxt) {
+      nb.textContent = `Další krok: ${nxt.ico} ${nxt.name}`;
+      nb.href = nxt.kind === 'quiz' ? quizHrefBase() + '&kind=quiz' : '#';
+      nb.onclick = nxt.kind === 'quiz' ? null : e => { e.preventDefault(); startStudy(false, nxt.kind); };
+      nb.style.display = '';
+    }
+  }
 }
 
 // ── Learning stats (spaced repetition) ─────────────────────────

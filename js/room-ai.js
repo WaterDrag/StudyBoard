@@ -142,9 +142,11 @@ function codeQuestionHtml(code, lang) {
 // ── Typ kartiček ──────────────────────────────────────────────
 // quiz  = otázka + možnosti (správné i špatné) — kvíz
 // learn = klasické flash cards: pojem/otázka ⟷ krátká odpověď
-// info  = výkladové: „XAML je …“ ⟷ celá informace; nic se nezkouší
+// info  = výkladové: „XAML je …“ + celá informace na jedné straně; nic se nezkouší
+// set   = všechny tři naráz (každé téma jako výklad, kartička i kvíz)
+const AI_SET_KINDS = ['info', 'learn', 'quiz'];
 function aiCardKind() {
-  return document.querySelector('input[name="aiKind"]:checked')?.value || 'quiz';
+  return document.querySelector('input[name="aiKind"]:checked')?.value || 'set';
 }
 
 // Podle stavby vybraných poznámek doporučí typ: slovníček pojmů → učební,
@@ -169,15 +171,11 @@ function updateAiKindRecommendation() {
   const text = ids.map(id => NOTES_MAP.get(id)).filter(Boolean).map(noteToPlainText).join('\n');
   const rec = recommendAiKind(text);
   document.querySelectorAll('.ai-kind').forEach(k => {
+    if (k.querySelector('input').value === 'set') return;
     k.querySelector('.ai-kind-rec').hidden = !rec || k.querySelector('input').value !== rec.kind;
   });
   const why = document.getElementById('aiKindWhy');
-  if (why) why.textContent = rec ? '💡 ' + rec.why : '';
-  // Doporučení se samo vybere jen dokud si člověk nevybral sám.
-  if (rec && !AI_KIND_TOUCHED) {
-    const r = document.querySelector(`input[name="aiKind"][value="${rec.kind}"]`);
-    if (r) r.checked = true;
-  }
+  if (why) why.textContent = rec ? '💡 Kdybys chtěl jen jeden typ: ' + rec.why : '';
 }
 let AI_KIND_TOUCHED = false;
 
@@ -544,6 +542,9 @@ async function openAiCardsModal() {
 // What each card must contain, per kind. Both the API path and the
 // copy-paste path use it, so a chat gives the same cards as the API.
 function aiKindFieldRules(kind) {
+  if (kind === 'set') return `CARD TYPE: a complete study SET. For EVERY concept write THREE cards right after each other, one of each type, and give each card a "kind" field:
+${AI_SET_KINDS.map((k, i) => `${i + 1}) "kind": "${k}" —\n${aiKindFieldRules(k).replace(/^/gm, '   ')}`).join('\n')}
+The three cards of one concept must not be copies of each other: the info card explains, the learn card asks for recall, the quiz card tests with options.`;
   if (kind === 'info') return `CARD TYPE: explanatory "info cards" — the student READS them to learn, nothing is being tested.
 - "front": the start of a statement that names the concept and ends with " …", e.g. "XAML je …", "Metoda Add() v kolekci List …", "OSI model má …". Never a question.
 - "back": the full information completing it — 1 to 3 clear sentences that would make sense on their own, with the key facts, numbers and examples from the notes.
@@ -564,9 +565,10 @@ function aiKindFieldRules(kind) {
 // Zadani i rozebrani odpovedi jsou zvlast, protoze je pouzivaji DVE cesty:
 // primo pres API s klicem, a rezim bez klice (zkopiruj zadani -> vloz odpoved).
 function buildAiCardsPrompt(text, count, automatic = false, kind = 'quiz') {
-  return `You are creating study flashcards from the notes below. Keep the SAME language as the notes (they may be in Czech).
+  return `You are creating study flashcards from the notes below. Keep the SAME language as the notes (they may be in Czech).${kind === 'set' ? '\nThe numbers below count CONCEPTS — every concept becomes 3 cards (info, learn, quiz).' : ''}
 ${automatic
     ? `Choose the suitable number of flashcards yourself (2 to ${AI_CARD_MAX}). Cover every separately defined term and important concept; do not stop at an arbitrary small number. Prefer one clear card per distinct term, and merge only genuinely inseparable concepts.`
+    : kind === 'set' ? `Cover exactly ${count} concepts (= ${count * 3} cards) — the key facts, terms, and concepts.`
     : `Create exactly ${count} flashcards covering the key facts, terms, and concepts.`}
 Each flashcard:
 ${aiKindFieldRules(kind)}
@@ -578,7 +580,7 @@ SOURCE CODE: if the notes contain programming code, make proper code cards too, 
 Keep code short (max ~12 lines), keep the original line breaks and indentation (as \n inside the JSON string), and never wrap the code itself in markdown fences. Use the language actually used in the notes. Mix code cards with normal ones when the notes mix theory and code.
 ${AI_SELF_CONTAINED_RULE}
 OUTPUT FORMAT: reply with ONE markdown code block tagged json (start it with \`\`\`json and end it with \`\`\`) that contains ONLY the JSON array, so the user can copy it with the code block's copy button. No text before or after the code block. Use straight ASCII double quotes for all JSON keys and strings. Inside the JSON, code goes in plain strings with escaped newlines (\\n) — never put another \`\`\` fence inside it.
-The array looks like this: [{"front":"...","back":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"codeLang":"java"}, ...]
+The array looks like this: [{${kind === 'set' ? '"kind":"learn",' : ''}"front":"...","back":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"codeLang":"java"}, ...]
 
 NOTES:
 """
@@ -668,10 +670,14 @@ function parseAiCardBatch(raw, expectedCount) {
 }
 
 async function generateAiCardBatches(targets) {
-  const batches = [];
+  const chunks = [];
   for (let i = 0; i < targets.length; i += AI_CARD_BATCH_SIZE) {
-    batches.push(targets.slice(i, i + AI_CARD_BATCH_SIZE));
+    chunks.push(targets.slice(i, i + AI_CARD_BATCH_SIZE));
   }
+  // Celý set: každá dávka témat třikrát (výklad, kartičky, kvíz). Pořadí
+  // výsledků = všechen výklad, pak kartičky, pak kvíz.
+  const kinds = AI_JOB.kind === 'set' ? AI_SET_KINDS : [AI_JOB.kind || 'quiz'];
+  const batches = kinds.flatMap(kind => chunks.map(targets => ({ kind, targets })));
   AI_JOB.done = 0;
   AI_JOB.total = batches.length;
   setAiCardsStatus(`Připraven plán ${targets.length} kartiček. Generuji ${batches.length} dávek souběžně…`);
@@ -683,14 +689,14 @@ async function generateAiCardBatches(targets) {
     while (!failure) {
       const index = nextBatch++;
       if (index >= batches.length) return;
-      const batch = batches[index];
+      const { kind, targets: batch } = batches[index];
       try {
-        results[index] = await aiGenerate(buildAiCardBatchPrompt(batch, AI_JOB.kind || 'quiz'), {
+        results[index] = (await aiGenerate(buildAiCardBatchPrompt(batch, kind), {
           temperature: 0.45,
           maxOutputTokens: 5000,
           statusElementId: null,
           parse: raw => parseAiCardBatch(raw, batch.length),
-        });
+        })).map(c => ({ ...c, kind }));
         AI_JOB.done++;
         setAiCardsStatus(`Generuji kartičky… hotovo ${AI_JOB.done} z ${AI_JOB.total} dávek.`);
       } catch (e) {
@@ -739,6 +745,7 @@ function parseAiCards(text) {
           const frontLang = lang(c.frontLang), codeLang = lang(c.codeLang);
           const code = (on, s) => on ? s.replace(/[“”„‟″]/g, '"').replace(/[‘’‚]/g, "'") : s;
           return {
+            kind: AI_SET_KINDS.includes(c.kind) ? c.kind : null,   // jen u celého setu
             front: code(frontLang, String(c.front).trim()),
             back: code(codeLang, back),
             corrects: corrects.map(s => code(codeLang, s)),
@@ -814,11 +821,18 @@ async function selectedNotesText(ids) {
     .filter(Boolean).join('\n\n---\n\n');
 }
 
+const AI_KIND_LABEL = { info: '📘 Výkladové', learn: '🧠 Kartičky', quiz: '🎯 Kvíz' };
 function renderAiCardsPreview(cards) {
+  // U celého setu po skupinách: výklad, kartičky, kvíz.
+  if (cards.some(c => c.kind)) {
+    const ord = k => AI_SET_KINDS.indexOf(k || 'quiz');
+    const sorted = cards.map((c, i) => [c, i]).sort((a, b) => ord(a[0].kind) - ord(b[0].kind) || a[1] - b[1]).map(x => x[0]);
+    if (sorted.some((c, i) => c !== cards[i])) { cards.splice(0, cards.length, ...sorted); }
+  }
   const el = document.getElementById('aiCardsPreview');
   el.innerHTML = `<label class="label" style="margin-top:12px;display:block;">Náhled (${cards.length}) — odškrtni, co nechceš uložit:</label>
     <div class="ai-cards-preview-list">` +
-    cards.map((c, i) => `
+    cards.map((c, i) => (c.kind && c.kind !== cards[i - 1]?.kind ? `<div class="ai-kind-group">${AI_KIND_LABEL[c.kind]} (${cards.filter(x => x.kind === c.kind).length})</div>` : '') + `
       <label class="ai-card-row">
         <input type="checkbox" class="ai-card-check" data-i="${i}" checked>
         <span>${c.frontLang ? `<b>Kód (${esc(c.frontLang)}):</b>${codeQuestionHtml(c.front, c.frontLang)}` : `<b>${esc(c.front)}</b>`}<br><span style="color:var(--text-muted);">${c.codeLang ? codeBlockHtml(c.back, c.codeLang) : esc(c.back)}</span>
@@ -848,15 +862,21 @@ async function saveAiCards() {
     // Match the color of the note(s) these cards were generated from,
     // instead of always defaulting to the same indigo.
     const sourceColor = AI_SOURCE_COLOR || document.querySelector('.ai-note-check:checked')?.dataset.color || '#6366f1';
+    const kindOf = c => c.kind || (AI_JOB.kind === 'set' ? 'quiz' : AI_JOB.kind) || aiCardKind();
+    const kinds = { info: 0, learn: 0, quiz: 0 };
+    toSave.forEach(c => { kinds[kindOf(c)] = (kinds[kindOf(c)] || 0) + 1; });
+    const used = Object.keys(kinds).filter(k => kinds[k]);
     const deckRef = await db.collection('decks').add({
       name, color: sourceColor, description: null,
       ownerUid: ME.uid, roomId: ROOM_ID, cardCount: 0,
+      kind: used.length > 1 ? 'set' : used[0], kinds,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     const batch = db.batch();
     const cardsCol = deckRef.collection('cards');
-    toSave.forEach(c => {
+    toSave.forEach((c, i) => {
       batch.set(cardsCol.doc(), {
+        order: i,                         // stejný createdAt pro celou dávku
         front: c.front,
         back: c.back,
         corrects: c.corrects || [],       // further answers that are also right
@@ -864,7 +884,7 @@ async function saveAiCards() {
         codeLang: c.codeLang || null,     // answer is code, in this language
         distractors: c.distractors || [],
         answerCount: c.answerCount || 4,
-        kind: AI_JOB.kind || aiCardKind(),   // quiz / learn / info
+        kind: kindOf(c),                  // quiz / learn / info
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
     });
