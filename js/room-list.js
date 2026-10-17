@@ -194,7 +194,8 @@ function openPinMenu(x, y, id) {
   const isFolder = FOLDERS_MAP.has(id);
   const canMove = MY_ROLE !== 'viewer';
   pop.innerHTML = `<button class="context-menu-item" data-pm="pin">📌 ${on ? 'Odepnout' : 'Připnout nahoru'}</button>` +
-    (canMove ? `<button class="context-menu-item" data-pm="move">📁 Přesunout do složky…</button>` : '');
+    (canMove ? `<button class="context-menu-item" data-pm="move">📁 Přesunout do složky…</button>` : '') +
+    (isFolder ? `<button class="context-menu-item" data-pm="present">▶ Prezentovat složku</button>` : '');
   document.body.appendChild(pop);
   pop.style.left = x + 'px';
   pop.style.top  = y + 'px';
@@ -208,6 +209,7 @@ function openPinMenu(x, y, id) {
     closePinMenu();
     if (act === 'pin') togglePin(id);
     if (act === 'move') { if (isFolder) openMoveFolderPicker(id); else openMoveToFolderModal(id); }
+    if (act === 'present') presentFolder(id);
   });
   setTimeout(() => {
     document.addEventListener('click', closePinMenu, { once: true });

@@ -3,7 +3,7 @@
 // exactly how five functions once vanished in a rewrite and nothing complained.
 const fs = require('fs');
 const dir = 'C:/Users/zitka/Desktop/StudyBoard/js/';
-const files = ['ai.js', 'bggen.js', 'drive.js', 'room-core.js', 'room-list.js', 'room-notes.js', 'room-export.js',
+const files = ['ai.js', 'bggen.js', 'drive.js', 'room-core.js', 'room-list.js', 'room-notes.js', 'room-export.js', 'room-import.js', 'room-present.js',
                'room-board.js', 'room-whiteboard.js', 'room-ai.js', 'room-social.js', 'room-files.js', 'room-init.js'];
 
 // Odstrani komentare a OBSAH retezcu vcetne template literalu, aby se proza
@@ -84,7 +84,7 @@ const builtins = new Set(['if','for','while','switch','catch','return','typeof',
   'Intl','Symbol','WeakMap','WeakSet','Proxy','Reflect','btoa','atob','crypto','URLSearchParams','AbortController',
   'ResizeObserver','IntersectionObserver','MutationObserver','Node','Element','HTMLElement','Infinity','NaN','undefined',
   'super','void','delete','in','of','instanceof','yield','class','extends','import','export','const','let','var','this',
-  'true','false','null','APP_VERSION','IMGBB_KEY','Uint8Array','DOMParser',
+  'true','false','null','APP_VERSION','IMGBB_KEY','Uint8Array','DOMParser','File',
   // regex artefacts, not real calls
   'async','stnosti']);
 

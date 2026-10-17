@@ -837,6 +837,7 @@ function applyKitSelection(){
 
 function initGame(){
   me.x=CX; me.y=CY;
+  gs._recorded=false;
   _flowGrids=null; _flowNextBuild=0; // force fresh flow fields for this map
   gs.zombies.clear();
   gs.bullets=[];
@@ -3925,8 +3926,19 @@ function gToast(msg,col='#fff'){
 }
 
 /* ── Game over ───────────────────────────────────────────── */
+// Body do žebříčku týdne (dashboard → Přátelé): users/{uid}.play.{den}.p
+function recordPlayPoints(n) {
+  try {
+    const u = auth.currentUser; if (!u || u.isAnonymous || !(n > 0)) return;
+    const day = new Date().toISOString().slice(0, 10);
+    db.collection('users').doc(u.uid).set({ play: { [day]: { p: firebase.firestore.FieldValue.increment(Math.round(n)) } } }, { merge: true }).catch(() => {});
+  } catch (_) {}
+}
 function gameOver(win){
+  if(!running&&gs._recorded)return;
   running=false;
+  // 5 bodů za každou přežitou vlnu (prohraná vlna se nepočítá)
+  if(!gs._recorded){gs._recorded=true;recordPlayPoints(5*Math.max(0,win?gs.wave:gs.wave-1));}
   const survived=Math.round((performance.now()-gs.startTime)/1000);
   document.getElementById('overEmoji').textContent=win?'🏆':'💀';
   document.getElementById('overTitle').textContent=win?'Přežil jsi!':'Game Over';

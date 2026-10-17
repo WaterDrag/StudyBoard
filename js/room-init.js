@@ -163,6 +163,8 @@ auth.onAuthStateChanged(async user => {
     setupComments();
     setupExport();
     setupRoomFiles();
+    setupImport();
+  setupPresentation();
     setupNoteHistoryKeys();
     setupConnections();
     setupWhiteboards();

@@ -813,6 +813,24 @@ function scores(st) {
   return out;
 }
 
+// Body do žebříčku týdne (dashboard → Přátelé): users/{uid}.play.{den}.p
+function recordPlayPoints(n) {
+  try {
+    const u = auth.currentUser; if (!u || u.isAnonymous || !(n > 0)) return;
+    const day = new Date().toISOString().slice(0, 10);
+    db.collection('users').doc(u.uid).set({ play: { [day]: { p: firebase.firestore.FieldValue.increment(Math.round(n)) } } }, { merge: true }).catch(() => {});
+  } catch (_) {}
+}
+// Každý hráč si zapíše svůj výsledek sám (do cizího profilu zapisovat nesmí).
+function recordGameResult(st) {
+  if (!st || !(st.order || []).includes(ME.uid)) return;
+  const key = 'dob_rec_' + GAME_ID + '_' + st.step;
+  try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch (_) {}
+  const sc = scores(st);
+  const winner = Object.keys(sc).sort((a, b) => sc[b] - sc[a])[0];
+  recordPlayPoints(10 + (winner === ME.uid ? 30 : 0));
+}
+
 /* ═══ Vykreslení hry (všichni) ═══ */
 let VB = null, VB0 = null;
 const terrName = id => (MAP && MAP.t.find(t => t.id === id)?.name) || id;
@@ -977,6 +995,7 @@ let LAST_Q_RENDER = '';
 function renderQuestion(st) {
   const box = $('qBox');
   if (st.phase === 'end') {
+    recordGameResult(st);
     const sc = scores(st);
     const order = (st.order || []).filter(p => GAME.players[p]).sort((a, b) => sc[b] - sc[a]);
     box.innerHTML = `<div class="dob-end"><div class="dob-trophy">🏆</div><h3>${esc(pname(order[0]))} vyhrává!</h3>

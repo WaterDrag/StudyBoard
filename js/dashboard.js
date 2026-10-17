@@ -1058,7 +1058,11 @@ let FRIEND_NICKNAMES = {};
 let FRIEND_MAP = {}; // uid -> friendRequest doc id (the relation to delete on "remove")
 
 function loadFriends(user) {
-  const render = () => renderFriendsList(user.uid, FRIEND_MAP, FRIEND_NICKNAMES);
+  let _lbT = null;
+  const render = () => {
+    renderFriendsList(user.uid, FRIEND_MAP, FRIEND_NICKNAMES);
+    clearTimeout(_lbT); _lbT = setTimeout(() => renderLeaderboard(user.uid, Object.keys(FRIEND_MAP), FRIEND_NICKNAMES), 400);
+  };
 
   db.collection('users').doc(user.uid).onSnapshot(snap => {
     if (!snap.exists) return;
@@ -1120,6 +1124,63 @@ function loadFriends(user) {
       badge.classList.toggle('show', pending.length > 0);
       renderRequests(user, snap.docs);
     }, () => { /* pravidla ještě nejsou plně propagována – tiše ignoruj */ });
+}
+
+// ── Žebříček týdne ──────────────────────────────────────────────
+// Ze sdílených profilů (users/{uid}): learn.{deck}.stats.days (kvízy) a
+// play.{den}.p (body ze her). Dny jsou v UTC, stejně jako je zapisují hry.
+function weekKeys(n = 7) {
+  const out = []; for (let i = 0; i < n; i++) out.push(new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10)); return out;
+}
+function weeklyScore(profile) {
+  const days = weekKeys(), allDays = weekKeys(60);
+  let answers = 0, correct = 0, games = 0;
+  const active = new Set();
+  Object.values(profile.learn || {}).forEach(d => {
+    const st = (d && d.stats && d.stats.days) || {};
+    Object.entries(st).forEach(([k, v]) => {
+      if ((v.a || 0) > 0) active.add(k);
+      if (days.includes(k)) { answers += v.a || 0; correct += v.c || 0; }
+    });
+  });
+  Object.entries(profile.play || {}).forEach(([k, v]) => {
+    if ((v.p || 0) > 0) active.add(k);
+    if (days.includes(k)) games += v.p || 0;
+  });
+  // dní v řadě (dnes, nebo když dnes ještě nic, tak od včerejška)
+  let streak = 0, i = active.has(allDays[0]) ? 0 : 1;
+  for (; i < allDays.length && active.has(allDays[i]); i++) streak++;
+  return { points: answers + 2 * correct + games, answers, correct, games, streak };
+}
+async function renderLeaderboard(myUid, friendIds, nicknames) {
+  const el = document.getElementById('lbList');
+  if (!el) return;
+  try {
+    const ids = [myUid, ...friendIds.filter(x => x !== myUid)];
+    const docs = await Promise.all(ids.map(uid => db.collection('users').doc(uid).get()));
+    const rows = docs.filter(d => d.exists).map(d => {
+      const p = d.data();
+      const name = (nicknames[d.id] || {}).nickname || p.displayName || 'Přítel';
+      return { uid: d.id, name, photo: p.photoURL, ...weeklyScore(p) };
+    }).sort((a, b) => b.points - a.points || b.streak - a.streak);
+    if (rows.length < 2) {
+      el.innerHTML = rows.map(r => lbRow(r, 0, myUid)).join('') + '<div class="lb-empty">Přidej si přátele a soutěžte, kdo se tento týden naučí víc.</div>';
+      return;
+    }
+    el.innerHTML = rows.map((r, i) => lbRow(r, i, myUid)).join('');
+  } catch (e) { el.innerHTML = '<div class="lb-empty">Žebříček se nepodařilo načíst.</div>'; }
+}
+function lbRow(r, i, myUid) {
+  const medal = (r.points > 0 && ['🥇', '🥈', '🥉'][i]) || `<span class="lb-n">${i + 1}.</span>`;
+  const acc = r.answers ? Math.round(r.correct / r.answers * 100) : null;
+  return `<div class="lb-row${r.uid === myUid ? ' me' : ''}">
+    <span class="lb-medal">${medal}</span>
+    <span class="lb-av">${r.photo ? `<img src="${esc(r.photo)}" alt="">` : esc((r.name || '?')[0].toUpperCase())}</span>
+    <span class="lb-name"><b>${esc(r.name)}${r.uid === myUid ? ' <small>(ty)</small>' : ''}</b>
+      <small>${r.answers} odpovědí${acc !== null ? ` · ${acc} % správně` : ''}${r.games ? ` · ${r.games} b ze her` : ''}</small></span>
+    ${r.streak ? `<span class="lb-streak" title="${r.streak} dní v řadě">🔥 ${r.streak}</span>` : ''}
+    <span class="lb-points">${r.points}<small> b</small></span>
+  </div>`;
 }
 
 function renderFriendsList(myUid, friendMap, nicknames) {

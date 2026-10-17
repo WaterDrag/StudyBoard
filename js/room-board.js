@@ -1332,7 +1332,7 @@ const ORB_GROUPS = [
   ['Místnost', [
     ['searchBtn', 'Hledat'], ['travelMenuBtn', 'Přejít na…'], ['filesBtn', 'Soubory'],
     ['aiCardsBtn', 'AI'], ['flashcardsBtn', 'Kartičky'], ['membersBtn', 'Členové'],
-    ['shareTopBtn', 'Sdílet'], ['exportBtn', 'Export'], ['roomBgBtn', 'Pozadí'],
+    ['shareTopBtn', 'Sdílet'], ['importBtn', 'Import'], ['presentBtn', 'Prezentace'], ['exportBtn', 'Export'], ['roomBgBtn', 'Pozadí'],
   ]],
   ['Zobrazení', [
     ['@board', 'Nástěnka'], ['@list', 'Seznam'], ['zoomOutBtn', 'Oddálit'],
