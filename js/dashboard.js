@@ -85,6 +85,7 @@ let _gamesLoaded = false;
 function loadGames(user) {
   if (_gamesLoaded) return;
   _gamesLoaded = true;
+  loadDailyCard(user);
   const dob = document.getElementById('dobLobbies');
   db.collection('conquest').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
     const games = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -129,6 +130,37 @@ function loadGames(user) {
     } catch (err) { toast('Chyba: ' + err.message); btn.disabled = false; }
   });
 }
+// Denní výzva + rekord Milionáře na kartách v záložce Hry
+async function loadDailyCard(user) {
+  const day = new Date().toLocaleDateString('en-CA');
+  try {
+    const best = +localStorage.getItem('mil_best') || 0;
+    document.getElementById('milStatus').innerHTML = best ? `🏆 Rekord: <b>${best.toLocaleString('cs-CZ')} Kč</b>` : '';
+  } catch (_) { /* nic */ }
+  const st = document.getElementById('dailyStatus'), fr = document.getElementById('dailyFriends');
+  if (user.isAnonymous) { st.textContent = 'Jen pro přihlášené.'; fr.innerHTML = ''; return; }
+  try {
+    const me = (await db.collection('users').doc(user.uid).get()).data() || {};
+    const daily = me.daily || {}, t = daily[day];
+    let streak = 0;
+    for (let i = t?.done ? 0 : 1; i < 400; i++) { if (!daily[new Date(Date.now() - i * 864e5).toLocaleDateString('en-CA')]?.done) break; streak++; }
+    st.innerHTML = (t?.done ? `✅ Dnes splněno: <b>${t.s} b</b> (${t.c}/${t.of || 10})` : t?.q ? `⏳ Rozehráno ${t.n || 0}/10` : '🔔 Dnešní výzva na tebe čeká')
+      + (streak ? ` · 🔥 ${streak}` : '');
+    document.getElementById('dailyBtn').textContent = t?.done ? 'Zobrazit výsledky' : t?.q ? 'Pokračovat' : 'Hrát dnešní výzvu';
+    const b = document.getElementById('gamesCountBadge');
+    if (b && !t?.done && !b.textContent) b.textContent = '1';
+    // Přátelé se načítají souběžně — při otevření přes ?tab=games ještě nemusí být.
+    if (!Object.keys(FRIEND_MAP).length) await new Promise(r => setTimeout(r, 1500));
+    const ids = Object.keys(FRIEND_MAP);
+    const docs = await Promise.all(ids.map(uid => db.collection('users').doc(uid).get().catch(() => null)));
+    const rows = docs.filter(d => d?.exists && d.data().daily?.[day]?.done)
+      .map(d => ({ name: (FRIEND_NICKNAMES[d.id] || {}).nickname || d.data().displayName || 'Přítel', t: d.data().daily[day] }))
+      .sort((a, b) => b.t.s - a.t.s).slice(0, 5);
+    fr.innerHTML = rows.length ? rows.map(r => `<div class="game-lobby"><span><b>${esc(r.name)}</b><small>${r.t.c}/${r.t.of || 10} správně</small></span><b>${r.t.s} b</b></div>`).join('')
+      : '<div class="game-empty">Dnes ještě nikdo z přátel nehrál.</div>';
+  } catch (_) { st.textContent = ''; fr.innerHTML = '<div class="game-empty">Nepodařilo se načíst.</div>'; }
+}
+
 function updateGamesBadge() {
   const n = document.querySelectorAll('#dobLobbies a.game-lobby').length;
   const b = document.getElementById('gamesCountBadge');

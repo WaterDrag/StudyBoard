@@ -5309,3 +5309,105 @@ body.pres-open { overflow: hidden; }
 .hljs-deletion { color: #ffa198; background: #490202; }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: 700; }
+
+/* ═══ Hry s otázkami A–D: Milionář a Denní výzva ═══ */
+.mc-main { max-width: 980px; margin: 0 auto; padding: 24px 16px 60px; }
+.mc-setup { max-width: 620px; margin: 0 auto; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.mc-setup h1 { font-size: 1.6rem; letter-spacing: -0.01em; }
+.mil-logo { font-size: 3.4rem; line-height: 1; margin-top: 8px; }
+.mc-sub { color: var(--text-muted); font-size: 0.92rem; line-height: 1.55; max-width: 520px; }
+.mc-hint { color: var(--text-faint); font-size: 0.8rem; }
+.mc-muted { color: var(--text-muted); font-size: 0.86rem; padding: 10px; }
+.mil-best:empty, .day-streak:empty { display: none; }
+.mil-best, .day-streak { font-size: 0.9rem; padding: 6px 14px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--border); }
+.mc-decks-h { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.9rem; }
+.mc-decks { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 340px; overflow-y: auto; text-align: left; }
+.mc-deck { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2); cursor: pointer; }
+.mc-deck:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg-2)); }
+.mc-deck input { accent-color: var(--accent); flex-shrink: 0; }
+.mc-deck span { display: flex; flex-direction: column; min-width: 0; }
+.mc-deck b { font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-deck small { color: var(--text-muted); font-size: 0.74rem; }
+.mc-start { min-width: 200px; justify-content: center; height: 46px; font-size: 1rem; margin-top: 6px; }
+.mc-end-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+
+/* Milionář: hra */
+.mil-page { background: radial-gradient(ellipse at 50% -10%, #1e3a8a 0%, transparent 60%), var(--bg); }
+.mil-game { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 20px; align-items: start; }
+.mil-game[hidden], .day-game[hidden], .mc-setup[hidden] { display: none; }
+.mil-stage { display: flex; flex-direction: column; gap: 14px; }
+.mil-top, .day-top { display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; color: var(--text-muted); }
+.mil-top b { color: #facc15; }
+.mil-question {
+  padding: 22px 24px; border-radius: 18px; text-align: center;
+  background: linear-gradient(180deg, #172554, #0b1437); border: 2px solid #3b5bdb; color: #fff;
+  box-shadow: 0 10px 40px -18px #3b5bdb;
+}
+.mc-q-text { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
+.mil-question .code-block { text-align: left; margin-top: 12px; }
+.mil-deck { margin-top: 10px; font-size: 0.72rem; color: #93a3d8; }
+.mil-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mil-ans {
+  display: flex; align-items: center; gap: 10px; text-align: left; min-height: 58px; padding: 10px 16px;
+  border-radius: 999px; border: 2px solid #3b5bdb; background: #0b1437; color: #fff;
+  font: inherit; font-size: 0.95rem; cursor: pointer; transition: background .15s, border-color .15s, opacity .2s;
+}
+.mil-ans i { font-style: normal; font-weight: 700; color: #facc15; flex-shrink: 0; }
+.mil-ans span { min-width: 0; overflow-wrap: anywhere; }
+.mil-ans.is-code { border-radius: 14px; }
+.mil-ans.is-code span { flex: 1; }
+.mil-ans .code-block { margin: 0; font-size: 0.75rem; }
+.mil-ans:hover:not(:disabled) { background: #1e3a8a; }
+.mil-ans.picked { background: #b45309; border-color: #f59e0b; }
+.mil-ans.right { background: #15803d; border-color: #4ade80; animation: milBlink .35s 3; }
+.mil-ans.wrong { background: #991b1b; border-color: #f87171; }
+.mil-ans.gone { opacity: 0; pointer-events: none; }
+@keyframes milBlink { 50% { filter: brightness(1.5); } }
+.mil-help:empty { display: none; }
+.mil-aud { display: flex; justify-content: center; gap: 18px; height: 140px; padding: 12px; border-radius: 14px; background: var(--bg-2); border: 1px solid var(--border); }
+.mil-bar { width: 44px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; font-size: 0.75rem; }
+.mil-bar i { width: 100%; min-height: 2px; background: linear-gradient(#facc15, #b45309); border-radius: 4px 4px 0 0; }
+.mil-bar span { font-weight: 700; color: #facc15; }
+.mil-phone { padding: 12px 16px; border-radius: 14px; background: var(--bg-2); border: 1px solid var(--border); font-size: 0.95rem; }
+.mil-lifelines { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mil-life {
+  width: 64px; height: 42px; border-radius: 50%; border: 2px solid #3b5bdb; background: #0b1437; color: #fff;
+  font: 700 0.85rem var(--font); cursor: pointer;
+}
+.mil-life:disabled { opacity: 0.3; cursor: default; text-decoration: line-through; }
+.mil-quit { margin-left: auto; }
+.mil-ladder { list-style: none; margin: 0; padding: 10px; border-radius: 14px; background: #0b1437; border: 1px solid #1e3a8a; display: flex; flex-direction: column; gap: 2px; }
+.mil-ladder li { display: flex; gap: 10px; padding: 4px 10px; border-radius: 6px; font: 600 0.82rem var(--font-mono); color: #c7d2fe; }
+.mil-ladder li span { width: 20px; text-align: right; color: #6b7cb8; }
+.mil-ladder li.safe { color: #fff; }
+.mil-ladder li.done { color: #4ade80; }
+.mil-ladder li.cur { background: #b45309; color: #fff; }
+.mil-win { display: flex; flex-direction: column; gap: 4px; padding: 16px 28px; border-radius: 16px; background: linear-gradient(180deg, #172554, #0b1437); border: 2px solid #eab308; color: #fff; font-size: 1.1rem; }
+.mil-win b { font-size: 1.8rem; color: #facc15; }
+.mil-win em { font-style: normal; color: #4ade80; font-weight: 600; }
+.mil-win small { color: #93a3d8; font-size: 0.8rem; }
+@media (max-width: 760px) {
+  .mil-game { grid-template-columns: 1fr; }
+  .mil-ladder { order: -1; flex-direction: row; overflow-x: auto; padding: 6px; scrollbar-width: none; }
+  .mil-ladder li { flex-shrink: 0; padding: 4px 8px; font-size: 0.72rem; }
+  .mil-ladder li:not(.cur):not(.safe) { display: none; }
+  .mil-answers { grid-template-columns: 1fr; }
+  .mc-q-text { font-size: 1.05rem; }
+  .mil-question { padding: 16px; }
+}
+
+/* Denní výzva */
+.day-game { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.day-score { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.day-timer { height: 6px; border-radius: 3px; background: var(--bg-3); overflow: hidden; }
+.day-timer i { display: block; height: 100%; width: 100%; background: var(--accent); transition: width .1s linear; }
+.day-timer i.low { background: var(--danger); }
+.day-result { display: flex; flex-direction: column; gap: 4px; }
+.day-result b { font-size: 2.2rem; }
+.day-result span { color: var(--text-muted); font-size: 0.9rem; }
+.day-rank-h { font: 600 0.72rem var(--font); text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); margin-top: 10px; align-self: stretch; text-align: left; }
+#dayRank { align-self: stretch; text-align: left; }
+.lb-row.idle { opacity: 0.55; }
+.game-status:empty { display: none; }
+.game-status { font-size: 0.85rem; }
+.mil-life:not(#life50) { font-size: 1.15rem; }

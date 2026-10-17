@@ -158,6 +158,26 @@
         <div><h2>Hry</h2><p>Uč se hraním — s přáteli nebo proti botům, otázky z tvých kartiček</p></div>
       </div>
       <div class="games-grid">
+        <section class="game-card" style="--g1:#f59e0b;--g2:#6366f1">
+          <div class="game-art">📅</div>
+          <div class="game-body">
+            <h3>Denní výzva</h3>
+            <p>Každý den 10 otázek z tvých kartiček — hlavně z těch, co ti nejdou. 20 sekund na otázku, rychlost přidává body. Udrž sérii a porovnej se s přáteli.</p>
+            <div class="game-status" id="dailyStatus"></div>
+            <div class="game-actions"><a class="btn btn-primary" href="denni.html" id="dailyBtn">Hrát dnešní výzvu</a></div>
+            <div class="game-lobbies-title">Dnes s přáteli</div>
+            <div class="game-lobbies" id="dailyFriends"><div class="game-empty">Načítám…</div></div>
+          </div>
+        </section>
+        <section class="game-card" style="--g1:#1e3a8a;--g2:#eab308">
+          <div class="game-art">💰</div>
+          <div class="game-body">
+            <h3>Milionář</h3>
+            <p>Chcete být milionářem? 15 otázek z vybraných balíčků, každá těžší. Jistoty na 5. a 10. otázce, nápovědy 50:50, publikum a telefon příteli.</p>
+            <div class="game-status" id="milStatus"></div>
+            <div class="game-actions"><a class="btn btn-primary" href="milionar.html">Hrát Milionáře</a></div>
+          </div>
+        </section>
         <section class="game-card" style="--g1:#6366f1;--g2:#22c55e">
           <div class="game-art">🗺️</div>
           <div class="game-body">
@@ -208,6 +228,8 @@
               • 🍅 pomodoro: <b>1 b</b> za každých 5 minut učení<br>
               • Dobyvatel: účast <b>10 b</b>, výhra <b>+30 b</b><br>
               • Zombie Survival: <b>5 b</b> za každou přežitou vlnu<br>
+              • Denní výzva: <b>10 b</b> + <b>3 b</b> za každou správnou<br>
+              • Milionář: <b>2 b</b> za každou správnou otázku, milion <b>+20 b</b><br>
               🔥 = kolik dní v řadě ses učil(a)</span>
           </span>
         </div>

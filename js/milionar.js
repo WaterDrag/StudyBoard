@@ -1,0 +1,168 @@
+// ═══ milionar.js — Chcete být milionářem? z vlastních kartiček
+// 15 otázek, obtížnost roste: nejdřív karty, které už umíš (vysoká krabička
+// z učení), na konec ty, které ti nejdou nebo jsi je ještě neviděl.
+// Jistoty na 5. a 10. otázce, nápovědy 50:50 / publikum / přítel.
+const LADDER = [1000, 2000, 3000, 5000, 10000, 20000, 40000, 80000, 160000, 320000, 640000, 1250000, 2500000, 5000000, 10000000];
+const SAFE = new Set([4, 9]);          // index otázky, po které je částka jistá
+const money = n => n.toLocaleString('cs-CZ') + ' Kč';
+const SEL_KEY = 'mil_decks', BEST_KEY = 'mil_best';
+
+let DECKS = [], G = null;   // G = { qs:[{card, opts, correct}], i, used:{}, locked, removed:Set }
+
+auth.onAuthStateChanged(async user => {
+  if (!user) { location.href = 'index.html'; return; }
+  ME = user;
+  showBest();
+  try { DECKS = await mcLoadDecks(); } catch (e) { $('milDecks').innerHTML = '<div class="mc-muted">Balíčky se nepodařilo načíst.</div>'; return; }
+  renderDecks();
+});
+
+function showBest() {
+  let best = 0;
+  try { best = +localStorage.getItem(BEST_KEY) || 0; } catch (_) { /* nic */ }
+  $('milBest').innerHTML = best ? `🏆 Tvůj rekord: <b>${money(best)}</b>` : '';
+}
+
+function savedSel() { try { return new Set(JSON.parse(localStorage.getItem(SEL_KEY) || '[]')); } catch (_) { return new Set(); } }
+function renderDecks() {
+  const el = $('milDecks');
+  if (!DECKS.length) { el.innerHTML = '<div class="mc-muted">Nemáš žádné balíčky s kartičkami. Vytvoř si nějaký ve Flash Cards.</div>'; return; }
+  const sel = savedSel();
+  el.innerHTML = DECKS.map(d => `<label class="mc-deck"><input type="checkbox" value="${d.id}"${sel.has(d.id) ? ' checked' : ''}>
+    <span><b>${esc(d.name)}</b><small>${d.cardCount || 0} karet${d.roomName ? ' · ' + esc(d.roomName) : ''}</small></span></label>`).join('');
+  el.addEventListener('change', updateStart);
+  $('milAll').onclick = () => {
+    const boxes = [...el.querySelectorAll('input')], all = boxes.every(b => b.checked);
+    boxes.forEach(b => { b.checked = !all; });
+    updateStart();
+  };
+  $('milStart').onclick = startGame;
+  updateStart();
+}
+function chosenDecks() { return [...document.querySelectorAll('#milDecks input:checked')].map(i => DECKS.find(d => d.id === i.value)).filter(Boolean); }
+function updateStart() {
+  const ds = chosenDecks(), n = ds.reduce((s, d) => s + (d.cardCount || 0), 0);
+  $('milStart').disabled = !ds.length;
+  $('milHint').textContent = ds.length ? (n < 15 ? `Vybrané balíčky mají jen ${n} karet — hra bude mít méně otázek.` : `${n} karet k dispozici.`) : 'Vyber aspoň jeden balíček.';
+}
+
+async function startGame() {
+  const ds = chosenDecks();
+  try { localStorage.setItem(SEL_KEY, JSON.stringify(ds.map(d => d.id))); } catch (_) { /* nic */ }
+  const btn = $('milStart');
+  btn.disabled = true; btn.textContent = 'Připravuji otázky…';
+  try {
+    const [pool, boxes] = await Promise.all([mcLoadCards(ds), mcLearnBoxes()]);
+    // obtížnost: neznámá karta ~ krabička 2, umím (5) = lehká
+    const scored = pool.map(c => ({ c, d: (5 - (boxes[c.id] ?? 2.5)) + Math.random() * 1.6 }))
+      .map(x => ({ ...x, o: mcOptions(x.c, pool) })).filter(x => x.o)
+      .sort((a, b) => a.d - b.d);
+    if (scored.length < 3) { toast('Z vybraných balíčků nejde sestavit otázky s možnostmi — přidej balíček s víc kartami.'); return; }
+    const n = Math.min(15, scored.length);
+    const picks = Array.from({ length: n }, (_, i) => scored[Math.round(i * (scored.length - 1) / Math.max(1, n - 1))]);
+    const ladder = LADDER.slice(LADDER.length - n);   // kratší hra = nižší start, milion zůstává nahoře
+    G = { qs: picks.map(x => ({ card: x.c, ...x.o })), ladder, i: 0, used: {}, locked: false, removed: new Set() };
+    $('milSetup').hidden = true; $('milEnd').hidden = true; $('milGame').hidden = false;
+    renderLadder(); renderQ();
+  } catch (e) {
+    toast('Nepovedlo se: ' + e.message);
+  } finally { btn.disabled = false; btn.textContent = 'Hrát'; }
+}
+
+const safeIdx = i => { const n = G.qs.length, off = 15 - n; return SAFE.has(i + off); };
+function guaranteed(i) {   // co mám jisté, když spletu otázku i
+  for (let k = i - 1; k >= 0; k--) if (safeIdx(k)) return G.ladder[k];
+  return 0;
+}
+function renderLadder() {
+  $('milLadder').innerHTML = G.ladder.map((v, k) => `<li class="${k === G.i ? 'cur' : k < G.i ? 'done' : ''}${safeIdx(k) ? ' safe' : ''}"><span>${k + 1}</span>${money(v)}</li>`).reverse().join('');
+}
+function renderQ() {
+  const q = G.qs[G.i];
+  G.locked = false; G.removed = new Set();
+  $('milQn').textContent = `Otázka ${G.i + 1} z ${G.qs.length}`;
+  $('milFor').innerHTML = `za <b>${money(G.ladder[G.i])}</b>${safeIdx(G.i) ? ' · 🔒 jistota' : ''}`;
+  $('milQuestion').innerHTML = mcQuestionHtml(q.card) + `<div class="mil-deck">${esc(q.card.deckName)}</div>`;
+  $('milAnswers').innerHTML = q.opts.map((o, k) => `<button type="button" class="mil-ans${q.card.cl ? ' is-code' : ''}" data-k="${k}"><i>${'ABCD'[k]}</i><span>${mcOptionHtml(q.card, o)}</span></button>`).join('');
+  $('milAnswers').querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => answer(+b.dataset.k)));
+  $('milHelp').innerHTML = '';
+  $('life50').disabled = !!G.used.f; $('lifeAud').disabled = !!G.used.a; $('lifePhone').disabled = !!G.used.p;
+  $('life50').onclick = use5050; $('lifeAud').onclick = useAudience; $('lifePhone').onclick = usePhone;
+  const have = G.i ? G.ladder[G.i - 1] : 0;
+  $('milQuit').textContent = have ? `Odstoupit s ${money(have)}` : 'Odstoupit';
+  $('milQuit').onclick = () => { if (!G.locked && confirm(have ? `Opravdu odstoupit a odejít s ${money(have)}?` : 'Opravdu skončit?')) endGame('quit', have); };
+  renderLadder();
+}
+
+function answer(k) {
+  if (G.locked || G.removed.has(k)) return;
+  G.locked = true;
+  const q = G.qs[G.i];
+  const btns = [...$('milAnswers').children];
+  btns[k].classList.add('picked');
+  setTimeout(() => {
+    btns[q.correct].classList.add('right');
+    if (k !== q.correct) btns[k].classList.add('wrong');
+    setTimeout(() => {
+      if (k !== q.correct) return endGame('wrong', guaranteed(G.i), q);
+      if (G.i === G.qs.length - 1) return endGame('win', G.ladder[G.i]);
+      G.i++;
+      renderQ();
+    }, k === q.correct ? 1300 : 2600);
+  }, 1100);
+}
+
+// ── Nápovědy ───────────────────────────────────────────────────
+// Publikum a přítel nevědí víc než ty: čím těžší otázka, tím méně jistě.
+const knowP = () => Math.max(0.35, 0.92 - G.i * 0.04);
+function use5050() {
+  if (G.used.f || G.locked) return;
+  G.used.f = true;
+  const q = G.qs[G.i];
+  const wrong = shuffle(q.opts.map((_, k) => k).filter(k => k !== q.correct && !G.removed.has(k))).slice(0, 2);
+  wrong.forEach(k => { G.removed.add(k); const b = $('milAnswers').children[k]; b.classList.add('gone'); b.disabled = true; });
+  $('life50').disabled = true;
+}
+function useAudience() {
+  if (G.used.a || G.locked) return;
+  G.used.a = true;
+  const q = G.qs[G.i];
+  const live = q.opts.map((_, k) => k).filter(k => !G.removed.has(k));
+  const w = {};
+  live.forEach(k => { w[k] = Math.random() * (1 - knowP()) + 0.05; });
+  w[q.correct] += knowP() * (0.8 + Math.random() * 0.5);
+  const sum = live.reduce((s, k) => s + w[k], 0);
+  const pct = {}; let left = 100;
+  live.forEach((k, i) => { pct[k] = i === live.length - 1 ? left : Math.round(w[k] / sum * 100); left -= pct[k]; });
+  $('milHelp').innerHTML = `<div class="mil-aud">${q.opts.map((_, k) => `<div class="mil-bar"><i style="height:${pct[k] || 0}%"></i><b>${pct[k] ?? 0} %</b><span>${'ABCD'[k]}</span></div>`).join('')}</div>`;
+  $('lifeAud').disabled = true;
+}
+function usePhone() {
+  if (G.used.p || G.locked) return;
+  G.used.p = true;
+  const q = G.qs[G.i];
+  const live = q.opts.map((_, k) => k).filter(k => !G.removed.has(k));
+  const right = Math.random() < knowP();
+  const pick = right ? q.correct : shuffle(live.filter(k => k !== q.correct))[0];
+  const sure = right ? Math.round(55 + Math.random() * 40 - G.i * 2) : Math.round(30 + Math.random() * 35);
+  const say = sure > 80 ? `Tohle vím. Je to <b>${'ABCD'[pick]}</b>.` : sure > 55 ? `Myslím, že <b>${'ABCD'[pick]}</b>… tak na ${sure} %.` : `Hele, nevím jistě. Tipnul bych <b>${'ABCD'[pick]}</b>, ale neber mě za slovo.`;
+  $('milHelp').innerHTML = `<div class="mil-phone">📞 <span>${say}</span></div>`;
+  $('lifePhone').disabled = true;
+}
+
+// ── Konec hry ──────────────────────────────────────────────────
+function endGame(how, won, q) {
+  $('milGame').hidden = true; $('milEnd').hidden = false;
+  const reached = how === 'win' ? G.qs.length : G.i;
+  let best = 0;
+  try { best = +localStorage.getItem(BEST_KEY) || 0; if (won > best) localStorage.setItem(BEST_KEY, String(won)); } catch (_) { /* nic */ }
+  const pts = reached * 2 + (how === 'win' && G.qs.length === 15 ? 20 : 0);
+  recordPlayPoints(pts);
+  $('milEndIco').textContent = how === 'win' ? '🏆' : how === 'quit' ? '💼' : '💸';
+  $('milEndTitle').textContent = how === 'win' ? (G.qs.length === 15 ? 'Jsi milionář!' : 'Všechno správně!') : how === 'quit' ? 'Rozumné rozhodnutí' : 'Bohužel špatně';
+  $('milEndDesc').innerHTML = how === 'wrong' && q
+    ? `Správně bylo: <b>${esc(q.opts[q.correct])}</b>.<br>Otázek správně: ${reached} z ${G.qs.length}.`
+    : `Otázek správně: ${reached} z ${G.qs.length}.`;
+  $('milEndWin').innerHTML = `Odcházíš s <b>${money(won)}</b>${won > best ? '<em>🎉 nový rekord</em>' : ''}<small>+${pts} b do žebříčku týdne</small>`;
+  $('milAgain').onclick = () => { $('milEnd').hidden = true; $('milSetup').hidden = false; showBest(); };
+}

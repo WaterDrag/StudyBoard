@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Milionář – StudyBoard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%92%B0</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyBoard">
+  <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body class="mc-page mil-page">
+
+  <nav class="fc-nav">
+    <a id="backBtn" href="dashboard.html?tab=games" class="icon-btn" aria-label="Zpět na hry" title="Zpět na hry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <span class="fc-nav-title">💰 Milionář</span>
+  </nav>
+
+  <main class="mc-main">
+    <!-- Výběr balíčků -->
+    <section id="milSetup" class="mc-setup">
+      <div class="mil-logo">💰</div>
+      <h1>Chcete být milionářem?</h1>
+      <p class="mc-sub">15 otázek z tvých kartiček, každá těžší než ta předchozí. Na 5. a 10. otázce jsou jistoty. Kdykoli můžeš odstoupit a nechat si, co máš.</p>
+      <div class="mil-best" id="milBest"></div>
+      <div class="mc-decks-h"><b>Z jakých balíčků?</b><button type="button" class="btn btn-ghost btn-sm" id="milAll">Vybrat vše</button></div>
+      <div class="mc-decks" id="milDecks"><div class="mc-muted">Načítám balíčky…</div></div>
+      <button type="button" class="btn btn-primary mc-start" id="milStart" disabled>Hrát</button>
+      <p class="mc-hint" id="milHint"></p>
+    </section>
+
+    <!-- Hra -->
+    <section id="milGame" class="mil-game" hidden>
+      <div class="mil-stage">
+        <div class="mil-top">
+          <span class="mil-qn" id="milQn"></span>
+          <span class="mil-for" id="milFor"></span>
+        </div>
+        <div class="mil-question" id="milQuestion"></div>
+        <div class="mil-answers" id="milAnswers"></div>
+        <div class="mil-help" id="milHelp"></div>
+        <div class="mil-lifelines">
+          <button type="button" class="mil-life" id="life50" title="Odebere dvě špatné odpovědi">50:50</button>
+          <button type="button" class="mil-life" id="lifeAud" title="Hlasování publika">👥</button>
+          <button type="button" class="mil-life" id="lifePhone" title="Zavolat příteli">📞</button>
+          <button type="button" class="btn btn-ghost mil-quit" id="milQuit"></button>
+        </div>
+      </div>
+      <ol class="mil-ladder" id="milLadder" reversed></ol>
+    </section>
+
+    <!-- Konec -->
+    <section id="milEnd" class="mc-setup" hidden>
+      <div class="mil-logo" id="milEndIco">💰</div>
+      <h1 id="milEndTitle"></h1>
+      <p class="mc-sub" id="milEndDesc"></p>
+      <div class="mil-win" id="milEndWin"></div>
+      <div class="mc-end-actions">
+        <button type="button" class="btn btn-primary" id="milAgain">Hrát znovu</button>
+        <a class="btn btn-secondary" href="dashboard.html?tab=games">Zpět na hry</a>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>document.write('<script src="js/codehl.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/mcgame.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>(function(){var s=document.createElement('script');s.src='js/milionar.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>
