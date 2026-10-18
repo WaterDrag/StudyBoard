@@ -87,6 +87,16 @@ function loadGames(user) {
   if (_gamesLoaded) return;
   _gamesLoaded = true;
   loadDailyCard(user);
+  // Pexeso s přáteli: čekárny a rozehrané hry, kam mě někdo pozval
+  const pxl = document.getElementById('pxLobbies');
+  db.collection('pexeso').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
+    const games = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(g => g.status === 'lobby' || (g.status === 'play' && (g.playerIds || []).includes(user.uid)))
+      .filter(g => Date.now() - (g.createdAt?.toMillis?.() || Date.now()) < 6 * 3600e3)
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)).slice(0, 5);
+    pxl.innerHTML = games.length ? games.map(g => `<a class="game-lobby" href="pexeso.html?g=${g.id}"><span><b>${esc(g.hostName || 'Hra')}</b><small>${g.pairs || ''} dvojic · ${(g.playerIds || []).length} hráčů · ${g.status === 'play' ? 'hraje se' : 'čeká'}</small></span><span class="btn btn-secondary btn-sm">${(g.playerIds || []).includes(user.uid) ? 'Vrátit se' : 'Připojit'}</span></a>`).join('')
+      : '<div class="game-empty">Nikdo z přátel teď pexeso nezaložil.</div>';
+  }, () => { pxl.innerHTML = '<div class="game-empty">Hry se nepodařilo načíst.</div>'; });
   const dob = document.getElementById('dobLobbies');
   db.collection('conquest').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
     const games = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -137,6 +147,11 @@ async function loadDailyCard(user) {
   try {
     const best = +localStorage.getItem('mil_best') || 0;
     document.getElementById('milStatus').innerHTML = best ? `🏆 Rekord: <b>${best.toLocaleString('cs-CZ')} Kč</b>` : '';
+    const bestOf = (k, unit) => { const v = +localStorage.getItem(k) || 0; return v ? `🏆 Rekord: <b>${v.toLocaleString('cs-CZ')} ${unit}</b>` : ''; };
+    document.getElementById('tfStatus').innerHTML = bestOf('tf_best', 'b');
+    document.getElementById('wsStatus').innerHTML = bestOf('ws_best', 'b');
+    document.getElementById('cwStatus').innerHTML = bestOf('cw_best', 'b');
+    try { const px = JSON.parse(localStorage.getItem('px_best') || 'null'); document.getElementById('pxStatus').innerHTML = px ? `🏆 Sólo: <b>${px.moves} tahů</b> (${px.pairs} dvojic)` : ''; } catch (_) { /* nic */ }
     const hg = +localStorage.getItem('sib_best') || 0;
     document.getElementById('hgStatus').innerHTML = hg ? `🏆 Rekord: <b>${hg} b</b>` : '';
     const sp = +localStorage.getItem('spoj_best') || 0;

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Křížovka – StudyBoard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%A7%A9</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyBoard">
+  <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body class="mc-page">
+
+  <nav class="fc-nav">
+    <a href="dashboard.html?tab=games" class="icon-btn" aria-label="Zpět na hry" title="Zpět na hry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <span class="fc-nav-title">🧩 Křížovka</span>
+  </nav>
+
+  <main class="mc-main">
+    <section id="cwSetup" class="mc-setup">
+      <div class="mil-logo">🧩</div>
+      <h1>Křížovka</h1>
+      <p class="mc-sub">Z krátkých pojmů tvých kartiček se sama poskládá křížovka — pokaždé jiná. Legenda jsou otázky z kartiček (vodorovně a svisle). Klikni do políčka a piš, háčky neřeš. Druhý klik na stejné políčko přepne směr.</p>
+      <div class="mil-best" id="cwBest"></div>
+      <div class="mc-decks-h"><b>Z jakých balíčků?</b><button type="button" class="btn btn-ghost btn-sm" id="cwAll">Vybrat vše</button></div>
+      <div class="mc-decks" id="cwDecks"><div class="mc-muted">Načítám balíčky…</div></div>
+      <button type="button" class="btn btn-primary mc-start" id="cwStart" disabled>Hrát</button>
+      <p class="mc-hint" id="cwHint"></p>
+    </section>
+
+    <section id="cwGame" class="cw-game" hidden>
+      <div class="sp-hud">
+        <span class="sp-time" id="cwClock">0:00</span>
+        <span class="cw-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="cwReveal" title="Doplní písmeno v označeném políčku">💡 Písmeno</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="cwCheck">Zkontrolovat</button>
+        </span>
+      </div>
+      <div class="cw-active" id="cwActive"></div>
+      <div class="cw-layout">
+        <div class="cw-wrap"><div class="cw-grid" id="cwGrid"></div></div>
+        <div class="cw-clues">
+          <div><h3>Vodorovně</h3><ol id="cwAcross"></ol></div>
+          <div><h3>Svisle</h3><ol id="cwDown"></ol></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="cwEnd" class="mc-setup" hidden>
+      <div class="mil-logo">🏆</div>
+      <h1>Křížovka vyluštěna!</h1>
+      <div class="day-result" id="cwResult"></div>
+      <div class="mc-end-actions">
+        <button type="button" class="btn btn-primary" id="cwAgain">Novou křížovku</button>
+        <a class="btn btn-secondary" href="dashboard.html?tab=games">Zpět na hry</a>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>document.write('<script src="js/mcgame.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>(function(){var s=document.createElement('script');s.src='js/krizovka.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>

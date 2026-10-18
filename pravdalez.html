@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Pravda, nebo lež – StudyBoard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%E2%9C%85</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyBoard">
+  <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body class="mc-page">
+
+  <nav class="fc-nav">
+    <a href="dashboard.html?tab=games" class="icon-btn" aria-label="Zpět na hry" title="Zpět na hry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <span class="fc-nav-title">✅ Pravda, nebo lež</span>
+  </nav>
+
+  <main class="mc-main">
+    <section id="tfSetup" class="mc-setup">
+      <div class="mil-logo">✅❌</div>
+      <h1>Pravda, nebo lež?</h1>
+      <p class="mc-sub">Ukáže se otázka a odpověď — buď správná, nebo podstrčená špatná z kvízu. Máš 60 sekund. Na telefonu švihni doprava (pravda) nebo doleva (lež), na počítači šipky ← →. Série správných zvyšuje násobič, chyba ho shodí.</p>
+      <div class="mil-best" id="tfBest"></div>
+      <div class="mc-decks-h"><b>Z jakých balíčků?</b><button type="button" class="btn btn-ghost btn-sm" id="tfAll">Vybrat vše</button></div>
+      <div class="mc-decks" id="tfDecks"><div class="mc-muted">Načítám balíčky…</div></div>
+      <button type="button" class="btn btn-primary mc-start" id="tfStart" disabled>Hrát</button>
+      <p class="mc-hint" id="tfHint"></p>
+    </section>
+
+    <section id="tfGame" class="tf-game" hidden>
+      <div class="sp-hud">
+        <span class="sp-time" id="tfTime">60 s</span>
+        <span class="sp-combo" id="tfCombo"></span>
+        <span class="sp-score" id="tfScore">0 b</span>
+      </div>
+      <div class="day-timer"><i id="tfBar"></i></div>
+      <div class="tf-arena">
+        <div class="tf-card" id="tfCard">
+          <div class="tf-q" id="tfQ"></div>
+          <div class="tf-arrow">↓</div>
+          <div class="tf-a" id="tfA"></div>
+          <div class="tf-deck" id="tfDeck"></div>
+          <div class="tf-stamp" id="tfStamp"></div>
+        </div>
+      </div>
+      <div class="tf-btns">
+        <button type="button" class="tf-btn lie" id="tfLie">✕ Lež <span class="kbd">←</span></button>
+        <button type="button" class="tf-btn truth" id="tfTruth">✓ Pravda <span class="kbd">→</span></button>
+      </div>
+    </section>
+
+    <section id="tfEnd" class="mc-setup" hidden>
+      <div class="mil-logo" id="tfEndIco">⏱️</div>
+      <h1>Čas vypršel</h1>
+      <div class="day-result" id="tfResult"></div>
+      <div class="sp-review" id="tfReview"></div>
+      <div class="mc-end-actions">
+        <button type="button" class="btn btn-primary" id="tfAgain">Hrát znovu</button>
+        <a class="btn btn-secondary" href="dashboard.html?tab=games">Zpět na hry</a>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>document.write('<script src="js/codehl.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/mcgame.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>(function(){var s=document.createElement('script');s.src='js/pravdalez.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Osmisměrka – StudyBoard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%94%A0</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyBoard">
+  <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body class="mc-page">
+
+  <nav class="fc-nav">
+    <a href="dashboard.html?tab=games" class="icon-btn" aria-label="Zpět na hry" title="Zpět na hry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <span class="fc-nav-title">🔠 Osmisměrka</span>
+  </nav>
+
+  <main class="mc-main">
+    <section id="wsSetup" class="mc-setup">
+      <div class="mil-logo">🔠</div>
+      <h1>Osmisměrka</h1>
+      <p class="mc-sub">V mřížce je schovaných až 10 pojmů — vodorovně, svisle i šikmo, popředu i pozpátku. Neukazujeme je ale přímo: vedle mřížky jsou otázky a ty hledáš odpověď. Slovo označíš tažením od prvního k poslednímu písmenu (nebo klepnutím na první a pak na poslední).</p>
+      <div class="mil-best" id="wsBest"></div>
+      <div class="mc-decks-h"><b>Z jakých balíčků?</b><button type="button" class="btn btn-ghost btn-sm" id="wsAll">Vybrat vše</button></div>
+      <div class="mc-decks" id="wsDecks"><div class="mc-muted">Načítám balíčky…</div></div>
+      <button type="button" class="btn btn-primary mc-start" id="wsStart" disabled>Hrát</button>
+      <p class="mc-hint" id="wsHint"></p>
+    </section>
+
+    <section id="wsGame" class="ws-game" hidden>
+      <div class="sp-hud">
+        <span class="sp-time" id="wsClock">0:00</span>
+        <span class="ws-count" id="wsCount"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="wsHintBtn" title="Ukáže první písmeno jednoho nenalezeného slova">💡 Nápověda</button>
+      </div>
+      <div class="ws-layout">
+        <div class="ws-grid" id="wsGrid"></div>
+        <ol class="ws-clues" id="wsClues"></ol>
+      </div>
+    </section>
+
+    <section id="wsEnd" class="mc-setup" hidden>
+      <div class="mil-logo">🏆</div>
+      <h1>Všechno nalezeno!</h1>
+      <div class="day-result" id="wsResult"></div>
+      <div class="mc-end-actions">
+        <button type="button" class="btn btn-primary" id="wsAgain">Hrát znovu</button>
+        <a class="btn btn-secondary" href="dashboard.html?tab=games">Zpět na hry</a>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>document.write('<script src="js/mcgame.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>(function(){var s=document.createElement('script');s.src='js/osmismerka.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>

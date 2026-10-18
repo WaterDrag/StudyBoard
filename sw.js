@@ -12,10 +12,10 @@ const CACHE = 'studyboard-' + VERSION;
 // Same-origin shell. Missing entries must not break install, so they're
 // added individually rather than via addAll().
 const SHELL = [
-  'index.html', 'dashboard.html', 'room.html', 'flashcards.html', 'quiz.html', 'milionar.html', 'denni.html', 'spojovacka.html', 'sibenice.html',
+  'index.html', 'dashboard.html', 'room.html', 'flashcards.html', 'quiz.html', 'milionar.html', 'denni.html', 'spojovacka.html', 'sibenice.html', 'pravdalez.html', 'pexeso.html', 'osmismerka.html', 'krizovka.html',
   'css/style.css',
   'js/version.js', 'js/config.js', 'js/auth.js', 'js/dashboard.js', 'js/bggen.js',
-  'js/flashcards.js', 'js/quiz.js', 'js/learn.js', 'js/pomodoro.js', 'js/codehl.js', 'js/mcgame.js', 'js/milionar.js', 'js/denni.js', 'js/spojovacka.js', 'js/sibenice.js', 'js/garden.js',
+  'js/flashcards.js', 'js/quiz.js', 'js/learn.js', 'js/pomodoro.js', 'js/codehl.js', 'js/mcgame.js', 'js/milionar.js', 'js/denni.js', 'js/spojovacka.js', 'js/sibenice.js', 'js/pravdalez.js', 'js/pexeso.js', 'js/osmismerka.js', 'js/krizovka.js', 'js/garden.js',
   'js/room-core.js', 'js/room-list.js', 'js/room-notes.js', 'js/room-export.js',
   'js/room-board.js', 'js/room-whiteboard.js', 'js/room-ai.js',
   'js/room-social.js', 'js/room-import.js', 'js/room-present.js', 'js/room-init.js',

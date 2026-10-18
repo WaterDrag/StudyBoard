@@ -135,3 +135,31 @@ function mcDeckPicker(o) {
   update();
   return () => { const ds = chosen(); try { localStorage.setItem(o.key, JSON.stringify(ds.map(d => d.id))); } catch (_) { /* nic */ } return ds; };
 }
+
+// ── Krátké pojmy (šibenice, osmisměrka, křížovka) ─────────────────
+const baseCh = ch => ch.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+const isLetterCh = ch => /\p{L}/u.test(ch);
+function mcShortTerm(t, maxLen = 24, maxWords = 3) {
+  t = t.trim();
+  const letters = [...t].filter(isLetterCh).length;
+  return t.length >= 2 && t.length <= maxLen && t.split(/\s+/).length <= maxWords && letters >= 2 && !/[?\n]/.test(t);
+}
+// Z karty udělá { word, clue, lbl }: hádá se krátká odpověď (nápověda = otázka),
+// nebo krátký pojem vpředu, když je vzadu jeho definice (nápověda = definice).
+function mcTermOf(c, maxLen, maxWords) {
+  if (c.fl || c.cl) return null;
+  if (mcShortTerm(c.b, maxLen, maxWords) && !mcShortTerm(c.f, maxLen, maxWords)) return { word: c.b.trim(), clue: c.f, lbl: 'Otázka', card: c };
+  if (mcShortTerm(c.f, maxLen, maxWords) && c.b.length > c.f.length) return { word: c.f.trim(), clue: c.b, lbl: 'Co je to?', card: c };
+  if (mcShortTerm(c.b, maxLen, maxWords)) return { word: c.b.trim(), clue: c.f, lbl: 'Otázka', card: c };
+  return null;
+}
+// Pro mřížku (osmisměrka, křížovka): jedno slovo jen z písmen, bez háčků, VELKÝMI.
+// Víceslovné pojmy se slijí („Rozlehlá síť“ → ROZLEHLASIT).
+function mcGridTerms(cards, minLen = 3, maxLen = 12) {
+  const seen = new Set();
+  return cards.map(c => mcTermOf(c, 24, 2)).filter(Boolean).map(t => {
+    const grid = [...t.word].filter(isLetterCh).map(baseCh).join('');
+    return { ...t, grid };
+  }).filter(t => t.grid.length >= minLen && t.grid.length <= maxLen && /^[A-Z]+$/.test(t.grid))
+    .filter(t => { if (seen.has(t.grid)) return false; seen.add(t.grid); return true; });
+}

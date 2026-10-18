@@ -288,6 +288,26 @@ service cloud.firestore {
     // Ostatní smí: připojit/odpojit SEBE, zapsat SVOU odpověď (answers.{uid})
     // a SVOU volbu území (req.{uid}); s povolením od hostitele i seznam
     // balíčků. Dokument má náhodné id = kdo má odkaz, smí ho přečíst.
+    // Pexeso s přáteli: hráč na tahu zapisuje jen herní pole, hostitel všechno.
+    match /pexeso/{gid} {
+      function pxOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+      allow get: if isAuth();
+      allow list: if isAuth() && (request.auth.uid in resource.data.allowedUids || request.auth.uid in resource.data.playerIds);
+      allow create: if isAuth() && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+                    && request.resource.data.hostUid == request.auth.uid
+                    && request.resource.data.status == 'lobby';
+      allow delete: if isAuth() && resource.data.hostUid == request.auth.uid;
+      allow update: if isAuth() && (
+        resource.data.hostUid == request.auth.uid ||
+        // připojit se / odejít v čekárně — jen sám sebe
+        (resource.data.status == 'lobby' && pxOnly(['playerIds', 'players'])
+          && request.resource.data.players.diff(resource.data.players).affectedKeys().hasOnly([request.auth.uid])) ||
+        // tah ve hře
+        (resource.data.status == 'play' && request.auth.uid in resource.data.playerIds
+          && pxOnly(['open', 'matched', 'players', 'turn', 'turnAt', 'status', 'moves']))
+      );
+    }
+
     match /conquest/{gid} {
       function cq() { return get(/databases/$(database)/documents/conquest/$(gid)).data; }
       function only(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
