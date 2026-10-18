@@ -264,25 +264,44 @@ async function copyToClipboard(text) {
   if (!ok) throw new Error('prohlížeč kopírování odmítl');
 }
 
+// Odpověď může mít víc bloků kódu (chat ji rozdělil) — každý se přečte zvlášť.
+function parseAiCardsMulti(raw) {
+  const blocks = [...raw.matchAll(/\x60{3}(?:json)?\s*([\s\S]*?)\x60{3}/gi)].map(m => m[1]).filter(b => /[[{]/.test(b));
+  if (blocks.length > 1) {
+    const all = [];
+    blocks.forEach(b => { try { all.push(...parseAiCards(b)); } catch (_) { /* rozbitý blok přeskočit */ } });
+    if (all.length) return all;
+  }
+  return parseAiCards(raw);
+}
+// Další vložená část se PŘIDÁ k už načteným kartičkám (bez opakování).
 function useAiCardsPaste() {
   const box = document.getElementById('aiPasteBox');
   const raw = (box?.value || '').trim();
   if (!raw) { aiManualMsg('Vlož nejdřív odpověď z chatu.', 'err'); return; }
   let cards;
   try {
-    cards = parseAiCards(raw);
+    cards = parseAiCardsMulti(raw);
   } catch (e) {
     aiManualMsg(e?.message === 'no-json'
       ? 'V té odpovědi není JSON se seznamem kartiček. Zkopíruj ji celou, i s hranatými závorkami.'
       : 'Odpověď se nepodařilo přečíst — chatu řekni, ať vrátí JEN ten JSON.', 'err');
     return;
   }
-  AI_GENERATED_CARDS = cards;
-  AI_JOB = { ...AI_JOB, status: 'ready', cards, kind: aiCardKind() };
-  renderAiCardsPreview(cards);
+  const prev = AI_JOB.pasted && AI_JOB.status === 'ready' ? AI_GENERATED_CARDS : [];
+  const key = c => (c.kind || '') + '|' + String(c.front).toLowerCase().replace(/\s+/g, ' ').trim();
+  const seen = new Set(prev.map(key));
+  const added = cards.filter(c => { const k = key(c); if (seen.has(k)) return false; seen.add(k); return true; });
+  const all = [...prev, ...added];
+  AI_GENERATED_CARDS = all;
+  AI_JOB = { ...AI_JOB, status: 'ready', cards: all, kind: aiCardKind(), pasted: true };
+  renderAiCardsPreview(all);
   document.getElementById('aiSaveBtn').style.display = 'inline-flex';
   document.getElementById('aiGenerateBtn').style.display = 'none';
-  aiManualMsg('Načteno ' + cards.length + ' kartiček.', 'ok');
+  box.value = '';
+  const more = /POKRAČOVÁNÍ/i.test(raw) && !/HOTOVO/i.test(raw);
+  aiManualMsg((prev.length ? `Přidáno ${added.length} (celkem ${all.length}).` : `Načteno ${all.length} kartiček.`)
+    + (more ? ' Chat má pokračování — napiš mu „pokračuj“ a další část vlož sem, přidá se.' : /HOTOVO/i.test(raw) ? ' Chat má hotovo ✓' : ' Další část z chatu sem můžeš vložit taky, přidá se.'), 'ok');
   updateAiJobNotice();
 }
 
@@ -567,7 +586,7 @@ The three cards of one concept must not be copies of each other: the info card e
 function buildAiCardsPrompt(text, count, automatic = false, kind = 'quiz') {
   return `You are creating study flashcards from the notes below. Keep the SAME language as the notes (they may be in Czech).${kind === 'set' ? '\nThe numbers below count CONCEPTS — every concept becomes 3 cards (info, learn, quiz).' : ''}
 ${automatic
-    ? `Choose the suitable number of flashcards yourself (2 to ${AI_CARD_MAX}). Cover every separately defined term and important concept; do not stop at an arbitrary small number. Prefer one clear card per distinct term, and merge only genuinely inseparable concepts.`
+    ? `Choose the suitable number of flashcards yourself (2 to ${AI_CARD_MAX}). Cover every separately defined term and important concept; do not stop at an arbitrary small number. Prefer one clear card per distinct term, and merge only genuinely inseparable concepts.\n${aiEstimateRule(text)}`
     : kind === 'set' ? `Cover exactly ${count} concepts (= ${count * 3} cards) — the key facts, terms, and concepts.`
     : `Create exactly ${count} flashcards covering the key facts, terms, and concepts.`}
 Each flashcard:
@@ -579,7 +598,8 @@ SOURCE CODE: if the notes contain programming code, make proper code cards too, 
 - "codeLang": same idea when the ANSWER is code — e.g. "Write a for-each loop over a List". Put the code in "back", and make "wrong" plausible but genuinely broken/incorrect code in the same language.
 Keep code short (max ~12 lines), keep the original line breaks and indentation (as \n inside the JSON string), and never wrap the code itself in markdown fences. Use the language actually used in the notes. Mix code cards with normal ones when the notes mix theory and code.
 ${AI_SELF_CONTAINED_RULE}
-OUTPUT FORMAT: reply with ONE markdown code block tagged json (start it with \`\`\`json and end it with \`\`\`) that contains ONLY the JSON array, so the user can copy it with the code block's copy button. No text before or after the code block. Use straight ASCII double quotes for all JSON keys and strings. Inside the JSON, code goes in plain strings with escaped newlines (\\n) — never put another \`\`\` fence inside it.
+LONG OUTPUT — SPLIT INTO PARTS: never leave out cards or shorten them to fit one reply. If everything does not fit into one message, write as many COMPLETE cards as fit${kind === 'set' ? ' (always all three cards of a concept together)' : ''}, close the JSON array and the code block, and end the message with a line exactly: POKRAČOVÁNÍ — napiš „pokračuj“. When the user writes "pokračuj", continue with the NEXT cards in a new json code block, without repeating any card. After the very last part write: HOTOVO.
+OUTPUT FORMAT: reply with ONE markdown code block tagged json (per part) (start it with \`\`\`json and end it with \`\`\`) that contains ONLY the JSON array, so the user can copy it with the code block's copy button. No text before or after the code block. Use straight ASCII double quotes for all JSON keys and strings. Inside the JSON, code goes in plain strings with escaped newlines (\\n) — never put another \`\`\` fence inside it.
 The array looks like this: [{${kind === 'set' ? '"kind":"learn",' : ''}"front":"...","back":"...","alsoCorrect":["..."],"wrong":["...","...","...","..."],"codeLang":"java"}, ...]
 
 NOTES:
@@ -588,12 +608,26 @@ ${text}
 """`;
 }
 
+// Kolik témat poznámky zhruba mají — bez toho AI (hlavně v chatu, kde je
+// odpověď omezená délkou) ráda skončí u 20–30 i u dlouhých zápisků.
+function aiConceptEstimate(text) {
+  const words = (text.match(/\S+/g) || []).length;
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const defs = lines.filter(l => /^[-•*\d.)\s]*[^\s].{0,48}?\s[–—:=-]\s+\S/.test(l)).length;
+  const target = Math.max(5, Math.min(AI_CARD_MAX, Math.max(defs, Math.round(words / 70))));
+  return { words, defs, target };
+}
+function aiEstimateRule(text) {
+  const e = aiConceptEstimate(text);
+  return `For scale: the notes have about ${e.words} words${e.defs ? ` and roughly ${e.defs} lines that define a term` : ''}. A thorough result for notes this long usually needs about ${e.target} or more concepts — do not stop at 20–30 just to keep the reply short.`;
+}
+
 function buildAiCardPlanPrompt(text, automatic, count) {
   const countRule = automatic
     ? `Choose a suitable number of distinct study targets (2 to ${AI_CARD_MAX}). If the notes contain a glossary or a list of terminology with definitions, include EVERY separately defined term. Usually use one target per term; combine only concepts that cannot be tested separately.`
     : `Choose exactly ${count} distinct study targets, distributed across the important terms and concepts. Do not omit a clearly defined term when the requested count allows it.`;
   return `You are planning a comprehensive set of study flashcards from the notes below. Keep the same language as the notes.
-${countRule}
+${countRule}${automatic ? '\n' + aiEstimateRule(text) : ''}
 First identify the concepts that deserve their own card. Do not write the cards yet. For each target, include a short topic and a concise evidence excerpt or faithful summary from the notes, so a second step can write a grounded card for it. Avoid duplicate targets and do not invent topics absent from the notes.
 The second step will NOT see the notes — only your topic and evidence — and the finished card must make sense to a student who never saw the notes either. So when a target is about specific code (a class, method, example program), copy the relevant code VERBATIM into "evidence", with real newlines and indentation, not just a description of it. If a target only makes sense with code the notes do not contain, phrase the topic as the general concept instead.
 Return ONLY valid JSON in this shape:
