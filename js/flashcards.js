@@ -1005,7 +1005,9 @@ function answerMatches(val, card) {
 const CLOZE_STOP = new Set(('a i o u v ve z ze k ke s se na do od po pro při za je jsou být byl byla bylo byly který která které '
   + 'kterou kterým kteří že aby nebo ale jako tak to ten ta ty tím tento tato toto této tyto jeho její jejich si sebe jen už ještě '
   + 'také když pokud než mezi podle pod nad před bez přes jak co kde kdy tedy proto může mohou musí lze není nejsou jsme jste '
-  + 'další dalších jiné jiný jejím jehož každý každá každé svůj své svým the of and or is are to in on for with by an as at be it this that').split(' '));
+  + 'další dalších jiné jiný jejím jehož každý každá každé svůj své svým takže protože avšak však pouze velmi hodně mnohem výrazně '
+  + 'například obvykle většinou zatímco tedy také proto kterou kterých kterými jenž které jsou byla'
+  + ' the of and or is are to in on for with by an as at be it this that').split(' '));
 const clozeTokens = text => String(text || '').split(/(\s+)/);
 function clozeCore(tok) {
   const m = tok.match(/^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}+#]*)$/u);
@@ -1216,12 +1218,22 @@ function checkTyped() {
   }
 }
 
+// Nápověda jde do políčka, ve kterém jsi naposledy byl(a) — klik na tlačítko
+// kurzor z políčka bere, proto si ho pamatujeme. Další klik = další písmeno;
+// správně napsaný začátek zůstane, překlep za ním se přepíše.
+let CLOZE_LAST = null;
 function clozeHint() {
   const inputs = [...document.querySelectorAll('#studyFront .cloze-in')];
-  const t = inputs.includes(document.activeElement) ? document.activeElement : inputs.find(i => !i.value.trim()) || inputs[0];
+  const act = document.activeElement;
+  const t = inputs.includes(act) ? act : inputs.includes(CLOZE_LAST) ? CLOZE_LAST : inputs.find(i => !i.value.trim()) || inputs[0];
   if (!t) return;
-  t.value = t.dataset.answer.slice(0, Math.min(t.dataset.answer.length - 1, (t.value.length || 0) + 1)) || t.dataset.answer[0];
+  const ans = t.dataset.answer, val = t.value;
+  let ok = 0;
+  while (ok < val.length && ok < ans.length && fold(val[ok]) === fold(ans[ok])) ok++;
+  t.value = ans.slice(0, Math.min(ans.length - 1, ok + 1)) || ans[0];
+  CLOZE_LAST = t;
   t.focus();
+  t.setSelectionRange(t.value.length, t.value.length);
 }
 
 function setupStudyControls() {
@@ -1242,6 +1254,10 @@ function setupStudyControls() {
   document.getElementById('readNextBtn').onclick = () => readStep(1);
   document.getElementById('typeCheckBtn').onclick = checkTyped;
   document.getElementById('clozeHintBtn').onclick = clozeHint;
+  document.getElementById('clozeHintBtn').onmousedown = e => e.preventDefault();   // ať kurzor zůstane v políčku
+  const remember = e => { if (e.target.matches?.('.cloze-in')) CLOZE_LAST = e.target; };
+  const sf = document.getElementById('studyFront');
+  if (!sf._clozeWired) { sf._clozeWired = true; ['focusin', 'pointerdown', 'input'].forEach(ev => sf.addEventListener(ev, remember)); }
   document.getElementById('nextCardBtn').onclick  = nextCard;
   document.getElementById('typeInput').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); checkTyped(); } };
   document.getElementById('studyFront').onkeydown = e => {
