@@ -86,6 +86,7 @@ let _gamesLoaded = false;
 function loadGames(user) {
   if (_gamesLoaded) return;
   _gamesLoaded = true;
+  setupGameFilters();
   loadDailyCard(user);
   // Pexeso s přáteli: čekárny a rozehrané hry, kam mě někdo pozval
   const pxl = document.getElementById('pxLobbies');
@@ -179,6 +180,27 @@ async function loadDailyCard(user) {
     fr.innerHTML = rows.length ? rows.map(r => `<div class="game-lobby"><span><b>${esc(r.name)}</b><small>${r.t.c}/${r.t.of || 10} správně</small></span><b>${r.t.s} b</b></div>`).join('')
       : '<div class="game-empty">Dnes ještě nikdo z přátel nehrál.</div>';
   } catch (_) { st.textContent = ''; fr.innerHTML = '<div class="game-empty">Nepodařilo se načíst.</div>'; }
+}
+
+// Filtr her: pro jednoho / s přáteli (hra může patřit do obou). Volba se pamatuje.
+function setupGameFilters() {
+  const bar = document.getElementById('gameFilters');
+  if (!bar || bar._wired) return;
+  bar._wired = true;
+  const cards = [...document.querySelectorAll('#tab-games .game-card')];
+  bar.querySelectorAll('[data-gmode]').forEach(b => {
+    const m = b.dataset.gmode;
+    b.querySelector('span').textContent = m === 'all' ? cards.length : cards.filter(c => c.dataset.modes.split(' ').includes(m)).length;
+  });
+  const apply = mode => {
+    bar.querySelectorAll('[data-gmode]').forEach(b => b.classList.toggle('on', b.dataset.gmode === mode));
+    cards.forEach(c => { c.hidden = mode !== 'all' && !c.dataset.modes.split(' ').includes(mode); });
+    try { localStorage.setItem('games_filter', mode); } catch (_) { /* nic */ }
+  };
+  bar.addEventListener('click', e => { const b = e.target.closest('[data-gmode]'); if (b) apply(b.dataset.gmode); });
+  let saved = 'all';
+  try { saved = localStorage.getItem('games_filter') || 'all'; } catch (_) { /* nic */ }
+  apply(['all', 'solo', 'multi'].includes(saved) ? saved : 'all');
 }
 
 function updateGamesBadge() {

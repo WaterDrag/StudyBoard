@@ -5633,3 +5633,10 @@ body.pres-open { overflow: hidden; }
 .px-tile.done { border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, var(--bg-2)); cursor: default; }
 @media (max-width: 600px) { .px-board { --cols: 4 !important; gap: 6px; } .px-tile { aspect-ratio: 3 / 4; } }
 .px-players[hidden] { display: none; }
+
+/* Hry: filtr a štítky režimů */
+.game-filters { margin-bottom: 16px; }
+.game-card[hidden] { display: none; }
+.game-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: -4px; }
+.game-tag { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--bg-4); color: var(--text-muted); }
+.game-tag.multi { background: color-mix(in srgb, var(--accent) 18%, var(--bg-3)); color: var(--text); }
