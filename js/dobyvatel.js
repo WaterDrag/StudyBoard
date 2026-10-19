@@ -858,7 +858,7 @@ function buildSvg() {
   // Zvýraznění vybíratelných území je ve VLASTNÍ vrstvě nad všemi územími —
   // obrys v území samotném z poloviny překryl soused, a tak byl jinde tlustý, jinde tenký.
   svg.innerHTML = `<g class="dob-terrs">${MAP.t.map(t => `<path d="${t.d}" data-t="${t.id}" class="dob-t${REGION.ids.has(t.id) ? '' : ' off'}"/>`).join('')}</g>
-    <g class="dob-hl" id="dobHl"></g>
+    <g class="dob-hl" id="dobHl"></g><g class="dob-hover" id="dobHover"></g>
     <g class="dob-marks">${MAP.t.filter(t => REGION.ids.has(t.id)).map(t => `<g class="dob-mark" data-m="${t.id}" transform="translate(${t.c[0]},${t.c[1]})">${t.small ? `<circle r="5" class="dob-small" data-t="${t.id}"/>` : ''}<text class="dob-castle" y="4"></text>${labels ? `<text class="dob-label" y="17">${esc(shortName(t.name))}</text>` : ''}<text class="dob-val" y="${labels ? 28 : 16}"></text></g>`).join('')}</g>`;
 }
 
@@ -905,13 +905,15 @@ function wireGame() {
   });
   svg.addEventListener('pointercancel', up);
   svg.addEventListener('pointerover', e => { HOVER_T = e.target.closest('[data-t]')?.dataset.t || null; updateTip(); });
-  svg.addEventListener('pointerleave', () => { HOVER_T = null; $('mapTip').hidden = true; });
+  svg.addEventListener('pointerleave', () => { HOVER_T = null; updateTip(); });
   setInterval(updateTimer, 250);
 }
 
 // Bublina u území — překreslí se i při změně stavu (dřív ukazovala starou hodnotu).
 function updateTip() {
   const t = HOVER_T, tip = $('mapTip');
+  const hv = $('dobHover');
+  if (hv) { const tt = t && REGION?.ids.has(t) && MAP.t.find(x => x.id === t); hv.innerHTML = tt ? `<path d="${tt.d}"/>` : ''; }
   if (!t || !GAME?.st || !REGION?.ids.has(t)) { tip.hidden = true; return; }
   const st = GAME.st, p = st.own?.[t];
   tip.innerHTML = `<b>${esc(terrName(t))}</b>${p ? `<br><span style="color:${GAME.players[p]?.color}">● ${esc(pname(p))}</span> · ${st.val[t] || VAL_LAND} b` : '<br>volné'}`;
@@ -995,8 +997,26 @@ function renderPhase(st) {
       : b ? `⚔️ ${esc(pname(b.att))} → ${esc(terrName(b.tid))} (${esc(pname(b.def))})${b.castle ? ` · hrad, věží ${st.towers[b.def]}` : ''}${st.ctx?.type === 'tie' ? ' · rozstřel' : ''}` : '';
   } else if (st.phase === 'end') txt = '🏆 Hra skončila';
   const roundTxt = st.round ? `<span class="dob-round">Kolo ${Math.min(st.round, st.rounds)}/${st.rounds}</span>` : '<span class="dob-round">Rozdělování</span>';
-  box.innerHTML = `<div class="dob-phase-row">${roundTxt}<span class="dob-timer" id="dobTimer"></span></div><div class="dob-phase-txt">${txt}</div><div class="dob-bar"><i id="dobBar"></i></div>`;
+  box.innerHTML = `<div class="dob-phase-row">${roundTxt}<span class="dob-timer" id="dobTimer"></span></div>${battleTrack(st)}<div class="dob-phase-txt">${txt}</div><div class="dob-bar"><i id="dobBar"></i></div>`;
   if (!isHost() && st.phase !== 'end') box.insertAdjacentHTML('beforeend', '');
+}
+
+// Ukazatel kol a tahů jako v televizním Dobyvateli: úsek pro každé kolo, pod
+// ním barevné čárky hráčů v pořadí útoků. Odehrané tahy zešednou, hráč na
+// tahu má velkou čárku, aktuální kolo svítí.
+function battleTrack(st) {
+  if (!st.round || !st.attackOrder?.length) return '';
+  const cur = Math.min(st.round, st.rounds), order = st.attackOrder;
+  const ended = st.phase === 'end';
+  return '<div class="dob-track">' + Array.from({ length: st.rounds }, (_, r) => {
+    const n = r + 1, past = ended || n < cur, now = !ended && n === cur;
+    const marks = order.map((p, i) => {
+      const done = past || (now && i < st.attackIdx), on = now && i === st.attackIdx;
+      const out = st.out?.[p];
+      return `<i class="${done ? 'done' : ''}${on ? ' on' : ''}${out && !done ? ' out' : ''}" style="--c:${GAME.players[p]?.color || '#888'}" title="${esc(pname(p))}"></i>`;
+    }).join('');
+    return `<div class="dob-trk${past ? ' past' : ''}${now ? ' now' : ''}"><span class="dob-trk-bar"></span><span class="dob-trk-marks">${marks}</span></div>`;
+  }).join('') + '</div>';
 }
 
 function updateTimer() {
@@ -1025,11 +1045,13 @@ function renderQuestion(st) {
       ${isHost() ? '<button type="button" class="btn btn-primary" id="againBtn">Hrát znovu (lobby)</button>' : ''}
       <a class="btn btn-secondary" href="dobyvatel.html">Zpět na hry</a></div>`;
     $('againBtn')?.addEventListener('click', () => ref().update({ status: 'lobby', st: firebase.firestore.FieldValue.delete(), answers: {}, req: {} }));
+    $('mapWrap').classList.add('has-q');
     LAST_Q_RENDER = '';
     return;
   }
   if (!st.q || (st.phase !== 'q' && st.phase !== 'reveal')) {
-    box.innerHTML = st.phase === 'pick' || st.phase === 'castle' || st.phase === 'attack' ? '<div class="dob-muted dob-wait">Mapa vlevo — vybírá se území.</div>' : '';
+    box.innerHTML = '';
+    $('mapWrap').classList.remove('has-q');
     LAST_Q_RENDER = '';
     return;
   }
@@ -1061,6 +1083,7 @@ function renderQuestion(st) {
       body = `<div class="dob-opts">${q.opts.map((o, i) => `<div class="dob-opt ${i === r.correct ? 'ok' : ''}${Object.values(r.res).some(x => x.v === i) && i !== r.correct ? ' bad' : ''}${q.cl ? ' is-code' : ''}">${q.cl ? `<pre><code>${esc(o)}</code></pre>` : esc(o)}<span class="dob-who">${q.parts.filter(p => r.res[p].v === i).map(p => `<i style="background:${GAME.players[p]?.color}" title="${esc(pname(p))}"></i>`).join('')}</span></div>`).join('')}</div>`;
     }
   }
+  $('mapWrap').classList.add('has-q');
   box.innerHTML = `<div class="dob-qhead">${q.kind === 'guess' ? '🎯 Tipovačka' : '❓ Otázka'} <span class="dob-chips">${who}</span></div>
     <div class="dob-qtext">${codeOrText(q.text, q.fl)}</div>${body}`;
   renderAnsweredDots(st);
