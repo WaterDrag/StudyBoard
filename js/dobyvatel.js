@@ -408,17 +408,50 @@ async function hostStart() {
 
 async function hostLoadPool() {
   const snap = await ref().collection('pool').get();
-  H.pool = snap.docs.flatMap(d => d.data().cards || []);
+  H.poolByDeck = snap.docs.map(d => ({ id: d.id, name: d.data().name, cards: d.data().cards || [] }));
+  H.pool = H.poolByDeck.flatMap(d => d.cards);
 }
 
+// AI tipovačky se ukládají k balíčku (dobGuess/{deckId}) a další hry je
+// použijí znovu. AI se zavolá jen pro balíček, kde zbývá míň než
+// DOB_AI_MIN otázek, které tenhle prohlížeč ještě neviděl — nové se přidají.
+const DOB_AI_MIN = 8, DOB_AI_KEEP = 150, DOB_SEEN_KEY = 'dob_seen_ai';
+const dobSeen = () => { try { return new Set(JSON.parse(localStorage.getItem(DOB_SEEN_KEY) || '[]')); } catch (_) { return new Set(); } };
+function dobMarkSeen(t) {
+  try { const s = [...dobSeen(), t].slice(-600); localStorage.setItem(DOB_SEEN_KEY, JSON.stringify(s)); } catch (_) { /* nic */ }
+}
+async function aiGuessesFor(cards) {
+  const topics = shuffle(cards).slice(0, 25).map(c => '- ' + String(c.f).slice(0, 120)).join('\n');
+  const prompt = `Vymysli 15 tipovacích otázek pro kvízovou hru v češtině. Odpověď na každou musí být JEDNO celé číslo (rok, počet, výška, vzdálenost…), které je ověřitelný a neměnný fakt — žádné odhady, žádná čísla, která se v čase mění. Téma ber z těchto kartiček studenta (když z nich nejde udělat číselnou otázku, použij příbuzné téma):\n${topics}\n\nVrať POUZE JSON pole: [{"q":"Otázka?","a":1234}]`;
+  return aiGenerate(prompt, { temperature: 0.4, maxOutputTokens: 2000, statusElementId: null, parse: raw => {
+    const m = raw.match(/\[[\s\S]*\]/); const a = JSON.parse(m[0]);
+    return a.filter(x => x && typeof x.q === 'string' && Number.isFinite(+x.a)).map(x => ({ t: x.q.trim().slice(0, 300), a: Math.round(+x.a) }));
+  } });
+}
 async function hostAiGuesses() {
   try {
-    const topics = shuffle(H.pool).slice(0, 25).map(c => '- ' + String(c.f).slice(0, 120)).join('\n');
-    const prompt = `Vymysli 15 tipovacích otázek pro kvízovou hru v češtině. Odpověď na každou musí být JEDNO celé číslo (rok, počet, výška, vzdálenost…), které je ověřitelný a neměnný fakt — žádné odhady, žádná čísla, která se v čase mění. Téma ber z těchto kartiček studenta (když z nich nejde udělat číselnou otázku, použij příbuzné téma):\n${topics}\n\nVrať POUZE JSON pole: [{"q":"Otázka?","a":1234}]`;
-    const arr = await aiGenerate(prompt, { temperature: 0.4, maxOutputTokens: 2000, statusElementId: null, parse: raw => {
-      const m = raw.match(/\[[\s\S]*\]/); const a = JSON.parse(m[0]);
-      return a.filter(x => x && typeof x.q === 'string' && Number.isFinite(+x.a)).map((x, i) => ({ t: x.q, a: Math.round(+x.a), id: 'ai' + i }));
-    } });
+    const seen = dobSeen();
+    const fresh = [];
+    let calls = 0;
+    for (const d of H.poolByDeck || []) {
+      const cref = db.collection('dobGuess').doc(d.id);
+      let cached = [];
+      try { const snap = await cref.get(); cached = (snap.exists && snap.data().qs) || []; } catch (_) { /* bez zásobníku */ }
+      let unseen = cached.filter(q => !seen.has(q.t));
+      if (unseen.length < DOB_AI_MIN && d.cards.length) {
+        try {
+          const made = await aiGuessesFor(d.cards); calls++;
+          const known = new Set(cached.map(q => q.t.toLowerCase()));
+          const add = made.filter(q => !known.has(q.t.toLowerCase()));
+          cached = [...cached, ...add].slice(-DOB_AI_KEEP);
+          unseen = [...unseen, ...add];
+          cref.set({ qs: cached, deckName: d.name || '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+        } catch (_) { /* bez AI — použijí se uložené i viděné */ if (!unseen.length) unseen = cached; }
+      }
+      fresh.push(...unseen);
+    }
+    const arr = shuffle(fresh).map((q, i) => ({ ...q, id: 'ai' + i, ai: true }));
+    console.info(`Dobyvatel: ${arr.length} AI tipovaček (${calls}× nové od AI, zbytek z uložených).`);
     H.aiGuess = arr;
     // AI otázky se zamíchají mezi vestavěné (vždy ob jednu)
     const mixed = []; const a = shuffle(arr), b = H.guess.slice();
@@ -552,7 +585,9 @@ function hostCastle(st, now) {
 /* — otázky — */
 function nextGuess() {
   if (!H.guess.length) H.guess = shuffle(DOB_GUESS.map((q, i) => ({ t: q[0], a: q[1], id: 'b' + i })));
-  return H.guess.shift();
+  const g = H.guess.shift();
+  if (g.ai) dobMarkSeen(g.t);
+  return g;
 }
 function nextCard() {
   if (!H.pool.length) return null;

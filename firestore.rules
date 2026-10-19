@@ -288,6 +288,14 @@ service cloud.firestore {
     // Ostatní smí: připojit/odpojit SEBE, zapsat SVOU odpověď (answers.{uid})
     // a SVOU volbu území (req.{uid}); s povolením od hostitele i seznam
     // balíčků. Dokument má náhodné id = kdo má odkaz, smí ho přečíst.
+    // Dobyvatel: zásobník AI tipovaček k balíčku (otázka + číslo, nic osobního),
+    // ať se při každé hře nevolá AI znovu. Číst a doplňovat může přihlášený hráč.
+    match /dobGuess/{deckId} {
+      allow read: if isAuth();
+      allow create, update: if isAuth() && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+                            && request.resource.data.qs is list && request.resource.data.qs.size() <= 200;
+    }
+
     // Pexeso s přáteli: hráč na tahu zapisuje jen herní pole, hostitel všechno.
     match /pexeso/{gid} {
       function pxOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
