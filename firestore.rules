@@ -308,6 +308,23 @@ service cloud.firestore {
       );
     }
 
+    // Šibenice — závod: každý hráč zapisuje jen svůj postup, hostitel všechno.
+    match /sibenice/{gid} {
+      function sbOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+      function sbMe() { return request.resource.data.players.diff(resource.data.players).affectedKeys().hasOnly([request.auth.uid]); }
+      allow get: if isAuth();
+      allow list: if isAuth() && (request.auth.uid in resource.data.allowedUids || request.auth.uid in resource.data.playerIds);
+      allow create: if isAuth() && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+                    && request.resource.data.hostUid == request.auth.uid
+                    && request.resource.data.status == 'lobby';
+      allow delete: if isAuth() && resource.data.hostUid == request.auth.uid;
+      allow update: if isAuth() && (
+        resource.data.hostUid == request.auth.uid ||
+        (resource.data.status == 'lobby' && sbOnly(['playerIds', 'players']) && sbMe()) ||
+        (resource.data.status == 'play' && request.auth.uid in resource.data.playerIds && sbOnly(['players', 'status']) && sbMe())
+      );
+    }
+
     match /conquest/{gid} {
       function cq() { return get(/databases/$(database)/documents/conquest/$(gid)).data; }
       function only(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }

@@ -31,13 +31,32 @@
       <h1>Šibenice</h1>
       <p class="mc-sub">Podle nápovědy z kartičky hádej pojem písmeno po písmenu. Na každé slovo máš 8 chyb. Háčky a čárky neřeš — „C“ odkryje i „Č“. Hraje se jen z karet, kde je odpovědí krátký pojem.</p>
       <div class="mil-best" id="hgBest"></div>
+      <div class="px-modes" role="radiogroup" aria-label="Režim">
+        <label class="px-mode"><input type="radio" name="hgMode" value="solo" checked><b>🧑 Sám</b><small>10 slov, rekord</small></label>
+        <label class="px-mode"><input type="radio" name="hgMode" value="multi"><b>⚔️ Proti přátelům</b><small>stejná slova, kdo je rychlejší</small></label>
+      </div>
       <div class="mc-decks-h"><b>Z jakých balíčků?</b><button type="button" class="btn btn-ghost btn-sm" id="hgAll">Vybrat vše</button></div>
       <div class="mc-decks" id="hgDecks"><div class="mc-muted">Načítám balíčky…</div></div>
       <button type="button" class="btn btn-primary mc-start" id="hgStart" disabled>Hrát</button>
       <p class="mc-hint" id="hgHint"></p>
     </section>
 
+    <!-- Čekárna závodu -->
+    <section id="hgLobby" class="mc-setup" hidden>
+      <div class="mil-logo">⚔️</div>
+      <h1>Závod v šibenici</h1>
+      <p class="mc-sub" id="hgLobbyInfo"></p>
+      <div class="px-players" id="hgLobbyPlayers"></div>
+      <div class="mc-end-actions">
+        <button type="button" class="btn btn-secondary" id="hgCopy">🔗 Zkopírovat odkaz</button>
+        <button type="button" class="btn btn-primary" id="hgGo" hidden>Spustit závod</button>
+        <button type="button" class="btn btn-ghost" id="hgLeave">Odejít</button>
+      </div>
+      <p class="mc-hint" id="hgLobbyHint"></p>
+    </section>
+
     <section id="hgGame" class="hg-game" hidden>
+      <div class="px-players hg-rivals" id="hgRivals" hidden></div>
       <div class="day-top"><span id="hgRound"></span><span class="day-score" id="hgScore"></span></div>
       <div class="hg-stage">
         <svg viewBox="0 0 120 130" class="hg-gallows" id="hgGallows" aria-hidden="true">
@@ -68,6 +87,8 @@
       <div class="mil-logo" id="hgEndIco">🔤</div>
       <h1 id="hgEndTitle">Konec hry</h1>
       <div class="day-result" id="hgResult"></div>
+      <div class="lb-list" id="hgRank"></div>
+      <p class="mc-hint" id="hgWait"></p>
       <div class="sp-review" id="hgReview"></div>
       <div class="mc-end-actions">
         <button type="button" class="btn btn-primary" id="hgAgain">Hrát znovu</button>

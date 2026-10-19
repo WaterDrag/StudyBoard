@@ -88,6 +88,16 @@ function loadGames(user) {
   _gamesLoaded = true;
   setupGameFilters();
   loadDailyCard(user);
+  // Šibenice — závody přátel
+  const hgl = document.getElementById('hgLobbies');
+  db.collection('sibenice').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
+    const games = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(g => g.status === 'lobby' || (g.status === 'play' && (g.playerIds || []).includes(user.uid) && !g.players?.[user.uid]?.done))
+      .filter(g => Date.now() - (g.createdAt?.toMillis?.() || Date.now()) < 6 * 3600e3)
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)).slice(0, 5);
+    hgl.innerHTML = games.length ? games.map(g => `<a class="game-lobby" href="sibenice.html?g=${g.id}"><span><b>${esc(g.hostName || 'Závod')}</b><small>${(g.words || []).length} slov · ${(g.playerIds || []).length} hráčů · ${g.status === 'play' ? 'běží' : 'čeká'}</small></span><span class="btn btn-secondary btn-sm">${(g.playerIds || []).includes(user.uid) ? 'Vrátit se' : 'Připojit'}</span></a>`).join('')
+      : '<div class="game-empty">Nikdo z přátel teď závod nezaložil.</div>';
+  }, () => { hgl.innerHTML = '<div class="game-empty">Nepodařilo se načíst.</div>'; });
   // Pexeso s přáteli: čekárny a rozehrané hry, kam mě někdo pozval
   const pxl = document.getElementById('pxLobbies');
   db.collection('pexeso').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {

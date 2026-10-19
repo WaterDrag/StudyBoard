@@ -17,7 +17,7 @@ const MAP_LIST = [
 const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ec4899'];
 const BOT_NAMES = ['Bot Karel', 'Bot Eva', 'Bot Ondra', 'Bot Jana', 'Bot Petr'];
 const MAX_PLAYERS = 6;
-const VAL_LAND = 200, VAL_CASTLE = 1000, VAL_DEFEND = 100;
+const VAL_LAND = 200, VAL_CASTLE = 1000, VAL_DEFEND = 200, VAL_DEFEND_MAX = 400;   // ubráněné území +200, nejvýš na 400
 const REVEAL_MS = 4500;
 const POOL_MAX_CARDS = 400;
 
@@ -794,7 +794,11 @@ function hostBattleWin(s, attackerWon) {
     addLog(s, `✅ ${pname(b.att)} dobyl ${terrName(b.tid)}.`);
   } else {
     if (b.castle) { s.towers[b.def] = 3; addLog(s, `🛡️ ${pname(b.def)} ubránil hrad — věže opraveny.`); }
-    else { s.val[b.tid] = (s.val[b.tid] || VAL_LAND) + VAL_DEFEND; addLog(s, `🛡️ ${pname(b.def)} ubránil ${terrName(b.tid)} (+${VAL_DEFEND}).`); }
+    else {
+      const was = s.val[b.tid] || VAL_LAND;
+      s.val[b.tid] = Math.max(was, Math.min(VAL_DEFEND_MAX, was + VAL_DEFEND));
+      addLog(s, `🛡️ ${pname(b.def)} ubránil ${terrName(b.tid)}` + (s.val[b.tid] > was ? ` (${was} → ${s.val[b.tid]} b).` : ` (už má maximum ${VAL_DEFEND_MAX} b).`));
+    }
   }
   hostNextAttack(s);
 }
@@ -832,7 +836,7 @@ function recordGameResult(st) {
 }
 
 /* ═══ Vykreslení hry (všichni) ═══ */
-let VB = null, VB0 = null;
+let VB = null, VB0 = null, SHOW_ALL_VALUES = true, HOVER_T = null;
 const terrName = id => (MAP && MAP.t.find(t => t.id === id)?.name) || id;
 
 // Popisek na mapu: bez slov, která jsou u všech stejná
@@ -850,8 +854,12 @@ function buildSvg() {
   VB = VB0.slice();
   svg.setAttribute('viewBox', VB.join(' '));
   const labels = REGION.ids.size <= 20; // na malé mapě (kraje, spolkové země) jsou vidět názvy
+  SHOW_ALL_VALUES = labels;
+  // Zvýraznění vybíratelných území je ve VLASTNÍ vrstvě nad všemi územími —
+  // obrys v území samotném z poloviny překryl soused, a tak byl jinde tlustý, jinde tenký.
   svg.innerHTML = `<g class="dob-terrs">${MAP.t.map(t => `<path d="${t.d}" data-t="${t.id}" class="dob-t${REGION.ids.has(t.id) ? '' : ' off'}"/>`).join('')}</g>
-    <g class="dob-marks">${MAP.t.filter(t => REGION.ids.has(t.id)).map(t => `<g class="dob-mark" data-m="${t.id}" transform="translate(${t.c[0]},${t.c[1]})">${t.small ? `<circle r="5" class="dob-small" data-t="${t.id}"/>` : ''}<text class="dob-castle" y="4"></text>${labels ? `<text class="dob-label" y="17">${esc(shortName(t.name))}</text>` : ''}</g>`).join('')}</g>`;
+    <g class="dob-hl" id="dobHl"></g>
+    <g class="dob-marks">${MAP.t.filter(t => REGION.ids.has(t.id)).map(t => `<g class="dob-mark" data-m="${t.id}" transform="translate(${t.c[0]},${t.c[1]})">${t.small ? `<circle r="5" class="dob-small" data-t="${t.id}"/>` : ''}<text class="dob-castle" y="4"></text>${labels ? `<text class="dob-label" y="17">${esc(shortName(t.name))}</text>` : ''}<text class="dob-val" y="${labels ? 28 : 16}"></text></g>`).join('')}</g>`;
 }
 
 function wireGame() {
@@ -890,20 +898,24 @@ function wireGame() {
   svg.addEventListener('pointerup', e => {
     const wasMoved = moved; up(e);
     if (wasMoved) return;
-    const t = e.target.closest('[data-t]')?.dataset.t;
+    // svg drží ukazatel (setPointerCapture), takže e.target je celé svg — území dohledat podle souřadnic
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const t = hit?.closest?.('[data-t]')?.dataset.t;
     if (t) onTerritoryClick(t);
   });
   svg.addEventListener('pointercancel', up);
-  svg.addEventListener('pointerover', e => {
-    const t = e.target.closest('[data-t]')?.dataset.t;
-    const tip = $('mapTip');
-    if (!t || !GAME?.st || !REGION?.ids.has(t)) { tip.hidden = true; return; }
-    const st = GAME.st, p = st.own?.[t];
-    tip.innerHTML = `<b>${esc(terrName(t))}</b>${p ? `<br><span style="color:${GAME.players[p]?.color}">● ${esc(pname(p))}</span> · ${st.val[t] || VAL_LAND} b.` : '<br>volné'}`;
-    tip.hidden = false;
-  });
-  svg.addEventListener('pointerleave', () => { $('mapTip').hidden = true; });
+  svg.addEventListener('pointerover', e => { HOVER_T = e.target.closest('[data-t]')?.dataset.t || null; updateTip(); });
+  svg.addEventListener('pointerleave', () => { HOVER_T = null; $('mapTip').hidden = true; });
   setInterval(updateTimer, 250);
+}
+
+// Bublina u území — překreslí se i při změně stavu (dřív ukazovala starou hodnotu).
+function updateTip() {
+  const t = HOVER_T, tip = $('mapTip');
+  if (!t || !GAME?.st || !REGION?.ids.has(t)) { tip.hidden = true; return; }
+  const st = GAME.st, p = st.own?.[t];
+  tip.innerHTML = `<b>${esc(terrName(t))}</b>${p ? `<br><span style="color:${GAME.players[p]?.color}">● ${esc(pname(p))}</span> · ${st.val[t] || VAL_LAND} b` : '<br>volné'}`;
+  tip.hidden = false;
 }
 
 function myOptions(st) {
@@ -943,7 +955,17 @@ function renderGame() {
   document.querySelectorAll('#mapSvg .dob-mark').forEach(g => {
     const t = g.dataset.m, p = castleOf[t];
     g.querySelector('.dob-castle').textContent = p ? '🏰' + '●'.repeat(st.towers[p] || 0) : '';
+    // hodnota území: na malých mapách u všech zabraných, na velkých jen ty zvýšené
+    const v = st.own?.[t] ? (st.val?.[t] || VAL_LAND) : 0;
+    const vEl = g.querySelector('.dob-val');
+    vEl.textContent = v && (SHOW_ALL_VALUES || v !== VAL_LAND) ? v : '';
+    vEl.classList.toggle('up', v > VAL_LAND && v < VAL_CASTLE);
   });
+  const byId = new Map(MAP.t.map(t => [t.id, t]));
+  const battleT = st.battle && (st.phase === 'q' || st.phase === 'reveal') ? st.battle.tid : null;
+  $('dobHl').innerHTML = [...opts].filter(id => byId.has(id)).map(id => `<path d="${byId.get(id).d}" class="sel"/>`).join('')
+    + (battleT && byId.has(battleT) ? `<path d="${byId.get(battleT).d}" class="battle"/>` : '');
+  updateTip();
   // skóre
   const sc = scores(st);
   $('scores').innerHTML = (st.order || []).filter(p => GAME.players[p]).sort((a, b) => sc[b] - sc[a]).map(p => {
