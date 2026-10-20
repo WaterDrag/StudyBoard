@@ -193,6 +193,10 @@ function openRace() {
       return renderRaceLobby();
     }
     if (!me) { hgShow('hgSetup'); toast('Závod už běží bez tebe.'); return; }
+    if (RACE.status === 'play') {
+      afkStart(rref(), ME.uid);
+      afkRender({ data: RACE, players: hgPeople(), startedAt: RACE.startAt });
+    } else afkStop();
     if (RACE.status === 'play' && !me.done) {
       if (!H) {   // start (nebo návrat po obnovení stránky)
         H = { words: RACE.words, i: me.i || 0, score: me.score || 0, solved: me.solved || 0, failed: [], multi: true };
@@ -233,14 +237,16 @@ function raceScores() {
     Object.entries(ps).forEach(([uid, p]) => { const t = p.at?.[k]; if (t && (!best || t < best.t)) best = { uid, t }; });
     if (best) firsts[best.uid] = (firsts[best.uid] || 0) + 1;
   });
-  return RACE.playerIds.filter(uid => ps[uid]).map(uid => ({ uid, ...ps[uid], firsts: firsts[uid] || 0, total: (ps[uid].score || 0) + (firsts[uid] || 0) * HG_FIRST }))
+  const out = afkKickedList(RACE, hgPeople(), RACE.startAt);
+  return RACE.playerIds.filter(uid => ps[uid]).map(uid => ({ uid, ...ps[uid], kicked: out.includes(uid) && !ps[uid].done, firsts: firsts[uid] || 0, total: (ps[uid].score || 0) + (firsts[uid] || 0) * HG_FIRST }))
     .sort((a, b) => b.total - a.total);
 }
+const hgPeople = () => (RACE.playerIds || []).filter(uid => RACE.players?.[uid]).map(uid => ({ uid, name: RACE.players[uid].name, done: !!RACE.players[uid].done }));
 function renderRivals() {
   const el = $('hgRivals');
   el.hidden = false;
   const n = RACE.words.length;
-  el.innerHTML = raceScores().map(r => `<span class="px-chip${r.uid === ME.uid ? ' turn' : ''}" style="--c:${r.color}">${esc(r.name)} <small>${r.done ? '🏁' : (r.i || 0) + '/' + n}</small> <b>${r.total}</b></span>`).join('');
+  el.innerHTML = raceScores().map(r => `<span class="px-chip${r.uid === ME.uid ? ' turn' : ''}" style="--c:${r.color}">${esc(r.name)} <small>${r.done ? '🏁' : r.kicked ? '🚪' : (r.i || 0) + '/' + n}</small> <b>${r.total}</b></span>`).join('');
 }
 
 function endRace() {
@@ -252,13 +258,13 @@ function endRace() {
 function renderRaceEnd() {
   hgShow('hgEnd');
   const rows = raceScores(), n = RACE.words.length;
-  const allDone = rows.every(r => r.done);
+  const allDone = rows.every(r => r.done || r.kicked);   // na vyhozené se nečeká
   if (allDone && RACE.status === 'play') rref().update({ status: 'end' }).catch(() => {});
   const me = rows.find(r => r.uid === ME.uid), win = allDone && rows[0]?.uid === ME.uid;
   $('hgEndIco').textContent = allDone ? (win ? '🏆' : '🏁') : '⏳';
   $('hgEndTitle').textContent = allDone ? (win ? 'Vyhrál(a) jsi závod!' : `Vítěz: ${rows[0]?.name}`) : 'Dohráno — čeká se na ostatní';
   $('hgResult').innerHTML = me ? `<b>${me.total} b</b><span>${me.solved || 0} z ${n} pojmů${me.firsts ? ` · 🥇 ${me.firsts}× první (+${me.firsts * HG_FIRST})` : ''}</span>` : '';
-  $('hgRank').innerHTML = rows.map((r, i) => `<div class="lb-row${r.uid === ME.uid ? ' me' : ''}${r.done ? '' : ' idle'}"><span class="lb-medal">${allDone ? (['🥇', '🥈', '🥉'][i] || i + 1 + '.') : (r.done ? '🏁' : '⏳')}</span><span class="lb-av" style="background:${r.color}">${esc((r.name || '?')[0].toUpperCase())}</span><span class="lb-name"><b>${esc(r.name)}</b><small>${r.done ? `${r.solved || 0}/${n} pojmů` : `hraje… slovo ${(r.i || 0) + 1}/${n}`}${r.firsts ? ` · 🥇 ${r.firsts}×` : ''}</small></span><span class="lb-points">${r.total}<small> b</small></span></div>`).join('');
+  $('hgRank').innerHTML = rows.map((r, i) => `<div class="lb-row${r.uid === ME.uid ? ' me' : ''}${r.done ? '' : ' idle'}"><span class="lb-medal">${allDone ? (['🥇', '🥈', '🥉'][i] || i + 1 + '.') : (r.done ? '🏁' : '⏳')}</span><span class="lb-av" style="background:${r.color}">${esc((r.name || '?')[0].toUpperCase())}</span><span class="lb-name"><b>${esc(r.name)}</b><small>${r.done ? `${r.solved || 0}/${n} pojmů` : r.kicked ? 'vyhozen(a) — odpadl(a)' : `hraje… slovo ${(r.i || 0) + 1}/${n}`}${r.firsts ? ` · 🥇 ${r.firsts}×` : ''}</small></span><span class="lb-points">${r.total}<small> b</small></span></div>`).join('');
   $('hgWait').textContent = allDone ? '' : 'Výsledky se doplní, až dohrají všichni.';
   if (allDone) {
     const key = 'hg_rec_' + GID;

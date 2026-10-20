@@ -82,6 +82,44 @@ function setupTabs(user) {
 // ── Hry ─────────────────────────────────────────────────────────
 // Dobyvatel: hry přátel (lobby nebo rozehraná, kde hraju). Zombie Survival:
 // otevřené čekárny. Načítá se až při otevření záložky.
+// Rozehrané hry přátel: opuštěné (3 h bez pohybu) se neukazují a vlastní se
+// samy smažou. ✕ u řádku: zakladatel hru smaže, ostatní ji jen skryjí u sebe.
+const GAME_STALE_MS = 3 * 3600e3;
+const hiddenGames = () => { try { return new Set(JSON.parse(localStorage.getItem('hidden_games') || '[]')); } catch (_) { return new Set(); } };
+function hideGame(key) {
+  try { localStorage.setItem('hidden_games', JSON.stringify([...hiddenGames(), key].slice(-200))); } catch (_) { /* nic */ }
+}
+const lastActive = g => Math.max(g.st?.deadline || 0, g.turnAt || 0, g.startAt || 0, g.createdAt?.toMillis?.() || 0);
+// Projde hry jedné kolekce: smaže vlastní opuštěné, vrátí ty, které ukázat.
+function liveGames(coll, docs, uid) {
+  const hidden = hiddenGames();
+  return docs.map(d => ({ id: d.id, ...d.data() })).filter(g => {
+    const stale = Date.now() - (lastActive(g) || Date.now()) > GAME_STALE_MS;
+    if (stale && g.hostUid === uid && g.status !== 'end') db.collection(coll).doc(g.id).delete().catch(() => {});
+    return !stale && !hidden.has(coll + '/' + g.id);
+  });
+}
+function lobbyRow(coll, g, uid, href, title, sub) {
+  const mine = (g.playerIds || []).includes(uid), host = g.hostUid === uid;
+  return `<div class="game-lobby"><a class="game-lobby-main" href="${href}"><span><b>${esc(title)}</b><small>${sub}</small></span><span class="btn btn-secondary btn-sm">${mine ? 'Vrátit se' : 'Připojit'}</span></a>
+    <button type="button" class="game-lobby-x" data-x="${coll}/${g.id}" data-host="${host ? 1 : ''}" title="${host ? 'Ukončit a smazat hru' : 'Skrýt ze seznamu'}" aria-label="${host ? 'Smazat hru' : 'Skrýt'}">✕</button></div>`;
+}
+function wireLobbyX(el) {
+  if (el._xWired) return;
+  el._xWired = true;
+  el.addEventListener('click', e => {
+    const b = e.target.closest('[data-x]');
+    if (!b) return;
+    e.preventDefault();
+    const [coll, id] = b.dataset.x.split('/');
+    const row = b.closest('.game-lobby');
+    if (b.dataset.host) {
+      confirmDialog('Ukončit a smazat tuhle hru? Zmizí i ostatním hráčům.', () =>
+        db.collection(coll).doc(id).delete().then(() => toast('Hra smazána.')).catch(er => toast('Nepodařilo se: ' + er.message)));
+    } else { hideGame(coll + '/' + id); row?.remove(); }
+  });
+}
+
 let _gamesLoaded = false;
 function loadGames(user) {
   if (_gamesLoaded) return;
@@ -91,33 +129,35 @@ function loadGames(user) {
   // Šibenice — závody přátel
   const hgl = document.getElementById('hgLobbies');
   db.collection('sibenice').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
-    const games = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    const games = liveGames('sibenice', snap.docs, user.uid)
       .filter(g => g.status === 'lobby' || (g.status === 'play' && (g.playerIds || []).includes(user.uid) && !g.players?.[user.uid]?.done))
-      .filter(g => Date.now() - (g.createdAt?.toMillis?.() || Date.now()) < 6 * 3600e3)
-      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)).slice(0, 5);
-    hgl.innerHTML = games.length ? games.map(g => `<a class="game-lobby" href="sibenice.html?g=${g.id}"><span><b>${esc(g.hostName || 'Závod')}</b><small>${(g.words || []).length} slov · ${(g.playerIds || []).length} hráčů · ${g.status === 'play' ? 'běží' : 'čeká'}</small></span><span class="btn btn-secondary btn-sm">${(g.playerIds || []).includes(user.uid) ? 'Vrátit se' : 'Připojit'}</span></a>`).join('')
+      .sort((a, b) => lastActive(b) - lastActive(a)).slice(0, 5);
+    wireLobbyX(hgl);
+    hgl.innerHTML = games.length ? games.map(g => lobbyRow('sibenice', g, user.uid, `sibenice.html?g=${g.id}`, g.hostName || 'Závod',
+      `${(g.words || []).length} slov · ${(g.playerIds || []).length} hráčů · ${g.status === 'play' ? 'běží' : 'čeká'}`)).join('')
       : '<div class="game-empty">Nikdo z přátel teď závod nezaložil.</div>';
   }, () => { hgl.innerHTML = '<div class="game-empty">Nepodařilo se načíst.</div>'; });
   // Pexeso s přáteli: čekárny a rozehrané hry, kam mě někdo pozval
   const pxl = document.getElementById('pxLobbies');
   db.collection('pexeso').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
-    const games = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    const games = liveGames('pexeso', snap.docs, user.uid)
       .filter(g => g.status === 'lobby' || (g.status === 'play' && (g.playerIds || []).includes(user.uid)))
-      .filter(g => Date.now() - (g.createdAt?.toMillis?.() || Date.now()) < 6 * 3600e3)
-      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)).slice(0, 5);
-    pxl.innerHTML = games.length ? games.map(g => `<a class="game-lobby" href="pexeso.html?g=${g.id}"><span><b>${esc(g.hostName || 'Hra')}</b><small>${g.pairs || ''} dvojic · ${(g.playerIds || []).length} hráčů · ${g.status === 'play' ? 'hraje se' : 'čeká'}</small></span><span class="btn btn-secondary btn-sm">${(g.playerIds || []).includes(user.uid) ? 'Vrátit se' : 'Připojit'}</span></a>`).join('')
+      .sort((a, b) => lastActive(b) - lastActive(a)).slice(0, 5);
+    wireLobbyX(pxl);
+    pxl.innerHTML = games.length ? games.map(g => lobbyRow('pexeso', g, user.uid, `pexeso.html?g=${g.id}`, g.hostName || 'Hra',
+      `${g.pairs || ''} dvojic · ${(g.playerIds || []).length} hráčů · ${g.status === 'play' ? 'hraje se' : 'čeká'}`)).join('')
       : '<div class="game-empty">Nikdo z přátel teď pexeso nezaložil.</div>';
   }, () => { pxl.innerHTML = '<div class="game-empty">Hry se nepodařilo načíst.</div>'; });
   const dob = document.getElementById('dobLobbies');
   db.collection('conquest').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
-    const games = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    const games = liveGames('conquest', snap.docs, user.uid)
       .filter(g => (g.status === 'lobby' && g.hostUid !== user.uid) || (g.status !== 'end' && (g.playerIds || []).includes(user.uid)))
-      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)).slice(0, 6);
+      .sort((a, b) => lastActive(b) - lastActive(a)).slice(0, 6);
     const maps = { cesko: 'Česko', nemecko: 'Německo', evropa: 'Evropa', usa: 'USA', svet: 'Svět' };
-    dob.innerHTML = games.length ? games.map(g => {
-      const mine = (g.playerIds || []).includes(user.uid);
-      return `<a class="game-lobby" href="dobyvatel.html?g=${g.id}"><span><b>${esc(g.hostName || 'Hra')}</b><small>${esc(maps[g.settings?.map] || '')} · ${Object.keys(g.players || {}).length} hráčů · ${g.status === 'play' ? 'hraje se' : 'čeká'}</small></span><span class="btn btn-secondary btn-sm">${mine ? 'Vrátit se' : 'Připojit'}</span></a>`;
-    }).join('') : '<div class="game-empty">Teď nikdo z přátel nemá otevřenou hru.</div>';
+    dob.innerHTML = games.length ? games.map(g => lobbyRow('conquest', g, user.uid, `dobyvatel.html?g=${g.id}`, g.hostName || 'Hra',
+      `${esc(maps[g.settings?.map] || '')} · ${Object.keys(g.players || {}).length} hráčů · ${g.status === 'play' ? 'hraje se' : 'čeká'}`)).join('')
+      : '<div class="game-empty">Teď nikdo z přátel nemá otevřenou hru.</div>';
+    wireLobbyX(dob);
     updateGamesBadge();
   }, () => { dob.innerHTML = '<div class="game-empty">Hry se nepodařilo načíst.</div>'; });
 
@@ -214,7 +254,7 @@ function setupGameFilters() {
 }
 
 function updateGamesBadge() {
-  const n = document.querySelectorAll('#dobLobbies a.game-lobby').length;
+  const n = document.querySelectorAll('#dobLobbies .game-lobby').length;
   const b = document.getElementById('gamesCountBadge');
   if (b) b.textContent = n || '';
 }

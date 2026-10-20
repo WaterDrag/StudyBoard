@@ -93,8 +93,11 @@ function openGame() {
       return renderLobby();
     }
     if (!d.playerIds.includes(ME.uid)) { show('pxSetup'); toast('Hra už běží bez tebe.'); return; }
-    if (d.status === 'end') return renderEnd();
+    if (d.status === 'end') { afkStop(); return renderEnd(); }
     show('pxGame');
+    afkStart(gref(), ME.uid);
+    afkRender({ data: d, players: pxPeople(), startedAt: d.startedAt });
+    pxKickedTurn();
     if (!MULTI_CLOCK) MULTI_CLOCK = setInterval(clockTick, 500);   // hlídá zaseknuté tahy
     renderGame();
     maybeResolve();
@@ -111,7 +114,7 @@ function renderLobby() {
   $('pxLobbyHint').textContent = host ? (P.playerIds.length < 2 ? 'Čeká se aspoň na jednoho dalšího hráče.' : 'Všichni tu? Spusť hru.') : 'Čeká se, až hostitel spustí hru.';
   $('pxGo').onclick = () => {
     const order = shuffle(P.playerIds);
-    gref().update({ status: 'play', order, turn: order[0], turnAt: Date.now(), open: [], matched: {}, moves: 0 }).catch(e => toast('Nepovedlo se: ' + e.message));
+    gref().update({ status: 'play', order, turn: order[0], turnAt: Date.now(), startedAt: Date.now(), open: [], matched: {}, moves: 0 }).catch(e => toast('Nepovedlo se: ' + e.message));
   };
   $('pxCopy').onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Odkaz zkopírován.'); } catch (_) { prompt('Zkopíruj odkaz:', location.href); } };
   $('pxLeave').onclick = async () => {
@@ -145,9 +148,9 @@ function renderGame() {
   $('pxTurn').classList.toggle('mine', !P.solo && myTurn);
   $('pxMoves').textContent = `${P.moves || 0} tahů`;
   $('pxScores').hidden = P.solo;
-  if (!P.solo) $('pxScores').innerHTML = (P.order || []).map(uid => { const p = P.players[uid] || {}; return `<span class="px-chip${uid === P.turn ? ' turn' : ''}" style="--c:${p.color}">${esc(p.name)} <b>${p.score || 0}</b></span>`; }).join('');
-  const idle = !P.solo && !myTurn && P.turnAt && Date.now() - P.turnAt > PX_IDLE_MS;
-  $('pxSkip').hidden = !idle;
+  const out = P.solo ? [] : pxKicked();
+  if (!P.solo) $('pxScores').innerHTML = (P.order || []).map(uid => { const p = P.players[uid] || {}; return `<span class="px-chip${uid === P.turn ? ' turn' : ''}${out.includes(uid) ? ' out' : ''}" style="--c:${p.color}">${esc(p.name)} <b>${p.score || 0}</b></span>`; }).join('');
+  $('pxSkip').hidden = true;   // nahradilo hlasování o vyhození (afk.js)
 }
 function clockTick() {
   if (!P) return;
@@ -199,15 +202,32 @@ function maybeResolve() {
   db.runTransaction(async tx => {
     const s = await tx.get(gref()), d = s.data();
     if (d.open.length !== 2) return;
-    const order = d.order, next = order[(order.indexOf(d.turn) + 1) % order.length];
-    tx.update(gref(), { open: [], turn: next, turnAt: Date.now() });
+    tx.update(gref(), { open: [], turn: pxNext(d, d.turn), turnAt: Date.now() });
   }).catch(() => {}).finally(() => { resolving = false; });
+}
+// Lidé ve hře / vyhození (hlasováním, afk.js) — vyhozený se v tazích přeskakuje.
+const pxPeople = () => (P.order || []).map(uid => ({ uid, name: P.players[uid]?.name || 'Hráč' }));
+const pxKicked = () => afkKickedList(P, pxPeople(), P.startedAt);
+function pxNext(d, from) {
+  const order = d.order, out = afkKickedList(d, order.map(uid => ({ uid })), d.startedAt);
+  for (let i = 1; i <= order.length; i++) { const u = order[(order.indexOf(from) + i) % order.length]; if (!out.includes(u)) return u; }
+  return from;
+}
+// Je na tahu vyhozený? Kdokoli tah předá dalšímu.
+let kickTurning = false;
+function pxKickedTurn() {
+  if (P.solo || P.status !== 'play' || kickTurning || !pxKicked().includes(P.turn)) return;
+  kickTurning = true;
+  db.runTransaction(async tx => {
+    const s = await tx.get(gref()), d = s.data();
+    if (!afkKickedList(d, d.order.map(uid => ({ uid })), d.startedAt).includes(d.turn)) return;
+    tx.update(gref(), { open: [], turn: pxNext(d, d.turn), turnAt: Date.now() });
+  }).catch(() => {}).finally(() => { kickTurning = false; });
 }
 $('pxSkip').onclick = () => db.runTransaction(async tx => {
   const s = await tx.get(gref()), d = s.data();
   if (Date.now() - d.turnAt < PX_IDLE_MS) return;
-  const next = d.order[(d.order.indexOf(d.turn) + 1) % d.order.length];
-  tx.update(gref(), { open: [], turn: next, turnAt: Date.now() });
+  tx.update(gref(), { open: [], turn: pxNext(d, d.turn), turnAt: Date.now() });
 }).catch(e => toast('Nepovedlo se: ' + e.message));
 
 // ── Konec ────────────────────────────────────────────────────────

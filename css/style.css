@@ -5689,3 +5689,19 @@ body.pres-open { overflow: hidden; }
 .dob-trk-marks i.done { background: #cbd5e1; opacity: .55; }
 .dob-trk-marks i.on { height: 18px; width: 7px; opacity: 1; box-shadow: 0 0 0 1.5px #fff; }
 .dob-trk-marks i.out { opacity: .2; }
+
+/* Řádek rozehrané hry: odkaz + ✕ (smazat / skrýt) */
+.game-lobby-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+.game-lobby-main > span:first-child { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.game-lobby:has(.game-lobby-main:hover) { border-color: var(--accent); }
+.game-lobby-x { flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; }
+.game-lobby-x:hover { color: var(--danger); border-color: var(--danger); }
+
+/* Hlasování o vyhození hráče, který odpadl (afk.js) */
+.afk-vote {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 3000; width: min(560px, calc(100vw - 24px));
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; border-radius: 14px; background: var(--bg-2); border: 1px solid #f59e0b; box-shadow: var(--shadow); font-size: 0.9rem;
+}
+.afk-btns { display: flex; gap: 6px; }
+.px-chip.out { opacity: 0.4; text-decoration: line-through; }

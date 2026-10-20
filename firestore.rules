@@ -312,7 +312,7 @@ service cloud.firestore {
           && request.resource.data.players.diff(resource.data.players).affectedKeys().hasOnly([request.auth.uid])) ||
         // tah ve hře
         (resource.data.status == 'play' && request.auth.uid in resource.data.playerIds
-          && pxOnly(['open', 'matched', 'players', 'turn', 'turnAt', 'status', 'moves']))
+          && pxOnly(['open', 'matched', 'players', 'turn', 'turnAt', 'status', 'moves', 'seen', 'kick']))
       );
     }
 
@@ -329,7 +329,7 @@ service cloud.firestore {
       allow update: if isAuth() && (
         resource.data.hostUid == request.auth.uid ||
         (resource.data.status == 'lobby' && sbOnly(['playerIds', 'players']) && sbMe()) ||
-        (resource.data.status == 'play' && request.auth.uid in resource.data.playerIds && sbOnly(['players', 'status']) && sbMe())
+        (resource.data.status == 'play' && request.auth.uid in resource.data.playerIds && sbOnly(['players', 'status', 'seen', 'kick']) && sbMe())
       );
     }
 
@@ -354,6 +354,13 @@ service cloud.firestore {
                resource.data.playerIds.toSet().difference(request.resource.data.playerIds.toSet())).hasOnly([request.auth.uid])) ||
         // odpověď na otázku / volba území během hry
         (request.auth.uid in resource.data.playerIds && only(['answers']) && mapOnlyMe('answers')) ||
+        // znamení „jsem tu“ a hlasování o vyhození toho, kdo odpadl (afk.js)
+        (request.auth.uid in resource.data.playerIds && only(['seen']) && mapOnlyMe('seen')) ||
+        (request.auth.uid in resource.data.playerIds && only(['kick'])) ||
+        // hostitel přes minutu nedal znamení → hru převezme hráč (a za hostitele hraje bot)
+        (resource.data.status == 'play' && request.auth.uid in resource.data.playerIds && only(['hostUid', 'players'])
+          && request.resource.data.hostUid == request.auth.uid
+          && request.time.toMillis() - resource.data.get('seen', {}).get(resource.data.hostUid, 0) > 60000) ||
         (request.auth.uid in resource.data.playerIds && only(['req']) && mapOnlyMe('req')) ||
         // seznam balíčků — s povolením od hostitele
         (resource.data.status == 'lobby' && resource.data.get('deckPerm', {}).get(request.auth.uid, false) == true && only(['decks']))

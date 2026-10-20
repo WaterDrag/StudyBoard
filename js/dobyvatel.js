@@ -214,6 +214,7 @@ function openGame(id) {
     if (GAME.status === 'lobby' && !iAmIn) { await tryJoin(); return; }
     try { await ensureRegion(); } catch (e) { toast(e.message); }
     if (GAME.status === 'lobby') renderLobby(); else renderGame();
+    dobAfk();
     if (isHost()) hostOnSnapshot();
   }, e => { toast('Hru se nepodařilo otevřít: ' + e.message); });
 }
@@ -403,7 +404,7 @@ async function hostStart() {
     own: {}, val: {}, castles: {}, towers: {}, out: {}, round: 0, rounds: GAME.settings.rounds || 4,
     log: ['🎯 První tipovačka rozhodne, kdo si vybírá hrad první.'], q: null, reveal: null, ctx: null,
   };
-  await ref().update({ status: 'play', st, answers: {}, req: {} });
+  await ref().update({ status: 'play', st, answers: {}, req: {}, startedAt: Date.now(), kick: {} });
 }
 
 async function hostLoadPool() {
@@ -458,6 +459,34 @@ async function hostAiGuesses() {
     while (a.length || b.length) { if (a.length) mixed.push(a.shift()); if (b.length) mixed.push(b.shift()); }
     H.guess = mixed;
   } catch (_) { /* bez AI — zůstanou vestavěné */ }
+}
+
+// Kdo odpadl (afk.js): hlasování ukáže všem; vyhozeného hráče převezme bot.
+// Odpadl-li hostitel (on hru řídí), převezme ji jeden z hlasujících.
+function dobAfk() {
+  const st = GAME.st;
+  if (GAME.status !== 'play' || !st || st.phase === 'end' || !(st.order || []).includes(ME.uid)) { afkStop(); return; }
+  afkStart(ref(), ME.uid);
+  const people = (st.order || []).filter(p => GAME.players[p]).map(p => ({ uid: p, name: GAME.players[p].name, bot: !!GAME.players[p].bot, done: !!st.out?.[p] }));
+  afkRender({ data: GAME, players: people, startedAt: GAME.startedAt });
+  const out = afkKickedList(GAME, people, GAME.startedAt);
+  if (!out.length) return;
+  if (isHost()) {
+    const upd = {};
+    out.forEach(p => { upd[`players.${p}.bot`] = true; upd[`players.${p}.level`] = 0.6; });
+    out.forEach(p => toast(`🤖 Za ${GAME.players[p].name} teď hraje bot.`));
+    ref().update(upd).catch(() => {});
+  } else if (out.includes(GAME.hostUid)) {
+    // převezme ten z aktivních hlasujících, kdo je v pořadí první (ať to nedělají všichni naráz)
+    const active = people.filter(p => !p.bot && p.uid !== GAME.hostUid && !out.includes(p.uid) && !afkInactive(GAME, p.uid, GAME.startedAt)).map(p => p.uid).sort();
+    if (active[0] !== ME.uid || dobAfk.taking) return;
+    dobAfk.taking = true;
+    const old = GAME.hostUid;
+    ref().update({ hostUid: ME.uid, [`players.${old}.bot`]: true, [`players.${old}.level`]: 0.6 })
+      .then(() => toast('👑 Hostitel odpadl — hru teď řídíš ty.'))
+      .catch(e => toast('Převzít hru se nepodařilo: ' + e.message))
+      .finally(() => { dobAfk.taking = false; });
+  }
 }
 
 function hostOnSnapshot() {
