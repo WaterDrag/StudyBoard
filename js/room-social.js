@@ -233,7 +233,7 @@ function agentInviteInstructions(item) {
       `Nadpis sloupce: POST /rooms/${encodeURIComponent(item.roomId)}/notes s {"kind":"heading","title":"MO1 · Programování","col":0} (sedne do řádku 0). Poznámky pak posílej se stejným "col".`,
       `PATCH /rooms/${encodeURIComponent(item.roomId)}/notes/{noteId} — upravit title a/nebo content, JSON tělo: {"content":"Nový obsah"}`,
       'Úpravy přijímají prostý text; mazání poznámek není povoleno.',
-      'OBRÁZKY: k POST i PATCH lze přidat "images":[{"url":"https://upload.wikimedia.org/…","caption":"Popisek · zdroj, licence"}] (max. 4, jen https z upload.wikimedia.org nebo i.ibb.co; zobrazí se nad textem; PATCH s images musí poslat i content).',
+      'OBRÁZKY: k POST i PATCH lze přidat "images":[{"url":"https://upload.wikimedia.org/…","caption":"Popisek · zdroj, licence"}] (max. 4, jen https z upload.wikimedia.org nebo i.ibb.co). Obrázek dej k tématu: samostatný řádek [[img1]], [[img2]] … v content ho vloží na to místo; obrázky bez značky jdou nad text. PATCH s images musí poslat i content.',
     ] : []),
     ...(hasComments ? [`POST /rooms/${encodeURIComponent(item.roomId)}/notes/{noteId}/comments — přidat komentář, JSON tělo: {"text":"..."}`] : []),
     `Pozvánka platí do: ${new Date(item.invite.expiresAt).toLocaleString('cs-CZ')}`,

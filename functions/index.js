@@ -214,18 +214,34 @@ function validateImages(body) {
   });
 }
 
-function imagesToSafeHtml(images) {
-  return images.map(({ url, caption }) => {
-    const alt = plainTextToSafeHtml(caption);
-    const img = `<img src="${plainTextToSafeHtml(url)}" alt="${alt}" ` +
-      'style="width:100%;max-width:100%;border-radius:6px;display:block;margin:4px 0 2px;">';
-    const cap = caption ? `<div style="font-size:12px;opacity:.7;margin:0 0 10px;">${alt}</div>` : '';
-    return img + cap;
-  }).join('');
+function imageToSafeHtml({ url, caption }) {
+  const alt = plainTextToSafeHtml(caption);
+  const img = `<img src="${plainTextToSafeHtml(url)}" alt="${alt}" ` +
+    'style="width:100%;max-width:360px;border-radius:6px;display:block;margin:0;">';
+  const cap = caption ? `<div style="font-size:12px;opacity:.7;margin-top:3px;">${alt}</div>` : '';
+  return `<div style="margin:8px 0 10px;">${img}${cap}</div>`;
 }
 
+// Řádek obsahující jen [[img1]], [[img2]] … vloží daný obrázek na to místo
+// v textu. Obrázky, na které text neodkazuje, se dají nad text.
+const IMAGE_MARKER = /^\s*\[\[img(\d+)\]\]\s*$/;
+
 function agentContentHtml(content, images) {
-  return (images ? imagesToSafeHtml(images) : '') + plainTextToSafeHtml(content);
+  const used = new Set();
+  const parts = content.replace(/\r\n?/g, '\n').split('\n').map(line => {
+    const m = IMAGE_MARKER.exec(line);
+    if (!m) return { text: plainTextToSafeHtml(line) };
+    const i = Number(m[1]) - 1;
+    if (!images || !images[i]) throw new ApiError(400, `Značka [[img${m[1]}]] odkazuje na obrázek, který v poli images není.`);
+    used.add(i);
+    return { block: imageToSafeHtml(images[i]) };
+  });
+  const top = (images || []).filter((_, i) => !used.has(i)).map(imageToSafeHtml).join('');
+  // <br> jen mezi dvěma řádky textu — obrázek je blok a zalomí si sám.
+  return top + parts.map((p, i) => {
+    if (p.block) return p.block;
+    return (i > 0 && parts[i - 1].text !== undefined ? '<br>' : '') + p.text;
+  }).join('');
 }
 
 async function requireRoomOwner(req, roomId) {
