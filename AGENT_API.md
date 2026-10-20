@@ -78,6 +78,15 @@ Content-Type: application/json
 {"content":"Upravené vysvětlení"}
 ```
 
+Obrázky: `POST` i `PATCH` přijímají volitelné pole `images` (1–4 položky `{"url":"…","caption":"…"}`). URL musí být `https` z `upload.wikimedia.org` nebo `i.ibb.co`, popisek nejvýše 300 znaků (hodí se do něj zdroj a licence). Obrázky se vloží nad text poznámky. Protože `PATCH` nahrazuje obsah celý, posílej `images` vždy spolu s `content`.
+
+```http
+PATCH /rooms/{roomId}/notes/{noteId}
+Content-Type: application/json
+
+{"content":"Text poznámky","images":[{"url":"https://upload.wikimedia.org/…/obrazek.png","caption":"Popisek · Wikimedia Commons, CC BY-SA 3.0"}]}
+```
+
 `title` může mít nejvýše 300 znaků a `content` 100 000 znaků. Při úpravě lze poslat `title`, `content` nebo obojí. `title: null` název smaže. Zatím lze přes API měnit obsah jen běžných textových poznámek; obsah návodů a tabulek ani poznámky mazat nelze.
 
 ### Přidat komentář

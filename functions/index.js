@@ -184,6 +184,50 @@ function plainTextToSafeHtml(text) {
   })[character]).replace(/\r\n?/g, '\n').replace(/\n/g, '<br>');
 }
 
+// Obrázky od agenta: jen odkazy na ověřené hostingy (Wikimedia Commons,
+// ImgBB, kam nahrává i aplikace). Do HTML jde jen námi sestavený <img>
+// s escapovanou adresou a popiskem — žádné cizí atributy ani markup.
+const IMAGE_HOSTS = new Set(['upload.wikimedia.org', 'i.ibb.co']);
+const MAX_IMAGES = 4;
+const MAX_CAPTION_LENGTH = 300;
+
+function validateImages(body) {
+  if (!Object.prototype.hasOwnProperty.call(body, 'images')) return undefined;
+  const images = body.images;
+  if (!Array.isArray(images) || !images.length || images.length > MAX_IMAGES) {
+    throw new ApiError(400, `images musí být pole s 1 až ${MAX_IMAGES} obrázky.`);
+  }
+  return images.map(image => {
+    if (!image || typeof image !== 'object' || Array.isArray(image)) throw new ApiError(400, 'Obrázek musí být objekt {url, caption}.');
+    const extra = Object.keys(image).filter(k => k !== 'url' && k !== 'caption');
+    if (extra.length) throw new ApiError(400, `Nepovolené pole u obrázku: ${extra.join(', ')}.`);
+    let url;
+    try { url = new URL(image.url); } catch (_) { throw new ApiError(400, 'Adresa obrázku není platná URL.'); }
+    if (url.protocol !== 'https:' || !IMAGE_HOSTS.has(url.hostname) || url.username || url.password) {
+      throw new ApiError(400, `Obrázky jen přes https z: ${[...IMAGE_HOSTS].join(', ')}.`);
+    }
+    const caption = image.caption === undefined ? '' : image.caption;
+    if (typeof caption !== 'string' || caption.length > MAX_CAPTION_LENGTH) {
+      throw new ApiError(400, `Popisek obrázku může mít nejvýše ${MAX_CAPTION_LENGTH} znaků.`);
+    }
+    return { url: url.href, caption: caption.trim() };
+  });
+}
+
+function imagesToSafeHtml(images) {
+  return images.map(({ url, caption }) => {
+    const alt = plainTextToSafeHtml(caption);
+    const img = `<img src="${plainTextToSafeHtml(url)}" alt="${alt}" ` +
+      'style="width:100%;max-width:100%;border-radius:6px;display:block;margin:4px 0 2px;">';
+    const cap = caption ? `<div style="font-size:12px;opacity:.7;margin:0 0 10px;">${alt}</div>` : '';
+    return img + cap;
+  }).join('');
+}
+
+function agentContentHtml(content, images) {
+  return (images ? imagesToSafeHtml(images) : '') + plainTextToSafeHtml(content);
+}
+
 async function requireRoomOwner(req, roomId) {
   const token = bearerToken(req);
   if (!token || token.startsWith(API_TOKEN_PREFIX)) {
@@ -345,12 +389,14 @@ async function getNote(req, res, roomId, noteId) {
 async function createAgentNote(req, res, roomId) {
   const invite = await requireAgent(req, roomId, 'notes:write');
   const body = req.body;
-  validateObjectBody(body, new Set(['title', 'content', 'x', 'y', 'color', 'col', 'row', 'kind']));
+  validateObjectBody(body, new Set(['title', 'content', 'images', 'x', 'y', 'color', 'col', 'row', 'kind']));
   const has = k => Object.prototype.hasOwnProperty.call(body, k);
   const heading = body.kind === 'heading';
   if (has('kind') && !heading) throw new ApiError(400, 'kind může být jen "heading" (nadpis sloupce).');
   const title = validateTitle(body, heading);
   const content = heading ? '' : validateContent(body, true);
+  const images = validateImages(body);
+  if (heading && images) throw new ApiError(400, 'Nadpis nemůže mít obrázky.');
   let x = 60;
   let y = 60;
   const isCell = v => Number.isInteger(v) && v >= 0;
@@ -386,7 +432,7 @@ async function createAgentNote(req, res, roomId) {
   const noteRef = db.collection('rooms').doc(roomId).collection('notes').doc();
   await noteRef.create({
     title: title || null,
-    content: heading ? '' : plainTextToSafeHtml(content),
+    content: heading ? '' : agentContentHtml(content, images),
     contentType: 'html',
     ...(heading ? { kind: 'heading', hsize: 30 } : {}),
     color,
@@ -403,9 +449,11 @@ async function createAgentNote(req, res, roomId) {
 async function updateAgentNote(req, res, roomId, noteId) {
   await requireAgent(req, roomId, 'notes:write');
   const body = req.body;
-  validateObjectBody(body, new Set(['title', 'content']));
+  validateObjectBody(body, new Set(['title', 'content', 'images']));
   const title = validateTitle(body);
   const content = validateContent(body);
+  const images = validateImages(body);
+  if (images && content === undefined) throw new ApiError(400, 'Obrázky pošli spolu s polem content (obsah se nahrazuje celý).');
   if (title === undefined && content === undefined) {
     throw new ApiError(400, 'Zadej alespoň jedno pole: title nebo content.');
   }
@@ -422,7 +470,7 @@ async function updateAgentNote(req, res, roomId, noteId) {
     if (title !== undefined) patch.title = title;
     if (content !== undefined) {
       if (note.kind === 'heading') throw new ApiError(400, 'U nadpisu může agent změnit jen pole title.');
-      patch.content = plainTextToSafeHtml(content);
+      patch.content = agentContentHtml(content, images);
       patch.contentType = 'html';
     }
     tx.update(noteRef, patch);
