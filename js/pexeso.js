@@ -135,7 +135,14 @@ function renderGame() {
     board.innerHTML = P.tiles.map((t, i) => `<button type="button" class="px-tile" data-i="${i}"><span class="px-back">?</span><span class="px-face"><small>${t.s === 'f' ? 'pojem' : 'odpověď'}</small>${esc(t.t)}</span></button>`).join('');
     board.querySelectorAll('.px-tile').forEach(b => b.addEventListener('click', () => flip(+b.dataset.i)));
   }
-  const open = new Set(P.open || []);
+
+  const nOpen = (P.open || []).length, nMatch = Object.keys(P.matched || {}).length;
+  if (PX_SND.init) {
+    if (nMatch > PX_SND.m) window.sfx?.('ok');
+    else if (nOpen > PX_SND.o) window.sfx?.('flip');
+    else if (nOpen < PX_SND.o && nMatch === PX_SND.m) window.sfx?.('bad');
+  }
+  Object.assign(PX_SND, { o: nOpen, m: nMatch, init: true });  const open = new Set(P.open || []);
   [...board.children].forEach((b, i) => {
     const by = (P.matched || {})[i];
     b.classList.toggle('up', open.has(i) || !!by);
@@ -231,7 +238,9 @@ $('pxSkip').onclick = () => db.runTransaction(async tx => {
 }).catch(e => toast('Nepovedlo se: ' + e.message));
 
 // ── Konec ────────────────────────────────────────────────────────
+const PX_SND = { o: 0, m: 0, init: false };
 function renderEnd() {
+  if (!renderEnd.played) { renderEnd.played = true; window.sfx?.(P.solo || (P.order || []).map(u => P.players[u]).sort((a, b) => (b?.score || 0) - (a?.score || 0))[0] === P.players[ME.uid] ? 'win' : 'lose'); }
   clearInterval(P.clock); clearInterval(MULTI_CLOCK); MULTI_CLOCK = null;
   show('pxEnd');
   const pairs = P.tiles.length / 2;

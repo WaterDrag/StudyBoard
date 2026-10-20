@@ -115,9 +115,11 @@ function finish(a, b) {
   if (!cells || cells.length < 2) return;
   const key = cells.join(','), rev = cells.slice().reverse().join(',');
   const k = W.words.findIndex(w => !w.found && (w.cells.join(',') === key || w.cells.join(',') === rev));
+  if (k < 0) window.sfx?.('bad');
   if (k < 0) { $('wsGrid').classList.remove('nope'); void $('wsGrid').offsetWidth; $('wsGrid').classList.add('nope'); return; }
   const w = W.words[k];
   w.found = true;
+  window.sfx?.('ok');
   w.cells.forEach(i => { const c = $('wsGrid').children[i]; c.classList.add('found'); c.style.setProperty('--c', WS_COLORS[k % WS_COLORS.length]); });
   const li = $('wsClues').querySelector(`[data-k="${k}"]`);
   li.classList.add('done');
@@ -139,6 +141,7 @@ $('wsHintBtn').onclick = () => {
 
 function endGame() {
   W.over = true;
+  window.sfx?.('win');
   clearInterval(W.timer);
   const sec = Math.floor((Date.now() - W.t0) / 1000);
   const score = Math.max(0, W.words.length * 100 + Math.max(0, 600 - sec) - W.hints * 40);

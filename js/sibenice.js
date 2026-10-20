@@ -113,6 +113,7 @@ function guess(k) {
   if (!c || c.done || c.guessed.has(k)) return;
   c.guessed.add(k);
   if (![...c.word].some(ch => base(ch) === k)) c.lives--;
+  window.sfx?.([...c.word].some(ch => base(ch) === k) ? 'pop' : 'bad');
   finishCheck();
 }
 function finishCheck() {
@@ -121,10 +122,12 @@ function finishCheck() {
     c.done = true;
     const gain = 10 + c.lives * 2;
     H.score += gain; H.solved++;
+    window.sfx?.('ok');
     toast(`✓ Správně! +${gain} b`);
   } else if (c.lives <= 0) {
     c.done = true;
     H.failed.push(c);
+    window.sfx?.('lose');
   }
   render();
   if (c.done && H.multi) {
@@ -160,6 +163,7 @@ document.addEventListener('keydown', e => {
 
 function endGame() {
   if (H.multi) return endRace();
+  window.sfx?.('win');
   let best = 0;
   try { best = +localStorage.getItem(HG_BEST) || 0; if (H.score > best) localStorage.setItem(HG_BEST, String(H.score)); } catch (_) { /* nic */ }
   recordPlayPoints(H.solved * 2);
@@ -271,6 +275,7 @@ function renderRaceEnd() {
     let fresh = true;
     try { fresh = !localStorage.getItem(key); localStorage.setItem(key, '1'); } catch (_) { /* nic */ }
     if (fresh && me) recordPlayPoints((me.solved || 0) * 2 + (win ? 10 : 0));
+    if (fresh) window.sfx?.(win ? 'win' : 'lose');
   }
   $('hgAgain').onclick = () => { UNSUB?.(); location.href = 'sibenice.html'; };
 }

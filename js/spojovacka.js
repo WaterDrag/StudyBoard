@@ -70,6 +70,7 @@ function pick(b) {
     prev?.classList.remove('sel');
     S.sel = prev === b ? null : b;
     S.sel?.classList.add('sel');
+    if (S.sel) window.sfx?.('click');
     return;
   }
   prev.classList.remove('sel');
@@ -80,16 +81,19 @@ function pick(b) {
     S.maxMult = Math.max(S.maxMult, S.mult);
     S.lastOk = now;
     S.score += 100 * S.mult;
+    window.sfx?.(S.mult > 1 ? 'combo' : 'ok', { n: S.mult });
     S.pairs++;
     [prev, b].forEach(x => { x.classList.add('ok'); x.disabled = true; });
     pop(b, `+${100 * S.mult}`);
     if (--S.left === 0) {
       S.endAt += SP_BONUS;
+      window.sfx?.('coin');
       pop($('spTime'), '+5 s');
       setTimeout(() => { if (!S.over) deal(); }, 450);
     }
   } else {
     S.mult = 1; S.lastOk = 0; S.wrong++;
+    window.sfx?.('bad');
     S.endAt -= SP_PENALTY;
     // „spletl jsem si“ se počítá oběma kartám, ať je vidíš v opakování
     [prev, b].forEach(x => {
@@ -126,6 +130,8 @@ function tick() {
   const bar = $('spBar');
   bar.style.width = Math.min(100, left / SP_TIME * 100) + '%';
   bar.classList.toggle('low', left < 10e3);
+  const sec = Math.ceil(left / 1000);
+  if (left && left < 5000 && sec !== S.lastTick) { S.lastTick = sec; window.sfx?.('tick'); }
   // násobič vyprchá, když dlouho nic nespojíš
   if (S.mult > 1 && Date.now() - S.lastOk > SP_COMBO_MS) { S.mult = 1; hud(); }
   if (!left) endGame(false);
@@ -134,6 +140,7 @@ function tick() {
 function endGame(allDone) {
   if (S.over) return;
   S.over = true;
+  window.sfx?.('win');
   clearInterval(S.timer);
   // Všechno spojeno před koncem: zbylý čas = bonus
   const leftS = allDone ? Math.ceil(Math.max(0, S.endAt - Date.now()) / 1000) : 0;

@@ -91,6 +91,8 @@ function showQ() {
     const left = Math.max(0, DAY_MS - (Date.now() - D.shownAt));
     bar.style.width = (left / DAY_MS * 100) + '%';
     bar.classList.toggle('low', left < 5000);
+    const sec = Math.ceil(left / 1000);
+    if (left && left < 5000 && sec !== D.lastTick) { D.lastTick = sec; window.sfx?.('tick'); }
     if (!left) answer(-1);
   }, 100);
 }
@@ -102,6 +104,7 @@ function answer(k) {
   const q = D.qs[D.i];
   const left = Math.max(0, DAY_MS - (Date.now() - D.shownAt));
   const ok = k === q.correct;
+  window.sfx?.(ok ? 'ok' : 'bad');
   const gain = ok ? 100 + Math.round(50 * left / DAY_MS) : 0;
   D.s += gain; if (ok) D.c++;
   const btns = [...$('dayAnswers').children];
@@ -122,6 +125,7 @@ document.addEventListener('keydown', e => {
 });
 
 async function finish() {
+  window.sfx?.('win');
   const st = { ...(DAILY[TODAY] || {}), n: D.i, c: D.c, s: D.s, done: true, of: D.qs.length };
   DAILY[TODAY] = st;
   // staré dny pryč, ať profil neroste donekonečna

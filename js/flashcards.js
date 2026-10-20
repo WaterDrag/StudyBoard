@@ -1189,6 +1189,7 @@ function checkTyped() {
       inp.replaceWith(span);
     });
     const all = good === inputs.length;
+    window.sfx?.(all ? 'ok' : 'bad');
     card._known = all;
     if (all) KNOWN++;
     recordAnswer(card.id, all, true);   // výklad nemá krabičku, jen statistika
@@ -1200,6 +1201,7 @@ function checkTyped() {
   }
   const val = document.getElementById('typeInput').value.trim();
   const ok = answerMatches(val, card);
+  window.sfx?.(ok ? 'ok' : 'flip');
   IS_FLIPPED = true;
   document.getElementById('flashcardInner').classList.add('flipped');
   verdict.style.display = 'block';
@@ -1241,6 +1243,7 @@ function setupStudyControls() {
   document.getElementById('flashcardWrap').onclick = () => {
     if (IS_FLIPPED || STUDY_MODE !== 'flip' || isInfo(STUDY_QUEUE[STUDY_IDX])) return;
     IS_FLIPPED = true;
+    window.sfx?.('flip');
     document.getElementById('flashcardInner').classList.add('flipped');
     document.getElementById('studyBtns').style.display = 'flex';
     document.getElementById('studyHint').style.display  = 'none';
@@ -1300,6 +1303,7 @@ document.addEventListener('keydown', e => {
 // Chytré procvičování a „K opakování dnes“ vědí i o tom, co se učíš tady.
 function gradeCard(known) {
   const card = STUDY_QUEUE[STUDY_IDX];
+  window.sfx?.(known === true ? 'ok' : known === false ? 'bad' : 'click');
   if (known === true) {
     card._known = true;
     KNOWN++;
@@ -1312,6 +1316,7 @@ function gradeCard(known) {
 
 function showResults() {
   showView('results');
+  window.sfx?.('win');
   const read  = STUDY_MODE === 'flip' ? STUDY_QUEUE.filter(isInfo).length : 0;
   const total = STUDY_QUEUE.length - read;            // výklad se nehodnotí
   const pct   = total > 0 ? Math.round(KNOWN / total * 100) : 0;

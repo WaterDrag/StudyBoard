@@ -998,6 +998,7 @@ function onTerritoryClick(t) {
   document.querySelector(`[data-t="${t}"]`)?.classList.add('picked');
 }
 
+const DOB_SND = { n: 0, tw: 0, init: false };
 function renderGame() {
   show('screenGame');
   const st = GAME.st;
@@ -1017,7 +1018,15 @@ function renderGame() {
   document.querySelectorAll('#mapSvg .dob-small').forEach(el => {
     const p = st.own?.[el.dataset.t]; el.style.fill = p ? GAME.players[p]?.color : ''; el.classList.toggle('sel', opts.has(el.dataset.t));
   });
-  const castleOf = {}; Object.entries(st.castles || {}).forEach(([p, t]) => { castleOf[t] = p; });
+
+  // zvuk: přibylo / ubylo mi území, padla věž
+  const myN = Object.values(st.own || {}).filter(p => p === ME.uid).length, towersN = Object.values(st.towers || {}).reduce((a, b) => a + b, 0);
+  if (DOB_SND.init) {
+    if (towersN < DOB_SND.tw) window.sfx?.('tower');
+    else if (myN > DOB_SND.n) window.sfx?.('place');
+    else if (myN < DOB_SND.n) window.sfx?.('bad');
+  }
+  Object.assign(DOB_SND, { n: myN, tw: towersN, init: true });  const castleOf = {}; Object.entries(st.castles || {}).forEach(([p, t]) => { castleOf[t] = p; });
   document.querySelectorAll('#mapSvg .dob-mark').forEach(g => {
     const t = g.dataset.m, p = castleOf[t];
     g.querySelector('.dob-castle').textContent = p ? '🏰' + '●'.repeat(st.towers[p] || 0) : '';
@@ -1102,6 +1111,7 @@ function renderQuestion(st) {
   const box = $('qBox');
   if (st.phase === 'end') {
     recordGameResult(st);
+    if (!DOB_SND.ended) { DOB_SND.ended = true; const sc0 = scores(st); const top = Object.keys(sc0).sort((a, b) => sc0[b] - sc0[a])[0]; window.sfx?.(top === ME.uid ? 'win' : 'lose'); }
     const sc = scores(st);
     const order = (st.order || []).filter(p => GAME.players[p]).sort((a, b) => sc[b] - sc[a]);
     box.innerHTML = `<div class="dob-end"><div class="dob-trophy">🏆</div><h3>${esc(pname(order[0]))} vyhrává!</h3>
@@ -1125,6 +1135,11 @@ function renderQuestion(st) {
   const key = st.step + '|' + st.phase + '|' + (answered ? 1 : 0);
   if (key === LAST_Q_RENDER && st.phase === 'q') { renderAnsweredDots(st); return; }
   LAST_Q_RENDER = key;
+  if (st.phase === 'q') window.sfx?.(answered ? 'click' : 'start');
+  else if (st.phase === 'reveal' && part) {
+    const mine = st.reveal?.res?.[ME.uid];
+    window.sfx?.(q.kind === 'guess' ? (st.reveal.rank?.[0] === ME.uid ? 'coin' : 'tick') : (mine?.ok ? 'ok' : 'bad'));
+  }
   const who = q.parts.map(p => `<span class="dob-chip" style="--c:${GAME.players[p]?.color}" data-chip="${p}">${esc(pname(p))}</span>`).join('');
   let body = '';
   if (st.phase === 'q') {

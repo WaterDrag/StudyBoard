@@ -100,8 +100,10 @@ function answer(k) {
   const q = G.qs[G.i];
   const btns = [...$('milAnswers').children];
   btns[k].classList.add('picked');
+  window.sfx?.('click');
   setTimeout(() => {
     btns[q.correct].classList.add('right');
+    window.sfx?.(k === q.correct ? 'coin' : 'bad');
     if (k !== q.correct) btns[k].classList.add('wrong');
     setTimeout(() => {
       if (k !== q.correct) return endGame('wrong', guaranteed(G.i), q);
@@ -118,6 +120,7 @@ const knowP = () => Math.max(0.35, 0.92 - G.i * 0.04);
 function use5050() {
   if (G.used.f || G.locked) return;
   G.used.f = true;
+  window.sfx?.('hint');
   const q = G.qs[G.i];
   const wrong = shuffle(q.opts.map((_, k) => k).filter(k => k !== q.correct && !G.removed.has(k))).slice(0, 2);
   wrong.forEach(k => { G.removed.add(k); const b = $('milAnswers').children[k]; b.classList.add('gone'); b.disabled = true; });
@@ -126,6 +129,7 @@ function use5050() {
 function useAudience() {
   if (G.used.a || G.locked) return;
   G.used.a = true;
+  window.sfx?.('hint');
   const q = G.qs[G.i];
   const live = q.opts.map((_, k) => k).filter(k => !G.removed.has(k));
   const w = {};
@@ -140,6 +144,7 @@ function useAudience() {
 function usePhone() {
   if (G.used.p || G.locked) return;
   G.used.p = true;
+  window.sfx?.('hint');
   const q = G.qs[G.i];
   const live = q.opts.map((_, k) => k).filter(k => !G.removed.has(k));
   const right = Math.random() < knowP();
@@ -153,6 +158,7 @@ function usePhone() {
 // ── Konec hry ──────────────────────────────────────────────────
 function endGame(how, won, q) {
   $('milGame').hidden = true; $('milEnd').hidden = false;
+  window.sfx?.(how === 'wrong' ? 'lose' : 'win');
   const reached = how === 'win' ? G.qs.length : G.i;
   let best = 0;
   try { best = +localStorage.getItem(BEST_KEY) || 0; if (won > best) localStorage.setItem(BEST_KEY, String(won)); } catch (_) { /* nic */ }

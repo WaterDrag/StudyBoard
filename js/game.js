@@ -1706,6 +1706,7 @@ function killZombie(zid,z,attacker){
 /* ── Wave management ─────────────────────────────────────── */
 function startWave(){
   gs.wave++;
+  window.sfx?.('start');
   gs.phase='wave';
   gs.spawnedCount=0;
   const baseCount=6+Math.round(gs.wave*2.6);
@@ -3936,6 +3937,7 @@ function recordPlayPoints(n) {
 }
 function gameOver(win){
   if(!running&&gs._recorded)return;
+  window.sfx?.(win ? 'win' : 'lose');
   running=false;
   // 5 bodů za každou přežitou vlnu (prohraná vlna se nepočítá)
   if(!gs._recorded){gs._recorded=true;recordPlayPoints(5*Math.max(0,win?gs.wave:gs.wave-1));}

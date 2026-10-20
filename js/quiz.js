@@ -278,6 +278,7 @@ function submitMulti(card) {
 function finishAnswer(ok, card) {
   const cardEl = document.getElementById('quizCard');
   cardEl.classList.add(ok ? 'quiz-card-correct' : 'quiz-card-wrong');
+  window.sfx?.(ok ? 'ok' : 'bad');
   if (ok) {
     SCORE++;
     STREAK++;
@@ -321,6 +322,7 @@ function pick(btn, correct, card) {
 function showResults() {
   document.getElementById('quizQuestion').style.display = 'none';
   document.getElementById('quizResults').style.display  = 'block';
+  window.sfx?.('win');
 
   const total = QUIZ_QUEUE.length;
   const pct   = Math.round((SCORE / total) * 100);

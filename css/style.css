@@ -5705,3 +5705,16 @@ body.pres-open { overflow: hidden; }
 }
 .afk-btns { display: flex; gap: 6px; }
 .px-chip.out { opacity: 0.4; text-decoration: line-through; }
+
+/* ═══ Zvuk: tlačítko a nastavení (sound.js) ═══ */
+.snd-btn.off { opacity: 0.55; }
+.snd-float { position: fixed; top: 10px; right: 10px; z-index: 2500; background: var(--bg-2); border: 1px solid var(--border-strong); }
+.snd-pop {
+  position: fixed; z-index: 2600; width: 240px; padding: 14px; border-radius: 14px;
+  background: var(--bg-2); border: 1px solid var(--border-strong); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 8px; font-size: 0.88rem; color: var(--text);
+}
+.snd-pop.sheet { left: 12px !important; right: 12px; bottom: 12px; top: auto !important; width: auto; }
+.snd-row { display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 4px; }
+.snd-row input, .snd-pop input[type="range"] { accent-color: var(--accent); }
+.snd-pop input[type="range"] { width: 100%; }

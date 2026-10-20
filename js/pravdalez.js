@@ -69,11 +69,13 @@ function answer(saysTrue) {
     T.bestStreak = Math.max(T.bestStreak, T.streak);
     T.mult = Math.min(4, 1 + Math.floor(T.streak / 3));
     T.score += 100 * T.mult;
+    window.sfx?.(T.mult > 1 ? 'combo' : 'ok', { n: T.mult });
     el.classList.add(saysTrue ? 'fly-r' : 'fly-l');
     setTimeout(() => { if (!T.over) nextStatement(); }, 230);
   } else {
     T.streak = 0; T.mult = 1;
     T.misses.push(c);
+    window.sfx?.('bad');
     // Chyba: ukázat, jak to je, a na tu chvíli zastavit čas.
     T.busy = true;
     const pausedAt = T.pausedAt = Date.now();
@@ -101,6 +103,8 @@ function tick() {
   const bar = $('tfBar');
   bar.style.width = (left / TF_TIME * 100) + '%';
   bar.classList.toggle('low', left < 10e3);
+  const sec = Math.ceil(left / 1000);
+  if (!T.busy && left && left < 5000 && sec !== T.lastTick) { T.lastTick = sec; window.sfx?.('tick'); }
   if (!left && !T.busy) endGame();
 }
 
@@ -136,6 +140,7 @@ document.addEventListener('keydown', e => {
 function endGame() {
   if (T.over) return;
   T.over = true;
+  window.sfx?.('win');
   clearInterval(T.timer);
   let best = 0;
   try { best = +localStorage.getItem(TF_BEST) || 0; if (T.score > best) localStorage.setItem(TF_BEST, String(T.score)); } catch (_) { /* nic */ }

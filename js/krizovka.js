@@ -191,6 +191,7 @@ function wire() {
       const ch = [...inp.value].reverse().find(isLetterCh);
       if (!ch) { setVal(key, ''); return; }
       setVal(key, baseCh(ch));
+      window.sfx?.('tick');
       step(1);
       checkDone();
     });
@@ -226,6 +227,7 @@ $('cwReveal').onclick = () => {
   const c = C.cell.get(C.cur);
   if (c.val === c.ch) return step(1);
   C.hints++;
+  window.sfx?.('hint');
   setVal(C.cur, c.ch);
   inputAt(C.cur).parentElement.classList.add('revealed');
   step(1);
@@ -234,6 +236,7 @@ $('cwReveal').onclick = () => {
 $('cwCheck').onclick = () => {
   if (!C || C.over) return;
   C.checks++;
+  window.sfx?.('click');
   let wrong = 0, empty = 0;
   for (const [key, c] of C.cell) {
     const el = inputAt(key).parentElement;
@@ -251,6 +254,7 @@ function checkDone() {
 function endGame() {
   if (C.over) return;
   C.over = true;
+  window.sfx?.('win');
   clearInterval(C.timer);
   const sec = Math.floor((Date.now() - C.t0) / 1000);
   const score = Math.max(0, C.words.length * 60 + Math.max(0, 900 - sec) - C.hints * 25);
