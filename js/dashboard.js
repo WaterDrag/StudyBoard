@@ -1599,6 +1599,7 @@ function setupSettings(user) {
 
   // Předvyplň aktuálně uloženými klíči
   btn.addEventListener('click', () => {
+    renderAccountMethods();
     gInput.value = localStorage.getItem('sb_gemini_key') || '';
     qInput.value = localStorage.getItem('sb_groq_key') || '';
     updateStatus(gStatus, gInput.value);
@@ -1626,6 +1627,86 @@ function setupSettings(user) {
     } catch(e) { toast('Chyba: ' + e.message); }
     saveBtn.disabled = false;
   });
+}
+
+// ── Účet: víc způsobů přihlášení k jednomu účtu ─────────────────
+// Firebase umí k jednomu účtu připojit Google i e-mail + heslo (linkWith…).
+// Host (anonymní) si tím udělá trvalý účet a nepřijde o to, co vytvořil.
+const ACCT_ERR = {
+  'auth/credential-already-in-use': 'Tenhle Google účet už patří k jinému účtu StudyBoardu.',
+  'auth/email-already-in-use': 'Tenhle e-mail už má jiný účet StudyBoardu.',
+  'auth/provider-already-linked': 'Tenhle způsob přihlášení už máš připojený.',
+  'auth/weak-password': 'Heslo musí mít aspoň 6 znaků.',
+  'auth/invalid-email': 'Neplatná e-mailová adresa.',
+  'auth/popup-closed-by-user': 'Okno s Googlem bylo zavřeno.',
+  'auth/no-such-provider': 'Tenhle způsob přihlášení už připojený není.',
+};
+const acctMsg = e => ACCT_ERR[e.code] || e.message;
+// Citlivé změny chtějí čerstvé přihlášení — s Googlem to jde rovnou oknem.
+async function acctFresh(fn) {
+  try { return await fn(); }
+  catch (e) {
+    if (e.code !== 'auth/requires-recent-login') throw e;
+    const u = auth.currentUser;
+    if (u.providerData.some(p => p.providerId === 'google.com')) {
+      await u.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider());
+      return fn();
+    }
+    throw new Error('Z bezpečnostních důvodů se nejdřív odhlas a znovu přihlas, pak to zopakuj.');
+  }
+}
+function renderAccountMethods() {
+  const el = document.getElementById('acctMethods');
+  const u = auth.currentUser;
+  if (!el || !u) return;
+  const has = id => u.providerData.some(p => p.providerId === id);
+  const google = u.providerData.find(p => p.providerId === 'google.com');
+  const guest = u.isAnonymous;
+  const n = u.providerData.length;
+  const row = (ico, title, sub, action) => `<div class="acct-row"><span class="acct-ico">${ico}</span><span class="acct-txt"><b>${title}</b><small>${sub}</small></span>${action || ''}</div>`;
+  let html = guest ? '<p class="acct-note">Jsi přihlášený jako <b>host</b>. Připoj Google nebo e-mail s heslem a z hosta se stane trvalý účet — všechno, co máš, zůstane.</p>' : '';
+  html += has('google.com')
+    ? row('🟢', 'Google', esc(google.email || ''), n > 1 ? '<button type="button" class="btn btn-ghost btn-sm" data-acct="unlink-google">Odebrat</button>' : '')
+    : row('⚪', 'Google', 'nepřipojeno', '<button type="button" class="btn btn-secondary btn-sm" data-acct="link-google">Připojit Google</button>');
+  html += has('password')
+    ? row('🟢', 'E-mail a heslo', esc(u.email || ''), '<button type="button" class="btn btn-ghost btn-sm" data-acct="reset">Změnit heslo</button>' + (n > 1 ? '<button type="button" class="btn btn-ghost btn-sm" data-acct="unlink-password">Odebrat</button>' : ''))
+    : row('⚪', 'E-mail a heslo', 'nepřipojeno', '<button type="button" class="btn btn-secondary btn-sm" data-acct="show-pw">Přidat heslo</button>');
+  html += `<form class="acct-pw" id="acctPwForm" hidden>
+      <input type="email" class="input" id="acctEmail" placeholder="E-mail" autocomplete="username" ${u.email ? `value="${esc(u.email)}" readonly` : ''}>
+      <input type="password" class="input" id="acctPw" placeholder="Nové heslo (aspoň 6 znaků)" autocomplete="new-password" minlength="6">
+      <input type="password" class="input" id="acctPw2" placeholder="Heslo znovu" autocomplete="new-password" minlength="6">
+      <button type="submit" class="btn btn-primary btn-sm">Uložit heslo</button>
+    </form>
+    <p class="acct-note">Je to pořád jeden účet — místnosti, kartičky i přátelé jsou stejné, ať se přihlásíš kterýmkoli způsobem.</p>`;
+  el.innerHTML = html;
+  const done = msg => { toast(msg); auth.currentUser.reload().then(renderAccountMethods); };
+  el.onclick = async e => {
+    const a = e.target.closest('[data-acct]')?.dataset.acct;
+    if (!a) return;
+    const user = auth.currentUser;
+    try {
+      if (a === 'show-pw') { const f = document.getElementById('acctPwForm'); f.hidden = false; (user.email ? f.querySelector('#acctPw') : f.querySelector('#acctEmail')).focus(); }
+      if (a === 'link-google') { await user.linkWithPopup(new firebase.auth.GoogleAuthProvider()); done('Google připojen ✓ — teď se můžeš přihlásit i přes Google.'); }
+      if (a === 'unlink-google' || a === 'unlink-password') {
+        const id = a === 'unlink-google' ? 'google.com' : 'password';
+        confirmDialog(id === 'google.com' ? 'Odebrat přihlášení přes Google?' : 'Odebrat přihlášení e-mailem a heslem?', async () => {
+          try { await acctFresh(() => auth.currentUser.unlink(id)); done('Odebráno.'); } catch (er) { toast(acctMsg(er)); }
+        });
+      }
+      if (a === 'reset') { await auth.sendPasswordResetEmail(user.email); toast(`Poslal jsem e-mail na ${user.email} s odkazem pro změnu hesla.`); }
+    } catch (er) { toast(acctMsg(er)); }
+  };
+  document.getElementById('acctPwForm').onsubmit = async e => {
+    e.preventDefault();
+    const email = document.getElementById('acctEmail').value.trim(), pw = document.getElementById('acctPw').value, pw2 = document.getElementById('acctPw2').value;
+    if (pw !== pw2) { toast('Hesla se neshodují.'); return; }
+    if (pw.length < 6) { toast('Heslo musí mít aspoň 6 znaků.'); return; }
+    try {
+      const cred = firebase.auth.EmailAuthProvider.credential(email, pw);
+      await acctFresh(() => auth.currentUser.linkWithCredential(cred));
+      done(`Heslo přidáno ✓ — teď se můžeš přihlásit i e-mailem ${email} a heslem.`);
+    } catch (er) { toast(acctMsg(er)); }
+  };
 }
 
 function setupModalClose() {

@@ -5718,3 +5718,13 @@ body.pres-open { overflow: hidden; }
 .snd-row { display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 4px; }
 .snd-row input, .snd-pop input[type="range"] { accent-color: var(--accent); }
 .snd-pop input[type="range"] { width: 100%; }
+
+/* Nastavení: účet a způsoby přihlášení */
+.acct-methods { display: flex; flex-direction: column; gap: 8px; }
+.acct-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 12px; border-radius: 10px; background: var(--bg-3); border: 1px solid var(--border); }
+.acct-ico { font-size: 0.8rem; }
+.acct-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.acct-txt b { font-size: 0.88rem; }
+.acct-txt small { font-size: 0.75rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-pw:not([hidden]) { display: flex; flex-direction: column; gap: 6px; }
+.acct-note { font-size: 0.75rem; color: var(--text-muted); line-height: 1.45; }

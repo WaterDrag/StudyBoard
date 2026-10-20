@@ -78,7 +78,7 @@ authForm.addEventListener('submit', async e => {
     const msgs = {
       'auth/user-not-found':     'Účet s tímto emailem neexistuje.',
       'auth/wrong-password':     'Špatné heslo.',
-      'auth/invalid-credential': 'Špatný email nebo heslo.',
+      'auth/invalid-credential': 'Špatný email nebo heslo. Pokud ses registroval(a) přes Google, přihlas se tlačítkem Google — heslo si pak můžeš přidat v Nastavení.',
       'auth/email-already-in-use': 'Tento email je již registrovaný.',
       'auth/invalid-email':      'Neplatná emailová adresa.',
       'auth/weak-password':      'Heslo musí mít alespoň 6 znaků.',
