@@ -64,6 +64,9 @@ canvas{display:block;cursor:crosshair;}
 .kit-card.selected{border-color:var(--kc,#6366f1);background:var(--bg3);}
 .kit-card.selected::after{opacity:1;}
 .kit-emoji{font-size:2rem;margin-bottom:6px;line-height:1;}
+.zi{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;line-height:1;}
+.zi svg{display:block;}
+.zi:empty{display:none;}
 .kit-name{font-weight:700;font-size:.86rem;letter-spacing:.01em;}
 .kit-desc{font-size:.63rem;color:var(--muted);margin-top:4px;line-height:1.35;}
 
@@ -227,7 +230,7 @@ canvas{display:block;cursor:crosshair;}
 
 /* ── Info bar ─────────────────────────── */
 #placInfo{
-  position:fixed;bottom:84px;left:50%;transform:translateX(-50%);
+  position:fixed;bottom:182px;left:50%;transform:translateX(-50%);
   background:rgba(4,4,18,.9);border:1px solid var(--brd2);border-radius:8px;
   padding:5px 16px;font-size:.76rem;pointer-events:none;z-index:20;display:none;
 }
@@ -243,16 +246,22 @@ canvas{display:block;cursor:crosshair;}
 
 /* ── Passive hint ─────────────────────── */
 #passiveHint{
-  position:fixed;bottom:148px;left:50%;transform:translateX(-50%);
-  font-size:.64rem;color:var(--muted);pointer-events:none;z-index:20;white-space:nowrap;
+  position:fixed;bottom:150px;left:50%;transform:translateX(-50%);
+  font-size:.72rem;color:#e2e8f0;pointer-events:none;z-index:20;white-space:nowrap;
+  background:rgba(4,4,18,.82);border:1px solid var(--brd2);border-radius:999px;padding:3px 12px;
+  max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis;
 }
+#passiveHint:empty{display:none;}
 
 /* ── Hotkeys hint ─────────────────────── */
 #hotkeysHint{
-  position:fixed;bottom:84px;right:14px;
-  color:var(--muted2);font-size:.65rem;pointer-events:none;z-index:20;
-  text-align:right;line-height:1.7;
+  position:fixed;bottom:164px;right:14px;max-width:260px;
+  color:#cbd5e1;font-size:.68rem;pointer-events:none;z-index:20;
+  text-align:right;line-height:1.6;
+  background:rgba(4,4,18,.82);border:1px solid var(--brd2);border-radius:10px;padding:5px 10px;
 }
+#hotkeysHint b{color:#f8fafc;font-weight:700;}
+@media (pointer:coarse),(max-width:760px){#hotkeysHint{display:none;}}
 
 /* ── Toasts ───────────────────────────── */
 #gToasts{position:fixed;top:58px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:5px;z-index:100;pointer-events:none;align-items:center;}
@@ -398,27 +407,27 @@ canvas{display:block;cursor:crosshair;}
       <!-- Left: Player stats -->
       <div id="hudLeft">
         <div class="hud-bar-wrap">
-          <span class="hud-lbl">❤️ HP</span>
+          <span class="hud-lbl"><span class="zi" data-zsi="hp" data-emo="❤️" data-sz="14">❤️</span> HP</span>
           <div class="hud-bar"><div class="hud-bar-fill" id="playerHpFill" style="width:100%"></div></div>
           <span class="hud-v" id="playerHpVal">80/80</span>
         </div>
         <div class="hud-bar-wrap">
-          <span class="hud-lbl">⭐ XP</span>
+          <span class="hud-lbl"><span class="zi" data-zsi="xp" data-emo="⭐" data-sz="14">⭐</span> XP</span>
           <div class="hud-bar"><div class="hud-bar-fill" id="xpFill" style="width:0%"></div></div>
           <span class="hud-v" id="xpVal">0/100</span>
         </div>
         <div class="hud-bar-wrap">
-          <span class="hud-lbl">🍖 Hlad</span>
+          <span class="hud-lbl"><span class="zi" data-zsi="hunger" data-emo="🍖" data-sz="14">🍖</span> Hlad</span>
           <div class="hud-bar"><div class="hud-bar-fill" id="hungerFill" style="width:100%;background:#f59e0b;"></div></div>
           <span class="hud-v" id="hungerVal">100</span>
         </div>
         <div class="hud-bar-wrap">
-          <span class="hud-lbl">💧 Voda</span>
+          <span class="hud-lbl"><span class="zi" data-zsi="thirst" data-emo="💧" data-sz="14">💧</span> Voda</span>
           <div class="hud-bar"><div class="hud-bar-fill" id="thirstFill" style="width:100%;background:#06b6d4;"></div></div>
           <span class="hud-v" id="thirstVal">100</span>
         </div>
         <div id="hudStrip">
-          <span id="lvlBox">Lv.<span id="levelVal">1</span></span>
+          <span id="lvlBox"><span class="zi" data-zsi="level" data-emo="" data-sz="14"></span>Lv.<span id="levelVal">1</span></span>
           <span id="kitLbl"></span>
           <span id="spWrap">SP:<span id="spVal">0</span></span>
         </div>
@@ -426,17 +435,17 @@ canvas{display:block;cursor:crosshair;}
 
       <!-- Center: Wave pill -->
       <div id="hudCenter">
-        <div id="waveBox">Vlna <span id="waveNum">0</span> · <span id="phaseLabel" style="color:#fbbf24;">Příprava</span></div>
+        <div id="waveBox"><span class="zi" data-zsi="wave" data-emo="" data-sz="18"></span> Vlna <span id="waveNum">0</span> · <span id="phaseLabel" style="color:#fbbf24;">Příprava</span></div>
       </div>
 
       <!-- Right: Base + Coins -->
       <div id="hudRight">
         <div class="hud-bar-wrap">
-          <span class="hud-lbl">🏠 Base</span>
+          <span class="hud-lbl"><span class="zi" data-zsi="base" data-emo="🏠" data-sz="14">🏠</span> Base</span>
           <div class="hud-bar"><div class="hud-bar-fill" id="baseHpFill" style="width:100%"></div></div>
           <span class="hud-v" id="baseHpVal">500/500</span>
         </div>
-        <div id="coinsBox">💰 <span id="coinsVal">0</span></div>
+        <div id="coinsBox"><span class="zi" data-zsi="coins" data-emo="💰" data-sz="18">💰</span> <span id="coinsVal">0</span></div>
       </div>
 
     </div>
@@ -449,14 +458,14 @@ canvas{display:block;cursor:crosshair;}
   <div id="passiveHint"></div>
   <div id="placInfo"></div>
   <div id="gToasts"></div>
-  <div id="hotkeysHint">B = Obchod · T = Dovednosti · G = Zahrada · 6-9 = Infrastruktura<br>H = Nápověda · R = Otočit · Esc = Zrušit</div>
+  <div id="hotkeysHint"><b>B</b> Obchod · <b>T</b> Dovednosti · <b>G</b> Zahrada<br><b>6–9</b> Infrastruktura · <b>H</b> Nápověda<br><b>R</b> / kolečko otočit o 15° · <b>Esc</b> zrušit</div>
 </div>
 
 <!-- ═══════════ OVERLAY: Shop ═══════════ -->
 <div class="ov hidden" id="shopOv">
   <div class="panel" style="width:520px;">
     <div class="ov-head">
-      <h2>🏪 Obchod · 💰 <span id="shopCoins">0</span></h2>
+      <h2>🏪 Obchod · <span class="zi" data-zsi="coins" data-emo="💰" data-sz="20">💰</span> <span id="shopCoins">0</span></h2>
       <button class="btn-s" id="shopClose" style="padding:3px 12px;">✕</button>
     </div>
     <div class="shop-grid" id="shopGrid"></div>
@@ -471,7 +480,7 @@ canvas{display:block;cursor:crosshair;}
 <div class="ov hidden" id="gardenOv">
   <div class="panel" style="width:600px;max-width:94vw;">
     <div class="ov-head">
-      <h2>🌱 Zahrada · 💰 <span id="gardenCoins">0</span></h2>
+      <h2>🌱 Zahrada · <span class="zi" data-zsi="coins" data-emo="💰" data-sz="20">💰</span> <span id="gardenCoins">0</span></h2>
       <button class="btn-s" id="gardenClose" style="padding:3px 12px;">✕</button>
     </div>
     <div id="gardenBody"></div>
@@ -518,7 +527,7 @@ canvas{display:block;cursor:crosshair;}
         <h3 style="margin-top:14px;">🍖 Přežití &amp; mechaniky</h3>
         <div class="help-p">🍖 <b>Hlad</b> a 💧 <b>žízeň</b> klesají — sklízej plodiny a pij ze studny v <b>zahradě [G]</b>.</div>
         <div class="help-p">🌊 <b>Voda</b>: řeka → kanály → studna. Surová voda se <b>kazí</b> → 💧 čistička ji udrží čerstvou.</div>
-        <div class="help-p">⚡ <b>Elektřina</b>: ⚙️ vodní kolo u řeky → 🔌 kabely → věže / el. plot / postřikovač. Bez proudu nefungují.</div>
+        <div class="help-p">⚡ <b>Elektřina</b>: ⚙️ vodní kolo u řeky → 🔌 kabely → věže / el. plot / postřikovač. Plot a postřikovač bez proudu nefungují; věž bez proudu jede slabší na baterii, s proudem střílí rychleji, dál a silněji. Stačí ji postavit hned vedle kabelu, do 320 px od základny je proud vždy.</div>
         <div class="help-p">🧟 <b>Vlny</b>: mezi vlnami je příprava + kvíz z tvých balíčků (správně = bonus 💰).</div>
         <div class="help-p">👥 <b>Co-op</b>: základna i zahrada jsou <b>sdílené</b>. Když hostitel odejde, řízení převezme jiný hráč.</div>
       </div>
@@ -599,6 +608,10 @@ canvas{display:block;cursor:crosshair;}
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="js/config.js"></script>
+<script>document.write('<script src="js/zombie-sprites.js?v='+APP_VERSION+'"><\/script>');</script>
+<script>document.write('<script src="js/zombie-sprites-2.js?v='+APP_VERSION+'"><\/script>');</script>
+<script>document.write('<script src="js/zombie-sprites-3.js?v='+APP_VERSION+'"><\/script>');</script>
+<script>document.write('<script src="js/zombie-icons.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/sound.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>(function(){var s=document.createElement('script');s.src='js/game.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>

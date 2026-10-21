@@ -186,7 +186,8 @@
       <label class="snd-row"><input type="checkbox" data-k="music" ${S.music ? 'checked' : ''}> Hudba</label>
       <input type="range" min="0" max="1" step="0.05" value="${S.musicVol}" data-v="musicVol" aria-label="Hlasitost hudby">
       <label class="snd-row"><input type="checkbox" data-k="sfx" ${S.sfx ? 'checked' : ''}> Zvukové efekty</label>
-      <input type="range" min="0" max="1" step="0.05" value="${S.sfxVol}" data-v="sfxVol" aria-label="Hlasitost efektů">`;
+      <input type="range" min="0" max="1" step="0.05" value="${S.sfxVol}" data-v="sfxVol" aria-label="Hlasitost efektů">`
+      + (window.SB_EXTRA_SETTINGS || []).map((o, i) => `<label class="snd-row"><input type="checkbox" data-x="${i}" ${o.get() ? 'checked' : ''}> ${o.label}</label>`).join('');
     document.body.appendChild(pop);
     const r = btn.getBoundingClientRect();
     pop.style.top = (r.bottom + 8) + 'px';
@@ -195,7 +196,8 @@
     pop.addEventListener('click', e => e.stopPropagation());
     pop.addEventListener('input', e => {
       unlock();
-      const k = e.target.dataset.k, v = e.target.dataset.v;
+      const k = e.target.dataset.k, v = e.target.dataset.v, x = e.target.dataset.x;
+      if (x !== undefined) { window.SB_EXTRA_SETTINGS?.[+x]?.set(e.target.checked); return; }
       if (k) { S[k] = e.target.checked; if (k === 'music') { if (S.music) musicStart(); else musicStop(); } }
       if (v) { S[v] = +e.target.value; if (v === 'sfxVol') window.sfx('click'); }
       save(); applyVol(); paint();

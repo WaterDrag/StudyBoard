@@ -491,15 +491,15 @@ function useAbility(aId,player){
     case 'slash':    meleeAOE(player,110,2.2,1.5); break;
     case 'rage':     {const rd=hasSkill('war_a2')?8000:5000;player.eff.rage={end:now+rd};gToast(`😡 Vztek! +${hasSkill('war_a2')?70:50}% DMG na ${rd/1000}s`,'#ef4444');} break;
     case 'multishot':shootMulti(player,3,0.18); break;
-    case 'dodge':    {const fast=hasSkill('arc_b3');const ddist=fast?340:240;const dashMs=fast?230:190;const iframeMs=dashMs+(fast?500:350);player.eff.dodge={end:now+iframeMs,moveEnd:now+dashMs,speed:ddist/(dashMs/1000)};if(player.uid===me.uid){spawnRing(player.x,player.y,46,'#84cc16',{dur:0.3,lineW:3});gToast('💨 Úskok!','#84cc16');}} break;
+    case 'dodge':    {const fast=hasSkill('arc_b3');const ddist=fast?340:240;const dashMs=fast?230:190;const iframeMs=dashMs+(fast?500:350);player.eff.dodge={end:now+iframeMs,moveEnd:now+dashMs,speed:ddist/(dashMs/1000)};if(player.uid===me.uid){spawnRing(player.x,player.y,46,'#84cc16',{dur:0.3,lineW:3,kind:'dodge'});gToast('💨 Úskok!','#84cc16');}} break;
     case 'fireball': spawnProjectile(player,player.aimDx,player.aimDy,'fireball'); break;
     case 'blink':    blinkToMouse(player); break;
     case 'nova':     novaAOE(player,160,getStatMult(player,'int')*60); break;
     case 'grenade':  throwGrenade(player); break;
     case 'suppression':suppressAOE(player,hasSkill('mil_b1')?300:250,hasSkill('mil_b1')?5000:3000); break;
     case 'taunt':    tauntAOE(player,350); break;
-    case 'fortify':  player.eff.fortify={end:now+4000};if(hasSkill('war_b2')&&player.uid===me.uid)player.eff.postFortify={end:now+7000};if(hasSkill('tan_b3')&&player.uid===me.uid){player.hp=Math.min(player.maxHp,player.hp+30);gToast('📣 Fortify! +30 HP','#64748b');}else{gToast('🛡️ Opevnění! −50% dmg na 4s','#64748b');} break;
-    case 'stealth':  player.eff.stealth={end:now+4000};player.eff.postStealthCrit=false;if(player.uid===me.uid)spawnRing(player.x,player.y,55,'#a855f7',{dur:0.45,lineW:3,fill:true});gToast('👻 Neviditelnost 4s — první útok = krit!','#a855f7'); break;
+    case 'fortify':  player.eff.fortify={end:now+4000};if(useZS()&&player.uid===me.uid)spawnRing(player.x,player.y,44,'#38bdf8',{dur:0.65,kind:'fortify'});if(hasSkill('war_b2')&&player.uid===me.uid)player.eff.postFortify={end:now+7000};if(hasSkill('tan_b3')&&player.uid===me.uid){player.hp=Math.min(player.maxHp,player.hp+30);gToast('📣 Fortify! +30 HP','#64748b');}else{gToast('🛡️ Opevnění! −50% dmg na 4s','#64748b');} break;
+    case 'stealth':  player.eff.stealth={end:now+4000};player.eff.postStealthCrit=false;if(player.uid===me.uid)spawnRing(player.x,player.y,55,'#a855f7',{dur:0.45,lineW:3,fill:true,kind:'stealth'});gToast('👻 Neviditelnost 4s — první útok = krit!','#a855f7'); break;
     case 'backstab': player.eff.backstab={hits:1};gToast('🗡️ Příští útok = 3× dmg!','#a855f7'); break;
     case 'deploy':   deployTurret(player); break;
     case 'repair':   repairNearby(player,120,hasSkill('eng_b1')?80:40); break;
@@ -511,16 +511,16 @@ function useAbility(aId,player){
     case 'ult_arc_a': shootMulti(player,6,0.28); gToast('🏹 Salva smrti!','#84cc16'); break;
     case 'ult_arc_b': blinkToMouse(player); shootMulti(player,4,0.2); gToast('🌀 Stínový skok!','#22d3ee'); break;
     case 'ult_mag_a': for(let _i=0;_i<3;_i++){const _a=player.angle+(_i-1)*0.4;spawnProjectile(player,Math.cos(_a),Math.sin(_a),'fireball');} gToast('☄️ Apokalyptický oheň!','#f97316'); break;
-    case 'ult_mag_b': gs.zombies.forEach(z=>{z.suppressed=now+4000;});spawnRing(player.x,player.y,720,'#818cf8',{dur:0.7,lineW:6});spawnRing(player.x,player.y,520,'#c7d2fe',{dur:0.6,lineW:4});gToast('⏳ Čas se zastavil! 4s','#818cf8'); break;
-    case 'ult_mil_a': {const _gDmg=hasSkill('mil_a2')?120:80;const _gR=hasSkill('mil_a3')?320:280;const _aoe=hasSkill('mil_a3')?96:80;for(let _i=0;_i<3;_i++){const _a=player.angle+(_i-1)*0.32;gs.bullets.push({x:player.x,y:player.y,dx:Math.cos(_a),dy:Math.sin(_a),spd:7,dmg:_gDmg,range:_gR,dist:0,col:'#f97316',r:6,owner:player.uid,type:'grenade',onHit:(bx,by)=>explosionAOE(bx,by,hasSkill('mil_a3')?140:100,_aoe)});}} gToast('🚀 Raketomet!','#f59e0b'); break;
+    case 'ult_mag_b': gs.zombies.forEach(z=>{z.suppressed=now+4000;});spawnRing(player.x,player.y,720,'#818cf8',{dur:0.9,lineW:6,kind:'timestop'});spawnRing(player.x,player.y,520,'#c7d2fe',{dur:0.6,lineW:4,kind:'-'});gToast('⏳ Čas se zastavil! 4s','#818cf8'); break;
+    case 'ult_mil_a': {const _gDmg=hasSkill('mil_a2')?120:80;const _gR=hasSkill('mil_a3')?320:280;const _aoe=hasSkill('mil_a3')?96:80;for(let _i=0;_i<3;_i++){const _a=player.angle+(_i-1)*0.32;gs.bullets.push({x:player.x,y:player.y,dx:Math.cos(_a),dy:Math.sin(_a),spd:7,dmg:_gDmg,range:_gR,dist:0,col:'#f97316',r:6,owner:player.uid,type:'grenade',rocket:true,onHit:(bx,by)=>explosionAOE(bx,by,hasSkill('mil_a3')?140:100,_aoe)});}} gToast('🚀 Raketomet!','#f59e0b'); break;
     case 'ult_mil_b': for(let _i=0;_i<5;_i++) setTimeout(()=>explosionAOE(mouse.wx+(Math.random()*100-50),mouse.wy+(Math.random()*100-50),100,60),_i*180); gToast('✈️ Letecký úder!','#f59e0b'); break;
     case 'ult_tan_a': player.eff.immune={end:now+5000};tauntAOE(player,800);gToast('🗡️ Nezranitelný! 5s imunita','#64748b'); break;
-    case 'ult_tan_b': explosionAOE(player.x,player.y,220,100);gs.zombies.forEach(z=>{if(Math.hypot(z.x-player.x,z.y-player.y)<220)z.stunEnd=now+3000;});gToast('⚡ Šok!','#dc2626'); break;
+    case 'ult_tan_b': explosionAOE(player.x,player.y,220,100);if(useZS())spawnRing(player.x,player.y,220,'#38bdf8',{dur:0.5,kind:'shock'});gs.zombies.forEach(z=>{if(Math.hypot(z.x-player.x,z.y-player.y)<220)z.stunEnd=now+3000;});gToast('⚡ Šok!','#dc2626'); break;
     case 'ult_rog_a': player.eff.stealth={end:now+5000};player.eff.backstab={hits:5};gToast('🌑 Legie stínů! ×5 backstab','#a855f7'); break;
-    case 'ult_rog_b': gs.zombies.forEach(z=>{if(Math.hypot(z.x-player.x,z.y-player.y)<200){z.poison={dmg:hasSkill('rog_b2')?7.5:5,end:now+6000,tick:0};}});spawnRing(player.x,player.y,200,'#16a34a',{dur:0.6,lineW:5,fill:true});gToast('🌫️ Jedová mlha!','#16a34a'); break;
+    case 'ult_rog_b': gs.zombies.forEach(z=>{if(Math.hypot(z.x-player.x,z.y-player.y)<200){z.poison={dmg:hasSkill('rog_b2')?7.5:5,end:now+6000,tick:0};}});spawnRing(player.x,player.y,200,'#16a34a',{dur:0.8,lineW:5,fill:true,kind:'poison'});gToast('🌫️ Jedová mlha!','#16a34a'); break;
     case 'ult_eng_a': {const _tHp=Math.round(STRUCT_DEFS.turret.hp*(hasSkill('eng_a2')?2:1));for(let _i=0;_i<2;_i++){const _sx=me.x+(Math.random()*140-70),_sy=me.y+(Math.random()*140-70);gs.structs.push({id:eid(),type:'turret',def:STRUCT_DEFS.turret,x:_sx-20,y:_sy-20,w:40,h:40,hp:_tHp,maxHp:_tHp,rot:0,lastShot:0,zombieHits:{},owner:me.uid});}updateInvDisplay();gToast('🤖 Automatická obrana!','#0ea5e9');} break;
     case 'ult_eng_b': me.inv.turret=(me.inv.turret||0)+2;me.inv.wall=(me.inv.wall||0)+5;me.inv.barricade=(me.inv.barricade||0)+3;updateInvDisplay();gToast('📫 Zásoby dopadly! +věže +zdi +barikády','#0ea5e9'); break;
-    case 'ult_pri_a': gs.zombies.forEach((z,id)=>{dealDmg(id,z,80,player);z.stunEnd=now+2500;});spawnRing(player.x,player.y,760,'#fde68a',{dur:0.7,lineW:6,fill:true});gToast('⚡ Boží hněv!','#fde68a'); break;
+    case 'ult_pri_a': gs.zombies.forEach((z,id)=>{dealDmg(id,z,80,player);z.stunEnd=now+2500;});spawnRing(player.x,player.y,760,'#fde68a',{dur:0.8,lineW:6,fill:true,kind:'holy'});gToast('⚡ Boží hněv!','#fde68a'); break;
     case 'ult_pri_b': {const _bd=hasSkill('pri_b1')?11000:8000;player.eff.bless={end:now+_bd};player.eff.ultBlessing={end:now+8000};gToast('🌈 Žehnající aura! 8s','#fbbf24');} break;
     // ── Branch C ────────────────────────────────────────────
     // Warrior C
@@ -712,7 +712,7 @@ function buildKitScreen(){
     const c=document.createElement('div');
     c.className='kit-card'+(id==='warrior'?' selected':'');
     c.style.setProperty('--kc',k.col);
-    c.innerHTML=`<div class="kit-emoji">${k.emoji}</div><div class="kit-name">${k.name}</div><div class="kit-desc">${k.desc}</div><div class="kit-passive" style="font-size:.68rem;color:#94a3b8;margin-top:4px;line-height:1.3;">${k.passive||''}</div>`;
+    c.innerHTML=`<div class="kit-emoji">${zi('kit_'+id,k.emoji,40)}</div><div class="kit-name">${k.name}</div><div class="kit-desc">${k.desc}</div><div class="kit-passive" style="font-size:.68rem;color:#94a3b8;margin-top:4px;line-height:1.3;">${k.passive||''}</div>`;
     c.onclick=()=>{
       kitSel.kit=id;
       kg.querySelectorAll('.kit-card').forEach(x=>x.classList.remove('selected'));
@@ -735,7 +735,7 @@ function buildKitScreen(){
 function refreshKitAbilities(){
   const kit=KITS[kitSel.kit];
   const nameEl=document.getElementById('kitAbilName');
-  if(nameEl)nameEl.textContent=kit.emoji+' '+kit.name;
+  if(nameEl)nameEl.innerHTML=kitLblHTML(kitSel.kit);
   // Passive
   const pr=document.getElementById('kitPassiveRow');
   if(pr)pr.innerHTML=`<div class="passive-pill"><span style="font-size:1.05rem;line-height:1;">✨</span><span><b style="color:#a5b4fc;">Pasivní:</b> ${kit.passive||'—'}</span></div>`;
@@ -747,7 +747,7 @@ function refreshKitAbilities(){
     if(!a)return '';
     const cd=a.cd?`CD ${(a.cd/1000).toFixed(a.cd%1000?1:0)}s`:'';
     return `<div class="abil-row">
-      <span class="abil-icon">${a.emoji}</span>
+      <span class="abil-icon">${zi(aId,a.emoji,26)}</span>
       <span class="abil-key">${a.key||'?'}</span>
       <div class="abil-meta">
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
@@ -832,7 +832,7 @@ function applyKitSelection(){
   me.maxHp=80+me.stats.vit*20;
   me.hp=me.maxHp;
   me.sp=0; me.skills={}; me.unlockedAbils=[]; me._shotCount=0; me.usedRevive=false;
-  document.getElementById('kitLbl').textContent=kit.emoji+' '+kit.name;
+  document.getElementById('kitLbl').innerHTML=kitLblHTML(me.kit);
 }
 
 function initGame(){
@@ -887,7 +887,7 @@ function buildBuildBar(){
     const btn=document.createElement('div');
     btn.className='bb-btn';
     btn.dataset.type=type;
-    btn.innerHTML=`<span>${def.emoji}</span><span class="bb-cnt" id="inv_${type}">${me.inv[type]||0}</span><span class="bb-key">${i+1}</span>`;
+    btn.innerHTML=`${zi(type,def.emoji,30)}<span class="bb-cnt" id="inv_${type}">${me.inv[type]||0}</span><span class="bb-key">${i+1}</span>`;
     btn.title=`${def.name} (${def.cost}💰) — klávesa ${i+1}`;
     btn.onclick=()=>togglePlacing(type);
     bar.appendChild(btn);
@@ -897,7 +897,7 @@ function buildBuildBar(){
     const btn=document.createElement('div');
     btn.className='bb-btn bb-infra';
     btn.dataset.type=type;
-    btn.innerHTML=`<span>${def.emoji}</span><span class="bb-cnt" id="inv_${type}">${me.inv[type]||0}</span>${def.key?`<span class="bb-key">${def.key}</span>`:''}`;
+    btn.innerHTML=`${zi(type,def.emoji,30)}<span class="bb-cnt" id="inv_${type}">${me.inv[type]||0}</span>${def.key?`<span class="bb-key">${def.key}</span>`:''}`;
     btn.title=`${def.name} (${def.cost}💰)${def.key?' — klávesa '+def.key:''}`;
     btn.onclick=()=>togglePlacing(type);
     bar.appendChild(btn);
@@ -923,8 +923,8 @@ function buildAbilBar(){
     const btn=document.createElement('div');
     btn.className='ab-btn';
     btn.id='ab_'+aId;
-    btn.innerHTML=`<span>${a.emoji}</span><span class="ab-key">${a.key}</span>`+
-      `<div class="ab-tooltip"><strong>${a.emoji} ${a.name}</strong>${a.desc||''}<div class="ab-tip-cd">Cooldown: ${a.cd/1000}s</div></div>`;
+    btn.innerHTML=`${zi(aId,a.emoji,36)}<span class="ab-key">${a.key}</span>`+
+      `<div class="ab-tooltip"><strong>${zi(aId,a.emoji,16)} ${a.name}</strong>${a.desc||''}<div class="ab-tip-cd">Cooldown: ${a.cd/1000}s</div></div>`;
     btn.onclick=()=>useAbility(aId,me);
     bar.appendChild(btn);
   });
@@ -941,9 +941,9 @@ function togglePlacing(type){
     placing.rot=0;
     document.querySelectorAll('.bb-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));
     const d=STRUCT_DEFS[type]||INFRA_DEFS[type];
-    const hint=INFRA_DEFS[type]?'klik = položit (mřížka) · Esc = zrušit':'R = otoč · klik = položit · Esc = zrušit';
+    const hint=INFRA_DEFS[type]?'klik = položit (mřížka) · Esc = zrušit':'R / kolečko = otoč o 15° (Shift+R zpět) · klik = položit · Esc = zrušit';
     document.getElementById('placInfo').style.display='block';
-    document.getElementById('placInfo').textContent=`Kladeš: ${d.emoji} ${d.name} · ${hint}`;
+    document.getElementById('placInfo').innerHTML=`Kladeš: ${zi(type,d.emoji,16)} ${d.name} · ${hint}`;
   }
 }
 
@@ -951,6 +951,12 @@ function togglePlacing(type){
 //  INPUT
 // ══════════════════════════════════════════════════════════
 function setupInput(){
+  // kolečko myši při pokládání stavby = otáčení
+  window.addEventListener('wheel',e=>{
+    if(gs.screen!=='game'||!placing.active||INFRA_DEFS[placing.type])return;
+    e.preventDefault();
+    rotatePlacing(e.deltaY>0?1:-1);
+  },{passive:false});
   window.addEventListener('keydown',e=>{
     keys[e.code]=true;
     if(gs.screen!=='game')return;
@@ -968,7 +974,7 @@ function setupInput(){
       else closeOv('shopOv');
     }
     if(e.code==='KeyR'&&placing.active){
-      placing.rot=(placing.rot+90)%360;
+      rotatePlacing(e.shiftKey?-1:1);
     }
     // Build shortcuts: 1-5 structures, 6-9 infrastructure
     const idx=parseInt(e.key)-1;
@@ -996,11 +1002,21 @@ function setupInput(){
   });
   canvas.addEventListener('mousedown',e=>{
     if(gs.screen!=='game')return;
+    // pravé tlačítko: při stavění zruší pokládání, jinak nic (nestřílí)
+    if(e.button===2){if(placing.active)togglePlacing(placing.type);return;}
+    if(e.button!==0)return;
     mouse.down=true;
     if(placing.active){placeStructure();return;}
-    if(e.button===0&&me.alive)doShoot();
+    if(me.alive)doShoot();
   });
-  canvas.addEventListener('mouseup',()=>{mouse.down=false;});
+  // puštění tlačítka kdekoliv (i mimo plátno) zastaví střelbu
+  window.addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false;});
+  // ve hře nechceme kontextové menu — spolklo by puštění kláves a postava by šla dál sama
+  canvas.addEventListener('contextmenu',e=>e.preventDefault());
+  // když okno ztratí fokus (menu, Alt+Tab, přepnutí karty), pustíme všechny klávesy
+  const releaseAll=()=>{for(const k in keys)keys[k]=false;mouse.down=false;};
+  window.addEventListener('blur',releaseAll);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll();});
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1180,8 +1196,7 @@ function updatePlayer(dt,ts){
   }
 
   // Track whether player is elevated on a platform
-  me.onPlatform=gs.structs.some(s=>s.hp>0&&STRUCT_DEFS[s.type].plat&&
-    me.x>s.x&&me.x<s.x+s.w&&me.y>s.y&&me.y<s.y+s.h);
+  me.onPlatform=gs.structs.some(s=>s.hp>0&&STRUCT_DEFS[s.type].plat&&pointInWall(s,me.x,me.y));
 
   // Auto-fire when holding mouse
   if(mouse.down&&me.alive&&!placing.active){doShoot();}
@@ -1192,11 +1207,34 @@ function clampToBounds(){
   me.y=Math.max(BARRIER.y+PLAYER_R,Math.min(BARRIER.y+BARRIER.h-PLAYER_R,me.y));
 }
 
+/* ── Otočené stavby ─────────────────────────────────────────
+   Stavba s rot, který není násobkem 90°, je obdélník w×h (x,y = levý horní roh
+   v neotočené poloze) otočený kolem svého středu. Kolize se počítají v jeho
+   lokálních souřadnicích — tam je to zase obyčejný osově zarovnaný obdélník.
+   Násobky 90° zůstávají po staru (při 90/270 se jen prohodí w a h). */
+function rAng(w){ return w.rot&&w.rot%90?w.rot*Math.PI/180:0; }
+function rotAround(w,x,y,a){
+  const cx=w.x+w.w/2,cy=w.y+w.h/2,c=Math.cos(a),s=Math.sin(a),dx=x-cx,dy=y-cy;
+  return [cx+dx*c-dy*s, cy+dx*s+dy*c];
+}
+function toLocal(w,x,y){ const a=rAng(w); return a?rotAround(w,x,y,-a):[x,y]; }
+function toWorld(w,x,y){ const a=rAng(w); return a?rotAround(w,x,y,a):[x,y]; }
+function pointInWall(w,x,y){ if(!(w.rot%90))return x>w.x&&x<w.x+w.w&&y>w.y&&y<w.y+w.h; const[lx,ly]=toLocal(w,x,y); return lx>w.x&&lx<w.x+w.w&&ly>w.y&&ly<w.y+w.h; }
+// Rohy obdélníku ve světě, popořadě dokola (LH, PH, PD, LD)
+function wallCorners(w){
+  return [[w.x,w.y],[w.x+w.w,w.y],[w.x+w.w,w.y+w.h],[w.x,w.y+w.h]].map(([x,y])=>toWorld(w,x,y));
+}
+// Úhel pokládané stavby: R / kolečko otáčí po 15°
+const ROT_STEP=15;
+function rotatePlacing(dir){ placing.rot=((placing.rot+dir*ROT_STEP)%360+360)%360; }
+
 function collidesWithAnyWall(entity,r,walls){
   for(const w of walls){
-    const nx=Math.max(w.x,Math.min(w.x+w.w,entity.x));
-    const ny=Math.max(w.y,Math.min(w.y+w.h,entity.y));
-    if(Math.hypot(entity.x-nx,entity.y-ny)<r)return true;
+    let ex=entity.x,ey=entity.y;
+    if(w.rot%90)[ex,ey]=toLocal(w,ex,ey);   // rychlá cesta pro neotočené zdi
+    const nx=Math.max(w.x,Math.min(w.x+w.w,ex));
+    const ny=Math.max(w.y,Math.min(w.y+w.h,ey));
+    if(Math.hypot(ex-nx,ey-ny)<r)return true;
   }
   return false;
 }
@@ -1231,23 +1269,28 @@ function unstuckFromWalls(entity,r,walls){
   for(let pass=0;pass<3;pass++){
     let any=false;
     for(const w of walls){
-      const nx=Math.max(w.x,Math.min(w.x+w.w,entity.x));
-      const ny=Math.max(w.y,Math.min(w.y+w.h,entity.y));
-      const dist=Math.hypot(entity.x-nx,entity.y-ny);
+      // u otočené stavby počítáme v jejích lokálních souřadnicích a výsledek vrátíme zpět
+      const rotd=!!(w.rot%90);
+      let ex=entity.x,ey=entity.y;
+      if(rotd)[ex,ey]=toLocal(w,ex,ey);
+      const nx=Math.max(w.x,Math.min(w.x+w.w,ex));
+      const ny=Math.max(w.y,Math.min(w.y+w.h,ey));
+      const dist=Math.hypot(ex-nx,ey-ny);
       if(dist>=r)continue;
       any=true;
       if(dist>0){
         const push=(r-dist)+0.8;
-        entity.x+=(entity.x-nx)/dist*push;
-        entity.y+=(entity.y-ny)/dist*push;
+        ex+=(ex-nx)/dist*push;
+        ey+=(ey-ny)/dist*push;
       } else {
-        const dLeft=entity.x-w.x, dRight=w.x+w.w-entity.x, dTop=entity.y-w.y, dBottom=w.y+w.h-entity.y;
+        const dLeft=ex-w.x, dRight=w.x+w.w-ex, dTop=ey-w.y, dBottom=w.y+w.h-ey;
         const m=Math.min(dLeft,dRight,dTop,dBottom);
-        if(m===dLeft)entity.x=w.x-r-0.8;
-        else if(m===dRight)entity.x=w.x+w.w+r+0.8;
-        else if(m===dTop)entity.y=w.y-r-0.8;
-        else entity.y=w.y+w.h+r+0.8;
+        if(m===dLeft)ex=w.x-r-0.8;
+        else if(m===dRight)ex=w.x+w.w+r+0.8;
+        else if(m===dTop)ey=w.y-r-0.8;
+        else ey=w.y+w.h+r+0.8;
       }
+      if(rotd)[entity.x,entity.y]=toWorld(w,ex,ey); else {entity.x=ex;entity.y=ey;}
     }
     if(!any)break;
     moved=true;
@@ -1452,6 +1495,7 @@ function doShoot(){
   const w=WEAPONS[me.weapon];
   if(now-me.lastShot<w.cd)return;
   me.lastShot=now;
+  me._atkAt=now;
   if(w.melee){doMelee(me);return;}
   me._shotCount=(me._shotCount||0)+1;
   const critShot=hasSkill('arc_a1')&&me._shotCount%3===0;
@@ -1473,7 +1517,8 @@ function spawnBullet(x,y,dx,dy,weapon,owner){
   const pierce=isMe&&hasSkill('arc_a2')&&(weapon.arrow||weapon===WEAPONS.rifle);
   const b={x,y,dx,dy,spd:weapon.spd||14,dmg:getBulletDmg(owner,weapon),
     range:(weapon.range+extraRange)*perMult,dist:0,col:weapon.col,r:weapon.arrow?5:3,
-    owner:owner.uid,arrow:!!weapon.arrow,elevated,pierce};
+    owner:owner.uid,arrow:!!weapon.arrow,elevated,pierce,
+    wk:weapon===WEAPONS.rifle?'rifle':weapon.pellets?'pellet':'bullet'};
   gs.bullets.push(b);
   return b;
 }
@@ -1550,7 +1595,7 @@ function doMelee(p){
     if(hasSkill('rog_a3')&&p.uid===me.uid) p.eff.shadowDance={end:performance.now()+2000};
   }
   meleeHit(p.x,p.y,p.angle,w.range,w.arc,Math.round(dmg),p);
-  spawnSwing(p.x,p.y,p.angle,w.range,w.arc,w.col);
+  spawnSwing(p.x,p.y,p.angle,w.range,w.arc,w.col,p.weapon);
   if(p.weapon==='wrench') repairNearby(p,w.range,hasSkill('eng_b1')?80:20);
 }
 
@@ -1571,7 +1616,10 @@ function segmentHitsRect(x1,y1,x2,y2,rx,ry,rw,rh){
   return true;
 }
 function meleeBlocked(x1,y1,x2,y2,walls){
-  for(const w of walls){ if(segmentHitsRect(x1,y1,x2,y2,w.x,w.y,w.w,w.h))return true; }
+  for(const w of walls){
+    if(rAng(w)){const[a1,b1]=toLocal(w,x1,y1),[a2,b2]=toLocal(w,x2,y2);if(segmentHitsRect(a1,b1,a2,b2,w.x,w.y,w.w,w.h))return true;}
+    else if(segmentHitsRect(x1,y1,x2,y2,w.x,w.y,w.w,w.h))return true;
+  }
   return false;
 }
 function meleeHit(x,y,ang,range,arc,dmg,owner){
@@ -1591,6 +1639,7 @@ function meleeHit(x,y,ang,range,arc,dmg,owner){
         if(owner._warCombo>=5){owner._warCombo=0;finalDmg*=2;gs.floats.push({x:z.x,y:z.y-30,txt:'RYTMUS!',col:'#ef4444',life:0.9,dy:-50});}
       }
       dealDmg(id,z,finalDmg,owner);
+      spawnHit(z.x-Math.cos(a)*z.r*0.6,z.y-Math.sin(a)*z.r*0.6,'#fef08a');
       gs.floats.push({x:z.x,y:z.y-20,txt:`-${finalDmg}`,col:'#ef4444',life:1.2,dy:-40});
       // Mage A2: burning
       if(isMe&&hasSkill('mag_a2'))z.poison={dmg:5,end:performance.now()+3000,tick:0};
@@ -1610,9 +1659,10 @@ function meleeHit(x,y,ang,range,arc,dmg,owner){
 
 function meleeAOE(p,range,arc,mult){
   const w=WEAPONS[p.weapon];
+  p._atkAt=performance.now();
   const dmg=Math.round(w.dmg*(1+p.stats.str*0.05)*mult);
   meleeHit(p.x,p.y,p.angle,range,arc,dmg,p);
-  spawnSwing(p.x,p.y,p.angle,range,arc,w.col);
+  spawnSwing(p.x,p.y,p.angle,range,arc,w.col,p.weapon);
 }
 
 /* ── Bullets ─────────────────────────────────────────────── */
@@ -1627,7 +1677,7 @@ function updateBullets(dt){
     if(!b.elevated){
       const walls=getBulletWalls();
       for(const w of walls){
-        if(b.x>w.x&&b.x<w.x+w.w&&b.y>w.y&&b.y<w.y+w.h)return false;
+        if(pointInWall(w,b.x,b.y))return false;
       }
     }
     // Zombie collision
@@ -1636,6 +1686,7 @@ function updateBullets(dt){
         const owner=b.owner===me.uid?me:gs.players[b.owner];
         if(b.type==='fireball'||b.type==='grenade') z._killedBySpell=true;
         dealDmg(id,z,b.dmg,owner);
+        spawnHit(b.x,b.y,b.col);
         gs.floats.push({x:z.x,y:z.y-20,txt:`-${b.dmg}`,col:'#fbbf24',life:1,dy:-35});
         if(b.pierce&&!b._pierced){b._pierced=true;continue;}
         return b.type==='fireball';
@@ -1647,6 +1698,7 @@ function updateBullets(dt){
 
 /* ── Damage ──────────────────────────────────────────────── */
 function dealDmg(zid,z,dmg,attacker){
+  if(z)z._hitAt=performance.now();   // bílé bliknutí v nové grafice
   // Non-authority clients don't kill locally — they forward the hit to the host,
   // who is the single source of truth (prevents "respawning" + double rewards).
   if(!isAuthority()){
@@ -2453,7 +2505,7 @@ function buildShop(){
     const el=document.createElement('div');
     el.className='si'+(me.coins<cost?' sd':'')+(item.type==='infra'?' si-infra':'');
     const owned=item.type==='infra'?`<div class="si-own">×${me.inv[item.id]||0}</div>`:'';
-    el.innerHTML=`<div class="si-e">${item.emoji}</div><div class="si-n">${item.name}</div><div class="si-c">${cost}💰</div>${owned}`;
+    el.innerHTML=`<div class="si-e">${zi(shopIcon(item),item.emoji,30)}</div><div class="si-n">${item.name}</div><div class="si-c">${cost}${zi('coins','💰',14)}</div>${owned}`;
     el.onclick=()=>{if(me.coins<cost)return;buyItem(item,cost);buildShop();};
     grid.appendChild(el);
   });
@@ -2504,7 +2556,7 @@ function placeStructure(){
   const def=STRUCT_DEFS[type];
   const rot=placing.rot;
   let w=def.w,h=def.h;
-  if(rot===90||rot===270){w=def.h;h=def.w;}
+  if(rot===90||rot===270){w=def.h;h=def.w;}   // ostatní úhly: w×h zůstává, otočí se přes rot
   const sx=mouse.wx-w/2, sy=mouse.wy-h/2;
   // Don't place on top of base
   if(Math.hypot(mouse.wx-CX,mouse.wy-CY)<BASE_R+30){gToast('Příliš blízko základny','#f59e0b');return;}
@@ -2550,6 +2602,7 @@ function updateStructures(ts){
       s.lastShot=ts;
       const dx=nearest.x-(s.x+s.w/2),dy=nearest.y-(s.y+s.h/2);
       const l=Math.hypot(dx,dy)||1;
+      s._aim=Math.atan2(dy,dx);
       // owner = hráč: zabití věží dává mince a XP (dřív 'turret' → odměna nikomu)
       gs.bullets.push({x:s.x+s.w/2,y:s.y+s.h/2,dx:dx/l,dy:dy/l,
         spd:13,dmg:tDmg,range:range+10,dist:0,col:powered?'#38bdf8':'#fbbf24',r:3,owner:me.uid});
@@ -2565,16 +2618,26 @@ function updateFloats(dt){
 // Broadcast FX so co-op players see each other's animations (capped per tick).
 let _fxReplaying=false;
 function fxQueue(o){ if(gs.sessionId&&!_fxReplaying){ if(!me._fxq)me._fxq=[]; if(me._fxq.length<12)me._fxq.push(o); } }
+// kind = efekt v nové grafice (ZS.burst: explosion, nova, heal…); '-' = v nové grafice se nekreslí
 function spawnRing(x,y,rEnd,col,opts={}){
   if(!gs.fx)gs.fx=[];
   gs.fx.push({type:'ring',x,y,r0:opts.r0||0,rEnd,t:0,
-    dur:opts.dur||0.5,col,lineW:opts.lineW||4,fill:opts.fill||false});
-  fxQueue({f:'r',x:Math.round(x),y:Math.round(y),e:Math.round(rEnd),c:col,d:opts.dur||0.5,w:opts.lineW||4,l:opts.fill?1:0,r0:opts.r0||0});
+    dur:opts.dur||0.5,col,lineW:opts.lineW||4,fill:opts.fill||false,kind:opts.kind,seed:(Math.random()*1e6)|0});
+  fxQueue({f:'r',x:Math.round(x),y:Math.round(y),e:Math.round(rEnd),c:col,d:opts.dur||0.5,w:opts.lineW||4,l:opts.fill?1:0,r0:opts.r0||0,k:opts.kind});
 }
-function spawnSwing(x,y,ang,range,arc,col){
+// Délka švihu v nové grafice (zbraň v ruce i stopa jedou podle ní)
+const SWING_FX_DUR=0.24;
+function spawnSwing(x,y,ang,range,arc,col,wid){
   if(!gs.fx)gs.fx=[];
-  gs.fx.push({type:'swing',x,y,ang,range,arc:arc||1.0,col:col||'#fff',t:0,dur:0.16});
-  fxQueue({f:'s',x:Math.round(x),y:Math.round(y),a:+(ang||0).toFixed(2),rg:range,ar:arc||1.0,c:col||'#fff'});
+  gs.fx.push({type:'swing',x,y,ang,range,arc:arc||1.0,col:col||'#fff',t:0,dur:useZS()?SWING_FX_DUR:0.16,w:wid,seed:(Math.random()*1e6)|0});
+  fxQueue({f:'s',x:Math.round(x),y:Math.round(y),a:+(ang||0).toFixed(2),rg:range,ar:arc||1.0,c:col||'#fff',w:wid});
+}
+// Jiskra při zásahu zombíka — jen lokálně a jen v nové grafice
+function spawnHit(x,y,col){
+  if(!useZS()||!window.ZS?.burst)return;
+  if(!gs.fx)gs.fx=[];
+  if(gs.fx.length>140)return;
+  gs.fx.push({type:'ring',kind:'hit',x,y,r0:0,rEnd:13,t:0,dur:0.2,col:col||'#fef08a',lineW:2,seed:(Math.random()*1e6)|0});
 }
 function spawnTrail(x,y,col){
   if(!gs.fx)gs.fx=[];
@@ -2584,8 +2647,8 @@ function spawnTrail(x,y,col){
 // Replay a peer's FX event locally (without re-broadcasting)
 function replayFx(o){
   _fxReplaying=true;
-  if(o.f==='r')spawnRing(o.x,o.y,o.e,o.c,{dur:o.d,lineW:o.w,fill:!!o.l,r0:o.r0||0});
-  else if(o.f==='s')spawnSwing(o.x,o.y,o.a,o.rg,o.ar,o.c);
+  if(o.f==='r')spawnRing(o.x,o.y,o.e,o.c,{dur:o.d,lineW:o.w,fill:!!o.l,r0:o.r0||0,kind:o.k});
+  else if(o.f==='s')spawnSwing(o.x,o.y,o.a,o.rg,o.ar,o.c,o.w);
   else if(o.f==='t')spawnTrail(o.x,o.y,o.c);
   _fxReplaying=false;
 }
@@ -2598,7 +2661,13 @@ function drawFx(){
   gs.fx.forEach(f=>{
     const p=f.t/f.dur, alpha=1-p;
     ctx.save();
-    if(f.type==='swing'){
+    if(useZS()&&window.ZS?.swingFx&&f.type==='swing'&&WEAPONS[f.w]?.melee){
+      ZS.swingFx(ctx,f.w,f.x,f.y,f.ang,f.range,f.arc,p,f.col,f.seed||1);
+    } else if(useZS()&&window.ZS?.burst&&f.type==='ring'&&f.kind){
+      if(f.kind!=='-')ZS.burst(ctx,f.kind,f.x,f.y,f.rEnd,p,performance.now(),f.col,f.seed||1);
+    } else if(f.type==='ring'&&f.kind==='hit'){
+      // jiskra zásahu se ve staré grafice nekreslí
+    } else if(f.type==='swing'){
       // arc sweeps from one edge to the other as it fades
       const start=f.ang-f.arc/2, end=f.ang+f.arc/2;
       const cur=start+(end-start)*Math.min(1,p*1.35);
@@ -2651,8 +2720,8 @@ function blinkToMouse(p){
   // Check walls don't block destination
   p.x=Math.max(BARRIER.x+20,Math.min(BARRIER.x+BARRIER.w-20,mouse.wx));
   p.y=Math.max(BARRIER.y+20,Math.min(BARRIER.y+BARRIER.h-20,mouse.wy));
-  spawnRing(ox,oy,42,'#818cf8',{dur:0.4,lineW:3,fill:true});   // depart puff
-  spawnRing(p.x,p.y,46,'#c7d2fe',{dur:0.45,lineW:4,fill:true}); // arrive puff
+  spawnRing(ox,oy,42,'#818cf8',{dur:0.4,lineW:3,fill:true,kind:'blink_out'});   // depart puff
+  spawnRing(p.x,p.y,46,'#c7d2fe',{dur:0.45,lineW:4,fill:true,kind:'blink_in'}); // arrive puff
   gs.floats.push({x:p.x,y:p.y-30,txt:'✨',col:'#818cf8',life:0.8,dy:-30});
 }
 
@@ -2666,8 +2735,8 @@ function novaAOE(p,range,dmg){
     }
   });
   // Visible magic shockwave matching the hit radius
-  spawnRing(p.x,p.y,range,'#818cf8',{dur:0.5,lineW:6,fill:true});
-  spawnRing(p.x,p.y,range*0.92,'#c7d2fe',{dur:0.42,lineW:3,r0:range*0.2});
+  spawnRing(p.x,p.y,range,'#818cf8',{dur:0.55,lineW:6,fill:true,kind:'nova'});
+  spawnRing(p.x,p.y,range*0.92,'#c7d2fe',{dur:0.42,lineW:3,r0:range*0.2,kind:'-'});
   gs.floats.push({x:p.x,y:p.y-30,txt:'💫 Nova!',col:'#818cf8',life:1.2,dy:-50});
 }
 
@@ -2675,7 +2744,7 @@ function explosionAOE(x,y,range,dmg){
   gs.zombies.forEach((z,id)=>{
     if(Math.hypot(z.x-x,z.y-y)<range) dealDmg(id,z,dmg,me);
   });
-  spawnRing(x,y,range,'#f97316',{dur:0.4,lineW:5,fill:true});
+  spawnRing(x,y,range,'#f97316',{dur:0.6,lineW:5,fill:true,kind:'explosion'});
   gs.floats.push({x,y:y-20,txt:'💥 Boom!',col:'#f97316',life:1.2,dy:-40});
 }
 
@@ -2684,7 +2753,7 @@ function suppressAOE(p,range,dur){
   gs.zombies.forEach(z=>{
     if(Math.hypot(z.x-p.x,z.y-p.y)<range) z.suppressed=now+dur;
   });
-  spawnRing(p.x,p.y,range,'#f59e0b',{dur:0.55,lineW:4,fill:true});
+  spawnRing(p.x,p.y,range,'#f59e0b',{dur:0.6,lineW:4,fill:true,kind:'suppress'});
   gToast('🎯 Potlačení aktivováno!','#f59e0b');
 }
 
@@ -2696,7 +2765,7 @@ function tauntAOE(p,range){
       if(hasSkill('tan_b2')) z.taunted={spd:0.6,end:now+3000};
     }
   });
-  spawnRing(p.x,p.y,range,'#a855f7',{dur:0.55,lineW:4});
+  spawnRing(p.x,p.y,range,'#ef4444',{dur:0.6,lineW:4,kind:'taunt'});
   gToast('😤 Zombies se soustředí na tebe!','#64748b');
 }
 
@@ -2714,13 +2783,13 @@ function repairNearby(p,range,amount=40){
       s.hp=Math.min(s.maxHp,s.hp+amount);
     }
   }
-  spawnRing(p.x,p.y,range,'#0ea5e9',{dur:0.5,lineW:3});
+  spawnRing(p.x,p.y,range,'#0ea5e9',{dur:0.6,lineW:3,kind:'repair'});
   gToast('🔧 Opravuji struktury!','#0ea5e9');
 }
 
 function healNearby(p,range,amount,healOthers=false){
   me.hp=Math.min(me.maxHp,me.hp+amount);
-  spawnRing(p.x,p.y,range,'#4ade80',{dur:0.55,lineW:4,fill:true});
+  spawnRing(p.x,p.y,range,'#22c55e',{dur:0.65,lineW:4,fill:true,kind:'heal'});
   gToast(`💚 Uzdravení +${amount} HP!`,'#fde68a');
   if(healOthers) Object.values(gs.players).forEach(op=>{if(op.alive)op.hp=Math.min(op.maxHp,op.hp+amount);});
 }
@@ -2729,7 +2798,7 @@ function blessNearby(p,range,dur=14000,allPlayers=false){
   const now=performance.now();
   me.eff.bless={end:now+dur};
   if(allPlayers) Object.values(gs.players).forEach(op=>{if(op.alive)op.eff={...(op.eff||{}),bless:{end:now+dur}};});
-  spawnRing(p.x,p.y,allPlayers?range:70,'#fbbf24',{dur:0.55,lineW:4});
+  spawnRing(p.x,p.y,allPlayers?range:70,'#facc15',{dur:0.7,lineW:4,kind:'bless'});
   gToast(`✨ Požehnání! +20% DMG na ${dur/1000}s`,'#fde68a');
 }
 
@@ -3021,7 +3090,7 @@ function renderPlotCard(p,busy){
     const seeds=Object.entries(CROPS).map(([id,c])=>{
       const dis=(busy||me.coins<c.seed)?'disabled':'';
       const note=c.premium?'<span class="grd-tag tag-irr">💦</span>':'';
-      return `<button class="crop-btn" ${dis} title="${c.premium?'Náročná na vodu — ideálně postřikovač':''}" onclick="plantCrop('${p.key}','${id}')">${c.emoji} ${c.name} ${note}<span class="crop-cost">${c.seed}💰</span></button>`;
+      return `<button class="crop-btn" ${dis} title="${c.premium?'Náročná na vodu — ideálně postřikovač':''}" onclick="plantCrop('${p.key}','${id}')">${zi('crop_'+id,c.emoji,18)} ${c.name} ${note}<span class="crop-cost">${c.seed}${zi('coins','💰',12)}</span></button>`;
     }).join('');
     inner+=`<div style="font-size:.7rem;color:var(--muted);margin:6px 0 4px;">Zasadit:</div><div class="crop-list">${seeds}</div>`;
   } else if(p.state==='withered'){
@@ -3030,7 +3099,7 @@ function renderPlotCard(p,busy){
   } else {
     const c=CROPS[p.crop];
     const moistCol=p.moisture<25?'#ef4444':p.moisture<55?'#f59e0b':'#38bdf8';
-    inner+=`<div class="grd-crop">${c.emoji}</div><div class="grd-meter"><span>💧</span>${gBar(p.moisture,moistCol)}</div>`;
+    inner+=`<div class="grd-crop">${zi('crop_'+p.crop,c.emoji,36)}</div><div class="grd-meter">${zi('thirst','💧',14)}${gBar(p.moisture,moistCol)}</div>`;
     if(p.state==='ready'){
       inner+=`<button class="btn-p grd-act" ${busy?'disabled':''} onclick="harvestPlot('${p.key}')">🌾 Sklidit · +${c.food}🍖</button>`;
     } else {
@@ -3285,6 +3354,24 @@ function updateSummons(dt,ts){
 
 /* ── Draw summons ────────────────────────────────────────── */
 function drawSummons(){
+  if(useZS()&&ZS.summon){
+    const now=performance.now();
+    gs.summons.forEach(s=>{
+      if(['wolf','trap','banner','lure','c4','ghost_boss','acid_pool','toxic_zone'].includes(s.type)){
+        // směr pohybu (vlk, přízrak) jako u zombíků
+        const mdx=s.x-(s._lx??s.x),mdy=s.y-(s._ly??s.y);
+        if(mdx*mdx+mdy*mdy>0.04)s._ang=Math.atan2(mdy,mdx);
+        s._lx=s.x;s._ly=s.y;
+        const r=s.type==='wolf'?14:s.type==='ghost_boss'?28:(s.type==='acid_pool'||s.type==='toxic_zone')?(s.r||40):16;
+        ZS.summon(ctx,s.type,s.x,s.y,r,s._ang||0,now);
+        if(s.type==='wolf'){ctx.fillStyle='#dc2626';ctx.fillRect(s.x-16,s.y-22,32,4);ctx.fillStyle='#22c55e';ctx.fillRect(s.x-16,s.y-22,32*(s.hp/s.maxHp),4);}
+        if(s.type==='ghost_boss'){ctx.fillStyle='#7c3aed';ctx.fillRect(s.x-24,s.y-34,48,5);ctx.fillStyle='#a855f7';ctx.fillRect(s.x-24,s.y-34,48*(s.hp/s.maxHp),5);}
+      } else if(s.type==='curse_zone'){
+        ctx.globalAlpha=0.3;ctx.fillStyle='#7c3aed';ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+      }
+    });
+    return;
+  }
   gs.summons.forEach(s=>{
     ctx.font='22px serif';
     ctx.textAlign='center';
@@ -3355,8 +3442,8 @@ function updateHUD(){
   if(others.length){
     pl.style.display='block';
     pl.innerHTML=`<div style="font-size:.7rem;color:#666;margin-bottom:4px;">Hráči</div>`+
-      `<div class="pl-row"><span>${KITS[me.kit].emoji} ${me.name}</span><span class="pl-hp">${Math.ceil(me.hp)}/${me.maxHp}</span></div>`+
-      others.map(p=>`<div class="pl-row"><span>${KITS[p.kit]?.emoji||'?'} ${p.name}</span><span class="pl-hp">${Math.round(p.hp||0)}</span></div>`).join('');
+      `<div class="pl-row"><span>${zi('kit_'+me.kit,KITS[me.kit].emoji,14)} ${me.name}</span><span class="pl-hp">${Math.ceil(me.hp)}/${me.maxHp}</span></div>`+
+      others.map(p=>`<div class="pl-row"><span>${KITS[p.kit]?zi('kit_'+p.kit,KITS[p.kit].emoji,14):'?'} ${p.name}</span><span class="pl-hp">${Math.round(p.hp||0)}</span></div>`).join('');
   } else pl.style.display='none';
 }
 
@@ -3391,7 +3478,8 @@ function drawMinimap(){
   gs.structs.forEach(s=>{
     if(s.hp<=0)return;
     mmCtx.fillStyle='#0ea5e9';
-    mmCtx.fillRect(tx(s.x),ty(s.y),s.w*scale,s.h*scale);
+    if(rAng(s)){const c=wallCorners(s);mmCtx.beginPath();c.forEach(([x,y],i)=>i?mmCtx.lineTo(tx(x),ty(y)):mmCtx.moveTo(tx(x),ty(y)));mmCtx.closePath();mmCtx.fill();}
+    else mmCtx.fillRect(tx(s.x),ty(s.y),s.w*scale,s.h*scale);
   });
 
   // Zombies
@@ -3423,6 +3511,36 @@ function drawMinimap(){
 // ══════════════════════════════════════════════════════════
 //  DRAW
 // ══════════════════════════════════════════════════════════
+// ── Nová grafika (js/zombie-sprites.js, procedurální textury) ─────────
+// Jde vypnout v okně 🔊 (localStorage zs_gfx = '0') — pak se kreslí postaru emoji.
+function useZS(){ try{ return !!window.ZS && localStorage.getItem('zs_gfx')!=='0'; }catch(_){ return !!window.ZS; } }
+(window.SB_EXTRA_SETTINGS=window.SB_EXTRA_SETTINGS||[]).push({
+  label:'🎨 Nová grafika', get:()=>useZS(),
+  set:on=>{ try{ localStorage.setItem('zs_gfx',on?'1':'0'); }catch(_){} },
+});
+
+// ── Ikony rozhraní (js/zombie-icons.js) — stejný přepínač jako nová grafika ──
+// zi() vrátí <span data-zsi>, který applyZSI() umí kdykoliv přepnout mezi SVG a emoji.
+function zsiSvg(name,sz){ return (useZS()&&window.ZSI&&ZSI.svg(name,sz))||''; }
+function zi(name,emoji,sz=20){
+  return `<span class="zi" data-zsi="${name}" data-emo="${emoji}" data-sz="${sz}">${zsiSvg(name,sz)||emoji}</span>`;
+}
+function applyZSI(root=document){
+  root.querySelectorAll('[data-zsi]').forEach(el=>{ el.innerHTML=zsiSvg(el.dataset.zsi,+el.dataset.sz||20)||el.dataset.emo||''; });
+}
+function shopIcon(item){
+  if(item.type==='weapon')return 'w_'+item.id;
+  if(item.type==='struct')return item.stype;
+  if(item.type==='stat')return item.stat==='int'&&item.val>=2?'int2':item.stat;
+  return item.id;
+}
+function kitLblHTML(kitId){ const k=KITS[kitId]; return k?zi('kit_'+kitId,k.emoji,16)+' '+k.name:''; }
+window.SB_EXTRA_SETTINGS.find(o=>o.label==='🎨 Nová grafika').set=on=>{
+  try{ localStorage.setItem('zs_gfx',on?'1':'0'); }catch(_){}
+  applyZSI();
+};
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>applyZSI()); else applyZSI();
+
 function draw(ts){
   ctx.clearRect(0,0,W,H);
   const map=MAPS[gs.mapId];
@@ -3454,6 +3572,12 @@ function draw(ts){
 }
 
 function drawFloor(map){
+  if(useZS()){
+    const x0=Math.max(BARRIER.x,cam.x-W/2-64),y0=Math.max(BARRIER.y,cam.y-H/2-64);
+    const x1=Math.min(BARRIER.x+BARRIER.w,cam.x+W/2+64),y1=Math.min(BARRIER.y+BARRIER.h,cam.y+H/2+64);
+    if(x1>x0&&y1>y0)ZS.floor(ctx,gs.mapId,x0,y0,x1-x0,y1-y0);
+    return;
+  }
   const tileSize=64;
   const sx=Math.floor((cam.x-W/2)/tileSize)*tileSize;
   const sy=Math.floor((cam.y-H/2)/tileSize)*tileSize;
@@ -3481,6 +3605,7 @@ function drawBarrier(){
 
 function drawRiver(ts){
   const r=MAPS[gs.mapId].river; if(!r)return;
+  if(useZS()){ZS.river(ctx,r.x,r.y,r.w,r.h,ts);return;}
   const g=ctx.createLinearGradient(r.x,0,r.x+r.w,0);
   g.addColorStop(0,'#0b3a52');g.addColorStop(0.5,'#0e6d96');g.addColorStop(1,'#0b3a52');
   ctx.fillStyle=g;ctx.fillRect(r.x,r.y,r.w,r.h);
@@ -3497,6 +3622,7 @@ function drawFarm(ts){
   const half=IT/2;
   ctx.textAlign='center';ctx.textBaseline='middle';
 
+  if(useZS()&&ZS.infra){ drawFarmZS(ts); } else {
   // Pass 1: channels + wires (ground level)
   gs.infra.forEach(p=>{
     const[cx,cy]=gCenter(p.gx,p.gy);
@@ -3553,6 +3679,7 @@ function drawFarm(ts){
     }
   });
 
+  }
   // Tending progress arc at the active target
   if(gs.infraTask){
     const tp=gs.infra.get(gs.infraTask.key);
@@ -3568,6 +3695,48 @@ function drawFarm(ts){
     if(p){const[cx,cy]=gCenter(p.gx,p.gy);drawWorldTag(cx,cy-half-22,'🌱 [G] Zahrada','#86efac');}
   }
   ctx.textAlign='left';ctx.textBaseline='alphabetic';
+}
+
+// Farma, voda a elektřina v nové grafice (js/zombie-sprites-2.js).
+// Kanály a kabely se napojují na sousedy, aby tvořily souvislou síť.
+function drawFarmZS(ts){
+  const half=IT/2;
+  const JOIN={channel:['channel','well','purifier'],wire:['wire','wheel','sprinkler','fence']};
+  const links=(p,kinds)=>{const l={};for(const[dx,dy]of N4){const np=infraAt(p.gx+dx,p.gy+dy);if(np&&kinds.includes(np.type))l[dx===1?'e':dx===-1?'w':dy===1?'s':'n']=true;}return l;};
+  gs.infra.forEach(p=>{
+    const[cx,cy]=gCenter(p.gx,p.gy);
+    if(p.type==='channel')ZS.infra(ctx,'channel',cx,cy,IT,{fed:!!p._fed,fresh:!!p._fresh,links:links(p,JOIN.channel)},ts);
+    else if(p.type==='wire')ZS.infra(ctx,'wire',cx,cy,IT,{powered:!!p._pow,links:links(p,JOIN.wire)},ts);
+  });
+  gs.infra.forEach(p=>{
+    const[cx,cy]=gCenter(p.gx,p.gy);
+    if(p.type==='well'){
+      const spoiled=p.freshness<25;
+      ZS.infra(ctx,'well',cx,cy,IT,{level:p.water/INFRA_DEFS.well.store,spoiled,fed:!!p._fed},ts);
+      if(p._ripple){const el=performance.now()-p._ripple;if(el<700){ctx.save();ctx.globalAlpha=(1-el/700)*0.6;ctx.strokeStyle='#e0f2fe';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,4+el/700*20,0,Math.PI*2);ctx.stroke();ctx.restore();}}
+      if(spoiled)drawWorldTag(cx,cy-half-8,'⚠ zkažená','#ef4444');
+    } else if(p.type==='purifier'){
+      ZS.infra(ctx,'purifier',cx,cy,IT,{fed:!!p._fed},ts);
+    } else if(p.type==='wheel'){
+      const active=tileTouchesRiver(p.gx,p.gy);
+      ZS.infra(ctx,'wheel',cx,cy,IT,{active},ts);
+      drawWorldTag(cx,cy-half-8,active?'⚙️ +'+INFRA_DEFS.wheel.gen+'⚡':'⚙️ mimo řeku',active?'#fbbf24':'#94a3b8');
+    } else if(p.type==='sprinkler'){
+      ZS.infra(ctx,'sprinkler',cx,cy,IT,{powered:!!p._pow},ts);
+    } else if(p.type==='fence'){
+      ZS.infra(ctx,'fence',cx,cy,IT,{powered:!!p._pow},ts);
+    } else if(p.type==='plot'){
+      ZS.infra(ctx,'plot',cx,cy,IT,{soil:p.state||'empty'},ts);
+      if(p.state==='growing'){const c=CROPS[p.crop];const grown=Math.min(1,(p.growPhases+0.4)/(c?c.grow:2));ZS.crop(ctx,p.crop,cx,cy,Math.min(0.84,grown),ts);}
+      else if(p.state==='ready')ZS.crop(ctx,p.crop||'wheat',cx,cy,1,ts);
+      else if(p.state==='withered')ZS.crop(ctx,'withered',cx,cy,1,ts);
+      if(p.state==='growing'||p.state==='ready'){
+        const PW=IT-8,h=PW/2,mc=p.moisture<25?'#ef4444':p.moisture<55?'#f59e0b':'#38bdf8';
+        ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(cx-h+4,cy+h-6,PW-8,4);
+        ctx.fillStyle=mc;ctx.fillRect(cx-h+4,cy+h-6,(PW-8)*p.moisture/100,4);
+      }
+    }
+  });
 }
 
 function drawPlotPiece(p,cx,cy,ts){
@@ -3622,6 +3791,14 @@ function drawWorldTag(cx,cy,text,col){
 }
 
 function drawBase(){
+  if(useZS()){
+    const pct=gs.baseHp/gs.baseMaxHp;
+    ZS.base(ctx,CX,CY,BASE_R,pct,performance.now());
+    ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(CX-30,CY-BASE_R-14,60,8);
+    ctx.fillStyle=pct>0.5?'#3b82f6':pct>0.25?'#a855f7':'#ef4444';
+    ctx.fillRect(CX-30,CY-BASE_R-14,60*pct,8);
+    return;
+  }
   // Glow
   const grad=ctx.createRadialGradient(CX,CY,0,CX,CY,BASE_R*2.5);
   grad.addColorStop(0,'rgba(59,130,246,.25)');
@@ -3643,6 +3820,7 @@ function drawBase(){
 }
 
 function drawMapWalls(map){
+  if(useZS()){map.walls.forEach(w=>ZS.mapWall(ctx,gs.mapId,w.x,w.y,w.w,w.h));return;}
   ctx.fillStyle='#3a3a3a';
   map.walls.forEach(w=>{
     ctx.fillRect(w.x,w.y,w.w,w.h);
@@ -3657,6 +3835,37 @@ function drawStructures(){
     if(s.hp<=0)continue;
     const def=STRUCT_DEFS[s.type];
     const pct=s.hp/s.maxHp;
+    const ang=rAng(s);
+    if(ang){
+      // otočená stavba: tělo kreslíme v otočeném plátně, HP lištu rovně nad nejvyšším rohem
+      const cx=s.x+s.w/2,cy=s.y+s.h/2;
+      ctx.save();ctx.translate(cx,cy);ctx.rotate(ang);ctx.translate(-cx,-cy);
+      if(useZS())ZS.structure(ctx,s.type,s.x,s.y,s.w,s.h,pct,performance.now(),(s._aim||0)-ang);
+      else{
+        ctx.fillStyle='rgba(0,0,0,.3)';ctx.fillRect(s.x+3,s.y+3,s.w,s.h);
+        ctx.fillStyle=pct>0.5?'#2a3a2a':pct>0.25?'#3a2a10':'#3a1010';ctx.fillRect(s.x,s.y,s.w,s.h);
+        ctx.strokeStyle='rgba(255,255,255,.15)';ctx.lineWidth=1;ctx.strokeRect(s.x,s.y,s.w,s.h);
+        ctx.font=Math.min(s.w,s.h)*0.6+'px serif';ctx.fillText(def.emoji,cx,cy);
+      }
+      ctx.restore();
+      const top=Math.min(...wallCorners(s).map(c=>c[1])),bw=Math.max(s.w,s.h)*0.8;
+      ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(cx-bw/2,top-6,bw,4);
+      ctx.fillStyle=pct>0.5?'#4ade80':pct>0.25?'#fbbf24':'#ef4444';
+      ctx.fillRect(cx-bw/2,top-6,bw*pct,4);
+      continue;
+    }
+    if(useZS()){
+      ZS.structure(ctx,s.type,s.x,s.y,s.w,s.h,pct,performance.now(),s._aim||0);
+      ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(s.x,s.y-6,s.w,4);
+      ctx.fillStyle=pct>0.5?'#4ade80':pct>0.25?'#fbbf24':'#ef4444';
+      ctx.fillRect(s.x,s.y-6,s.w*pct,4);
+      if(def.turret&&!s._pow&&s.owner===me.uid){
+        ctx.font='12px serif';ctx.fillStyle='#ef4444';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('⚡',s.x+s.w-6,s.y+6);
+        ctx.save();ctx.globalAlpha=0.45;ctx.fillStyle='#000';ctx.fillRect(s.x,s.y,s.w,s.h);ctx.restore();
+      }
+      continue;
+    }
     // Shadow
     ctx.fillStyle='rgba(0,0,0,.3)';
     ctx.fillRect(s.x+3,s.y+3,s.w,s.h);
@@ -3694,8 +3903,17 @@ function drawZombies(ts){
       ctx.fillStyle='rgba(239,68,68,.15)';
       ctx.beginPath();ctx.arc(z.x,z.y,z.r*1.5,0,Math.PI*2);ctx.fill();
     }
-    ctx.font=z.r*1.4+'px serif';
-    ctx.fillText(def.emoji,z.x,z.y);
+    if(useZS()){
+      // směr podle pohybu (vyhlazený), bílé bliknutí 140 ms po zásahu
+      const mdx=z.x-(z._lx??z.x),mdy=z.y-(z._ly??z.y);
+      if(mdx*mdx+mdy*mdy>0.04){const a=Math.atan2(mdy,mdx);const d=Math.atan2(Math.sin(a-(z._ang||0)),Math.cos(a-(z._ang||0)));z._ang=(z._ang||0)+d*0.25;}
+      z._lx=z.x;z._ly=z.y;
+      const fl=z._hitAt?Math.max(0,1-(performance.now()-z._hitAt)/140):0;
+      ZS.zombie(ctx,z.type,z.x,z.y,z.r,z._ang||0,ts,fl);
+    } else {
+      ctx.font=z.r*1.4+'px serif';
+      ctx.fillText(def.emoji,z.x,z.y);
+    }
     // HP bar
     const bw=z.r*2.2,bh=4;
     const pct=z.hp/z.maxHp;
@@ -3706,6 +3924,19 @@ function drawZombies(ts){
 }
 
 function drawBullets(){
+  if(useZS()){
+    if(ZS.projectile){
+      const ts=performance.now();
+      gs.bullets.forEach(b=>{
+        if(b._sd===undefined)b._sd=(Math.random()*1e6)|0;
+        const kind=b.arrow?'arrow':b.type==='fireball'?'fireball':b.rocket?'rocket':b.type==='grenade'?'grenade':b.wk||(b.r>=5?'magic':'bullet');
+        ZS.projectile(ctx,kind,b.x,b.y,Math.atan2(b.dy,b.dx),ts,b.col,b.dist/((b.spd||10)*60),b._sd);
+      });
+      return;
+    }
+    gs.bullets.forEach(b=>ZS.bullet(ctx,b.arrow?'arrow':(b.type==='grenade'||b.r>=5)?'magic':'bullet',b.x,b.y,Math.atan2(b.dy,b.dx),b.col));
+    return;
+  }
   gs.bullets.forEach(b=>{
     if(b.arrow){
       ctx.save();ctx.translate(b.x,b.y);ctx.rotate(Math.atan2(b.dy,b.dx));
@@ -3723,16 +3954,16 @@ function drawPlayers(ts){
   // Draw remote players first
   Object.values(gs.players).forEach(p=>{
     if(!p.alive)return;
-    drawPlayerSprite(p.x||CX,p.y||CY,p.angle||0,p.kit||'militant',false,ts);
+    drawPlayerSprite(p.x||CX,p.y||CY,p.angle||0,p.kit||'militant',false,ts,p);
   });
   // Local player
   const alpha=me.eff.stealth?0.3:1;
   ctx.globalAlpha=alpha;
-  drawPlayerSprite(me.x,me.y,me.angle,me.kit,true,ts);
+  drawPlayerSprite(me.x,me.y,me.angle,me.kit,true,ts,me);
   ctx.globalAlpha=1;
 }
 
-function drawPlayerSprite(x,y,angle,kitId,isLocal,ts){
+function drawPlayerSprite(x,y,angle,kitId,isLocal,ts,pl){
   const kit=KITS[kitId]||KITS.militant;
   const r=PLAYER_R;
   // Active buff auras (local player) — pulsing colored rings
@@ -3755,6 +3986,18 @@ function drawPlayerSprite(x,y,angle,kitId,isLocal,ts){
       ctx.beginPath();ctx.arc(x,y,r+5+i*4+pulse*2,0,Math.PI*2);ctx.stroke();
       ctx.restore();
     });
+  }
+  if(useZS()){
+    const kid=kitId in KITS?kitId:'militant';
+    if(!ZS.playerBody||!ZS.weapon){ZS.player(ctx,kid,x,y,r,angle,ts,kit.col,isLocal);return;}
+    // Zbraň v ruce podle toho, co hráč právě drží (u ostatních hráčů přichází jako wp)
+    const wid=WEAPONS[pl?.weapon]?pl.weapon:WEAPONS[pl?.wp]?pl.wp:(kit.weapon||'pistol');
+    const W=WEAPONS[wid];
+    const dur=W.melee?SWING_FX_DUR:0.26;
+    const el=pl?._atkAt?(performance.now()-pl._atkAt)/1000:9;
+    ZS.playerBody(ctx,kid,x,y,r,angle,ts,kit.col,isLocal);
+    ZS.weapon(ctx,wid,x,y,r,angle,ts,el<dur?{p:el/dur,arc:W.arc||1.15}:null,W.col);
+    return;
   }
   // Shadow
   ctx.fillStyle='rgba(0,0,0,.4)';
@@ -3787,6 +4030,13 @@ function drawFloats(){
   ctx.globalAlpha=1;
 }
 
+// Stejné pravidlo jako v recomputeInfraNetworks: blízko základny, nebo do POWER_REACH od kabelu/kola pod proudem
+function turretWouldBePowered(x,y){
+  if(Math.hypot(x-CX,y-CY)<=BASE_POWER_RADIUS)return true;
+  let ok=false;
+  if(gs.infra)gs.infra.forEach(p=>{if(!ok&&p._pow&&(p.type==='wire'||p.type==='wheel')){const[ex,ey]=gCenter(p.gx,p.gy);if(Math.hypot(x-ex,y-ey)<POWER_REACH)ok=true;}});
+  return ok;
+}
 function drawPlacingPreview(){
   if(!placing.active)return;
   // Infrastructure: grid-snapped preview
@@ -3808,6 +4058,9 @@ function drawPlacingPreview(){
   let w=def.w,h=def.h;
   if(placing.rot===90||placing.rot===270){w=def.h;h=def.w;}
   const sx=mouse.wx-w/2,sy=mouse.wy-h/2;
+  const pa=placing.rot%90?placing.rot*Math.PI/180:0;
+  ctx.save();
+  if(pa){ctx.translate(mouse.wx,mouse.wy);ctx.rotate(pa);ctx.translate(-mouse.wx,-mouse.wy);}
   ctx.fillStyle='rgba(99,102,241,.3)';
   ctx.strokeStyle='rgba(99,102,241,.8)';
   ctx.setLineDash([4,4]);
@@ -3818,6 +4071,15 @@ function drawPlacingPreview(){
   ctx.font=(Math.min(w,h)*0.6)+'px serif';
   ctx.fillStyle='rgba(255,255,255,.7)';
   ctx.fillText(def.emoji,mouse.wx,mouse.wy);
+  ctx.restore();
+  // úhel u kurzoru
+  ctx.font='bold 12px Geist,sans-serif';ctx.fillStyle='rgba(255,255,255,.85)';
+  ctx.fillText(placing.rot+'°',mouse.wx,mouse.wy-Math.max(w,h)/2-14);
+  if(def.turret){
+    const pw=turretWouldBePowered(mouse.wx,mouse.wy);
+    ctx.fillStyle=pw?'#38bdf8':'#94a3b8';
+    ctx.fillText(pw?'⚡ s proudem':'🔋 bez proudu (baterie)',mouse.wx,mouse.wy+Math.max(w,h)/2+14);
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -3881,7 +4143,7 @@ function computeFOVPoly(px,py,aimAng,halfFov,walls){
   for(let i=0;i<=steps;i++) angles.push(aimAng-halfFov+i/steps*halfFov*2);
   // Add wall corner angles
   for(const w of walls){
-    [[w.x,w.y],[w.x+w.w,w.y],[w.x,w.y+w.h],[w.x+w.w,w.y+w.h]].forEach(([cx,cy])=>{
+    wallCorners(w).forEach(([cx,cy])=>{
       const a=Math.atan2(cy-py,cx-px);
       const diff=normalizeAngle(a-aimAng);
       if(Math.abs(diff)<halfFov+0.05){angles.push(a-0.001,a,a+0.001);}
@@ -3894,10 +4156,8 @@ function castRay(ox,oy,ang,walls,maxDist){
   const dx=Math.cos(ang),dy=Math.sin(ang);
   let t=maxDist;
   for(const w of walls){
-    const edges=[
-      [w.x,w.y,w.x+w.w,w.y],[w.x+w.w,w.y,w.x+w.w,w.y+w.h],
-      [w.x,w.y+w.h,w.x+w.w,w.y+w.h],[w.x,w.y,w.x,w.y+w.h],
-    ];
+    const c=wallCorners(w);
+    const edges=[[...c[0],...c[1]],[...c[1],...c[2]],[...c[2],...c[3]],[...c[3],...c[0]]];
     for(const [x1,y1,x2,y2] of edges){
       const r=raySegIntersect(ox,oy,dx,dy,x1,y1,x2,y2);
       if(r!==null&&r>1&&r<t)t=r;
@@ -3979,7 +4239,7 @@ function syncPlayerState(){
   const sref=liveRef('players/'+me.uid+'/s'); if(!sref)return;
   const payload={x:Math.round(me.x),y:Math.round(me.y),angle:+(me.angle||0).toFixed(2),
     hp:Math.round(me.hp),maxHp:me.maxHp,coins:me.coins,xp:me.xp,level:me.level,
-    alive:me.alive,kit:me.kit,name:me.name,ts:Date.now()};
+    alive:me.alive,kit:me.kit,name:me.name,ts:Date.now(),wp:me.weapon,an:Math.round(me._atkAt||0)};
   // Forward queued hits to the host (clients only)
   if(!isAuthority()&&me._pendingHits&&me._pendingHits.length){
     me._hitBatch++;
@@ -4193,7 +4453,7 @@ async function joinLobby(lobbyId){
     gs.hostUid=data.hostId;
     if(gs.isHost) document.getElementById('lobbyStartBtn').style.display='block';
     document.getElementById('lobbyCode').textContent=lobbyId.slice(0,6).toUpperCase();
-    document.getElementById('kitLbl').textContent=(KITS[kitSel.kit]?.emoji||'')+' '+(KITS[kitSel.kit]?.name||'');
+    document.getElementById('kitLbl').innerHTML=kitLblHTML(kitSel.kit);
 
     // Add self to lobby
     await ref.update({
@@ -4267,6 +4527,7 @@ function subscribePlayerStates(){
       const d=node.s; if(!d)return;       // player state lives under /s
       let p=gs.players[uid];
       if(!p){p={uid,x:d.x,y:d.y};gs.players[uid]=p;}
+      if(d.an&&p.an!==undefined&&d.an!==p.an)p._atkAt=performance.now();   // animace útoku v nové grafice
       Object.assign(p,d,{uid,tx:d.x,ty:d.y});
       // Replay this peer's visual FX so everyone sees their animations
       if(d.fx&&d.fxb&&d.fxb>(gs._fxSeen[uid]||0)){
