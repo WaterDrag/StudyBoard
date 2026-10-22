@@ -603,5 +603,15 @@ const TR = (() => {
     return c;
   }
 
-  return { render, mapPreview, slimeSprite };
+  // Prohlížeč může při nedostatku grafické paměti zahodit obsah canvasů (i předkreslených).
+  // Pak se všechny předkreslené obrázky smažou a vykreslí znovu.
+  function clearCaches() {
+    bgCache.clear(); spriteCache.clear();
+    if (window.TDS) { TDS.clearCacheA?.(); TDS.clearCacheD?.(); TDS.cache = {}; TDS._iconCache = {}; }
+  }
+  function cachesLost() {
+    const bg = useTDS() ? TDS.background({ id: G.map.id, paths: G.map.paths, track_width_px: TRACK_HALF * 2, water_zones: G.map.water_zones || [], obstacles: G.map.obstacles || [] }) : bgCache.get(G.map.id);
+    try { return !!bg?.getContext('2d').isContextLost?.(); } catch (_) { return false; }
+  }
+  return { render, mapPreview, slimeSprite, clearCaches, cachesLost };
 })();

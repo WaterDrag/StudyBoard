@@ -13,6 +13,7 @@
 
   // Interní cache pro předkreslené offscreen canvasy
   const cache = new Map();
+  TDS.clearCacheA = () => cache.clear();   // po ztrátě grafického kontextu prohlížeče
 
   // ============================================================================
   // POMOCNÉ FUNKCE (Matematika, PRNG, Tvary, Cache)

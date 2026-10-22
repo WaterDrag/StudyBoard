@@ -20,6 +20,7 @@ function drawPath(ctx, pathFunc, fillStyle, strokeStyle = OUTLINE, lineWidth = 2
     ctx.restore();
 }
 const cacheD = new Map();
+TDS.clearCacheD = () => cacheD.clear();
 function getCacheD(id, size, drawFunc) {
     let cvs = cacheD.get(id);
     if (!cvs) {

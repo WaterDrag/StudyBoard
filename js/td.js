@@ -99,6 +99,9 @@ function setupCanvas() {
     cv.width = Math.round(w * dpr); cv.height = Math.round(w * TH / TW * dpr);
   };
   fit(); window.onresize = fit;
+  // ztráta grafického kontextu (málo paměti, přepnutí karty…) — po obnovení vše překreslit
+  cv.addEventListener('contextlost', e => e.preventDefault());
+  cv.addEventListener('contextrestored', () => { g2 = cv.getContext('2d'); TR.clearCaches(); _towerIcoReset(); });
   cv.onpointermove = e => { view.pointer = worldPos(e); updateGhost(); };
   cv.onpointerleave = () => { view.pointer = null; if (view.ghost && !view.touchGhost) view.ghost = null; };
   cv.onpointerdown = e => {
@@ -169,9 +172,19 @@ $('hudCard').onclick = () => openCard();
 $('hudGo').onclick = () => { if (!G.waveActive && !G.over) { startWave(); renderSide(true); } };
 
 /* ── Hlavní smyčka ─────────────────────────────────────────────── */
+let lastErrAt = 0, frameNo = 0;
 function frame(now) {
   if (!running) return;
+  try { frameBody(now); } catch (e) {
+    // smyčka nesmí umřít — chybu ukážeme a hrajeme dál
+    console.error('Obrana království:', e);
+    if (now - lastErrAt > 10000) { lastErrAt = now; toast('Chyba vykreslení: ' + (e && e.message || e)); }
+  }
+  requestAnimationFrame(frame);
+}
+function frameBody(now) {
   const real = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  if (++frameNo % 60 === 0 && (g2.isContextLost?.() || TR.cachesLost())) { TR.clearCaches(); _towerIcoReset(); return; }
   if (!paused && !G.over) {
     let k = speed;
     if (cardOpen && cardOpen.slowUntil > now) { k = ECON.flashcards.singleplayer_slow_motion_factor; G.slowmo = true; } else G.slowmo = false;
@@ -185,7 +198,6 @@ function frame(now) {
   TR.render(g2, view);
   updateHud();
   if (Math.floor(now / 250) !== Math.floor((now - real * 1000) / 250)) renderSide();
-  requestAnimationFrame(frame);
 }
 
 /* ── HUD a lišta schopností ────────────────────────────────────── */
@@ -236,7 +248,13 @@ function renderSide(force) {
   if (!force && sig === panelSig) return;
   panelSig = sig;
   const side = $('tdSide');
+  // zachovat rozbalené úrovně hrdiny a posun panelu, když jde jen o obnovení stejného výběru
+  const same = side.dataset.sel === String(view.sel ? (view.sel.id || view.sel.boss?.id || 'o') : 0);
+  const levelsOpen = same && side.querySelector('.td-levels')?.open, scroll = same ? side.scrollTop : 0;
+  side.dataset.sel = String(view.sel ? (view.sel.id || view.sel.boss?.id || 'o') : 0);
   side.innerHTML = view.sel ? (view.sel.boss ? bossPanel(view.sel.boss) : view.sel.obst ? obstPanel(view.sel.obst) : view.sel.hero ? heroPanel(view.sel) : towerPanel(view.sel)) : shopPanel();
+  if (levelsOpen) side.querySelector('.td-levels')?.setAttribute('open', '');
+  side.scrollTop = scroll;
   side.querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, b.dataset));
 }
 function shopPanel() {
@@ -266,7 +284,8 @@ function shopPanel() {
 }
 const _miniCache = new Map();
 // Ikona věže do obchodu: nová grafika (TDS.towerIcon), jinak emoji
-const _towerIco = {};
+let _towerIco = {};
+function _towerIcoReset() { _towerIco = {}; panelSig = ''; }
 function towerIco(t) {
   if (!(window.TDS?.drawers?.[t.id] && TDS.towerIcon) || localStorage.getItem('td_gfx') === '0') return t.ico;
   _towerIco[t.id] = _towerIco[t.id] || TDS.towerIcon(t.id, 80).toDataURL();
