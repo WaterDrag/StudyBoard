@@ -1,0 +1,434 @@
+// ═══ td.js — rozhraní hry Obrana království (úvod, HUD, panel staveb a
+// vylepšení, svitky z kartiček, hlavní smyčka). Simulace je v td-engine.js,
+// kreslení v td-render.js, data v td-data.js.
+
+const SEL_KEY = 'td_decks', PREF_KEY = 'td_pref', BEST_KEY = 'td_best';
+const DMG_LABEL = { sharp: 'ostré', explosion: 'výbušné', freeze: 'mráz', energy: 'oheň', magic: 'magie', normal: 'pravé', true: 'pravé', none: '—' };
+const CAT_LABEL = { basic: 'Základní', military: 'Vojenské', magic: 'Magické', support: 'Podpora' };
+const TARGETS = [['first', 'První'], ['last', 'Poslední'], ['strong', 'Nejsilnější'], ['close', 'Nejbližší']];
+let DECKS = [], getDecks = () => [], POOL = [], CARDQ = [];
+let pref = { map: TD.maps[0].id, hero: TD.heroes[0].id, diff: 'medium' };
+try { pref = { ...pref, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch (_) { /* nic */ }
+const view = { sel: null, ghost: null, placing: null, pointer: null };
+let speed = 1, paused = false, running = false, lastFrame = 0, acc = 0, cardOpen = null, panelSig = '', hudSig = '';
+const fmt = n => Math.floor(n).toLocaleString('cs-CZ');
+
+auth.onAuthStateChanged(async user => {
+  if (!user) { location.href = 'index.html'; return; }
+  ME = user;
+  renderSetup();
+  try { DECKS = await mcLoadDecks(); } catch (e) { $('tdDecks').innerHTML = '<div class="mc-muted">Balíčky se nepodařilo načíst.</div>'; return; }
+  getDecks = mcDeckPicker({ list: 'tdDecks', all: 'tdAll', start: 'tdStart', hint: 'tdHint', key: SEL_KEY, decks: DECKS,
+    hintFor: n => `${n} kartiček připraveno na svitky.` });
+  $('tdStart').onclick = startGame;
+});
+
+/* ── Úvodní obrazovka ──────────────────────────────────────────── */
+function bestOf(map, diff) { try { return (JSON.parse(localStorage.getItem(BEST_KEY) || '{}'))[map + ':' + diff] || 0; } catch (_) { return 0; } }
+function renderSetup() {
+  const maps = $('tdMaps');
+  maps.innerHTML = TD.maps.map(m => `<button type="button" class="td-opt td-map${pref.map === m.id ? ' on' : ''}" data-map="${m.id}">
+      <span class="td-map-img" data-prev="${m.id}"></span><b>${esc(m.name)}</b><small>${m.difficulty === 'easy' ? 'Snadná · jedna cesta' : 'Střední · dvě cesty'}</small></button>`).join('');
+  maps.querySelectorAll('[data-prev]').forEach(el => {
+    const c = TR.mapPreview(TD.maps.find(m => m.id === el.dataset.prev), 260, 180); c.className = 'td-prev'; el.appendChild(c);
+  });
+  maps.onclick = e => { const b = e.target.closest('[data-map]'); if (!b) return; pref.map = b.dataset.map; savePref(); renderSetup(); };
+  $('tdHeroes').innerHTML = TD.heroes.map(h => `<button type="button" class="td-opt td-hero${pref.hero === h.id ? ' on' : ''}" data-hero="${h.id}">
+      <span class="td-hero-ico" style="--hc:${h.col}">${h.ico}</span><b>${esc(h.name)}</b><small>${esc(h.role)}</small>
+      <small class="td-hero-pass">📜 ${esc(h.passive.name)}: ${esc(h.passive.description)}</small><small class="td-hero-cost">${h.base.cost} zl</small></button>`).join('');
+  $('tdHeroes').onclick = e => { const b = e.target.closest('[data-hero]'); if (!b) return; pref.hero = b.dataset.hero; savePref(); renderSetup(); };
+  const D = { easy: ['Lehká', '200 životů, věže o 15 % levnější'], medium: ['Střední', '150 životů, běžné ceny'], hard: ['Těžká', '100 životů, věže o 8 % dražší'] };
+  $('tdDiffs').innerHTML = Object.entries(D).map(([k, [n, d]]) => { const b = bestOf(pref.map, k);
+    return `<button type="button" class="td-opt${pref.diff === k ? ' on' : ''}" data-diff="${k}"><b>${n}</b><small>${d}</small>${b ? `<small class="td-best">🏆 vlna ${b}</small>` : ''}</button>`; }).join('');
+  $('tdDiffs').onclick = e => { const b = e.target.closest('[data-diff]'); if (!b) return; pref.diff = b.dataset.diff; savePref(); renderSetup(); };
+}
+function savePref() { try { localStorage.setItem(PREF_KEY, JSON.stringify(pref)); } catch (_) { /* nic */ } }
+
+async function startGame() {
+  const ds = getDecks();
+  const btn = $('tdStart'); btn.disabled = true; btn.textContent = 'Připravuji svitky…';
+  try { const all = await mcLoadCards(ds); POOL = all.filter(c => mcOptions(c, all)); POOL.all = all; } catch (_) { POOL = []; }
+  btn.disabled = false; btn.textContent = 'Hrát';
+  if (!POOL.length) { toast('Z vybraných balíčků nejde sestavit otázky s možnostmi — přidej balíček s víc kartičkami.'); return; }
+  if (POOL.length < 8) toast(`Ve vybraných balíčcích je jen ${POOL.length} otázek — budou se často opakovat.`);
+  CARDQ = shuffle(POOL);
+  newGame(pref.map, pref.hero, pref.diff);
+  G.onLose = () => setTimeout(() => endGame(false), 900);
+  G.onWin = () => { paused = true; $('tdWinDesc').textContent = `Ubránil jsi všech ${TD.waves.length} vln. Můžeš pokračovat ve volné hře — slizáci budou čím dál silnější.`; $('tdWin').hidden = false; window.sfx?.('win'); };
+  G.onWaveEnd = w => { saveBest(); if (w === 1) toast('Mezi vlnami je 15 s pauza. Další vlna se spustí sama, nebo dřív tlačítkem ⏭ (bonus zlaťáky).'); };
+  $('tdSetup').hidden = true; $('tdEnd').hidden = true; $('tdGame').hidden = false;
+  view.sel = null; view.placing = null; view.ghost = null; speed = 1; paused = false; panelSig = '';
+  setupCanvas();
+  running = true; lastFrame = performance.now(); acc = 0;
+  requestAnimationFrame(frame);
+  renderSide(true);
+  toast('Vyber věž vpravo a polož ji vedle cesty. Až budeš připravený, dej ▶ Start.');
+}
+function saveBest() {
+  try { const b = JSON.parse(localStorage.getItem(BEST_KEY) || '{}'), k = G.map.id + ':' + G.diff; if ((b[k] || 0) < G.stats.wavesDone) { b[k] = G.stats.wavesDone; localStorage.setItem(BEST_KEY, JSON.stringify(b)); } } catch (_) { /* nic */ }
+}
+function endGame(won) {
+  running = false; saveBest();
+  recordPlayPoints(G.stats.wavesDone * 4 + G.cardsOk * 3);
+  $('tdGame').hidden = true; $('tdEnd').hidden = false; $('tdWin').hidden = true; closeCard(true);
+  $('tdEndIco').textContent = won ? '👑' : '💥';
+  $('tdEndTitle').textContent = won ? 'Království ubráněno!' : 'Hrad padl';
+  $('tdEndDesc').textContent = won ? `Vydržel jsi až do vlny ${G.wave}.` : `Slizáci prolomili bránu ve vlně ${G.wave}.`;
+  $('tdEndStats').innerHTML = [
+    ['🌊', 'Ubráněné vlny', G.stats.wavesDone], ['🫧', 'Prasknutí slizáci', fmt(G.stats.pops)], ['🪙', 'Vydělané zlaťáky', fmt(G.stats.earned)],
+    ['📜', 'Svitky správně', `${G.cardsOk} / ${G.cardsOk + G.cardsBad}`], ['🏰', 'Postavené věže', G.towers.length],
+  ].map(([i, l, v]) => `<div><span>${i}</span><b>${v}</b><small>${l}</small></div>`).join('');
+  window.sfx?.(won ? 'win' : 'lose');
+}
+$('tdAgain').onclick = () => { $('tdEnd').hidden = true; $('tdSetup').hidden = false; renderSetup(); };
+$('tdWinGo').onclick = () => { $('tdWin').hidden = true; paused = false; };
+$('tdWinEnd').onclick = () => endGame(true);
+
+/* ── Canvas, souřadnice, ovládání myší a dotykem ──────────────── */
+let cv, g2, dpr = 1;
+function setupCanvas() {
+  cv = $('tdCanvas'); g2 = cv.getContext('2d');
+  const fit = () => {
+    const w = $('tdStage').clientWidth || 800;
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.style.width = w + 'px'; cv.style.height = (w * TH / TW) + 'px';
+    cv.width = Math.round(w * dpr); cv.height = Math.round(w * TH / TW * dpr);
+  };
+  fit(); window.onresize = fit;
+  cv.onpointermove = e => { view.pointer = worldPos(e); updateGhost(); };
+  cv.onpointerleave = () => { view.pointer = null; if (view.ghost && !view.touchGhost) view.ghost = null; };
+  cv.onpointerdown = e => {
+    const p = worldPos(e); view.pointer = p;
+    if (e.button === 2) { cancelPlacing(); return; }
+    if (view.placing) {
+      if (e.pointerType === 'touch' && !view.touchGhost) { view.touchGhost = true; updateGhost(); return; }   // první klepnutí jen ukáže, kam to padne
+      tryPlace(p); return;
+    }
+    clickWorld(p);
+  };
+  cv.oncontextmenu = e => e.preventDefault();
+}
+function worldPos(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * TW, y: (e.clientY - r.top) / r.height * TH }; }
+function updateGhost() {
+  if (!view.placing || !view.pointer) { view.ghost = null; return; }
+  const { x, y } = view.pointer, type = view.placing;
+  let bad = view.placing === 'moveHero' ? placeProblem(G.hero.id, x, y, G.hero) : placeProblem(type, x, y);
+  const cost = type === 'moveHero' ? 250 : HDEF[type] ? heroCost(type) : towerCost(type, x, y);
+  if (!bad && G.gold < cost) bad = 'Málo zlaťáků';
+  view.ghost = { type: type === 'moveHero' ? G.hero.id : type, x, y, bad };
+}
+function tryPlace(p) {
+  const type = view.placing;
+  let why;
+  if (type === 'moveHero') why = moveHero(p.x, p.y);
+  else if (HDEF[type]) why = placeHero(type, p.x, p.y);
+  else why = placeTower(type, p.x, p.y);
+  if (why) { toast(why); window.sfx?.('bad'); return; }
+  const placed = type === 'moveHero' || HDEF[type] ? G.hero : G.towers[G.towers.length - 1];
+  const keep = !HDEF[type] && type !== 'moveHero' && keyShift && G.gold >= towerCost(type, p.x, p.y);
+  if (!keep) { cancelPlacing(); view.sel = placed; }
+  renderSide(true);
+}
+let keyShift = false;
+function cancelPlacing() { view.placing = null; view.ghost = null; view.touchGhost = false; renderSide(true); }
+function clickWorld(p) {
+  const hit = [G.hero, ...G.towers].filter(Boolean).find(t => Math.hypot(t.x - p.x, t.y - p.y) <= t.r + 4);
+  if (hit) { view.sel = hit; window.sfx?.('click'); renderSide(true); return; }
+  const boss = G.enemies.find(e => e.def.boss && Math.hypot(e.x - p.x, e.y - p.y) <= e.def.r + 6);
+  if (boss) { view.sel = { boss }; renderSide(true); return; }
+  const obst = (G.map.obstacles || []).find(o => !o.removed && o.removable && p.x > o.x && p.x < o.x + o.width && p.y > o.y && p.y < o.y + o.height);
+  if (obst) { view.sel = { obst }; renderSide(true); return; }
+  if (view.sel) { view.sel = null; renderSide(true); }
+}
+
+/* ── Klávesy ───────────────────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  keyShift = e.shiftKey;
+  if (!running || e.target.closest?.('input,textarea')) return;
+  if (cardOpen) { const n = +e.key; if (n >= 1 && n <= 4) { const b = $('tdCardOpts').children[n - 1]; b?.click(); } if (e.key === 'Escape') closeCard(); return; }
+  if (e.code === 'Space' || e.key === 'q' || e.key === 'Q') { e.preventDefault(); openCard(); return; }
+  if (e.key === 'Escape') { if (view.placing) cancelPlacing(); else { view.sel = null; renderSide(true); } return; }
+  if (e.key === 'p' || e.key === 'P') { togglePause(); return; }
+  if (e.key === 'f' || e.key === 'F') { cycleSpeed(); return; }
+  const n = +e.key; if (n >= 1 && n <= 9) { const btn = $('tdAbil').children[n - 1]; btn?.click(); }
+});
+document.addEventListener('keyup', e => { keyShift = e.shiftKey; });
+document.addEventListener('visibilitychange', () => { if (document.hidden && running && !paused) togglePause(true); });
+window.addEventListener('beforeunload', e => { if (running && G && G.wave > 0 && !G.over) { e.preventDefault(); e.returnValue = ''; } });
+
+function togglePause(force) { paused = force === true ? true : !paused; $('tdPaused').hidden = !paused; $('hudPause').textContent = paused ? '▶' : '⏸'; }
+function cycleSpeed() { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $('hudSpeed').textContent = speed + '×'; }
+$('hudPause').onclick = () => togglePause();
+$('tdResume').onclick = () => togglePause();
+$('hudSpeed').onclick = cycleSpeed;
+$('hudCard').onclick = () => openCard();
+$('hudGo').onclick = () => { if (!G.waveActive && !G.over) { startWave(); renderSide(true); } };
+
+/* ── Hlavní smyčka ─────────────────────────────────────────────── */
+function frame(now) {
+  if (!running) return;
+  const real = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  if (!paused && !G.over) {
+    let k = speed;
+    if (cardOpen && cardOpen.slowUntil > now) { k = ECON.flashcards.singleplayer_slow_motion_factor; G.slowmo = true; } else G.slowmo = false;
+    acc += real * k;
+    let n = 0;
+    while (acc >= STEP && n++ < 12) { step(STEP); acc -= STEP; }
+    if (n >= 12) acc = 0;
+  }
+  const s = cv.width / TW;
+  g2.setTransform(s, 0, 0, s, 0, 0);
+  TR.render(g2, view);
+  updateHud();
+  if (Math.floor(now / 250) !== Math.floor((now - real * 1000) / 250)) renderSide();
+  requestAnimationFrame(frame);
+}
+
+/* ── HUD a lišta schopností ────────────────────────────────────── */
+function cardQuota() { return ECON.flashcards.max_per_wave + G.cardQuotaBonus; }
+function updateHud() {
+  $('hudLives').textContent = Math.ceil(G.lives);
+  $('hudGold').textContent = fmt(G.gold);
+  $('hudKm').textContent = G.km;
+  $('hudWave').textContent = G.wave > TD.waves.length ? `${G.wave} (volná hra)` : `${G.wave} / ${TD.waves.length}`;
+  const left = cardQuota() - G.cardsThisWave, cd = Math.max(0, G.cardCdUntil - G.time);
+  $('hudCardQ').textContent = cd > 0 ? Math.ceil(cd) + ' s' : `${left}/${cardQuota()}`;
+  $('hudCard').disabled = left <= 0 || cd > 0 || !!cardOpen;
+  const go = $('hudGo');
+  if (G.waveActive) { go.textContent = '🌊 Vlna běží'; go.disabled = true; }
+  else if (G.wave === 0) { go.textContent = '▶ Start'; go.disabled = false; }
+  else { go.textContent = `⏭ Další vlna (${Math.max(0, Math.ceil(G.pauseUntil - G.time))} s)`; go.disabled = false; }
+  // pečeť bosse
+  const bosses = G.enemies.filter(e => e.seal && e.seal.s > 0);
+  const ban = $('tdBanner');
+  if (bosses.length) { ban.hidden = false; ban.innerHTML = `🔮 <b>Runová pečeť</b> chrání ${bosses.length > 1 ? 'krále' : esc(bosses[0].def.name)} — správný svitek ji oslabí, nebo klikni na krále a rozbij ji za 💎.`; }
+  else ban.hidden = true;
+  // schopnosti
+  const abil = [];
+  if (G.hero) G.hero.abilities.forEach((a, i) => abil.push({ k: 'h' + i, name: a.name, ico: HDEF[G.hero.id].ico, until: a.until, cd: a.cd, use: () => useHeroAbility(i) }));
+  const seen = new Map();
+  G.towers.forEach(t => { if (!t.ability) return; const k = t.ability.key; const prev = seen.get(k); if (!prev || t.cdUntil < prev.cdUntil) seen.set(k, t); });
+  seen.forEach((t, k) => abil.push({ k, name: t.ability.name, ico: TDEF[t.type].ico, until: t.cdUntil, cd: (t.ability.cooldown_s || 30) * abilityCdMul(t), use: () => useTowerAbility(t) }));
+  const sig = abil.map(a => a.k).join('|');
+  const bar = $('tdAbil');
+  if (sig !== hudSig) {
+    hudSig = sig;
+    bar.innerHTML = abil.map((a, i) => `<button type="button" class="td-ab" data-i="${i}" title="${esc(a.name)} (${i + 1})"><span>${a.ico}</span><small>${esc(a.name)}</small><i></i><em>${i + 1}</em></button>`).join('');
+    [...bar.children].forEach((b, i) => { b.onclick = () => { const x = curAbil[i]; if (x && x.until <= G.time) { if (x.use() === false) toast('Teď není na co to použít.'); } }; });
+  }
+  curAbil = abil;
+  [...bar.children].forEach((b, i) => { const a = abil[i]; if (!a) return; const left = Math.max(0, a.until - G.time); b.classList.toggle('cd', left > 0); b.querySelector('i').style.setProperty('--p', left > 0 ? Math.min(1, left / a.cd) : 0); b.querySelector('i').textContent = left > 0 ? Math.ceil(left) : ''; });
+}
+let curAbil = [];
+
+/* ── Postranní panel: obchod / vybraná věž / hrdina / boss ────── */
+function renderSide(force) {
+  if (!G) return;
+  const sel = view.sel;
+  if (sel && !sel.boss && !sel.obst && !sel.hero && !G.towers.includes(sel)) view.sel = null;
+  if (sel?.boss && sel.boss.dead) view.sel = null;
+  const sig = JSON.stringify([view.sel ? (view.sel.id || view.sel.boss?.id || 'o') : 0, view.placing, Math.floor(G.gold / 5), G.km, G.waveActive, G.wave,
+    view.sel?.up, view.sel?.level, view.sel?.target, view.sel?.mode, Math.floor((view.sel?.bank || 0) / 50), view.sel?.boss ? Math.ceil(view.sel.boss.seal?.s * 10) : 0, Math.floor(G.time / 2) * (view.sel?.hero ? 1 : 0)]);
+  if (!force && sig === panelSig) return;
+  panelSig = sig;
+  const side = $('tdSide');
+  side.innerHTML = view.sel ? (view.sel.boss ? bossPanel(view.sel.boss) : view.sel.obst ? obstPanel(view.sel.obst) : view.sel.hero ? heroPanel(view.sel) : towerPanel(view.sel)) : shopPanel();
+  side.querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, b.dataset));
+}
+function shopPanel() {
+  let h = '';
+  if (!G.hero) {
+    const hd = HDEF[G.heroId], c = heroCost(G.heroId);
+    h += `<div class="td-sec">Hrdina</div><button type="button" class="td-shop td-shop-hero${view.placing === G.heroId ? ' on' : ''}" data-act="buy" data-type="${G.heroId}" ${G.gold < c ? 'data-poor' : ''}>
+      <span class="td-shop-ico" style="--hc:${hd.col}">${hd.ico}</span><span><b>${esc(hd.name)}</b><small>${esc(hd.role)}</small></span><em>${c} zl</em></button>`;
+  }
+  const byCat = {};
+  TD.towers.forEach(t => (byCat[t.cat] = byCat[t.cat] || []).push(t));
+  Object.entries(byCat).forEach(([cat, list]) => {
+    h += `<div class="td-sec">${CAT_LABEL[cat]}</div><div class="td-shop-grid">` + list.map(t => {
+      const c = Math.round(t.base.cost * G.costMul);
+      return `<button type="button" class="td-shop${view.placing === t.id ? ' on' : ''}" data-act="buy" data-type="${t.id}" title="${esc(t.name)} — ${esc(t.desc)}" ${G.gold < c ? 'data-poor' : ''}>
+        <span class="td-shop-ico" style="--hc:${t.col}">${t.ico}</span><b>${esc(t.short)}</b><em>${c}</em></button>`;
+    }).join('') + '</div>';
+  });
+  if (view.placing) h += `<p class="td-tip">Klikni vedle cesty a věž se postaví. Se Shiftem můžeš stavět víc za sebou. Esc nebo pravé tlačítko zruší.</p>`;
+  // krystaly
+  h += `<div class="td-sec">Krystaly moudrosti 💎</div><div class="td-km-acts">
+    <button type="button" class="btn btn-secondary btn-sm" data-act="flare" ${G.km < 1 ? 'disabled' : ''} title="Na 15 s odhalí všechny průhledné Duchslizy">🔦 Světlice (1 💎)</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-act="sellkm" ${G.km < 1 ? 'disabled' : ''}>Prodat krystal (+100 zl)</button></div>
+    <p class="td-tip">Krystaly dávají jen svitky (kartičky). Potřebuješ je na vylepšení úrovně 4 (2 💎) a 5 (5 💎).</p>`;
+  h += nextWavePanel();
+  return h;
+}
+const _miniCache = new Map();
+function miniSlime(id, mods) {
+  const key = id + (mods || []).join();
+  if (_miniCache.has(key)) return _miniCache.get(key);
+  const def = EDEF[id], fake = { t: id, def, fort: (mods || []).includes('kamenny'), armored: def.traits.includes('armored') };
+  const url = TR.slimeSprite(fake).toDataURL();
+  _miniCache.set(key, url); return url;
+}
+function nextWavePanel() {
+  const n = G.waveActive ? G.wave : G.wave + 1;
+  if (n > TD.waves.length + 50) return '';
+  const w = waveDef(n);
+  const groups = {};
+  w.def.groups.forEach(gr => { const k = gr.id + '|' + (gr.mods || []).join(','); groups[k] = (groups[k] || 0) + Math.round(gr.n * w.cnt); });
+  const BADGE = { duchsliz: ['👻', 'průhledný — vidí ho jen některé věže'], dorustajici: ['🌱', 'dorůstá'], kamenny: ['🪨', 'kamenný — 2× životy'] };
+  const chips = Object.entries(groups).map(([k, cnt]) => {
+    const [id, m] = k.split('|'), mods = m ? m.split(',') : [], def = EDEF[id];
+    const traits = [...mods.map(x => BADGE[x]?.[0]).filter(Boolean), def.armored || def.traits.includes('armored') ? '🪖' : '', def.traits.includes('explosion_immune') ? '💥🚫' : '', def.traits.includes('freeze_immune') ? '❄️🚫' : '', def.traits.includes('magic_immune') ? '🔮🚫' : ''].join('');
+    return `<span class="td-chip" title="${esc(def.name)}${mods.length ? ' · ' + mods.map(x => BADGE[x]?.[1]).join(', ') : ''}"><img src="${miniSlime(id, mods)}" alt=""><b>${cnt}×</b><small>${esc(def.name)} ${traits}</small></span>`;
+  }).join('');
+  return `<div class="td-sec">${G.waveActive ? 'Právě jde' : 'Další vlna'}: ${n}</div><div class="td-chips">${chips}</div>${w.def.why && n <= TD.waves.length ? `<p class="td-warn">⚠️ ${esc(w.def.why)}</p>` : ''}`;
+}
+function statRow(t) {
+  const st = t.st;
+  const rows = [];
+  if (st.damage) rows.push(['Poškození', +effDamage(t).toFixed(1) + (t.fx.bonus_boss_damage || t.fx.bonus_moab_damage || t.fx.moab_damage_bonus ? ` (+${t.fx.bonus_boss_damage || t.fx.bonus_moab_damage || t.fx.moab_damage_bonus} králům)` : '')]);
+  if (st.damage) rows.push(['Průraz', effPierce(t)]);
+  if (st.range) rows.push(['Dosah', st.range >= 1900 ? 'celá mapa' : Math.round(effRange(t)) + ' px']);
+  if (st.damage && st.interval) rows.push(['Útoky', (speedMul(t) / st.interval).toFixed(1) + '/s']);
+  if (st.type && st.type !== 'none') rows.push(['Typ', DMG_LABEL[t.aura?.trueD ? 'true' : st.type] || st.type]);
+  if (st.damage) rows.push(['Vidí 👻', st.camo || t.aura?.camo ? 'ano' : 'ne']);
+  if (t.type === 'zlaty_dul') rows.push(['Výnos', Math.round(mineIncome(t)) + ' zl/vlna']);
+  if (t.dmgDone) rows.push(['Zničil', fmt(t.dmgDone)]);
+  return `<div class="td-stats">${rows.map(([a, b]) => `<span>${a}<b>${b}</b></span>`).join('')}</div>`;
+}
+function towerPanel(t) {
+  const def = TDEF[t.type];
+  let h = `<div class="td-sel-head"><span class="td-shop-ico" style="--hc:${def.col}">${def.ico}</span><div><b>${esc(def.name)}</b><small>${esc(def.desc)}</small></div><button type="button" class="td-x" data-act="close" aria-label="Zavřít">✕</button></div>`;
+  h += statRow(t);
+  if (towerHasAttack(t)) h += `<div class="td-targets">${TARGETS.map(([k, n]) => `<button type="button" class="${t.target === k ? 'on' : ''}" data-act="target" data-t="${k}">${n}</button>`).join('')}</div>`;
+  if (t.fx.toggle_submerge_mode) h += `<button type="button" class="btn btn-secondary btn-sm td-wide" data-act="mode">${t.mode === 'lighthouse' ? '⛵ Přepnout na střelbu' : '🗼 Přepnout na maják'}</button>`;
+  if (t.fx.bank_mode) h += `<div class="td-bank">🏦 V bance <b>${fmt(t.bank || 0)}</b> / ${fmt(t.fx.bank_capacity || 7500)} zl <button type="button" class="btn btn-primary btn-sm" data-act="bank" ${!(t.bank > 0) ? 'disabled' : ''}>Vybrat</button></div>`;
+  if (t.ability) { const left = Math.max(0, t.cdUntil - G.time); h += `<button type="button" class="btn btn-primary btn-sm td-wide" data-act="ability" ${left > 0 ? 'disabled' : ''}>✨ ${esc(t.ability.name)}${left > 0 ? ` (${Math.ceil(left)} s)` : ''}</button><p class="td-tip">${esc(t.ability.effect || '')}</p>`; }
+  h += '<div class="td-paths">';
+  for (let p = 0; p < 3; p++) {
+    const tier = t.up[p], next = def.paths[p][tier], ok = canUpgradePath(t, p), c = next ? upgradeCost(t, p) : null;
+    const pips = [0, 1, 2, 3, 4].map(i => `<i class="${i < tier ? 'on' : ''}"></i>`).join('');
+    const cur = tier ? def.paths[p][tier - 1].name : '—';
+    let btn;
+    if (!next) btn = '<span class="td-done">Hotovo ✓</span>';
+    else if (!ok.ok) btn = `<span class="td-lock">🔒 ${esc(ok.why)}</span>`;
+    else {
+      const poor = G.gold < c.gold || G.km < c.km;
+      btn = `<button type="button" class="td-buy" data-act="up" data-p="${p}" ${poor ? 'data-poor' : ''}><b>${esc(next.name)}</b><small>${esc(next.desc)}</small><em>${c.gold ? fmt(c.gold) + ' zl' : 'zdarma'}${c.km ? ` + ${c.km} 💎` : ''}</em></button>`;
+    }
+    h += `<div class="td-path td-p${p}"><div class="td-path-h"><span>Cesta ${p + 1}</span><span class="td-pips">${pips}</span></div><small class="td-cur">${esc(cur)}</small>${btn}</div>`;
+  }
+  h += '</div>';
+  h += `<button type="button" class="btn btn-secondary btn-sm td-wide td-sell" data-act="sell">Prodat za ${fmt(sellValue(t))} zl${t.kmSpent ? ` + ${t.kmSpent} 💎` : ''}</button>`;
+  return h;
+}
+function heroPanel(h) {
+  const def = HDEF[h.id], L = def.levels, next = L[h.level];
+  const base = L[h.level - 1].xp, need = next ? next.xp : base, pct = next ? Math.min(100, (h.xp - base) / (need - base) * 100) : 100;
+  let s = `<div class="td-sel-head"><span class="td-shop-ico" style="--hc:${def.col}">${def.ico}</span><div><b>${esc(def.name)}</b><small>${esc(def.role)}</small></div><button type="button" class="td-x" data-act="close" aria-label="Zavřít">✕</button></div>`;
+  s += `<div class="td-lvl"><b>Úroveň ${h.level}</b><span class="td-xpbar"><i style="width:${pct}%"></i></span><small>${next ? `${fmt(h.xp)} / ${fmt(need)} XP` : 'Maximální úroveň'}</small></div>`;
+  if (h.st.damage) s += `<div class="td-stats"><span>Poškození<b>${h.st.damage}</b></span><span>Dosah<b>${h.st.range} px</b></span><span>Útoky<b>${(speedMul(h) / h.st.interval).toFixed(1)}/s</b></span><span>Vidí 👻<b>${h.st.camo ? 'ano' : 'ne'}</b></span></div>`;
+  s += `<p class="td-tip">📜 <b>${esc(def.passive.name)}:</b> ${esc(def.passive.description)}</p>`;
+  if (next) s += `<p class="td-tip">Další úroveň: ${esc(next.text)}</p>`;
+  if (h.st.damage) s += `<div class="td-targets">${TARGETS.map(([k, n]) => `<button type="button" class="${h.target === k ? 'on' : ''}" data-act="target" data-t="${k}">${n}</button>`).join('')}</div>`;
+  s += `<div class="td-km-acts"><button type="button" class="btn btn-secondary btn-sm" data-act="heroxp" ${G.km < 1 || !next ? 'disabled' : ''}>+350 XP za 1 💎</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-act="movehero" ${G.gold < 250 ? 'disabled' : ''}>Přesunout (250 zl)</button></div>`;
+  s += `<details class="td-levels"><summary>Všechny úrovně</summary>${L.map(l => `<div class="${l.level <= h.level ? 'on' : ''}"><b>${l.level}</b> ${esc(l.text)}</div>`).join('')}</details>`;
+  return s;
+}
+function bossPanel(e) {
+  const left = e.seal ? Math.ceil(e.seal.s * e.seal.n - 1e-6) : 0, km = e.def.seal?.km || 3;
+  return `<div class="td-sel-head"><span class="td-shop-ico" style="--hc:${e.def.col}">👑</span><div><b>${esc(e.def.name)}</b><small>${esc(e.def.look || '')}</small></div><button type="button" class="td-x" data-act="close" aria-label="Zavřít">✕</button></div>
+    <div class="td-stats"><span>Životy<b>${fmt(Math.max(0, e.hp))} / ${fmt(e.maxHp)}</b></span><span>Pečeť<b>${left ? left + ' / ' + e.seal.n : 'prolomena'}</b></span></div>
+    ${left ? `<p class="td-tip">Dokud drží Runová pečeť, dostává král o 75 % menší poškození. Každý správný svitek ubere jednu pečeť, sama od sebe pomalu slábne.</p>
+    <button type="button" class="btn btn-primary btn-sm td-wide" data-act="seal" ${G.km < km ? 'disabled' : ''}>🔮 Rozbít pečeť za ${km} 💎</button>` : '<p class="td-tip">Pečeť je prolomená — teď dostává plné poškození.</p>'}`;
+}
+function obstPanel(o) {
+  return `<div class="td-sel-head"><span class="td-shop-ico" style="--hc:#78716c">🪨</span><div><b>${esc(o.name)}</b><small>Uvolní místo pro stavbu.</small></div><button type="button" class="td-x" data-act="close" aria-label="Zavřít">✕</button></div>
+    <button type="button" class="btn btn-primary btn-sm td-wide" data-act="clear" ${G.gold < o.remove_cost_gold ? 'disabled' : ''}>Odklidit za ${o.remove_cost_gold} zl</button>`;
+}
+function act(a, d) {
+  const sel = view.sel;
+  switch (a) {
+    case 'buy': if (view.placing === d.type) cancelPlacing(); else { view.placing = d.type; view.sel = null; view.touchGhost = false; updateGhost(); renderSide(true); } return;
+    case 'close': view.sel = null; break;
+    case 'target': sel.target = d.t; break;
+    case 'mode': sel.mode = sel.mode === 'lighthouse' ? null : 'lighthouse'; break;
+    case 'bank': addGold(sel.bank || 0); floatText(sel.x, sel.y - 26, '+' + fmt(sel.bank || 0), '#facc15'); sel.bank = 0; window.sfx?.('coin'); break;
+    case 'ability': if (useTowerAbility(sel) === false) toast('Teď není na co to použít.'); break;
+    case 'up': { const why = buyUpgrade(sel, +d.p); if (why) { toast(why); window.sfx?.('bad'); } break; }
+    case 'sell': sellTower(sel); view.sel = null; break;
+    case 'flare': if (G.km >= 1) { G.km--; G.revealUntil = G.time + ECON.flashcards.emergency_flare_reveal_duration_s; window.sfx?.('hint'); toast('🔦 Světlice: 15 s vidí všechny věže průhledné slizáky.'); } break;
+    case 'sellkm': if (G.km >= 1) { G.km--; addGold(ECON.currencies.km_to_gold_conversion_rate); window.sfx?.('coin'); } break;
+    case 'heroxp': if (G.km >= 1) { G.km--; addHeroXp(ECON.flashcards.direct_hero_xp_per_1_km); } break;
+    case 'movehero': view.placing = 'moveHero'; view.sel = null; toast('Klikni, kam hrdinu přesunout.'); break;
+    case 'seal': { const km = sel.boss.def.seal?.km || 3; if (G.km >= km) { G.km -= km; sel.boss.seal.s = 0; addFx({ kind: 'sealbreak', x: sel.boss.x, y: sel.boss.y, r: sel.boss.def.r, dur: 0.6 }); window.sfx?.('combo', { n: 3 }); } break; }
+    case 'clear': { const o = sel.obst; if (spend(o.remove_cost_gold)) { o.removed = true; window.sfx?.('tower'); view.sel = null; } break; }
+  }
+  renderSide(true);
+}
+
+/* ── Svitky (kartičky) ─────────────────────────────────────────── */
+function nextCard() {
+  if (!CARDQ.length) CARDQ = shuffle(POOL);
+  const c = CARDQ.shift();
+  const o = mcOptions(c, POOL.all || POOL);
+  return o ? { card: c, ...o } : nextCard();
+}
+function cardGold() {
+  let gold = ECON.flashcards.reward_base_gold + ECON.flashcards.reward_per_wave_gold * Math.max(1, G.wave);
+  const h = G.hero;
+  if (h?.id === 'kronikar_oskar') gold *= 1 + (h.level >= 20 ? 1 : h.level >= 8 ? 0.5 : 0.3);
+  if (G.towers.some(t => t.fx.flashcard_cash_bonus_pct)) gold *= 1.25;
+  gold += G.towers.filter(t => t.fx.flashcard_bonus_gold_add).length * 15;
+  return Math.round(gold);
+}
+function openCard() {
+  if (!G || G.over || cardOpen) return;
+  if (G.cardCdUntil > G.time) { toast(`Další svitek za ${Math.ceil(G.cardCdUntil - G.time)} s.`); return; }
+  if (G.cardsThisWave >= cardQuota()) { toast('V této vlně už jsi vyčerpal svitky. Další budou po vlně.'); return; }
+  const q = nextCard();
+  cardOpen = { ...q, slowUntil: performance.now() + ECON.flashcards.singleplayer_slow_motion_max_s * 1000, done: false };
+  $('tdCardQ').innerHTML = mcQuestionHtml(q.card);
+  $('tdCardOpts').innerHTML = q.opts.map((t, i) => `<button type="button" class="td-ans" data-i="${i}"><em>${i + 1}</em><span>${mcOptionHtml(q.card, t)}</span></button>`).join('');
+  $('tdCardReward').textContent = `+${cardGold()} zl · +1 💎`;
+  $('tdCardNote').textContent = G.enemies.some(e => e.seal && e.seal.s > 0) ? '🔮 Správná odpověď oslabí pečeť krále.' : 'Hra zatím běží zpomaleně.';
+  $('tdCard').hidden = false;
+  $('tdCardOpts').querySelectorAll('.td-ans').forEach(b => b.onclick = () => answerCard(+b.dataset.i));
+  if (typeof enhanceCode === 'function') enhanceCode($('tdCard'));
+  window.sfx?.('flip');
+}
+function answerCard(i) {
+  const c = cardOpen; if (!c || c.done) return;
+  c.done = true;
+  const ok = i === c.correct, btns = $('tdCardOpts').children;
+  btns[c.correct].classList.add('ok'); if (!ok) btns[i].classList.add('bad');
+  [...btns].forEach(b => b.disabled = true);
+  const F = ECON.flashcards, h = G.hero;
+  if (ok) {
+    G.cardsOk++; G.cardsThisWave++; G.streak++;
+    const gold = cardGold();
+    let km = F.reward_knowledge_points + (h?.id === 'kronikar_oskar' && h.level >= 20 ? 1 : 0) + (G.nextCardKmBonus || 0);
+    G.nextCardKmBonus = 0;
+    if (h?.id === 'kronikar_oskar' && h.level >= 15 && G.cardsOk % 5 === 0) km++;
+    let streakMsg = '';
+    if (G.streak % F.streak_required_count === 0) { km += F.streak_bonus_knowledge_points; G.streakUntil = G.time + (h?.id === 'kronikar_oskar' ? 15 : F.streak_buff_duration_s); streakMsg = ' · 👑 Královské požehnání!'; }
+    addGold(gold); G.km += km;
+    addHeroXp(F.hero_xp_per_correct_answer);
+    breakSeals(1);
+    if (h?.id === 'lovec_bedrich') { h.critShots = h.level >= 7 ? 5 : 3; const a = h.abilities[0]; if (a) a.until -= 6; }
+    if (h?.id === 'kronikar_oskar' && h.level >= 7) { for (const e of enemiesNear(h.x, h.y, h.st.range)) if (!e.def.boss) e.d = Math.max(0, e.d - 40); addFx({ kind: 'ring', x: h.x, y: h.y, r: h.st.range, dur: 0.4, col: '#fde68a' }); }
+    G.cardCdUntil = G.time + (G.waveActive ? F.correct_cooldown_during_wave_s : F.correct_cooldown_between_waves_s);
+    $('tdCardNote').innerHTML = `<b class="td-good">Správně! +${gold} zl, +${km} 💎${streakMsg}</b>`;
+    window.sfx?.('ok');
+    setTimeout(() => closeCard(true), 900);
+  } else {
+    G.cardsBad++; G.streak = 0;
+    G.cardCdUntil = G.time + (h?.id === 'kronikar_oskar' && h.level >= 13 ? F.wrong_answer_cooldown_s / 2 : F.wrong_answer_cooldown_s);
+    $('tdCardNote').innerHTML = `<b class="td-bad">Špatně — správná odpověď je zvýrazněná. Další svitek za ${Math.ceil(G.cardCdUntil - G.time)} s.</b>`;
+    window.sfx?.('bad');
+    setTimeout(() => closeCard(true), 2200);
+  }
+}
+function closeCard() { cardOpen = null; $('tdCard').hidden = true; if (G) G.slowmo = false; }
+$('tdCardClose').onclick = () => closeCard();
+$('tdCard').addEventListener('click', e => { if (e.target.id === 'tdCard' && cardOpen?.done) closeCard(); });

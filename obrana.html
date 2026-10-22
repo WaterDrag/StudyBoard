@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Obrana království – StudyBoard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%8F%B0</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StudyBoard">
+  <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
+</head>
+<body class="mc-page td-page">
+
+  <nav class="fc-nav">
+    <a id="backBtn" href="dashboard.html?tab=games" class="icon-btn" aria-label="Zpět na hry" title="Zpět na hry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+    <span class="fc-nav-title">🏰 Obrana království</span>
+  </nav>
+
+  <main class="td-main">
+    <!-- Úvod: mapa, hrdina, obtížnost, balíčky -->
+    <section id="tdSetup" class="td-setup">
+      <div class="mil-logo">🏰</div>
+      <h1>Obrana království</h1>
+      <p class="mc-sub">Slizáci táhnou na hrad. Stav věže, vylepšuj je a odpovídej na svitky z tvých kartiček — za správné odpovědi získáš zlaťáky a krystaly moudrosti, bez kterých nekoupíš nejsilnější vylepšení ani neprolomíš pečeť bossů.</p>
+      <div class="td-step"><h3>1. Mapa</h3><div class="td-pick" id="tdMaps"></div></div>
+      <div class="td-step"><h3>2. Hrdina</h3><div class="td-pick" id="tdHeroes"></div></div>
+      <div class="td-step"><h3>3. Obtížnost</h3><div class="td-pick td-pick-sm" id="tdDiffs"></div></div>
+      <div class="td-step">
+        <div class="mc-decks-h"><h3>4. Z jakých balíčků budou svitky?</h3><button type="button" class="btn btn-ghost btn-sm" id="tdAll">Vybrat vše</button></div>
+        <div class="mc-decks" id="tdDecks"><div class="mc-muted">Načítám balíčky…</div></div>
+      </div>
+      <button type="button" class="btn btn-primary mc-start" id="tdStart" disabled>Hrát</button>
+      <p class="mc-hint" id="tdHint"></p>
+    </section>
+
+    <!-- Hra -->
+    <section id="tdGame" class="td-game" hidden>
+      <div class="td-hud">
+        <span class="td-stat" title="Životy hradu"><span class="td-ico">❤️</span><b id="hudLives">150</b></span>
+        <span class="td-stat" title="Zlaťáky"><span class="td-ico">🪙</span><b id="hudGold">0</b></span>
+        <span class="td-stat td-km" title="Krystaly moudrosti — jen ze svitků (kartiček)"><span class="td-ico">💎</span><b id="hudKm">0</b></span>
+        <span class="td-stat" title="Vlna"><span class="td-ico">🌊</span><b id="hudWave">0</b></span>
+        <span class="td-hud-sp"></span>
+        <button type="button" class="td-btn td-card-btn" id="hudCard" title="Rozluštit svitek (Mezerník)">📜 Svitek <small id="hudCardQ">3/3</small></button>
+        <button type="button" class="td-btn td-go" id="hudGo">▶ Start</button>
+        <button type="button" class="td-btn" id="hudSpeed" title="Rychlost hry (F)">1×</button>
+        <button type="button" class="td-btn" id="hudPause" title="Pauza (P)">⏸</button>
+      </div>
+      <div class="td-body">
+        <div class="td-stage" id="tdStage">
+          <canvas id="tdCanvas" width="1040" height="720"></canvas>
+          <div class="td-banner" id="tdBanner" hidden></div>
+          <div class="td-abil" id="tdAbil"></div>
+          <div class="td-paused" id="tdPaused" hidden><div>⏸ Pauza</div><button type="button" class="btn btn-primary" id="tdResume">Pokračovat</button></div>
+        </div>
+        <aside class="td-side" id="tdSide"></aside>
+      </div>
+    </section>
+
+    <!-- Konec -->
+    <section id="tdEnd" class="mc-setup" hidden>
+      <div class="mil-logo" id="tdEndIco">🏰</div>
+      <h1 id="tdEndTitle"></h1>
+      <p class="mc-sub" id="tdEndDesc"></p>
+      <div class="td-end-stats" id="tdEndStats"></div>
+      <div class="mc-end-actions">
+        <button type="button" class="btn btn-primary" id="tdAgain">Hrát znovu</button>
+        <a class="btn btn-secondary" href="dashboard.html?tab=games">Zpět na hry</a>
+      </div>
+    </section>
+  </main>
+
+  <!-- Svitek (kartička) -->
+  <div class="td-modal" id="tdCard" hidden>
+    <div class="td-card">
+      <div class="td-card-top"><b>📜 Svitek moudrosti</b><span id="tdCardReward"></span></div>
+      <div class="td-card-q" id="tdCardQ"></div>
+      <div class="td-card-opts" id="tdCardOpts"></div>
+      <div class="td-card-foot"><span id="tdCardNote"></span><button type="button" class="btn btn-ghost btn-sm" id="tdCardClose">Zavřít</button></div>
+    </div>
+  </div>
+  <!-- Vítězství -->
+  <div class="td-modal" id="tdWin" hidden>
+    <div class="td-card td-win">
+      <div class="mil-logo">👑</div>
+      <h2>Království je zachráněno!</h2>
+      <p class="mc-sub" id="tdWinDesc"></p>
+      <div class="mc-end-actions"><button type="button" class="btn btn-primary" id="tdWinGo">Pokračovat ve volné hře</button><button type="button" class="btn btn-secondary" id="tdWinEnd">Ukončit</button></div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script>document.write('<script src="js/sound.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/codehl.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/mcgame.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/td-data.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/td-engine.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/td-render.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>(function(){var s=document.createElement('script');s.src='js/td.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
+</body>
+</html>

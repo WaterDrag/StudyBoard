@@ -211,7 +211,7 @@
   // Nálada podle stránky (stránka ji může změnit voláním soundMood).
   const page = (location.pathname.split('/').pop() || 'index.html').replace(/^_/, '').replace(/\.html$/, '') || 'index';
   const PAGE_MOOD = { dashboard: 'study', room: 'study', flashcards: 'study', quiz: 'quiz', denni: 'quiz', spojovacka: 'quiz', pravdalez: 'quiz',
-    sibenice: 'quiz', osmismerka: 'study', krizovka: 'study', pexeso: 'quiz', milionar: 'millionaire', dobyvatel: 'conquest', game: 'zombie' };
+    sibenice: 'quiz', osmismerka: 'study', krizovka: 'study', pexeso: 'quiz', milionar: 'millionaire', dobyvatel: 'conquest', game: 'zombie', obrana: 'conquest' };
   MOOD = PAGE_MOOD[page] || null;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 })();
