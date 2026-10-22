@@ -70,6 +70,7 @@ function spawnEnemy(t, pathIdx, d, mods = [], opt = {}) {
     vuln: 0, vulnUntil: 0, vulnMul: 1, vulnMulUntil: 0, burn: null, acid: null, revealed: false,
     goldMul: 1, coated: false, spdMul: opt.spdMul || 1, hpMulKids: opt.hpMul || 1, dead: false, wob: Math.random() * 6.28,
   };
+  if (opt.bounty) e.bounty = opt.bounty;
   if (def.seal && !opt.noSeal) e.seal = { s: 1, n: def.seal.n };
   const q = posAt(G.paths[pathIdx], d); e.x = q.x; e.y = q.y;
   G.enemies.push(e);
@@ -142,6 +143,7 @@ function killEnemy(e, overflow, type, o) {
   if (o.src?.aura?.cash) g *= 1 + o.src.aura.cash;
   if (G.blessUntil > G.time) g += 1;
   addGold(g, true);
+  if (e.bounty) { addGold(e.bounty); G.stats.bounty = (G.stats.bounty || 0) + e.bounty; floatText(e.x, e.y - 14, '+' + Math.round(e.bounty), '#fde047'); }
   for (const t of G.necros) if (Math.hypot(t.x - e.x, t.y - e.y) < t.st.range) { t.souls = Math.min(t.fx.graveyard_max_souls || 50, (t.souls || 0) + 1); break; }
   if (e.coated && isBoss(e)) explode(e.x, e.y, e.coatR, e.maxHp * e.coatPct, 'true', 999, null, { kind: 'boom' });
   if (isBoss(e)) addFx({ kind: 'bossdie', x: e.x, y: e.y, r: e.def.r, col: e.def.col, dur: 0.6 });
@@ -247,14 +249,16 @@ function spend(n) { if (G.gold + 1e-6 < n) return false; G.gold -= n; return tru
 const GEN = /^(.*?)_(add|mult|set)(?:_px|_s)?$/;
 const STAT_KEY = { range: 'range', damage: 'damage', pierce: 'pierce', attack_interval: 'interval', projectiles: 'projectiles',
   explosion_radius: 'expl', splash_radius: 'expl', freeze_duration: 'freeze', acid_dot_dps: 'acid', acid_duration: 'acidDur',
-  projectile_speed: 'pspeed', damage_type: 'type', income_per_wave: 'income', flame_damage: 'flameAdd', cluster_damage: 'clusterAdd' };
+  projectile_speed: 'pspeed', damage_type: 'type', income_per_wave: 'income', flame_damage: 'flameAdd', cluster_damage: 'clusterAdd',
+  carts: 'carts', cart_value: 'cartVal', cart_value_pct: 'cartPct', cart_mult: 'cartMul' };
 const SET_KEYS = { explosion_radius_px: 'expl', can_see_camo: 'camo', payouts_per_wave: 'payouts', attack_mode_set: 'mode' };
 
 function recalcTower(t) {
   const def = TDEF[t.type], b = def.base;
   const st = { range: b.range_px || 0, damage: b.damage || 0, pierce: b.pierce || 1, interval: b.attack_interval_s || 1, projectiles: b.projectiles || 1,
     expl: b.explosion_radius_px || b.splash_radius_px || 0, freeze: b.freeze_duration_s || 0, acid: b.acid_dot_dps || 0, acidDur: b.acid_duration_s || 0,
-    pspeed: 1, type: b.damage_type, camo: !!b.can_see_camo, income: b.income_per_wave || 0, payouts: b.payouts_per_wave || 4, flameAdd: 0, clusterAdd: 0, mode: null };
+    pspeed: 1, type: b.damage_type, camo: !!b.can_see_camo, income: b.income_per_wave || 0, payouts: b.payouts_per_wave || 4, flameAdd: 0, clusterAdd: 0, mode: null,
+    carts: 4, cartVal: Math.round((b.income_per_wave || 0) / 4), cartPct: 0, cartMul: 1 };
   const fx = {}, mults = {};
   let ability = null;
   for (let tier = 1; tier <= 5; tier++) for (let p = 0; p < 3; p++) {
@@ -341,6 +345,8 @@ function placeProblem(type, x, y, ignore) {
   const def = TDEF[type] || HDEF[type] || { base: { radius_px: 20, placement: 'land' } };
   const r = def.base.radius_px || 20, water = def.base.placement === 'water';
   if (x < r || y < r || x > TW - r || y > TH - r) return 'Mimo mapu';
+  const vsMax = G.vs && def.base.max_instances_in_versus;
+  if (vsMax && !ignore && G.towers.filter(t => t.type === type).length >= vsMax) return `Ve versus nejvýš ${vsMax}×`;
   if (distToTrack(x, y) < TRACK_HALF + r * 0.75) return 'Na cestě';
   for (const o of G.map.obstacles || []) if (!o.removed && inRect(x, y, r * 0.8, o)) return o.name;
   if (water && !inWater(x, y, r)) return 'Loď jen do vody';
@@ -433,6 +439,10 @@ function speedMul(t) {
   if (t.buff && t.buff.until > G.time) m += t.buff.spd || 0;
   if (t.rainUntil > G.time) m *= 3;
   if (t.type === 'kralovsky_lucistnik' && G.archerRush > G.time) m += 1.5;
+  if (G.vs) {
+    if (G.vs.focusUntil > G.time) m += VS.ffa_3_to_4_players.stage_1_mild_focus.defender_attack_speed_buff_pct;
+    if (G.vs.curse && G.vs.curse.id === t.id && G.vs.curse.until > G.time) m *= 0.5;
+  }
   return m;
 }
 function effRange(t) { return t.st.range * (1 + (t.aura?.rng || 0) + (t.buff && t.buff.until > G.time ? t.buff.rng || 0 : 0)); }
@@ -1076,8 +1086,10 @@ function startWave() {
   window.sfx?.('start');
 }
 function livesCap() { return (DIFF[G.diff]?.lives || 150) + 200; }
+// Důl: vozíky × hodnota vozíku (× bonus hodnoty × násobek tržiště/banky)
 function mineIncome(t) {
-  let inc = t.st.income || 0;
+  const st = t.st;
+  let inc = st.carts * st.cartVal * (1 + st.cartPct) * st.cartMul;
   inc *= 1 + (t.aura?.mine || 0);
   if (G.towers.some(o => o !== t && o.type === 'zlaty_dul' && o.fx.buff_all_other_farms_income_pct)) inc *= 1.25;
   const h = G.hero; if (h?.id === 'kronikar_oskar') inc *= 1 + (h.level >= 14 ? 0.15 : h.level >= 5 ? 0.08 : 0);
@@ -1085,7 +1097,7 @@ function mineIncome(t) {
 }
 function payMines(frac) {   // výplata dolů během vlny po částech
   for (const t of G.towers) {
-    if (t.type !== 'zlaty_dul' || t.st.bank) continue;
+    if (t.type !== 'zlaty_dul' || t.fx.bank_mode) continue;   // banka si výnos ukládá na konci vlny
     const total = mineIncome(t), due = total * frac - (t.paid || 0);
     if (due >= 1) {
       let g = due;
@@ -1101,10 +1113,16 @@ function endWave() {
   const w = G.wave;
   const reward = w <= TD.waves.length ? TD.waves[w - 1].gold : ECON.singleplayer.end_of_wave_base_gold + ECON.singleplayer.end_of_wave_per_wave_gold * w;
   addGold(reward);
+  waveRewards(w);
+  G.pauseUntil = G.time + ECON.singleplayer.inter_wave_pause_s;
+  G.onWaveEnd?.(w);
+  if (w === TD.waves.length && !G.wonShown) { G.wonShown = true; G.onWin?.(); }
+}
+function waveRewards(w) {
   // banky, životy z tržišť, příjmy z hlásky a galér, Oskar
   for (const t of G.towers) {
     if (t.type === 'zlaty_dul' && t.fx.bank_mode) {
-      t.bank = Math.min(t.fx.bank_capacity || 7500, ((t.bank || 0) + (t.fx.base_deposit_per_wave || 300) + mineIncome(t) * 0) * (1 + (t.fx.compound_interest_per_wave_pct || 0.15)));
+      t.bank = Math.min(t.fx.bank_capacity || 7500, ((t.bank || 0) + mineIncome(t)) * (1 + (t.fx.compound_interest_per_wave_pct || 0.15)));
     }
     if (t.fx.lives_generated_per_wave) G.lives = Math.min(livesCap(), G.lives + t.fx.lives_generated_per_wave);
     if (t.fx.base_income_per_wave) { addGold(t.fx.base_income_per_wave); floatText(t.x, t.y - 22, '+' + t.fx.base_income_per_wave, '#facc15'); }
@@ -1121,9 +1139,50 @@ function endWave() {
   }
   G.cardsThisWave = 0; G.cardQuotaBonus = 0;
   G.stats.wavesDone = w;
-  G.pauseUntil = G.time + ECON.singleplayer.inter_wave_pause_s;
-  G.onWaveEnd?.(w);
-  if (w === TD.waves.length && !G.wonShown) { G.wonShown = true; G.onWin?.(); }
+}
+
+/* ── Versus: každý brání svou mapu, vlny běží všem podle společných hodin,
+   místo odměn za vlnu je příjem (eco) a za poslané slizáky se eco zvedá ── */
+const VS = TD.versus;
+function vsWaveLen(n) {
+  const w = waveDef(n);
+  let end = 0;
+  w.def.groups.forEach(g => { end = Math.max(end, g.at + (Math.round(g.n * w.cnt) - 1) * g.every / Math.min(2, w.cnt)); });
+  return Math.max(16, end + 6);
+}
+function vsStartWave() {
+  if (G.wave > 0) { payMines(1); waveRewards(G.wave); G.onWaveEnd?.(G.wave); }
+  G.wave++;
+  const w = waveDef(G.wave), sd = VS.sudden_death_wave;
+  const hpMul = w.hpMul * (G.wave > sd ? 1 + VS.sudden_death_enemy_stat_increase_per_wave_pct * (G.wave - sd) : 1);
+  const rest = G.schedule.slice(G.schedIdx);
+  w.def.groups.forEach((g, gi) => {
+    const n = Math.round(g.n * w.cnt);
+    for (let i = 0; i < n; i++) rest.push({ at: G.time + g.at + i * g.every / Math.min(2, w.cnt), id: g.id, mods: g.mods, path: (i + gi) % G.paths.length, hpMul, spd: w.spd });
+  });
+  rest.sort((a, b) => a.at - b.at);
+  G.schedule = rest; G.schedIdx = 0;
+  G.waveActive = true; G.waveT = 0; G.waveLen = vsWaveLen(G.wave); G.mineTick = 0;
+  G.towers.forEach(t => { t.paid = 0; });
+  G.vs.nextWaveAt = G.time + G.waveLen;
+  if (G.wave === sd + 1) G.onSuddenDeath?.();
+  window.sfx?.('start');
+}
+// Změna příjmu: nad měkkým stropem roste pomaleji, tvrdý strop nepřekročí.
+function vsEco(x) {
+  if (x > 0 && G.vs.eco >= VS.eco_soft_cap_threshold) x *= VS.eco_soft_cap_multiplier;
+  G.vs.eco = Math.max(50, Math.min(VS.eco_hard_cap, G.vs.eco + x));
+}
+// Slizáci od soupeře: vypustí se postupně, za každého ubráněného je část ceny zpět.
+function vsIncoming(sendId, count, mods, bountyPct = VS.defense_bounty_cashback_pct) {
+  const sd = VS.sends.find(x => x.id === sendId); if (!sd) return;
+  const bounty = sd.cost_gold * bountyPct / Math.max(1, count + (sd.escort?.count || 0));
+  const at = Math.max(G.time, G.vs.inAt || 0);
+  for (let i = 0; i < count; i++) G.schedule.push({ at: at + i * sd.spacing_s, id: sd.enemy_id, mods, path: (G.vs.inPath++) % G.paths.length, hpMul: 1, spd: 1, bounty });
+  if (sd.escort) for (let i = 0; i < sd.escort.count; i++) G.schedule.push({ at: at + 0.6 + i * 0.35, id: sd.escort.enemy_id, mods: [], path: (G.vs.inPath++) % G.paths.length, hpMul: 1, spd: 1, bounty });
+  G.vs.inAt = at + count * sd.spacing_s;
+  const rest = G.schedule.slice(G.schedIdx).sort((a, b) => a.at - b.at);
+  G.schedule = rest; G.schedIdx = 0;
 }
 
 /* ── Hlavní krok simulace ──────────────────────────────────────── */
@@ -1134,11 +1193,16 @@ function step(dt) {
   // odložené akce
   if (G.later.length) { const now = G.later.filter(l => l.at <= G.time); G.later = G.later.filter(l => l.at > G.time); now.forEach(l => l.fn()); }
   // vlna: vypouštění slizáků
+  if (G.vs) {
+    if (G.time >= G.vs.nextWaveAt) vsStartWave();
+    if (G.time >= G.vs.ecoAt) { G.vs.ecoAt += VS.eco_payout_interval_s; addGold(G.vs.eco); G.stats.eco = (G.stats.eco || 0) + G.vs.eco; G.onEco?.(G.vs.eco); }
+  }
   if (G.waveActive) {
     G.waveT += dt;
-    while (G.schedIdx < G.schedule.length && G.schedule[G.schedIdx].at <= G.waveT) {
+    const clock = G.vs ? G.time : G.waveT;
+    while (G.schedIdx < G.schedule.length && G.schedule[G.schedIdx].at <= clock) {
       const s = G.schedule[G.schedIdx++];
-      spawnEnemy(s.id, s.path, 0, s.mods || [], { hpMul: s.hpMul, spdMul: s.spd });
+      spawnEnemy(s.id, s.path, 0, s.mods || [], { hpMul: s.hpMul, spdMul: s.spd, bounty: s.bounty });
     }
     const frac = Math.min(1, G.waveT / G.waveLen);
     const ticks = Math.floor(frac * 10);
@@ -1196,13 +1260,14 @@ function step(dt) {
   G.enemies = G.enemies.filter(e => !e.dead);
   G.fx = G.fx.filter(f => G.time - f.t0 < f.dur);
   G.floats = G.floats.filter(f => G.time - f.t0 < 1.2);
-  if (G.waveActive && G.schedIdx >= G.schedule.length && !G.enemies.length) endWave();
+  if (G.waveActive && !G.vs && G.schedIdx >= G.schedule.length && !G.enemies.length) endWave();
 }
 
 /* ── Nová hra ──────────────────────────────────────────────────── */
 // Obtížnost jako v BTD: ceny a počet životů
 const DIFF = { easy: { name: 'Lehká', cost: 0.85, lives: 200 }, medium: { name: 'Střední', cost: 1, lives: 150 }, hard: { name: 'Těžká', cost: 1.08, lives: 100 } };
-function newGame(mapId, heroId, diff = 'medium') {
+function newGame(mapId, heroId, diff = 'medium', vs = null) {
+  if (vs) diff = 'medium';
   const D = DIFF[diff] || DIFF.medium;
   const map = JSON.parse(JSON.stringify(TD.maps.find(m => m.id === mapId) || TD.maps[0]));
   G = {
@@ -1213,5 +1278,9 @@ function newGame(mapId, heroId, diff = 'medium') {
     cardsThisWave: 0, cardQuotaBonus: 0, cardCdUntil: 0, streak: 0, cardsOk: 0, cardsBad: 0, debt: 0,
     stats: { pops: 0, leaks: 0, popGold: 0, wavesDone: 0, earned: 0 }, glob: {}, auraDirty: true, over: false,
   };
+  if (vs) {
+    G.gold = VS.starting_gold; G.lives = vs.lives || VS.starting_lives; G.autoNext = false;
+    G.vs = { eco: VS.base_eco_income_gold, ecoAt: VS.eco_payout_interval_s, nextWaveAt: 3, inAt: 0, inPath: 0, curse: null, focusUntil: 0 };
+  }
   return G;
 }

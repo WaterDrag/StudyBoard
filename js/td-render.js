@@ -453,7 +453,7 @@ const TR = (() => {
     'splat', 'bossdie', 'sealbreak', 'upgrade', 'levelup', 'place', 'sell', 'gold', 'goldSplash', 'trap', 'shrink', 'potion', 'regrow', 'flame', 'blade']);
   function drawFx(g, f, time) {
     const k = Math.min(1, (time - f.t0) / f.dur), a = 1 - k;
-    if (useTDS() && window.TDS?.fx && TDS_FX.has(f.kind) && f.kind !== 'blade') {
+    if (useTDS() && window.TDS?.fx && TDS_FX.has(f.kind)) {
       const now = performance.now(), col = f.col === 'rainbow' ? '#f472b6' : f.col;
       if (f.kind === 'meteor') TDS.fx(g, 'meteor', f.x + 60, f.y, 9, k, now, { tx: f.x, ty: f.y });
       else TDS.fx(g, f.kind, f.x, f.y, f.r || (f.kind === 'tracer' ? 2 : f.kind === 'beam' ? 5 : 26), k, now, { tx: f.tx, ty: f.ty, ang: f.ang, col });
@@ -559,8 +559,9 @@ const TR = (() => {
       if (waterFrozenAt(z.x + z.width / 2, z.y + z.height / 2)) { g.fillStyle = 'rgba(224,242,254,.35)'; rrect(g, z.x, z.y, z.width, z.height, 22); g.fill(); }
     });
     G.zones.forEach(z => drawZone(g, z, time));
-    // dosah vybrané věže
-    const sel = view.sel;
+    // dosah vybrané věže (výběr může být i boss nebo překážka — ty nemají dosah)
+    const pick = view.sel, sel = pick && (pick.hero || pick.st) ? pick : null;
+    if (pick?.obst) { const o = pick.obst; g.strokeStyle = '#facc15'; g.lineWidth = 2.5; g.setLineDash([6, 4]); rrect(g, o.x - 4, o.y - 4, o.width + 8, o.height + 8, 18); g.stroke(); g.setLineDash([]); }
     if (sel) {
       const r = sel.hero ? sel.st.range : effRange(sel);
       if (r < 1900) { g.fillStyle = 'rgba(255,255,255,.12)'; g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.5; g.beginPath(); g.arc(sel.x, sel.y, r, 0, TAU); g.fill(); g.stroke(); }
@@ -569,6 +570,7 @@ const TR = (() => {
     // slizáci (bossové navrch)
     const list = G.enemies.slice().sort((a, b) => (a.def.boss - b.def.boss) || (a.y - b.y));
     for (const e of list) drawEnemy(g, e, time);
+    if (pick?.boss && !pick.boss.dead) { const e = pick.boss; g.strokeStyle = '#facc15'; g.lineWidth = 2.5; g.setLineDash([5, 4]); g.beginPath(); g.arc(e.x, e.y, e.def.r + 8, 0, TAU); g.stroke(); g.setLineDash([]); }
     // věže a hrdina (podle y, ať se překrývají přirozeně)
     const tw = [...G.towers, G.hero].filter(Boolean).sort((a, b) => a.y - b.y);
     for (const t of tw) t.hero ? drawHero(g, t, time) : drawTower(g, t, time, t === sel);

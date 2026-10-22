@@ -7,9 +7,10 @@ const DMG_LABEL = { sharp: 'ostré', explosion: 'výbušné', freeze: 'mráz', e
 const CAT_LABEL = { basic: 'Základní', military: 'Vojenské', magic: 'Magické', support: 'Podpora' };
 const TARGETS = [['first', 'První'], ['last', 'Poslední'], ['strong', 'Nejsilnější'], ['close', 'Nejbližší']];
 let DECKS = [], getDecks = () => [], POOL = [], CARDQ = [];
-let pref = { map: TD.maps[0].id, hero: TD.heroes[0].id, diff: 'medium' };
+let pref = { map: TD.maps[0].id, hero: TD.heroes[0].id, diff: 'medium', mode: 'solo' };
 try { pref = { ...pref, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch (_) { /* nic */ }
-const view = { sel: null, ghost: null, placing: null, pointer: null };
+const view = { sel: null, ghost: null, placing: null, pointer: null, tab: 'def' };
+const JOIN_GID = new URLSearchParams(location.search).get('g');
 let speed = 1, paused = false, running = false, lastFrame = 0, acc = 0, cardOpen = null, panelSig = '', hudSig = '';
 const fmt = n => Math.floor(n).toLocaleString('cs-CZ');
 (window.SB_EXTRA_SETTINGS = window.SB_EXTRA_SETTINGS || []).push({
@@ -20,6 +21,13 @@ const fmt = n => Math.floor(n).toLocaleString('cs-CZ');
 auth.onAuthStateChanged(async user => {
   if (!user) { location.href = 'index.html'; return; }
   ME = user;
+  if (JOIN_GID) {
+    GID = JOIN_GID;
+    try { const snap = await tdRef().get(); LOBBY = snap.exists ? snap.data() : null; } catch (_) { LOBBY = null; }
+    if (!LOBBY) { toast('Hra už neexistuje.'); history.replaceState(null, '', 'obrana.html'); GID = null; }
+    else if (LOBBY.status !== 'lobby' && !LOBBY.playerIds.includes(ME.uid)) { toast('Tahle bitva už začala bez tebe.'); history.replaceState(null, '', 'obrana.html'); GID = null; LOBBY = null; }
+    else if (LOBBY.status === 'play') { toast('Bitva už běží — rozehranou mapu po obnovení stránky nejde vrátit.'); history.replaceState(null, '', 'obrana.html'); GID = null; LOBBY = null; }
+  }
   renderSetup();
   try { DECKS = await mcLoadDecks(); } catch (e) { $('tdDecks').innerHTML = '<div class="mc-muted">Balíčky se nepodařilo načíst.</div>'; return; }
   getDecks = mcDeckPicker({ list: 'tdDecks', all: 'tdAll', start: 'tdStart', hint: 'tdHint', key: SEL_KEY, decks: DECKS,
@@ -30,6 +38,16 @@ auth.onAuthStateChanged(async user => {
 /* ── Úvodní obrazovka ──────────────────────────────────────────── */
 function bestOf(map, diff) { try { return (JSON.parse(localStorage.getItem(BEST_KEY) || '{}'))[map + ':' + diff] || 0; } catch (_) { return 0; } }
 function renderSetup() {
+  const joining = !!(GID && LOBBY), vs = joining || pref.mode === 'vs';
+  $('tdModes').innerHTML = [['solo', '🧑 Sám', '40 vln proti počítači'], ['vs', '⚔️ S přáteli', 'Versus 2–4 hráčů: posílej soupeřům slizáky']]
+    .map(([k, n, d]) => `<button type="button" class="td-opt${pref.mode === k ? ' on' : ''}" data-mode="${k}"><b>${n}</b><small>${d}</small></button>`).join('');
+  $('tdModes').onclick = e => { const b = e.target.closest('[data-mode]'); if (!b) return; pref.mode = b.dataset.mode; savePref(); renderSetup(); };
+  $('tdModeStep').hidden = joining;
+  $('tdMapStep').hidden = joining;
+  $('tdDiffStep').hidden = vs;
+  $('tdJoinInfo').hidden = !joining;
+  if (joining) $('tdJoinInfo').innerHTML = `⚔️ <b>${esc(LOBBY.hostName)}</b> tě zve do bitvy na mapě <b>${esc(TD.maps.find(m => m.id === LOBBY.map)?.name || '')}</b>. Vyber si hrdinu a balíčky na svitky.`;
+  if (!$('tdStart').dataset.busy) $('tdStart').textContent = joining ? 'Připojit se' : vs ? 'Založit bitvu' : 'Hrát';
   const maps = $('tdMaps');
   maps.innerHTML = TD.maps.map(m => `<button type="button" class="td-opt td-map${pref.map === m.id ? ' on' : ''}" data-map="${m.id}">
       <span class="td-map-img" data-prev="${m.id}"></span><b>${esc(m.name)}</b><small>${m.difficulty === 'easy' ? 'Snadná · jedna cesta' : 'Střední · dvě cesty'}</small></button>`).join('');
@@ -50,31 +68,60 @@ function savePref() { try { localStorage.setItem(PREF_KEY, JSON.stringify(pref))
 
 async function startGame() {
   const ds = getDecks();
-  const btn = $('tdStart'); btn.disabled = true; btn.textContent = 'Připravuji svitky…';
+  const btn = $('tdStart'), label = btn.textContent; btn.disabled = true; btn.dataset.busy = '1'; btn.textContent = 'Připravuji svitky…';
   try { const all = await mcLoadCards(ds); POOL = all.filter(c => mcOptions(c, all)); POOL.all = all; } catch (_) { POOL = []; }
-  btn.disabled = false; btn.textContent = 'Hrát';
-  if (!POOL.length) { toast('Z vybraných balíčků nejde sestavit otázky s možnostmi — přidej balíček s víc kartičkami.'); return; }
+  if (!POOL.length) { btn.disabled = false; delete btn.dataset.busy; btn.textContent = label; toast('Z vybraných balíčků nejde sestavit otázky s možnostmi — přidej balíček s víc kartičkami.'); return; }
   if (POOL.length < 8) toast(`Ve vybraných balíčcích je jen ${POOL.length} otázek — budou se často opakovat.`);
   CARDQ = shuffle(POOL);
+  if (GID || pref.mode === 'vs') {
+    try { if (GID) await vsJoin(); else await vsCreate(); } catch (e) { toast('Nepovedlo se: ' + e.message); }
+    btn.disabled = false; delete btn.dataset.busy; btn.textContent = label;
+    return;
+  }
+  btn.disabled = false; delete btn.dataset.busy; btn.textContent = label;
   newGame(pref.map, pref.hero, pref.diff);
   G.onLose = () => setTimeout(() => endGame(false), 900);
   G.onWin = () => { paused = true; $('tdWinDesc').textContent = `Ubránil jsi všech ${TD.waves.length} vln. Můžeš pokračovat ve volné hře — slizáci budou čím dál silnější.`; $('tdWin').hidden = false; window.sfx?.('win'); };
   G.onWaveEnd = w => { saveBest(); if (w === 1) toast('Mezi vlnami je 15 s pauza. Další vlna se spustí sama, nebo dřív tlačítkem ⏭ (bonus zlaťáky).'); };
-  $('tdSetup').hidden = true; $('tdEnd').hidden = true; $('tdGame').hidden = false;
+  beginPlay();
+  toast('Vyber věž vpravo a polož ji vedle cesty. Až budeš připravený, dej ▶ Start.');
+}
+// Společné pro sólo i versus: přepnout na hru a rozjet smyčku
+function beginPlay() {
+  ['tdSetup', 'tdEnd', 'tdLobby'].forEach(id => { $(id).hidden = true; });
+  $('tdGame').hidden = false;
+  $('tdGame').classList.toggle('td-vs', !!NET);
+  ['hudSpeed', 'hudPause'].forEach(id => { $(id).hidden = !!NET; });
+  $('hudEcoWrap').hidden = !NET;
+  $('tdOpps').hidden = !NET;
   view.sel = null; view.placing = null; view.ghost = null; speed = 1; paused = false; panelSig = '';
   setupCanvas();
   running = true; lastFrame = performance.now(); acc = 0;
   requestAnimationFrame(frame);
   renderSide(true);
-  toast('Vyber věž vpravo a polož ji vedle cesty. Až budeš připravený, dej ▶ Start.');
 }
 function saveBest() {
+  if (NET) return;
   try { const b = JSON.parse(localStorage.getItem(BEST_KEY) || '{}'), k = G.map.id + ':' + G.diff; if ((b[k] || 0) < G.stats.wavesDone) { b[k] = G.stats.wavesDone; localStorage.setItem(BEST_KEY, JSON.stringify(b)); } } catch (_) { /* nic */ }
 }
 function endGame(won) {
   running = false; saveBest();
-  recordPlayPoints(G.stats.wavesDone * 4 + G.cardsOk * 3);
+  recordPlayPoints(G.stats.wavesDone * 4 + G.cardsOk * 3 + (NET && won ? 30 : 0));
+  if (NET) {
+    $('tdGame').hidden = true; $('tdEnd').hidden = false; closeCard(true);
+    $('tdEndIco').textContent = won ? '🏆' : '💥';
+    $('tdEndTitle').textContent = won ? (NET.teams ? 'Váš tým vyhrál!' : 'Vyhrál(a) jsi bitvu!') : `Hrad padl — ${NET.place}. místo`;
+    $('tdEndDesc').textContent = won ? `Ubránil(a) ses až do vlny ${G.wave}. Za ubráněné poslané slizáky jsi dostal(a) ${fmt(G.stats.bounty || 0)} zl.` : `Slizáci prolomili bránu ve vlně ${G.wave}.`;
+    $('tdEndStats').innerHTML = [
+      ['🌊', 'Vlna', G.wave], ['⚔️', 'Posláno slizáků', `za ${fmt(NET.sentGold)} zl`], ['💰', 'Konečný příjem', fmt(G.vs.eco) + ' zl'],
+      ['📜', 'Svitky správně', `${G.cardsOk} / ${G.cardsOk + G.cardsBad}`], ['🏰', 'Postavené věže', G.towers.length],
+    ].map(([i, l, v]) => `<div><span>${i}</span><b>${v}</b><small>${l}</small></div>`).join('');
+    $('tdEndRank').innerHTML = vsEndRows();
+    window.sfx?.(won ? 'win' : 'lose');
+    return;
+  }
   $('tdGame').hidden = true; $('tdEnd').hidden = false; $('tdWin').hidden = true; closeCard(true);
+  $('tdEndRank').innerHTML = '';
   $('tdEndIco').textContent = won ? '👑' : '💥';
   $('tdEndTitle').textContent = won ? 'Království ubráněno!' : 'Hrad padl';
   $('tdEndDesc').textContent = won ? `Vydržel jsi až do vlny ${G.wave}.` : `Slizáci prolomili bránu ve vlně ${G.wave}.`;
@@ -84,7 +131,7 @@ function endGame(won) {
   ].map(([i, l, v]) => `<div><span>${i}</span><b>${v}</b><small>${l}</small></div>`).join('');
   window.sfx?.(won ? 'win' : 'lose');
 }
-$('tdAgain').onclick = () => { $('tdEnd').hidden = true; $('tdSetup').hidden = false; renderSetup(); };
+$('tdAgain').onclick = () => { if (NET) { vsStop(); location.href = 'obrana.html'; return; } $('tdEnd').hidden = true; $('tdSetup').hidden = false; renderSetup(); };
 $('tdWinGo').onclick = () => { $('tdWin').hidden = true; paused = false; };
 $('tdWinEnd').onclick = () => endGame(true);
 
@@ -140,7 +187,7 @@ let keyShift = false;
 function cancelPlacing() { view.placing = null; view.ghost = null; view.touchGhost = false; renderSide(true); }
 function clickWorld(p) {
   const hit = [G.hero, ...G.towers].filter(Boolean).find(t => Math.hypot(t.x - p.x, t.y - p.y) <= t.r + 4);
-  if (hit) { view.sel = hit; window.sfx?.('click'); renderSide(true); return; }
+  if (hit) { view.sel = hit; view.tab = 'def'; window.sfx?.('click'); renderSide(true); return; }
   const boss = G.enemies.find(e => e.def.boss && Math.hypot(e.x - p.x, e.y - p.y) <= e.def.r + 6);
   if (boss) { view.sel = { boss }; renderSide(true); return; }
   const obst = (G.map.obstacles || []).find(o => !o.removed && o.removable && p.x > o.x && p.x < o.x + o.width && p.y > o.y && p.y < o.y + o.height);
@@ -155,12 +202,20 @@ document.addEventListener('keydown', e => {
   if (cardOpen) { const n = +e.key; if (n >= 1 && n <= 4) { const b = $('tdCardOpts').children[n - 1]; b?.click(); } if (e.key === 'Escape') closeCard(); return; }
   if (e.code === 'Space' || e.key === 'q' || e.key === 'Q') { e.preventDefault(); openCard(); return; }
   if (e.key === 'Escape') { if (view.placing) cancelPlacing(); else { view.sel = null; renderSide(true); } return; }
-  if (e.key === 'p' || e.key === 'P') { togglePause(); return; }
-  if (e.key === 'f' || e.key === 'F') { cycleSpeed(); return; }
+  if (!NET && (e.key === 'p' || e.key === 'P')) { togglePause(); return; }
+  if (!NET && (e.key === 'f' || e.key === 'F')) { cycleSpeed(); return; }
   const n = +e.key; if (n >= 1 && n <= 9) { const btn = $('tdAbil').children[n - 1]; btn?.click(); }
 });
 document.addEventListener('keyup', e => { keyShift = e.shiftKey; });
-document.addEventListener('visibilitychange', () => { if (document.hidden && running && !paused) togglePause(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && running && !paused && !NET) togglePause(true); });
+// Versus běží podle společných hodin i v záložce na pozadí (tam nejde requestAnimationFrame)
+setInterval(() => { if (NET && running && document.hidden) { try { vsCatchUp(600); vsTick(); } catch (e) { console.error(e); } } }, 500);
+function vsCatchUp(max) {
+  const target = (serverNow() - NET.startAt) / 1000;
+  let n = 0;
+  while (G.time + STEP <= target && n++ < max && !G.over) step(STEP);
+  return target;
+}
 window.addEventListener('beforeunload', e => { if (running && G && G.wave > 0 && !G.over) { e.preventDefault(); e.returnValue = ''; } });
 
 function togglePause(force) { paused = force === true ? true : !paused; $('tdPaused').hidden = !paused; $('hudPause').textContent = paused ? '▶' : '⏸'; }
@@ -169,7 +224,7 @@ $('hudPause').onclick = () => togglePause();
 $('tdResume').onclick = () => togglePause();
 $('hudSpeed').onclick = cycleSpeed;
 $('hudCard').onclick = () => openCard();
-$('hudGo').onclick = () => { if (!G.waveActive && !G.over) { startWave(); renderSide(true); } };
+$('hudGo').onclick = () => { if (!NET && !G.waveActive && !G.over) { startWave(); renderSide(true); } };
 
 /* ── Hlavní smyčka ─────────────────────────────────────────────── */
 let lastErrAt = 0, frameNo = 0;
@@ -185,7 +240,12 @@ function frame(now) {
 function frameBody(now) {
   const real = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
   if (++frameNo % 60 === 0 && (g2.isContextLost?.() || TR.cachesLost())) { TR.clearCaches(); _towerIcoReset(); return; }
-  if (!paused && !G.over) {
+  if (NET) {
+    const target = vsCatchUp(240);
+    vsTick();
+    const ban = $('tdBanner');
+    if (target < 0) { ban.hidden = false; ban.innerHTML = `⚔️ Bitva začíná za <b>${Math.ceil(-target)}</b> s — stav první věže!`; }
+  } else if (!paused && !G.over) {
     let k = speed;
     if (cardOpen && cardOpen.slowUntil > now) { k = ECON.flashcards.singleplayer_slow_motion_factor; G.slowmo = true; } else G.slowmo = false;
     acc += real * k;
@@ -211,13 +271,18 @@ function updateHud() {
   $('hudCardQ').textContent = cd > 0 ? Math.ceil(cd) + ' s' : `${left}/${cardQuota()}`;
   $('hudCard').disabled = left <= 0 || cd > 0 || !!cardOpen;
   const go = $('hudGo');
-  if (G.waveActive) { go.textContent = '🌊 Vlna běží'; go.disabled = true; }
+  if (NET) {
+    $('hudEco').textContent = fmt(G.vs.eco);
+    go.disabled = true;
+    go.textContent = G.time < 0.01 ? '⚔️ Za chvíli' : `🌊 Vlna ${G.wave + 1} za ${Math.max(0, Math.ceil(G.vs.nextWaveAt - G.time))} s`;
+  } else if (G.waveActive) { go.textContent = '🌊 Vlna běží'; go.disabled = true; }
   else if (G.wave === 0) { go.textContent = '▶ Start'; go.disabled = false; }
   else { go.textContent = `⏭ Další vlna (${Math.max(0, Math.ceil(G.pauseUntil - G.time))} s)`; go.disabled = false; }
   // pečeť bosse
   const bosses = G.enemies.filter(e => e.seal && e.seal.s > 0);
   const ban = $('tdBanner');
-  if (bosses.length) { ban.hidden = false; ban.innerHTML = `🔮 <b>Runová pečeť</b> chrání ${bosses.length > 1 ? 'krále' : esc(bosses[0].def.name)} — správný svitek ji oslabí, nebo klikni na krále a rozbij ji za 💎.`; }
+  if (NET && G.time < 0.01) { /* odpočet ukazuje smyčka */ }
+  else if (bosses.length) { ban.hidden = false; ban.innerHTML = `🔮 <b>Runová pečeť</b> chrání ${bosses.length > 1 ? 'krále' : esc(bosses[0].def.name)} — správný svitek ji oslabí, nebo klikni na krále a rozbij ji za 💎.`; }
   else ban.hidden = true;
   // schopnosti
   const abil = [];
@@ -245,14 +310,17 @@ function renderSide(force) {
   if (sel?.boss && sel.boss.dead) view.sel = null;
   const sig = JSON.stringify([view.sel ? (view.sel.id || view.sel.boss?.id || 'o') : 0, view.placing, Math.floor(G.gold / 5), G.km, G.waveActive, G.wave,
     view.sel?.up, view.sel?.level, view.sel?.target, view.sel?.mode, Math.floor((view.sel?.bank || 0) / 50), view.sel?.boss ? Math.ceil(view.sel.boss.seal?.s * 10) : 0, Math.floor(G.time / 2) * (view.sel?.hero ? 1 : 0)]);
-  if (!force && sig === panelSig) return;
-  panelSig = sig;
+  const atk = NET && view.tab === 'atk' && !view.sel && !view.placing;
+  const fullSig = atk ? 'atk|' + Math.floor(G.gold / 5) + '|' + G.km + '|' + attackSig() : sig;
+  if (!force && fullSig === panelSig) return;
+  panelSig = fullSig;
   const side = $('tdSide');
   // zachovat rozbalené úrovně hrdiny a posun panelu, když jde jen o obnovení stejného výběru
   const same = side.dataset.sel === String(view.sel ? (view.sel.id || view.sel.boss?.id || 'o') : 0);
   const levelsOpen = same && side.querySelector('.td-levels')?.open, scroll = same ? side.scrollTop : 0;
   side.dataset.sel = String(view.sel ? (view.sel.id || view.sel.boss?.id || 'o') : 0);
-  side.innerHTML = view.sel ? (view.sel.boss ? bossPanel(view.sel.boss) : view.sel.obst ? obstPanel(view.sel.obst) : view.sel.hero ? heroPanel(view.sel) : towerPanel(view.sel)) : shopPanel();
+  const tabs = NET ? `<div class="td-tabs"><button type="button" class="${atk ? '' : 'on'}" data-act="tab" data-t="def">🏰 Obrana</button><button type="button" class="${atk ? 'on' : ''}" data-act="tab" data-t="atk">⚔️ Útok</button></div>` : '';
+  side.innerHTML = tabs + (atk ? attackPanel() : view.sel ? (view.sel.boss ? bossPanel(view.sel.boss) : view.sel.obst ? obstPanel(view.sel.obst) : view.sel.hero ? heroPanel(view.sel) : towerPanel(view.sel)) : shopPanel());
   if (levelsOpen) side.querySelector('.td-levels')?.setAttribute('open', '');
   side.scrollTop = scroll;
   side.querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, b.dataset));
@@ -273,13 +341,14 @@ function shopPanel() {
         <span class="td-shop-ico" style="--hc:${t.col}">${towerIco(t)}</span><b>${esc(t.short)}</b><em>${c}</em></button>`;
     }).join('') + '</div>';
   });
+  if (NET) h = `<div class="td-vs-eco">💰 Příjem <b>${fmt(G.vs.eco)} zl</b> / ${VS.eco_payout_interval_s} s — zvedneš ho posíláním slizáků v záložce ⚔️ Útok.</div>` + h;
   if (view.placing) h += `<p class="td-tip">Klikni vedle cesty a věž se postaví. Se Shiftem můžeš stavět víc za sebou. Esc nebo pravé tlačítko zruší.</p>`;
   // krystaly
   h += `<div class="td-sec">Krystaly moudrosti 💎</div><div class="td-km-acts">
     <button type="button" class="btn btn-secondary btn-sm" data-act="flare" ${G.km < 1 ? 'disabled' : ''} title="Na 15 s odhalí všechny průhledné Duchslizy">🔦 Světlice (1 💎)</button>
     <button type="button" class="btn btn-secondary btn-sm" data-act="sellkm" ${G.km < 1 ? 'disabled' : ''}>Prodat krystal (+100 zl)</button></div>
     <p class="td-tip">Krystaly dávají jen svitky (kartičky). Potřebuješ je na vylepšení úrovně 4 (2 💎) a 5 (5 💎).</p>`;
-  h += nextWavePanel();
+  if (!NET) h += nextWavePanel();
   return h;
 }
 const _miniCache = new Map();
@@ -327,7 +396,11 @@ function statRow(t) {
   if (st.damage && st.interval) rows.push(['Útoky', (speedMul(t) / st.interval).toFixed(1) + '/s']);
   if (st.type && st.type !== 'none') rows.push(['Typ', DMG_LABEL[t.aura?.trueD ? 'true' : st.type] || st.type]);
   if (st.damage) rows.push(['Vidí 👻', st.camo || t.aura?.camo ? 'ano' : 'ne']);
-  if (t.type === 'zlaty_dul') rows.push(['Výnos', Math.round(mineIncome(t)) + ' zl/vlna']);
+  if (t.type === 'zlaty_dul') {
+    const cart = mineIncome(t) / t.st.carts;
+    rows.push([t.up[0] >= 4 ? 'Truhly' : 'Vozíky', `${t.st.carts} × ${fmt(cart)} zl`]);
+    rows.push([t.fx.bank_mode ? 'Do banky' : 'Výnos', fmt(mineIncome(t)) + ' zl/vlna']);
+  }
   if (t.dmgDone) rows.push(['Zničil', fmt(t.dmgDone)]);
   return `<div class="td-stats">${rows.map(([a, b]) => `<span>${a}<b>${b}</b></span>`).join('')}</div>`;
 }
@@ -384,8 +457,10 @@ function obstPanel(o) {
 }
 function act(a, d) {
   const sel = view.sel;
+  if (a === 'tab') { view.tab = d.t; view.sel = null; if (view.placing) cancelPlacing(); renderSide(true); return; }
+  if (NET && vsAct(a, d)) { renderSide(true); return; }
   switch (a) {
-    case 'buy': if (view.placing === d.type) cancelPlacing(); else { view.placing = d.type; view.sel = null; view.touchGhost = false; updateGhost(); renderSide(true); } return;
+    case 'buy': view.tab = 'def'; if (view.placing === d.type) cancelPlacing(); else { view.placing = d.type; view.sel = null; view.touchGhost = false; updateGhost(); renderSide(true); } return;
     case 'close': view.sel = null; break;
     case 'target': sel.target = d.t; break;
     case 'mode': sel.mode = sel.mode === 'lighthouse' ? null : 'lighthouse'; break;
@@ -423,11 +498,11 @@ function openCard() {
   if (G.cardCdUntil > G.time) { toast(`Další svitek za ${Math.ceil(G.cardCdUntil - G.time)} s.`); return; }
   if (G.cardsThisWave >= cardQuota()) { toast('V této vlně už jsi vyčerpal svitky. Další budou po vlně.'); return; }
   const q = nextCard();
-  cardOpen = { ...q, slowUntil: performance.now() + ECON.flashcards.singleplayer_slow_motion_max_s * 1000, done: false };
+  cardOpen = { ...q, slowUntil: NET ? 0 : performance.now() + ECON.flashcards.singleplayer_slow_motion_max_s * 1000, done: false };
   $('tdCardQ').innerHTML = mcQuestionHtml(q.card);
   $('tdCardOpts').innerHTML = q.opts.map((t, i) => `<button type="button" class="td-ans" data-i="${i}"><em>${i + 1}</em><span>${mcOptionHtml(q.card, t)}</span></button>`).join('');
   $('tdCardReward').textContent = `+${cardGold()} zl · +1 💎`;
-  $('tdCardNote').textContent = G.enemies.some(e => e.seal && e.seal.s > 0) ? '🔮 Správná odpověď oslabí pečeť krále.' : 'Hra zatím běží zpomaleně.';
+  $('tdCardNote').textContent = G.enemies.some(e => e.seal && e.seal.s > 0) ? '🔮 Správná odpověď oslabí pečeť krále.' : G.vs?.curse?.until > G.time ? '🕯️ Správná odpověď zlomí kletbu na tvé věži.' : NET ? 'Bitva běží dál — odpovídej rychle.' : 'Hra zatím běží zpomaleně.';
   $('tdCard').hidden = false;
   $('tdCardOpts').querySelectorAll('.td-ans').forEach(b => b.onclick = () => answerCard(+b.dataset.i));
   if (typeof enhanceCode === 'function') enhanceCode($('tdCard'));
@@ -451,6 +526,7 @@ function answerCard(i) {
     addGold(gold); G.km += km;
     addHeroXp(F.hero_xp_per_correct_answer);
     breakSeals(1);
+    if (G.vs?.curse?.until > G.time) { G.vs.curse = null; streakMsg += ' · 🕯️ Kletba zlomena'; }
     if (h?.id === 'lovec_bedrich') { h.critShots = h.level >= 7 ? 5 : 3; const a = h.abilities[0]; if (a) a.until -= 6; }
     if (h?.id === 'kronikar_oskar' && h.level >= 7) { for (const e of enemiesNear(h.x, h.y, h.st.range)) if (!e.def.boss) e.d = Math.max(0, e.d - 40); addFx({ kind: 'ring', x: h.x, y: h.y, r: h.st.range, dur: 0.4, col: '#fde68a' }); }
     G.cardCdUntil = G.time + (G.waveActive ? F.correct_cooldown_during_wave_s : F.correct_cooldown_between_waves_s);

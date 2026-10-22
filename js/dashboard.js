@@ -148,6 +148,17 @@ function loadGames(user) {
       `${g.pairs || ''} dvojic · ${(g.playerIds || []).length} hráčů · ${g.status === 'play' ? 'hraje se' : 'čeká'}`)).join('')
       : '<div class="game-empty">Nikdo z přátel teď pexeso nezaložil.</div>';
   }, () => { pxl.innerHTML = '<div class="game-empty">Hry se nepodařilo načíst.</div>'; });
+  // Obrana království — čekárny bitev přátel (rozehranou bitvu po odchodu vrátit nejde)
+  const tdl = document.getElementById('tdLobbies');
+  const TD_MAPS = { kralovske_predhradi: 'Královské předhradí', soutok_dvou_rek: 'Soutok dvou řek' };
+  db.collection('tdGames').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
+    const games = liveGames('tdGames', snap.docs, user.uid).filter(g => g.status === 'lobby')
+      .sort((a, b) => lastActive(b) - lastActive(a)).slice(0, 5);
+    wireLobbyX(tdl);
+    tdl.innerHTML = games.length ? games.map(g => lobbyRow('tdGames', g, user.uid, `obrana.html?g=${g.id}`, g.hostName || 'Bitva',
+      `${esc(TD_MAPS[g.map] || '')} · ${(g.playerIds || []).length}/4 hráčů · čeká`)).join('')
+      : '<div class="game-empty">Nikdo z přátel teď bitvu nezaložil.</div>';
+  }, () => { tdl.innerHTML = '<div class="game-empty">Bitvy se nepodařilo načíst.</div>'; });
   const dob = document.getElementById('dobLobbies');
   db.collection('conquest').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
     const games = liveGames('conquest', snap.docs, user.uid)

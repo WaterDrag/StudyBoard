@@ -31,15 +31,39 @@
       <div class="mil-logo">🏰</div>
       <h1>Obrana království</h1>
       <p class="mc-sub">Slizáci táhnou na hrad. Stav věže, vylepšuj je a odpovídej na svitky z tvých kartiček — za správné odpovědi získáš zlaťáky a krystaly moudrosti, bez kterých nekoupíš nejsilnější vylepšení ani neprolomíš pečeť bossů.</p>
-      <div class="td-step"><h3>1. Mapa</h3><div class="td-pick" id="tdMaps"></div></div>
-      <div class="td-step"><h3>2. Hrdina</h3><div class="td-pick" id="tdHeroes"></div></div>
-      <div class="td-step"><h3>3. Obtížnost</h3><div class="td-pick td-pick-sm" id="tdDiffs"></div></div>
+      <p class="td-join" id="tdJoinInfo" hidden></p>
+      <div class="td-step" id="tdModeStep"><h3>Režim</h3><div class="td-pick td-pick-sm" id="tdModes"></div></div>
+      <div class="td-step" id="tdMapStep"><h3>Mapa</h3><div class="td-pick" id="tdMaps"></div></div>
+      <div class="td-step"><h3>Hrdina</h3><div class="td-pick" id="tdHeroes"></div></div>
+      <div class="td-step" id="tdDiffStep"><h3>Obtížnost</h3><div class="td-pick td-pick-sm" id="tdDiffs"></div></div>
       <div class="td-step">
-        <div class="mc-decks-h"><h3>4. Z jakých balíčků budou svitky?</h3><button type="button" class="btn btn-ghost btn-sm" id="tdAll">Vybrat vše</button></div>
+        <div class="mc-decks-h"><h3>Z jakých balíčků budou svitky?</h3><button type="button" class="btn btn-ghost btn-sm" id="tdAll">Vybrat vše</button></div>
         <div class="mc-decks" id="tdDecks"><div class="mc-muted">Načítám balíčky…</div></div>
       </div>
       <button type="button" class="btn btn-primary mc-start" id="tdStart" disabled>Hrát</button>
       <p class="mc-hint" id="tdHint"></p>
+    </section>
+
+    <!-- Čekárna bitvy s přáteli -->
+    <section id="tdLobby" class="mc-setup td-lobby" hidden>
+      <div class="mil-logo">⚔️</div>
+      <h1>Čekárna bitvy</h1>
+      <p class="mc-sub" id="tdLobbyInfo"></p>
+      <div class="td-lobby-players" id="tdLobbyPlayers"></div>
+      <label class="td-teams" id="tdTeamsWrap" hidden><input type="checkbox" id="tdTeams"> Týmy 2 na 2 — klikni na hráče a přesuneš ho do druhého týmu</label>
+      <div class="mc-end-actions">
+        <button type="button" class="btn btn-secondary" id="tdCopy">🔗 Zkopírovat odkaz</button>
+        <button type="button" class="btn btn-primary" id="tdGoVs" hidden>Začít bitvu</button>
+        <button type="button" class="btn btn-ghost" id="tdLeave">Odejít</button>
+      </div>
+      <p class="mc-hint" id="tdLobbyHint"></p>
+      <div class="td-vs-rules">
+        <b>Jak se hraje versus</b>
+        <span>🏰 Každý brání svou kopii mapy, vlny jdou všem naráz.</span>
+        <span>⚔️ V záložce Útok posíláš slizáky soupeřům — každé poslání zvedne tvůj příjem (💰 každých 6 s).</span>
+        <span>🛡️ Za ubráněné poslané slizáky dostaneš část jejich ceny zpět. Od vlny 31 je náhlá smrt.</span>
+        <span>💎 Krystaly ze svitků kupují sabotáže: kamenné slizáky a kletbu na soupeřovu věž.</span>
+      </div>
     </section>
 
     <!-- Hra -->
@@ -49,16 +73,19 @@
         <span class="td-stat" title="Zlaťáky"><span class="td-ico">🪙</span><b id="hudGold">0</b></span>
         <span class="td-stat td-km" title="Krystaly moudrosti — jen ze svitků (kartiček)"><span class="td-ico">💎</span><b id="hudKm">0</b></span>
         <span class="td-stat" title="Vlna"><span class="td-ico">🌊</span><b id="hudWave">0</b></span>
+        <span class="td-stat td-eco-stat" id="hudEcoWrap" title="Příjem — vyplácí se každých 6 s" hidden><span class="td-ico">💰</span><b id="hudEco">0</b></span>
         <span class="td-hud-sp"></span>
         <button type="button" class="td-btn td-card-btn" id="hudCard" title="Rozluštit svitek (Mezerník)">📜 Svitek <small id="hudCardQ">3/3</small></button>
         <button type="button" class="td-btn td-go" id="hudGo">▶ Start</button>
         <button type="button" class="td-btn" id="hudSpeed" title="Rychlost hry (F)">1×</button>
         <button type="button" class="td-btn" id="hudPause" title="Pauza (P)">⏸</button>
       </div>
+      <div class="td-opps" id="tdOpps" hidden></div>
       <div class="td-body">
         <div class="td-stage" id="tdStage">
           <canvas id="tdCanvas" width="1040" height="720"></canvas>
           <div class="td-banner" id="tdBanner" hidden></div>
+          <div class="td-feed" id="tdFeed" aria-live="polite"></div>
           <div class="td-abil" id="tdAbil"></div>
           <div class="td-paused" id="tdPaused" hidden><div>⏸ Pauza</div><button type="button" class="btn btn-primary" id="tdResume">Pokračovat</button></div>
         </div>
@@ -72,6 +99,7 @@
       <h1 id="tdEndTitle"></h1>
       <p class="mc-sub" id="tdEndDesc"></p>
       <div class="td-end-stats" id="tdEndStats"></div>
+      <div class="lb-list td-vs-rank" id="tdEndRank"></div>
       <div class="mc-end-actions">
         <button type="button" class="btn btn-primary" id="tdAgain">Hrát znovu</button>
         <a class="btn btn-secondary" href="dashboard.html?tab=games">Zpět na hry</a>
@@ -103,6 +131,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="js/config.js"></script>
   <script>document.write('<script src="js/sound.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/codehl.js?v='+APP_VERSION+'"><\/script>');</script>
@@ -114,6 +143,7 @@
   <script>document.write('<script src="js/td-sprites-c.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/td-sprites-d.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/td-render.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/td-net.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>(function(){var s=document.createElement('script');s.src='js/td.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>
 </html>

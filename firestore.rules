@@ -316,6 +316,31 @@ service cloud.firestore {
       );
     }
 
+    // Obrana království — versus: čekárna a výsledky. Samotná bitva jde přes RTDB.
+    // Hostitel smí všechno; ostatní se v čekárně připojí/odejdou jen sami za sebe
+    // a během hry zapisují jen svůj výsledek (a vítěz konec hry).
+    match /tdGames/{gid} {
+      function tdOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+      function tdMe() { return request.resource.data.players.diff(resource.data.players).affectedKeys().hasOnly([request.auth.uid]); }
+      allow get: if isAuth();
+      allow list: if isAuth() && (request.auth.uid in resource.data.allowedUids || request.auth.uid in resource.data.playerIds);
+      allow create: if isAuth() && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+                    && request.resource.data.hostUid == request.auth.uid
+                    && request.resource.data.status == 'lobby';
+      allow delete: if isAuth() && resource.data.hostUid == request.auth.uid;
+      allow update: if isAuth() && (
+        resource.data.hostUid == request.auth.uid ||
+        (resource.data.status == 'lobby' && tdOnly(['playerIds', 'players']) && tdMe()
+          && request.resource.data.playerIds.size() <= 4
+          && request.resource.data.playerIds.toSet().difference(resource.data.playerIds.toSet()).hasOnly([request.auth.uid])
+          && resource.data.playerIds.toSet().difference(request.resource.data.playerIds.toSet()).hasOnly([request.auth.uid])) ||
+        (resource.data.status in ['play', 'end'] && request.auth.uid in resource.data.playerIds
+          && tdOnly(['players', 'status', 'winner']) && tdMe()
+          && request.resource.data.status in ['play', 'end']
+          && (!('winner' in request.resource.data) || request.resource.data.winner == request.auth.uid || request.resource.data.winner == resource.data.get('winner', null)))
+      );
+    }
+
     // Šibenice — závod: každý hráč zapisuje jen svůj postup, hostitel všechno.
     match /sibenice/{gid} {
       function sbOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }

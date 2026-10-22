@@ -2075,10 +2075,9 @@ window.TD = {
       "cost": 400,
       "km": 0,
       "fx": {
-       "income_per_wave_set": 180,
-       "payouts_per_wave": 6
+       "carts_add": 2
       },
-      "desc": "Zvyšuje výdělek dolu na 180 zlaťáků za vlnu (6 vozíků po 30 zl).",
+      "desc": "+2 vozíky za vlnu (6 místo 4).",
       "visual": "Vchod do dolu je vyztužen dubovými trámy a ven vedou železné koleje."
      },
      {
@@ -2087,10 +2086,9 @@ window.TD = {
       "cost": 550,
       "km": 0,
       "fx": {
-       "income_per_wave_set": 260,
-       "payouts_per_wave": 8
+       "carts_add": 2
       },
-      "desc": "Zvyšuje výdělek dolu na 260 zlaťáků za vlnu.",
+      "desc": "+2 další vozíky za vlnu (8).",
       "visual": "Ve vozících před dolem se třpytí velké hroudy ryzího zlata."
      },
      {
@@ -2099,10 +2097,9 @@ window.TD = {
       "cost": 1800,
       "km": 0,
       "fx": {
-       "income_per_wave_set": 520,
-       "payouts_per_wave": 10
+       "carts_set": 16
       },
-      "desc": "Masivní těžba: 520 zlaťáků za každou vlnu.",
+      "desc": "Těží 16 vozíků za vlnu.",
       "visual": "Kamenná budova s vodním kolem a parním kladivem drtícím rudu."
      },
      {
@@ -2111,10 +2108,10 @@ window.TD = {
       "cost": 4500,
       "km": 2,
       "fx": {
-       "income_per_wave_set": 1150,
-       "payouts_per_wave": 10
+       "carts_set": 5,
+       "cart_value_set": 230
       },
-      "desc": "Razí zlaté mince přímo na místě: vydělává 1 150 zlaťáků za vlnu.",
+      "desc": "Místo vozíků razí 5 truhel po 230 zl (1 150 zl za vlnu, hodnotu zvedá i druhá cesta).",
       "visual": "Velká budova se zlatou střechou a komínem, ze kterého stoupají zlaté jiskry."
      },
      {
@@ -2123,10 +2120,10 @@ window.TD = {
       "cost": 16000,
       "km": 5,
       "fx": {
-       "income_per_wave_set": 3500,
+       "cart_value_set": 700,
        "buff_all_other_farms_income_pct": 0.25
       },
-      "desc": "Vydělává neuvěřitelných 3 500 zlaťáků za vlnu a zvyšuje výdělek VŠECH ostatních Zlatých dolů na mapě o 25 %!",
+      "desc": "Truhly mají hodnotu 700 zl (3 500 zl za vlnu) a všechny ostatní Zlaté doly vydělávají o 25 % víc.",
       "visual": "Hora plná zlata a drahokamů s trpasličí korunou na vrcholu."
      }
     ],
@@ -2137,9 +2134,9 @@ window.TD = {
       "cost": 300,
       "km": 0,
       "fx": {
-       "income_per_wave_set": 150
+       "cart_value_pct_add": 0.1
       },
-      "desc": "Zvyšuje výdělek na 150 zlaťáků za vlnu.",
+      "desc": "Vozíky mají o 10 % vyšší hodnotu.",
       "visual": "Vedle dolu stojí dřevěná pokladnice se zámkem."
      },
      {
@@ -2148,10 +2145,10 @@ window.TD = {
       "cost": 600,
       "km": 0,
       "fx": {
-       "income_per_wave_set": 220,
+       "cart_value_pct_add": 0.25,
        "flashcard_bonus_gold_add": 15
       },
-      "desc": "Vydělává 220 zl za vlnu a každá správně zodpovězená kartička přidá do pokladnice +15 zl navíc.",
+      "desc": "Vozíky mají o dalších 25 % vyšší hodnotu a každý správný svitek dá +15 zl.",
       "visual": "Pokladnice je pobitá ocelovými pásy a hlídá ji strážný."
      },
      {
@@ -2161,11 +2158,11 @@ window.TD = {
       "km": 0,
       "fx": {
        "bank_mode": true,
-       "base_deposit_per_wave": 300,
+       "cart_mult_set": 1.8,
        "compound_interest_per_wave_pct": 0.15,
        "bank_capacity": 7500
       },
-      "desc": "Peníze se ukládají do Banky (300 zl/vlna) a na konci každé vlny se celá uložená částka zúročí o +15 % (max. kapacita 7 500 zl, pak vybereš tlačítkem).",
+      "desc": "Výnos jde do banky s 1,8× vyšší hodnotou a na konci vlny se uložená částka zúročí o 15 % (max. 7 500 zl, vybíráš tlačítkem). Víc vozíků z první cesty = víc do banky.",
       "visual": "Mramorová banka s velkými železnými dveřmi trezoru."
      },
      {
@@ -2174,15 +2171,17 @@ window.TD = {
       "cost": 4800,
       "km": 2,
       "fx": {
+       "bank_mode": true,
+       "cart_mult_set": 2.5,
+       "compound_interest_per_wave_pct": 0.15,
        "bank_capacity": 12000,
-       "base_deposit_per_wave": 500,
        "ability": {
         "name": "Okamžitá půjčka",
         "cooldown_s": 50,
-        "effect": "Okamžitě ti vyplatí 4 000 zlaťáků na ruku (následně se 2000 zl postupně splácí z budoucích výdělků)."
+        "effect": "Okamžitě ti vyplatí 4 000 zlaťáků (2 000 zl se pak splácí z budoucích výdělků)."
        }
       },
-      "desc": "Kapacita banky 12 000 zl. Aktivní schopnost ti okamžitě dá 4 000 zl na krizovou stavbu věží.",
+      "desc": "Banka ukládá 2,5× hodnotu vozíků, kapacita 12 000 zl. Schopnost: okamžitá půjčka 4 000 zl.",
       "visual": "Velkolepá banka s pozlacenými sloupy a královským znakem."
      },
      {
@@ -2210,10 +2209,10 @@ window.TD = {
       "cost": 200,
       "km": 0,
       "fx": {
-       "auto_collect": true,
+       "cart_value_pct_add": 0.1,
        "sell_value_bonus_pct": 0.05
       },
-      "desc": "Zlaťáky se přičítají automaticky bez klikání a důl lze prodat za o 5 % vyšší cenu.",
+      "desc": "Vozíky mají o 10 % vyšší hodnotu a důl jde prodat o 5 % dráž.",
       "visual": "Vozík se zlatem má vlastní plachtu a jede sám po kolejích."
      },
      {
@@ -2222,10 +2221,10 @@ window.TD = {
       "cost": 400,
       "km": 0,
       "fx": {
-       "income_per_wave_set": 200,
+       "cart_value_pct_add": 0.2,
        "sell_value_bonus_pct": 0.1
       },
-      "desc": "Vydělává 200 zl za vlnu a při prodeji vrací 90 % investované částky (v pauze mezi vlnami).",
+      "desc": "Vozíky mají o dalších 20 % vyšší hodnotu a důl jde prodat o 10 % dráž.",
       "visual": "Mezi zlatem se třpytí modré safíry a zelené smaragdy."
      },
      {
@@ -2234,10 +2233,10 @@ window.TD = {
       "cost": 1650,
       "km": 0,
       "fx": {
-       "income_per_wave_set": 460,
+       "cart_mult_set": 2.5,
        "lives_generated_per_wave": 2
       },
-      "desc": "Automaticky vydělává 460 zl za vlnu a na konci každé vlny opraví +2 životy hradní brány!",
+      "desc": "Tržiště: vozíky mají 2,5× hodnotu a na konci vlny opraví +2 životy brány.",
       "visual": "Živé tržiště s barevnými stany, sudy a vozy."
      },
      {
@@ -2246,11 +2245,11 @@ window.TD = {
       "cost": 4200,
       "km": 2,
       "fx": {
-       "income_per_wave_set": 1050,
+       "cart_mult_set": 5,
        "lives_generated_per_wave": 5,
        "buff_water_towers_income": 150
       },
-      "desc": "Automaticky vydělává 1 050 zl a +5 životů za vlnu. Navíc každá Říční galéra na mapě vydělá +150 zl za vlnu!",
+      "desc": "Velký bazar: vozíky mají 5× hodnotu, +5 životů za vlnu a každá Říční galéra vydělá +150 zl.",
       "visual": "Rozsáhlý kupecký palác s hedvábnými baldachýny a karavanou."
      },
      {
@@ -2259,11 +2258,11 @@ window.TD = {
       "cost": 17000,
       "km": 5,
       "fx": {
-       "income_per_wave_set": 3200,
+       "cart_mult_set": 15,
        "lives_generated_per_wave": 15,
        "global_tower_attack_speed_per_market_pct": 0.05
       },
-      "desc": "Vydělává 3 200 zl a +15 životů za vlnu (může navýšit životy až o +200 nad startovní maximum!). Všem věžím dává +5 % k rychlosti útoku za každé tržiště.",
+      "desc": "Vozíky mají 15× hodnotu, +15 životů za vlnu (až 200 nad start) a všechny věže střílí o 5 % rychleji za každé tržiště.",
       "visual": "Zlatý kupecký palác s fontánou života a sochou bohyně hojnosti."
      }
     ]
