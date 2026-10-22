@@ -342,6 +342,12 @@ const TR = (() => {
         if (t.bank) { g.fillStyle = '#fde68a'; g.font = 'bold 10px Geist, sans-serif'; g.textAlign = 'center'; g.fillText(Math.round(t.bank), 0, -r * 1.05); }
         break;
       }
+      default: {   // nové věže, dokud nemají textury: barevný kruh se znakem, který se natáčí za cílem
+        g.fillStyle = col; g.beginPath(); g.arc(0, 0, r * 0.72, 0, TAU); g.fill();
+        g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 2; g.stroke();
+        if (t.type !== 'kladec_pasti' && t.type !== 'gryfi_jezdec') { g.save(); g.rotate(ang); g.fillStyle = '#292524'; g.fillRect(r * 0.35, -2.5, r * 0.6, 5); g.restore(); }
+        if (typeof XR !== 'undefined') XR.emoji(g, def.ico, 0, 1, r * 1.05);
+      }
     }
     g.restore();
     }
@@ -416,10 +422,14 @@ const TR = (() => {
   }
 
   /* ── Střely ────────────────────────────────────────────────── */
+  // Střely nových věží, dokud nemají vlastní texturu, vypadají jako podobné stávající
+  const PROJ_ALIAS = { thorn: 'spike', shuriken: 'blade', dagger: 'boltTrue', nail: 'spike', plasma: 'bolt', gryfDart: 'dart', rocket: 'harpoonBolt', shell: 'cannon', mortarShell: 'cannon', flashBomb: 'cannon' };
   function drawProj(g, p, time) {
     if (useTDS() && window.TDS?.projectileDrawers?.[p.kind]) { TDS.projectile(g, p.kind, p.x, p.y, p.ang, performance.now()); return; }
+    const kind = PROJ_ALIAS[p.kind];
+    if (kind && useTDS() && window.TDS?.projectileDrawers?.[kind]) { TDS.projectile(g, kind, p.x, p.y, p.ang, performance.now()); return; }
     g.save(); g.translate(p.x, p.y); g.rotate(p.ang);
-    switch (p.kind) {
+    switch (kind || p.kind) {
       case 'arrow': case 'arrowCrit': case 'ballista':
         g.strokeStyle = p.kind === 'arrowCrit' ? '#f472b6' : '#78350f'; g.lineWidth = p.kind === 'ballista' ? 3.5 : 2;
         g.beginPath(); g.moveTo(-10, 0); g.lineTo(6, 0); g.stroke();
@@ -505,6 +515,7 @@ const TR = (() => {
       case 'trap': g.strokeStyle = `rgba(55,65,81,${a})`; g.lineWidth = 4; g.beginPath(); g.arc(f.x, f.y, f.r + 4, 0, TAU); g.stroke(); break;
       case 'shrink': g.fillStyle = `rgba(244,114,182,${a})`; for (let i = 0; i < 8; i++) { const an = i / 8 * TAU, d = f.r * (1 - k); star(g, f.x + Math.cos(an) * d, f.y + Math.sin(an) * d, 4); } break;
       case 'potion': { const x = f.x + (f.tx - f.x) * k, y = f.y + (f.ty - f.y) * k - Math.sin(k * Math.PI) * 30; g.fillStyle = '#f472b6'; g.beginPath(); g.arc(x, y, 4, 0, TAU); g.fill(); break; }
+      case 'drop': g.fillStyle = '#1c1917'; g.beginPath(); g.arc(f.x, f.y - 40 * (1 - k), 3 + 3 * (1 - k), 0, TAU); g.fill(); break;   // puma padající z gryfa
       case 'regrow': g.strokeStyle = `rgba(34,197,94,${a})`; g.lineWidth = 2; g.beginPath(); g.arc(f.x, f.y, f.r + 8 * k, 0, TAU); g.stroke(); break;
       case 'flame': { g.save(); g.translate(f.x, f.y); g.rotate(f.ang); const lg = g.createLinearGradient(0, 0, f.r, 0); lg.addColorStop(0, 'rgba(254,240,138,.8)'); lg.addColorStop(1, 'rgba(249,115,22,0)'); g.fillStyle = lg; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, f.r, -0.35, 0.35); g.closePath(); g.fill(); g.restore(); break; }
       case 'leak': g.fillStyle = `rgba(239,68,68,${a * 0.6})`; g.beginPath(); g.arc(f.x, f.y, 30 * (1 + k), 0, TAU); g.fill(); break;
@@ -559,6 +570,7 @@ const TR = (() => {
       if (waterFrozenAt(z.x + z.width / 2, z.y + z.height / 2)) { g.fillStyle = 'rgba(224,242,254,.35)'; rrect(g, z.x, z.y, z.width, z.height, 22); g.fill(); }
     });
     G.zones.forEach(z => drawZone(g, z, time));
+    if (typeof XR !== 'undefined') XR.ground(g, performance.now(), view);   // pasti, terč moždíře, tornáda (td-xtowers.js)
     // dosah vybrané věže (výběr může být i boss nebo překážka — ty nemají dosah)
     const pick = view.sel, sel = pick && (pick.hero || pick.st) ? pick : null;
     if (pick?.obst) { const o = pick.obst; g.strokeStyle = '#facc15'; g.lineWidth = 2.5; g.setLineDash([6, 4]); rrect(g, o.x - 4, o.y - 4, o.width + 8, o.height + 8, 18); g.stroke(); g.setLineDash([]); }
@@ -575,6 +587,7 @@ const TR = (() => {
     const tw = [...G.towers, G.hero].filter(Boolean).sort((a, b) => a.y - b.y);
     for (const t of tw) t.hero ? drawHero(g, t, time) : drawTower(g, t, time, t === sel);
     if (sel) { g.strokeStyle = '#facc15'; g.lineWidth = 2; g.setLineDash([4, 3]); g.beginPath(); g.arc(sel.x, sel.y, sel.r + 4, 0, TAU); g.stroke(); g.setLineDash([]); }
+    if (typeof XR !== 'undefined') XR.air(g, performance.now());   // střílny inženýra, gryf
     for (const p of G.projs) drawProj(g, p, time);
     for (const f of G.fx) drawFx(g, f, time);
     // plovoucí čísla (zlato)

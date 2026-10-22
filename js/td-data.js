@@ -2267,6 +2267,1490 @@ window.TD = {
      }
     ]
    ]
+  },
+  {
+   "id": "kladec_pasti",
+   "name": "Kladeč pastí",
+   "cat": "support",
+   "desc": "Obranná dílna, která neútočí přímo na slizáky, ale hází na cestu ve svém dosahu hromádky železných ježků a pastí. Ideální pojistka před hradní bránou.",
+   "col": "#64748b",
+   "ico": "🪤",
+   "short": "Pasti",
+   "base": {
+    "cost": 325,
+    "range_px": 115,
+    "damage": 1,
+    "attack_interval_s": 1.65,
+    "pierce": 5,
+    "projectiles": 1,
+    "damage_type": "sharp",
+    "can_see_camo": true,
+    "placement": "land",
+    "radius_px": 20
+   },
+   "attack": {
+    "pattern": "trap_on_track",
+    "max_traps_on_track": 18,
+    "trap_lifetime_s": 50,
+    "trap_hitbox_radius_px": 14,
+    "persist_between_waves": false,
+    "target_selection": "random_track_point_in_range"
+   },
+   "projectile_look": "Svazek pěti šedých železných čtyřhrotých ježků (caltrops) s kovovým odleskem, který dopadne na cestu obloukem.",
+   "isNew": true,
+   "paths": [
+    [
+     {
+      "tier": 1,
+      "name": "Větší svazky",
+      "cost": 150,
+      "km": 0,
+      "fx": {
+       "pierce_add": 4
+      },
+      "desc": "Každá hromádka pastí na cestě má o +4 hroty více (celkem vydrží 9 zásahů před zničením).",
+      "visual": "U paty dílny přibude dřevěná bedna plná čerstvě vykovaných železných hrotů."
+     },
+     {
+      "tier": 2,
+      "name": "Rozžhavené ostny",
+      "cost": 280,
+      "km": 0,
+      "fx": {
+       "damage_type_set": "normal",
+       "burn_dps": 1,
+       "burn_duration_s": 3
+      },
+      "desc": "Rozžhavené hroty prorazí i železné helmy Přilboslizů i zmrzlé slizáky a zapálí je na 3 s (1 poškození/s).",
+      "visual": "Uvnitř dílny zaplane kovářská výheň s měchem a hroty v koši žhnou oranžovou barvou."
+     },
+     {
+      "tier": 3,
+      "name": "Medvědí čelisti",
+      "cost": 850,
+      "km": 0,
+      "fx": {
+       "damage_add": 2,
+       "bonus_ceramic_damage": 4,
+       "bonus_fortified_damage": 3,
+       "stun_duration_s": 0.6
+      },
+      "desc": "Místo malých ježků klade těžké ocelové čelisti: +2 poškození (celkem 3), +4 do Zlatých slizů, +3 do kamenných a chyceného slizáka na 0,6 s znehybní.",
+      "visual": "Kolem dílny visí na řetězech mohutné zubaté ocelové čelisti s napruženými péry."
+     },
+     {
+      "tier": 4,
+      "name": "Trpasličí minové pole",
+      "cost": 2800,
+      "km": 2,
+      "fx": {
+       "damage_add": 3,
+       "explode_on_trap_deplete": true,
+       "explosion_damage": 18,
+       "explosion_radius_px": 60,
+       "explosion_pierce": 25
+      },
+      "desc": "Zvyšuje poškození čelistí o +3 (celkem 6). Jakmile past spotřebuje poslední výdrž, exploduje za 18 poškození v okruhu 60 px (zasáhne až 25 slizáků).",
+      "visual": "Dílna je přestavěna na kamennou zbrojnici s červenými výbušnými soudky a mosaznými rozbuškami."
+     },
+     {
+      "tier": 5,
+      "name": "Pevnost věčných min",
+      "cost": 16500,
+      "km": 5,
+      "fx": {
+       "damage_add": 6,
+       "pierce_add": 6,
+       "explosion_damage": 85,
+       "explosion_radius_px": 95,
+       "explosion_pierce": 60,
+       "stun_moab_duration_s": 1.2
+      },
+      "desc": "Klade kolosální zlaté runové miny (poškození 12 na šlápnutí, výdrž 15). Výbuch po vyčerpání udělí 85 poškození v okruhu 95 px a na 1,2 s omráčí i slizové krále.",
+      "visual": "Černo-zlatá trpasličí pevnost s dýmajícím komínem, jeřábem a žhnoucími magickými minami s rubínovým středem."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Dvojitý katapult",
+      "cost": 180,
+      "km": 0,
+      "fx": {
+       "attack_interval_mult": 0.72
+      },
+      "desc": "Mechanický podavač zrychluje kladení pastí (interval útoku se násobí 0,72×).",
+      "visual": "Na střeše dílny přibude druhé dřevěné házecí rameno s pružinou."
+     },
+     {
+      "tier": 2,
+      "name": "Široký rozptyl",
+      "cost": 320,
+      "km": 0,
+      "fx": {
+       "range_add_px": 45,
+       "max_traps_on_track_add": 10
+      },
+      "desc": "Zvyšuje dosah kladení o +45 px (na 160 px) a maximální počet současně ležících pastí o +10 (na 28).",
+      "visual": "Věžička má otočnou mosaznou hlaveň s dvojitým bubnem a vyšší pozorovací stříškou."
+     },
+     {
+      "tier": 3,
+      "name": "Trhač králů",
+      "cost": 1150,
+      "km": 0,
+      "fx": {
+       "bonus_boss_damage": 9,
+       "bonus_moab_damage": 9,
+       "slow_moab_pct": 25,
+       "slow_duration_s": 2.5
+      },
+      "desc": "Pasti mají zpětné harpunové háky: dávají +9 poškození za každý hrot do slizových králů a zpomalují je o 25 % na 2,5 s.",
+      "visual": "Věž z tmavého železa ověšená těžkými kotvami, řetězy a rudým praporem lovců obrů."
+     },
+     {
+      "tier": 4,
+      "name": "Kobercový výsev",
+      "cost": 3300,
+      "km": 2,
+      "fx": {
+       "attack_interval_mult": 0.65,
+       "ability": {
+        "name": "Kobercový výsev",
+        "kind": "carpet_of_spikes",
+        "cooldown_s": 30,
+        "effect": "Zrychluje kladení (interval ×0,65). Aktivní schopnost (cooldown 30 s): okamžitě pokryje celou cestu od začátku až k bráně 20 pastmi."
+       },
+       "ability_cooldown_s": 30,
+       "ability_traps_count": 20
+      },
+      "desc": "Zrychluje kladení (interval ×0,65). Aktivní schopnost (cooldown 30 s): okamžitě pokryje celou cestu od začátku až k bráně 20 pastmi.",
+      "visual": "Vysoká ocelová věž se čtyřmi výmetnicemi mířícími k nebi a ozubeným hodinovým strojem."
+     },
+     {
+      "tier": 5,
+      "name": "Bouře oceli",
+      "cost": 17500,
+      "km": 5,
+      "fx": {
+       "attack_interval_mult": 0.5,
+       "bonus_boss_damage": 22,
+       "passive_carpet_interval_s": 12,
+       "passive_carpet_traps_count": 15
+      },
+      "desc": "Dvojnásobná rychlost kladení a celkem +31 poškození na hrot do bossů. Navíc každých 12 s automaticky vystřelí salvu 15 pastí po celé délce mapy.",
+      "visual": "Monumentální parní baterie se zlatými hlavněmi, ze kterých neustále srší jiskry a létají ostny do všech stran."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Kalená ocel",
+      "cost": 140,
+      "km": 0,
+      "fx": {
+       "trap_lifetime_add_s": 50,
+       "persist_between_waves": true
+      },
+      "desc": "Pasti na cestě vydrží o +50 s déle (celkem 100 s) a nerozpadnou se na konci vlny — zůstávají do dalších vln.",
+      "visual": "Střecha dílny je pobitá modravými ocelovými pláty a vedle stojí sud s kalicím olejem."
+     },
+     {
+      "tier": 2,
+      "name": "Chytré zaměření",
+      "cost": 240,
+      "km": 0,
+      "fx": {
+       "allow_target_priority": true,
+       "start_of_wave_burst_mult": 3,
+       "start_of_wave_burst_duration_s": 3
+      },
+      "desc": "Umožňuje zvolit místo dopadu (blízko věže / nejdále po cestě k bráně) a na první 3 s každé vlny klade pasti 3× rychleji.",
+      "visual": "Na střeše sedí trpasličí pozorovatel s mosazným kukátkem a směrovou korouhvičkou."
+     },
+     {
+      "tier": 3,
+      "name": "Diamantové hroty",
+      "cost": 950,
+      "km": 0,
+      "fx": {
+       "attack_interval_mult": 2.2,
+       "pierce_add": 45,
+       "trap_lifetime_add_s": 140,
+       "max_traps_on_track_set": 12
+      },
+      "desc": "Klade pomaleji (interval ×2,2), ale každá hromádka má o +45 větší výdrž (celkem 50 zásahů) a vydrží na cestě až 240 sekund (max. 12 hromad).",
+      "visual": "Kamenná pevnost s azurově modrou střechou, kde trpaslík brousí obří krystalové ostny."
+     },
+     {
+      "tier": 4,
+      "name": "Runová barikáda",
+      "cost": 3100,
+      "km": 2,
+      "fx": {
+       "damage_add": 3,
+       "pierce_add": 50,
+       "strip_camo_on_hit": true,
+       "strip_regrow": true
+      },
+      "desc": "Zvyšuje poškození každého hrotu o +3 (celkem 4) a výdrž o dalších +50 (celkem 100 zásahů). Při dotyku trvale zruší průhlednost i dorůstání.",
+      "visual": "Kolem věže levitují čtyři kamenné pilíře se zářícími modrými runami a uprostřed se točí krystalový brus."
+     },
+     {
+      "tier": 5,
+      "name": "Neprostupná brána království",
+      "cost": 15800,
+      "km": 5,
+      "fx": {
+       "damage_add": 8,
+       "pierce_add": 200,
+       "trap_lifetime_add_s": 360,
+       "end_of_wave_cash_per_active_trap": 20
+      },
+      "desc": "Každá past má poškození 12, výdrž 300 zásahů a životnost 600 s (10 minut). Každá nespotřebovaná past na cestě navíc na konci vlny vygeneruje 20 zlaťáků.",
+      "visual": "Zářící platinovo-zlatá citadela s runovým oltářem, který na cestu pokládá nezničitelné diamantové zátarasy."
+     }
+    ]
+   ]
+  },
+  {
+   "id": "lesni_druid",
+   "name": "Lesní druid",
+   "cat": "magic",
+   "desc": "Strážce prastarého hvozdu, který vystřeluje vějíř ostrých trnů. Dokáže ovládnout blesky bouře, spoutat slizáky kořeny nebo probudit medvědí zuřivost.",
+   "col": "#15803d",
+   "ico": "🌿",
+   "short": "Druid",
+   "base": {
+    "cost": 390,
+    "range_px": 115,
+    "damage": 1,
+    "attack_interval_s": 1.05,
+    "pierce": 1,
+    "projectiles": 5,
+    "damage_type": "sharp",
+    "can_see_camo": false,
+    "placement": "land",
+    "radius_px": 20
+   },
+   "attack": {
+    "pattern": "cone_burst",
+    "spread_deg": 28,
+    "projectile_speed_px_s": 460
+   },
+   "projectile_look": "Zelenohnědý dřevěný trn se světle zelenou špičkou a drobným lístečkem na konci.",
+   "isNew": true,
+   "paths": [
+    [
+     {
+      "tier": 1,
+      "name": "Dubové trny",
+      "cost": 160,
+      "km": 0,
+      "fx": {
+       "pierce_add": 1,
+       "damage_type_set": "normal"
+      },
+      "desc": "Tvrdé dubové trny proletí o 1 slizáka navíc (průraz 2) a prorazí železné helmy i zmrzlé slizáky.",
+      "visual": "Druid má na ramenou dubovou kůru a jeho hůl je zakončena parožím."
+     },
+     {
+      "tier": 2,
+      "name": "Srdce hromu",
+      "cost": 330,
+      "km": 0,
+      "fx": {
+       "secondary_zap_interval_s": 2,
+       "zap_damage": 2,
+       "zap_bounce_targets": 8,
+       "zap_damage_type": "energy"
+      },
+      "desc": "Každé 2,0 s navíc vyšle z hole kulový blesk, který přeskočí až na 8 slizáků a udělí každému 2 poškození.",
+      "visual": "Drahokam v parohové holi modře jiskří a přes zelený plášť přebíhají drobné výboje."
+     },
+     {
+      "tier": 3,
+      "name": "Druid vichřice",
+      "cost": 920,
+      "km": 0,
+      "fx": {
+       "secondary_tornado_interval_s": 2.8,
+       "tornado_pierce": 18,
+       "tornado_knockback_px": 95,
+       "strip_camo_on_hit": true
+      },
+      "desc": "Každé 2,8 s sešle po cestě větrné tornádo (průraz 18), které odfoukne běžné slizáky o 95 px zpět k jeskyni a strhne z nich průhlednost.",
+      "visual": "Druid v bílomodrém rouchu obklopený malým vzdušným vírem a poletujícím listím."
+     },
+     {
+      "tier": 4,
+      "name": "Posel bouře",
+      "cost": 3100,
+      "km": 2,
+      "fx": {
+       "secondary_ball_lightning_interval_s": 4.2,
+       "ball_lightning_dps": 8,
+       "ball_lightning_radius_px": 65,
+       "ball_lightning_freeze_chance": 0.25,
+       "tornado_pierce_add": 22
+      },
+      "desc": "Tornádo zasáhne o +22 slizáků více (celkem 40). Každých 4,2 s vypustí pomalou kouli blesků (8 DPS v okruhu 65 px, 25% šance na zmrazení).",
+      "visual": "Druid se vznáší nad kamenným kruhem, má bíle zářící oči a nad hlavou mu pluje bouřkový mrak."
+     },
+     {
+      "tier": 5,
+      "name": "Hněv nebeské bouře",
+      "cost": 18500,
+      "km": 5,
+      "fx": {
+       "tornado_affects_moab": true,
+       "tornado_moab_knockback_px": 55,
+       "ball_lightning_dps_add": 24,
+       "zap_damage_add": 8,
+       "zap_bounce_targets_add": 12
+      },
+      "desc": "Obří super-tornádo dokáže zatlačit zpět i slizové krále (o 55 px). Kulové blesky dávají 32 DPS a přímý blesk skáče na 20 cílů po 10 poškození.",
+      "visual": "Majestátní bůh bouře ve zlatobílém plášti uprostřed zuřícího hurikánu plného zlatých blesků."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Trnitý houštin",
+      "cost": 210,
+      "km": 0,
+      "fx": {
+       "projectiles_add": 3,
+       "spread_deg": 38
+      },
+      "desc": "Druid vystřeluje o +3 trny v každé salvě více (celkem 8 trnů v širším kuželu 38°).",
+      "visual": "Kolem kamenného podstavce vyrůstají husté zelené kapradiny a šlahouny."
+     },
+     {
+      "tier": 2,
+      "name": "Dubové srdce",
+      "cost": 310,
+      "km": 0,
+      "fx": {
+       "strip_regrow": true,
+       "bonus_regrow_damage": 2
+      },
+      "desc": "Všechny útoky druida trvale zbavují slizáky vlastnosti dorůstání (dorustajici) a udělují jim +2 poškození.",
+      "visual": "Na hrudi druida svítí zelený smaragd ve tvaru dubového listu a trny mají zlatavé špičky."
+     },
+     {
+      "tier": 3,
+      "name": "Šlahouny pralesa",
+      "cost": 1050,
+      "km": 0,
+      "fx": {
+       "global_vine_grab_interval_s": 2.4,
+       "vine_grab_damage_per_s": 8,
+       "vine_after_pop_patch_duration_s": 4,
+       "vine_patch_slow_pct": 35,
+       "vine_patch_dps": 2
+      },
+      "desc": "Každé 2,4 s šlahoun kdekoli na mapě popadne nejsilnějšího běžného slizáka, drží ho na místě (8 DPS) a zanechá trnitý keř (4 s, zpomalení 35 %, 2 DPS).",
+      "visual": "Podstavec je obtočen silnými živými kořeny s červenými květy, které se samy hýbou."
+     },
+     {
+      "tier": 4,
+      "name": "Dar úrody",
+      "cost": 2900,
+      "km": 2,
+      "fx": {
+       "range_add_px": 25,
+       "ability": {
+        "name": "Dar úrody",
+        "kind": "jungle_bounty",
+        "cooldown_s": 40,
+        "effect": "Dosah +25 px a +2 životy brány za vlnu. Schopnost (cooldown 40 s): dá 320 zl + 130 zl za každý Zlatý důl v dosahu druida."
+       },
+       "ability_cooldown_s": 40,
+       "ability_base_cash": 320,
+       "ability_cash_per_farm_in_range": 130,
+       "lives_generated_per_wave": 2
+      },
+      "desc": "Dosah +25 px a +2 životy brány za vlnu. Schopnost (cooldown 40 s): dá 320 zl + 130 zl za každý Zlatý důl v dosahu druida.",
+      "visual": "Druid má korunu ze zlatého obilí a květů, kolem něj kvetou zlaté jabloně."
+     },
+     {
+      "tier": 5,
+      "name": "Duch prastarého hvozdu",
+      "cost": 19500,
+      "km": 5,
+      "fx": {
+       "full_track_thorns_dps": 12,
+       "full_track_thorns_bonus_moab_dps": 18,
+       "full_track_thorns_slow_pct": 25,
+       "base_income_per_wave": 1000,
+       "lives_generated_per_wave": 10
+      },
+      "desc": "Celá cesta po celé mapě trvale zaroste prastarými trny (12 DPS všem slizákům, +18 DPS bossům, zpomalení 25 %). Na konci každé vlny přidá 1000 zl a 10 životů.",
+      "visual": "Obří živoucí stromový titán (Ent) se zářící smaragdovou korunou, zlatými runami v kůře a kvetoucím oltářem."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Zálesákův dosah",
+      "cost": 130,
+      "km": 0,
+      "fx": {
+       "range_add_px": 30,
+       "attack_interval_mult": 0.9
+      },
+      "desc": "Zvyšuje dosah druida o +30 px (na 145 px) a zrychluje útok o 10 % (interval ×0,9).",
+      "visual": "Druid stojí na vyvýšeném pařezu a má delší vyřezávanou hůl."
+     },
+     {
+      "tier": 2,
+      "name": "Srdce pomsty",
+      "cost": 270,
+      "km": 0,
+      "fx": {
+       "speed_boost_per_leak_pct": 5,
+       "max_leak_speed_boost_pct": 80,
+       "base_attack_speed_bonus_pct": 10
+      },
+      "desc": "Zvyšuje rychlost útoku o +10 % a za každý ztracený život brány v bitvě získá dalších +5 % rychlosti útoku (až do maxima +80 %).",
+      "visual": "Plášť druida má krvavě rudé lemování a kolem hole pulzuje červená aura."
+     },
+     {
+      "tier": 3,
+      "name": "Medvědí zuřivost",
+      "cost": 880,
+      "km": 0,
+      "fx": {
+       "consecutive_hit_speed_stack_pct": 5,
+       "max_consecutive_speed_bonus_pct": 75,
+       "damage_add": 1
+      },
+      "desc": "Zvyšuje poškození trnů o +1. Každý výstřel na stejný cíl zvyšuje rychlost střelby o +5 % (až +75 % při nepřetržité palbě do zástupu či bosse).",
+      "visual": "Druid má přes hlavu přehozenou hnědou medvědí kožešinu s tesáky a drápy na rukavicích."
+     },
+     {
+      "tier": 4,
+      "name": "Volání smečky",
+      "cost": 2650,
+      "km": 2,
+      "fx": {
+       "aura_other_druids_attack_speed_pct": 12,
+       "max_pack_stacks": 5,
+       "damage_add": 1,
+       "pierce_add": 2
+      },
+      "desc": "Poškození +1, průraz +2. Každý další Lesní druid v dosahu zvyšuje rychlost útoku tohoto druida (a on jim) o +12 % (max. 5 druidů = +60 %).",
+      "visual": "Kožešina je černo-stříbrná (vlčí vůdce), u nohou druida sedí duchovní vlk a podstavec zdobí totem."
+     },
+     {
+      "tier": 5,
+      "name": "Vtělení prastaré šelmy",
+      "cost": 16800,
+      "km": 5,
+      "fx": {
+       "damage_add": 5,
+       "attack_interval_mult": 0.45,
+       "bonus_damage_per_100_enemy_max_hp": 3,
+       "max_hp_scaling_damage_bonus": 35
+      },
+      "desc": "Poškození +5, rychlost více než dvojnásobná (interval ×0,45). Čím víc má cíl maximálních životů, tím víc trny berou (+3 poškození za každých 100 max HP cíle, až +35 do bossů).",
+      "visual": "Obří černo-rudý prastarý medvědodlak ve zlaté runové zbroji, kolem kterého šlehá rudá energie zuřivosti."
+     }
+    ]
+   ]
+  },
+  {
+   "id": "stinovy_zved",
+   "name": "Stínový zvěd",
+   "cat": "magic",
+   "desc": "Hbitý královský špeh v temném plášti, který od základu vidí průhledné Duchslizy a vrhá ostré ocelové hvězdice.",
+   "col": "#334155",
+   "ico": "🥷",
+   "short": "Zvěd",
+   "base": {
+    "cost": 310,
+    "range_px": 125,
+    "damage": 1,
+    "attack_interval_s": 0.62,
+    "pierce": 2,
+    "projectiles": 1,
+    "damage_type": "sharp",
+    "can_see_camo": true,
+    "placement": "land",
+    "radius_px": 18
+   },
+   "attack": {
+    "pattern": "direct_throw",
+    "spread_deg": 12,
+    "projectile_speed_px_s": 580
+   },
+   "projectile_look": "Rotující čtyřcípá ocelová hvězdice (šuriken) s modrostříbrným odleskem a kruhovým otvorem uprostřed.",
+   "isNew": true,
+   "paths": [
+    [
+     {
+      "tier": 1,
+      "name": "Stínová disciplína",
+      "cost": 170,
+      "km": 0,
+      "fx": {
+       "range_add_px": 20,
+       "attack_interval_mult": 0.82
+      },
+      "desc": "Zvyšuje dosah o +20 px (na 145 px) a zrychluje vrhání hvězdic (interval útoku ×0,82).",
+      "visual": "Zvěd má tmavě modrou kuklu a kolem předloktí ovázané černé hedvábné pásky."
+     },
+     {
+      "tier": 2,
+      "name": "Břitké hrany",
+      "cost": 260,
+      "km": 0,
+      "fx": {
+       "pierce_add": 2,
+       "camo_damage_bonus": 1
+      },
+      "desc": "Hvězdice proletí o +2 slizáky navíc (celkem 4) a udělují +1 bonusové poškození průhledným Duchslizům.",
+      "visual": "Hvězdice v ruce zvěda mají červeně lakované středy a na opasku má pouzdra s náhradními čankami."
+     },
+     {
+      "tier": 3,
+      "name": "Dvojitý hod",
+      "cost": 720,
+      "km": 0,
+      "fx": {
+       "projectiles_set": 2,
+       "spread_deg": 10
+      },
+      "desc": "Zvěd vrhá oběma rukama 2 hvězdice současně.",
+      "visual": "Zvěd stojí v bojovém postoji s hvězdicemi v obou rukou a má přes rameno stříbrný nárameník."
+     },
+     {
+      "tier": 4,
+      "name": "Mistr pěti čepelí",
+      "cost": 2550,
+      "km": 2,
+      "fx": {
+       "projectiles_set": 5,
+       "damage_add": 1,
+       "spread_deg": 24,
+       "damage_type_set": "normal"
+      },
+      "desc": "Vrhá vějíř 5 hvězdic najednou, zvyšuje poškození každé o +1 (celkem 2) a hvězdice prorazí i železné helmy.",
+      "visual": "Mistr zvědů v bílo-modrém šatu se zlatou maskou a pěti zářícími hvězdicemi připravenými mezi prsty."
+     },
+     {
+      "tier": 5,
+      "name": "Velmistr stínů",
+      "cost": 16200,
+      "km": 5,
+      "fx": {
+       "projectiles_set": 8,
+       "damage_add": 3,
+       "attack_interval_mult": 0.55,
+       "shadow_clone_homing_dagger_damage": 6
+      },
+      "desc": "Vrhá 8 hvězdic (poškození 5 každá) obrovskou rychlostí (interval ×0,55) a každý hod navíc vyšle naváděnou stínovou dýku (6 poškození).",
+      "visual": "Postava v černo-zlaté zbroji obklopená dvěma poloprůhlednými stínovými klony, které hází zlaté hvězdice spolu s ní."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Omamný prach",
+      "cost": 160,
+      "km": 0,
+      "fx": {
+       "knockback_chance": 0.25,
+       "knockback_px": 28,
+       "slow_after_hit_pct": 15,
+       "slow_duration_s": 1.5
+      },
+      "desc": "Každý zásah zpomalí slizáka o 15 % na 1,5 s a má 25% šanci ho zmást a poslat o 28 px zpět po cestě.",
+      "visual": "U pasu zvěda visí fialové váčky s uspávacím pylem."
+     },
+     {
+      "tier": 2,
+      "name": "Kouřová clona",
+      "cost": 290,
+      "km": 0,
+      "fx": {
+       "strip_camo_on_hit": true,
+       "decamo_radius_px": 35
+      },
+      "desc": "Zásah hvězdicí uvolní v okruhu 35 px obláček prachu, který trvale zviditelní všechny průhledné slizáky (včetně Stínoslizu).",
+      "visual": "Zvěd má přes ústa šedou dýmovou masku a kolem nohou se mu převaluje jemný opar."
+     },
+     {
+      "tier": 3,
+      "name": "Škola stínů",
+      "cost": 820,
+      "km": 0,
+      "fx": {
+       "aura_other_ninjas_attack_speed_pct": 8,
+       "aura_other_ninjas_range_pct": 5,
+       "max_shinobi_stacks": 10
+      },
+      "desc": "Zvyšuje rychlost útoku o +8 % a dosah o +5 % všem Stínovým zvědům ve svém dosahu (sčítá se až 10×).",
+      "visual": "Za zády zvěda stojí dřevěný stojan s katanou a černým praporem cechu špehů."
+     },
+     {
+      "tier": 4,
+      "name": "Velká sabotáž",
+      "cost": 2900,
+      "km": 2,
+      "fx": {
+       "ability": {
+        "name": "Velká sabotáž",
+        "kind": "sabotage_supply_lines",
+        "cooldown_s": 45,
+        "effect": "Aktivní schopnost (cooldown 45 s): na 15 sekund zpomalí všechny slizáky i slizové krále na mapě (i nově příchozí) o 50 %."
+       },
+       "ability_cooldown_s": 45,
+       "ability_duration_s": 15,
+       "ability_global_slow_pct": 50
+      },
+      "desc": "Aktivní schopnost (cooldown 45 s): na 15 sekund zpomalí všechny slizáky i slizové krále na mapě (i nově příchozí) o 50 %.",
+      "visual": "Zvěd v temně rudé zbroji s dvojicí kouřových bomb v rukou a svitkem tajných rozkazů na zádech."
+     },
+     {
+      "tier": 5,
+      "name": "Pán noční sabotáže",
+      "cost": 17000,
+      "km": 5,
+      "fx": {
+       "ability_duration_s": 22,
+       "ability_spawn_moab_hp_reduction_pct": 25,
+       "aura_other_ninjas_damage_add": 2,
+       "aura_other_ninjas_bonus_boss_damage_add": 5
+      },
+      "desc": "Sabotáž trvá 22 s a všichni slizoví králové, kteří se během ní objeví, přijdou o 25 % max. životů. Aura navíc dává všem zvědům v dosahu +2 poškození (+5 do bossů).",
+      "visual": "Temný velitel na pagodovém podstavci obklopený fialovou mlhou a čtyřmi vznášejícími se nočními lucernami."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Naváděný hod",
+      "cost": 150,
+      "km": 0,
+      "fx": {
+       "homing_projectiles": true,
+       "projectile_speed_mult": 1.2
+      },
+      "desc": "Hvězdice jsou o 20 % rychlejší a za letu se samy stáčí za pohybujícími se slizáky.",
+      "visual": "Hvězdice mají zakřivené větrné čepele se zelenou runou uprostřed."
+     },
+     {
+      "tier": 2,
+      "name": "Železné ježky",
+      "cost": 230,
+      "km": 0,
+      "fx": {
+       "secondary_caltrops_interval_s": 2.6,
+       "caltrops_damage": 1,
+       "caltrops_pierce": 4
+      },
+      "desc": "Každé 2,6 s navíc hodí na nejbližší cestu železného ježka (1 poškození, výdrž 4 zásahy).",
+      "visual": "Vedle zvěda leží kožený váček s vysypanými kovovými ostny."
+     },
+     {
+      "tier": 3,
+      "name": "Oslepující bomba",
+      "cost": 960,
+      "km": 0,
+      "fx": {
+       "every_nth_shot_flash_bomb": 4,
+       "flash_bomb_damage": 4,
+       "flash_bomb_radius_px": 60,
+       "flash_bomb_stun_duration_s": 1.3,
+       "flash_bomb_damage_type": "normal"
+      },
+      "desc": "Každý 4. útok hodí místo hvězdice oslepující bombu, která v okruhu 60 px udělí 4 pravá poškození a na 1,3 s omráčí slizáky.",
+      "visual": "Zvěd drží v levé ruce kulatou černou pumu s jiskřícím doutnákem a přes oči má ochranné stínítko."
+     },
+     {
+      "tier": 4,
+      "name": "Přísavné nálože",
+      "cost": 3200,
+      "km": 2,
+      "fx": {
+       "secondary_sticky_bomb_interval_s": 3.8,
+       "sticky_bomb_fuse_s": 2,
+       "sticky_bomb_boss_damage": 160,
+       "sticky_bomb_splash_damage": 35,
+       "sticky_bomb_splash_radius_px": 55
+      },
+      "desc": "Každé 3,8 s hodí na nejsilnějšího slizového krále v dosahu přísavnou nálož, která po 2 s vybuchne za 160 poškození (a 35 poškození v okruhu 55 px).",
+      "visual": "Zvěd má na zádech dřevěnou bednu s runovými patronami obalenými lepkavou pryskyřicí."
+     },
+     {
+      "tier": 5,
+      "name": "Mistr demolice",
+      "cost": 18200,
+      "km": 5,
+      "fx": {
+       "sticky_bomb_global_range": true,
+       "sticky_bomb_boss_damage_set": 650,
+       "sticky_bomb_splash_damage_set": 150,
+       "can_stun_moab": true,
+       "stun_moab_duration_s": 1
+      },
+      "desc": "Hází přísavné nálože na slizové krále po celé mapě! Každá nálož udělí 650 poškození hlavnímu cíli (150 okolo) a oslepující bomby omráčí i bosse na 1 s.",
+      "visual": "Elitní sabotér v černo-purpurovém plášti s obří zlatou runovou bombou na zádech a planoucíma očima."
+     }
+    ]
+   ]
+  },
+  {
+   "id": "gryfi_jezdec",
+   "name": "Gryfí jezdec",
+   "cat": "military",
+   "desc": "Královský rytíř na okřídleném gryfovi. Jeho hnízdo zabírá místo na zemi, ale samotný gryf krouží vysoko nad mapou, ignoruje překážky a pálí salvy šipek.",
+   "col": "#b45309",
+   "ico": "🪶",
+   "short": "Gryf",
+   "base": {
+    "cost": 460,
+    "range_px": 9999,
+    "damage": 1,
+    "attack_interval_s": 1.15,
+    "pierce": 3,
+    "projectiles": 8,
+    "damage_type": "sharp",
+    "can_see_camo": false,
+    "placement": "land",
+    "radius_px": 24
+   },
+   "attack": {
+    "pattern": "orbit_radial_burst",
+    "orbit_radius_px": 95,
+    "flight_speed_px_s": 135,
+    "ignores_obstacles": true,
+    "projectile_speed_px_s": 500
+   },
+   "projectile_look": "Opeřená ocelová šipka se zlatými letkami vystřelená ze vzduchu.",
+   "isNew": true,
+   "paths": [
+    [
+     {
+      "tier": 1,
+      "name": "Rychlá křídla",
+      "cost": 180,
+      "km": 0,
+      "fx": {
+       "attack_interval_mult": 0.78,
+       "flight_speed_mult": 1.2
+      },
+      "desc": "Gryf létá o 20 % rychleji a jezdec vypouští salvy šipek častěji (interval útoku ×0,78).",
+      "visual": "Gryf má delší bílé letky na křídlech a jezdec má modrý plášť."
+     },
+     {
+      "tier": 2,
+      "name": "Hustá salva",
+      "cost": 290,
+      "km": 0,
+      "fx": {
+       "projectiles_add": 4,
+       "pierce_add": 1
+      },
+      "desc": "V každé kruhové salvě vystřelí o +4 šipky více (celkem 12 šipek) a zvyšuje průraz každé o +1 (na 4).",
+      "visual": "Po obou stranách sedla gryfa přibudou dva velké bubnové toulce na šipky."
+     },
+     {
+      "tier": 3,
+      "name": "Lovec monster",
+      "cost": 1100,
+      "km": 0,
+      "fx": {
+       "secondary_moab_missile_interval_s": 2.4,
+       "moab_missile_count": 2,
+       "moab_missile_damage": 16,
+       "moab_missile_pierce": 3,
+       "moab_missile_damage_type": "explosion"
+      },
+      "desc": "Každé 2,4 s vypálí jezdec 2 naváděné dračí rakety přímo na slizové krále kdekoli na mapě (16 výbušného poškození každá).",
+      "visual": "Gryf má ocelovou přilbici a pod křídly připevněné mosazné odpalovače raket."
+     },
+     {
+      "tier": 4,
+      "name": "Nebeská eskadra",
+      "cost": 3600,
+      "km": 2,
+      "fx": {
+       "attack_interval_mult": 0.55,
+       "projectiles_add": 4,
+       "moab_missile_count_set": 4,
+       "moab_missile_damage_add": 10
+      },
+      "desc": "Střílí téměř dvojnásobnou rychlostí (interval ×0,55), 16 šipek v salvě a 4 naváděné rakety po 26 poškození do slizových králů.",
+      "visual": "Zlatomodrá královská zbroj na gryfovi i jezdci, za křídly zůstává světle modrá vzdušná stopa."
+     },
+     {
+      "tier": 5,
+      "name": "Pán nebeské pevnosti",
+      "cost": 20500,
+      "km": 5,
+      "fx": {
+       "projectiles_set": 24,
+       "damage_add": 4,
+       "pierce_add": 6,
+       "damage_type_set": "normal",
+       "moab_missile_interval_s": 1,
+       "moab_missile_damage_set": 55
+      },
+      "desc": "Vypouští kruhy 24 průrazných šipek (poškození 5, průraz 10, typ normal) a každou 1,0 s pálí 4 rakety po 55 poškození do bossů.",
+      "visual": "Kolosální nebeský arcigryf ve zlaté plátové zbroji se čtyřmi křídly a zářící svatozáří."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Zápalné pumy",
+      "cost": 190,
+      "km": 0,
+      "fx": {
+       "drop_bomb_on_track_interval_s": 1.6,
+       "track_bomb_damage": 3,
+       "track_bomb_radius_px": 45,
+       "track_bomb_pierce": 15,
+       "track_bomb_damage_type": "explosion"
+      },
+      "desc": "Kdykoli gryf přelétá nad cestou (max. každé 1,6 s), shodí dolů zápalnou pumu (3 poškození v okruhu 45 px, průraz 15).",
+      "visual": "Pod břichem gryfa visí kožený koš plný kulatých černých pum."
+     },
+     {
+      "tier": 2,
+      "name": "Bystrý zrak gryfa",
+      "cost": 260,
+      "km": 0,
+      "fx": {
+       "can_see_camo": true,
+       "camo_damage_bonus": 1
+      },
+      "desc": "Gryf vidí průhledné Duchslizy a všechny jeho útoky (šipky i pumy) jim udělují +1 poškození.",
+      "visual": "Oči gryfa jasně zlatě svítí a jezdec má na přilbě krystalové hledí."
+     },
+     {
+      "tier": 3,
+      "name": "Kobercový nálet",
+      "cost": 980,
+      "km": 0,
+      "fx": {
+       "track_bomb_cluster_count": 4,
+       "track_bomb_damage_add": 4,
+       "track_bomb_radius_add_px": 15
+      },
+      "desc": "Místo jedné pumy shazuje řadu 4 pum za sebou, každá udělí o +4 poškození více (celkem 7) v okruhu 60 px.",
+      "visual": "Hnízdo na zemi má muniční jeřáb a gryf nese těžký dřevěno-ocelový bombardovací závěs."
+     },
+     {
+      "tier": 4,
+      "name": "Soudný den z nebes",
+      "cost": 3400,
+      "km": 2,
+      "fx": {
+       "track_bomb_damage_add": 8,
+       "ability": {
+        "name": "Soudný den z nebes",
+        "kind": "ground_zero_strike",
+        "cooldown_s": 40,
+        "effect": "Pumy dávají 15 poškození. Aktivní schopnost (cooldown 40 s): shodí obří sud střelného prachu, který dá 220 poškození všem na mapě a na 2 s je omráčí."
+       },
+       "ability_cooldown_s": 40,
+       "ability_global_damage": 220,
+       "ability_stun_duration_s": 2
+      },
+      "desc": "Pumy dávají 15 poškození. Aktivní schopnost (cooldown 40 s): shodí obří sud střelného prachu, který dá 220 poškození všem na mapě a na 2 s je omráčí.",
+      "visual": "Černo-červeně opancéřovaný válečný gryf nesoucí v pařátech obří zlatě okovaný sud."
+     },
+     {
+      "tier": 5,
+      "name": "Posel apokalypsy",
+      "cost": 19800,
+      "km": 5,
+      "fx": {
+       "track_bomb_damage_set": 40,
+       "ability_global_damage_set": 850,
+       "ability_cooldown_s": 30,
+       "ability_stun_moab_duration_s": 3.5
+      },
+      "desc": "Kobercové pumy dávají 40 poškození každá. Schopnost (cooldown 30 s) udělí 850 poškození všem nepřátelům na mapě a na 3,5 s omráčí i slizové krále.",
+      "visual": "Ohnivý fénix-gryf v dračím pancíři, kolem jehož hnízda stojí čtyři obří runové pumy."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Ostré pařáty",
+      "cost": 150,
+      "km": 0,
+      "fx": {
+       "pierce_add": 3,
+       "projectile_speed_mult": 1.25
+      },
+      "desc": "Šipky mají o +3 vyšší průraz (celkem 6) a letí o 25 % rychleji.",
+      "visual": "Pařáty gryfa jsou okované ocelovými drápy a šipky mají stříbrné hroty."
+     },
+     {
+      "tier": 2,
+      "name": "Cvičený let",
+      "cost": 280,
+      "km": 0,
+      "fx": {
+       "flight_modes_unlocked": [
+        "circle",
+        "figure_eight",
+        "patrol_point",
+        "follow_cursor"
+       ]
+      },
+      "desc": "Umožňuje přepínat letový režim: Kroužení, Osmička, Hlídka kolem bodu zvoleného hráčem nebo Sledování kurzoru/dotyku.",
+      "visual": "Na hnízdě přibude barevný praporek a jezdec drží zdobené zlaté otěže."
+     },
+     {
+      "tier": 3,
+      "name": "Naváděné šipky",
+      "cost": 1050,
+      "km": 0,
+      "fx": {
+       "attack_mode_set": "targeted_homing_stream",
+       "projectiles_set": 3,
+       "attack_interval_mult": 0.45,
+       "homing_projectiles": true
+      },
+      "desc": "Místo střílení naslepo do kruhu jezdec míří přímo na slizáky a pálí naváděné trojité salvy více než dvojnásobnou rychlostí.",
+      "visual": "Jezdec třímá opakovací trpasličí arbalest na otočném kloubu v sedle."
+     },
+     {
+      "tier": 4,
+      "name": "Přízrak oblohy",
+      "cost": 3500,
+      "km": 2,
+      "fx": {
+       "secondary_explosive_shell_every_n_shots": 2,
+       "shell_damage": 12,
+       "shell_radius_px": 45,
+       "damage_add": 2,
+       "damage_type_set": "normal"
+      },
+      "desc": "Šipky dávají +2 poškození (typ normal) a každý 2. výstřel doprovází výbušná střela (12 poškození v okruhu 45 px).",
+      "visual": "Velký šedozlatý gryf s dvojhlavňovým mechanickým dělem na hřbetě."
+     },
+     {
+      "tier": 5,
+      "name": "Létající citadela",
+      "cost": 21000,
+      "km": 5,
+      "fx": {
+       "independent_turrets_count": 3,
+       "attack_interval_mult": 0.35,
+       "damage_add": 6,
+       "bonus_boss_damage": 10,
+       "shell_damage_set": 38
+      },
+      "desc": "Tři nezávislé střelecké věžičky v sedle pálí nepřetržitý proud naváděných šipek (poškození 9, +10 do bossů) a výbušných granátů (38 poškození) po celé mapě.",
+      "visual": "Gigantický královský gryf nesoucí na zádech pancéřovanou věž se třemi zlatými kanóny a vlajícími prapory."
+     }
+    ]
+   ]
+  },
+  {
+   "id": "oblehaci_mozdir",
+   "name": "Obléhací moždíř",
+   "cat": "military",
+   "desc": "Těžké dělostřelectvo s neomezeným dostřelem, které obloukem přes všechny překážky ostřeluje přesné místo na mapě zvolené hráčem.",
+   "col": "#57534e",
+   "ico": "🎯",
+   "short": "Moždíř",
+   "base": {
+    "cost": 480,
+    "range_px": 9999,
+    "damage": 2,
+    "attack_interval_s": 2,
+    "pierce": 25,
+    "projectiles": 1,
+    "damage_type": "explosion",
+    "can_see_camo": true,
+    "placement": "land",
+    "radius_px": 24
+   },
+   "attack": {
+    "pattern": "target_ground_point",
+    "explosion_radius_px": 52,
+    "shell_flight_time_s": 0.55,
+    "ignores_obstacles": true,
+    "scatter_radius_px": 14
+   },
+   "projectile_look": "Velká černá litinová puma s kouřovou stopou letící vysokým obloukem a terčem na zemi.",
+   "isNew": true,
+   "paths": [
+    [
+     {
+      "tier": 1,
+      "name": "Větší ráže",
+      "cost": 190,
+      "km": 0,
+      "fx": {
+       "explosion_radius_add_px": 15,
+       "pierce_add": 15
+      },
+      "desc": "Poloměr výbuchu se zvětšuje o +15 px (na 67 px) a výbuch zasáhne o +15 slizáků více (celkem 40).",
+      "visual": "Hlaveň moždíře má širší bronzové hrdlo a vedle leží větší dělové koule."
+     },
+     {
+      "tier": 2,
+      "name": "Drtivý dopad",
+      "cost": 310,
+      "km": 0,
+      "fx": {
+       "damage_add": 2
+      },
+      "desc": "Těžší nálož zvyšuje poškození výbuchu o +2 (celkem 4 poškození každému zasaženému slizákovi).",
+      "visual": "Podstavec moždíře je zpevněn železnými skobami zaraženými do země."
+     },
+     {
+      "tier": 3,
+      "name": "Otřesná vlna",
+      "cost": 920,
+      "km": 0,
+      "fx": {
+       "stun_duration_s": 1.1,
+       "shockwave_outer_radius_px": 95,
+       "shockwave_damage": 1,
+       "bonus_ceramic_damage": 3
+      },
+      "desc": "Výbuch na 1,1 s omráčí zasažené slizáky, dá +3 poškození do Zlatých slizů a vyšle tlakovou vlnu do 95 px (1 poškození).",
+      "visual": "Masivní ocelový moždíř s odpruženými písty po stranách a lebkou na hlavni."
+     },
+     {
+      "tier": 4,
+      "name": "Drsňák",
+      "cost": 3200,
+      "km": 2,
+      "fx": {
+       "damage_add": 7,
+       "explosion_radius_add_px": 25,
+       "pierce_add": 35,
+       "bonus_boss_damage": 10,
+       "can_stun_moab": true,
+       "stun_moab_duration_s": 0.6
+      },
+      "desc": "Obří granát udělí o +7 poškození více (celkem 11, +10 do bossů) v okruhu 92 px a na 0,6 s otřese i slizovými králi.",
+      "visual": "Černo-žlutě pruhovaná pevnostní baterie s obřím kovovým hmoždířem a navijákem na granáty."
+     },
+     {
+      "tier": 5,
+      "name": "Kladivo nebes",
+      "cost": 18500,
+      "km": 5,
+      "fx": {
+       "damage_add": 24,
+       "explosion_radius_add_px": 45,
+       "pierce_add": 80,
+       "bonus_boss_damage": 35,
+       "stun_duration_s": 2.2,
+       "stun_moab_duration_s": 1.4
+      },
+      "desc": "Kataklyzmatické výbuchy (poškození 35, do bossů 80) v obřím okruhu 137 px omráčí běžné slizáky na 2,2 s a slizové krále na 1,4 s.",
+      "visual": "Kolosální černo-zlatý obléhací kolos se žhnoucími runami v hlavni, při jehož výstřelu praská země."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Rychlé nabíjení",
+      "cost": 170,
+      "km": 0,
+      "fx": {
+       "attack_interval_mult": 0.75
+      },
+      "desc": "Obsluha nabíjí moždíř o čtvrtinu rychleji (interval útoku ×0,75).",
+      "visual": "Vedle hlavně přibude dřevěný skluz na koule a nabiják na tyči."
+     },
+     {
+      "tier": 2,
+      "name": "Těžké granáty",
+      "cost": 320,
+      "km": 0,
+      "fx": {
+       "damage_type_set": "normal",
+       "bonus_moab_damage": 3,
+       "bonus_fortified_damage": 2
+      },
+      "desc": "Granáty zraní i Černé slizy (typ normal) a udělují +3 poškození slizovým králům a +2 kamenným slizákům.",
+      "visual": "Dělové koule mají ostré špičaté hlavice a mosazné vodicí kroužky."
+     },
+     {
+      "tier": 3,
+      "name": "Dvojhlavňový moždíř",
+      "cost": 1050,
+      "km": 0,
+      "fx": {
+       "attack_interval_mult": 0.55,
+       "scatter_radius_px": 8
+      },
+      "desc": "Dvě hlavně pálí střídavě, čímž zkracují interval útoku na téměř polovinu (×0,55) a zpřesňují dopad.",
+      "visual": "Dvě spojené ocelové hlavně vedle sebe na otočném ozubeném věnci."
+     },
+     {
+      "tier": 4,
+      "name": "Dělostřelecká baterie",
+      "cost": 3400,
+      "km": 2,
+      "fx": {
+       "attack_interval_mult": 0.5,
+       "bonus_stunned_damage": 6,
+       "ability": {
+        "name": "Dělostřelecká palba",
+        "kind": "artillery_barrage",
+        "cooldown_s": 35,
+        "effect": "Dvojnásobná kadence a +6 poškození do omráčených cílů. Schopnost (cooldown 35 s): na 8 s ztrojnásobí rychlost střelby."
+       },
+       "ability_cooldown_s": 35,
+       "ability_duration_s": 8,
+       "ability_fire_rate_mult": 3
+      },
+      "desc": "Dvojnásobná kadence a +6 poškození do omráčených cílů. Schopnost (cooldown 35 s): na 8 s ztrojnásobí rychlost střelby.",
+      "visual": "Věž se třemi hlavněmi v trojúhelníkové formaci a automatickým pásovým podavačem munice."
+     },
+     {
+      "tier": 5,
+      "name": "Pán hromové palby",
+      "cost": 19200,
+      "km": 5,
+      "fx": {
+       "damage_add": 6,
+       "bonus_moab_damage": 15,
+       "ability_global_bombardment_waves": 10,
+       "ability_wave_damage": 60,
+       "ability_wave_stun_s": 1
+      },
+      "desc": "Nepřetržitý déšť granátů (+6 poškození, +15 do bossů). Schopnost navíc spustí 10 celomapových salv (60 poškození a 1 s omráčení každá).",
+      "visual": "Zlatem a platinou kovaná čtyřhlavňová pevnost s parními písty a modrými blesky kolem ústí."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Přesná muška",
+      "cost": 140,
+      "km": 0,
+      "fx": {
+       "scatter_radius_px": 0,
+       "allow_auto_follow_target": true
+      },
+      "desc": "Granáty dopadají s milimetrovou přesností a hráč může zapnout režim automatického sledování prvního/nejsilnějšího slizáka.",
+      "visual": "Na boku moždíře je připevněn mosazný kvadrant a olovnice."
+     },
+     {
+      "tier": 2,
+      "name": "Řecký oheň",
+      "cost": 270,
+      "km": 0,
+      "fx": {
+       "burn_dps": 3,
+       "burn_duration_s": 3.5
+      },
+      "desc": "Zasažení slizáci začnou hořet na 3,5 s za 3 poškození za sekundu.",
+      "visual": "Hrdlo moždíře je zbarvené do červena a koule jsou napuštěné hořlavou smůlou."
+     },
+     {
+      "tier": 3,
+      "name": "Světlice odhalení",
+      "cost": 850,
+      "km": 0,
+      "fx": {
+       "strip_camo_on_hit": true,
+       "decamo_radius_px": 85,
+       "leave_fire_patch_duration_s": 2.5,
+       "fire_patch_dps": 4
+      },
+      "desc": "Každý výbuch v okruhu 85 px trvale zviditelní všechny průhledné Duchslizy a zanechá na zemi ohnivou louži (2,5 s, 4 DPS).",
+      "visual": "Moždíř zdobený zlatým sluncem a bednou s jasně svítícími magickými světlicemi."
+     },
+     {
+      "tier": 4,
+      "name": "Rozbíječ pečetí",
+      "cost": 3100,
+      "km": 2,
+      "fx": {
+       "strip_fortified_from_non_moab": true,
+       "strip_regrow": true,
+       "strip_lead": true,
+       "burn_dps_add": 8
+      },
+      "desc": "Výbuch strhne z běžných slizáků železné helmy, kamenný krunýř i dorůstání a zvýší hoření o +8 DPS (celkem 11 DPS).",
+      "visual": "Runový moždíř z fialovo-zlatého kovu, jehož ústí plive modrofialové očistné plameny."
+     },
+     {
+      "tier": 5,
+      "name": "Popelavý soud",
+      "cost": 17800,
+      "km": 5,
+      "fx": {
+       "burn_dps_set": 45,
+       "burn_bonus_boss_dps": 75,
+       "burn_duration_s": 8,
+       "fire_patch_radius_px": 95,
+       "fire_patch_dps_set": 25
+      },
+      "desc": "Promění cílovou oblast v peklo (25 DPS na zemi). Zasažení slizáci hoří za 45 DPS (slizoví králové za 120 DPS!) po dobu 8 sekund.",
+      "visual": "Démonická sopečná baterie ve tvaru dračí tlamy chrlící žhnoucí lávové meteory k obloze."
+     }
+    ]
+   ]
+  },
+  {
+   "id": "trpaslici_inzenyr",
+   "name": "Trpasličí inženýr",
+   "cat": "support",
+   "desc": "Vynalézavý trpasličí mistr s hřebíkometem, který kolem sebe staví malé automatické střílny, líčí pasti a přetaktovává okolní věže.",
+   "col": "#ca8a04",
+   "ico": "🔧",
+   "short": "Inženýr",
+   "base": {
+    "cost": 370,
+    "range_px": 130,
+    "damage": 1,
+    "attack_interval_s": 0.72,
+    "pierce": 3,
+    "projectiles": 1,
+    "damage_type": "sharp",
+    "can_see_camo": false,
+    "placement": "land",
+    "radius_px": 19
+   },
+   "attack": {
+    "pattern": "direct_and_build_sentries",
+    "projectile_speed_px_s": 540
+   },
+   "projectile_look": "Dlouhý kovový hřebík s plochou hlavičkou vystřelený stlačenou párou.",
+   "isNew": true,
+   "paths": [
+    [
+     {
+      "tier": 1,
+      "name": "Automatické střílny",
+      "cost": 200,
+      "km": 0,
+      "fx": {
+       "spawn_sentry_interval_s": 9,
+       "sentry_duration_s": 25,
+       "max_active_sentries": 3,
+       "sentry_damage": 1,
+       "sentry_attack_interval_s": 0.9,
+       "sentry_pierce": 2,
+       "sentry_range_px": 115
+      },
+      "desc": "Inženýr každých 9 s postaví v dosahu malou automatickou střílnu (trvá 25 s, max. 3 současně, útok každých 0,9 s, poškození 1, průraz 2).",
+      "visual": "Inženýr má na hlavě žlutou hornickou přilbu, v levé ruce francouzský klíč a u nohou brašnu s nářadím."
+     },
+     {
+      "tier": 2,
+      "name": "Rychlá montáž",
+      "cost": 260,
+      "km": 0,
+      "fx": {
+       "spawn_sentry_interval_s": 5.5,
+       "max_active_sentries": 4
+      },
+      "desc": "Staví střílny mnohem rychleji (každých 5,5 s) a může mít až 4 aktivní střílny najednou.",
+      "visual": "Na zádech inženýra přibude parní kotlík s tlakoměrem a měděnými trubkami."
+     },
+     {
+      "tier": 3,
+      "name": "Těžké hřeby",
+      "cost": 780,
+      "km": 0,
+      "fx": {
+       "pierce_add": 4,
+       "sentry_pierce_add": 2,
+       "damage_type_set": "normal",
+       "sentry_damage_type_set": "normal",
+       "attack_interval_mult": 0.75
+      },
+      "desc": "Hřebíkomet inženýra i všech střílen prorazí železné helmy (typ normal), mají vyšší průraz (+4 inženýr, +2 střílny) a střílí rychleji.",
+      "visual": "Inženýr drží masivní mosazný parní hřebíkomet a střílny mají ocelové štíty."
+     },
+     {
+      "tier": 4,
+      "name": "Mistr konstruktér",
+      "cost": 2950,
+      "km": 2,
+      "fx": {
+       "sentry_types_set": [
+        "crushing_mace",
+        "explosion_bomb",
+        "laser_beam",
+        "frost_pulse"
+       ],
+       "max_active_sentries": 5,
+       "sentry_damage_add": 2
+      },
+      "desc": "Staví až 5 specializovaných střílen (+2 poškození): Drtící palcát (proti Zlatým), Pumomet (plošný), Ohnivý paprsek (průraz) a Mrazicí věžičku.",
+      "visual": "Inženýr v modrozlatém mistrovském plášti s mechanickou rukou a barevnými krystalovými střílnami kolem."
+     },
+     {
+      "tier": 5,
+      "name": "Pán parních automatů",
+      "cost": 17500,
+      "km": 5,
+      "fx": {
+       "sentry_damage_set": 6,
+       "sentry_attack_interval_s": 0.28,
+       "sentry_explode_on_expire_damage": 65,
+       "sentry_explode_radius_px": 75,
+       "max_active_sentries": 6
+      },
+      "desc": "Udržuje až 6 plazmových střílen, které pálí kulometnou rychlostí (každých 0,28 s za 6 poškození) a při zániku vybuchnou za 65 poškození v okruhu 75 px.",
+      "visual": "Vznešený arcikonstruktér na levitující zlaté plošině obklopený fialově zářícími runovými věžičkami."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Delší dosah",
+      "cost": 130,
+      "km": 0,
+      "fx": {
+       "range_add_px": 35,
+       "sentry_range_add_px": 25
+      },
+      "desc": "Zvyšuje dosah inženýra o +35 px (na 165 px) a dosah jeho střílen o +25 px.",
+      "visual": "Na přilbě inženýra je výsuvná mosazná anténa s čočkou."
+     },
+     {
+      "tier": 2,
+      "name": "Demontáž zbroje",
+      "cost": 310,
+      "km": 0,
+      "fx": {
+       "bonus_moab_damage": 2,
+       "bonus_fortified_damage": 2,
+       "strip_lead": true
+      },
+      "desc": "Útoky inženýra i střílen dávají +2 poškození slizovým králům a kamenným slizákům a trvale strhávají železné helmy.",
+      "visual": "Hřebíky mají ozubené závity a u pasu inženýra visí těžké štípací kleště."
+     },
+     {
+      "tier": 3,
+      "name": "Čisticí pěna",
+      "cost": 820,
+      "km": 0,
+      "fx": {
+       "spawn_foam_on_track_interval_s": 2,
+       "foam_duration_s": 8,
+       "foam_pierce": 12,
+       "foam_strips_camo": true,
+       "foam_strips_regrow": true,
+       "foam_strips_lead": true,
+       "foam_slow_pct": 25
+      },
+      "desc": "Každé 2,0 s nastříká na cestu bělostnou alchymistickou pěnu (výdrž 12 slizáků), která zpomalí o 25 % a smyje průhlednost, dorůstání i helmu.",
+      "visual": "Inženýr drží v druhé ruce mosaznou hadici připojenou k sudu s bublající bílou pěnou."
+     },
+     {
+      "tier": 4,
+      "name": "Přetaktování",
+      "cost": 3600,
+      "km": 2,
+      "fx": {
+       "foam_pierce_add": 15,
+       "ability": {
+        "name": "Přetaktování",
+        "kind": "overclock_target_tower",
+        "cooldown_s": 30,
+        "effect": "Pěna vydrží o +15 slizáků více. Schopnost (cooldown 30 s): na 25 s přetaktuje vybranou věž (+65 % rychlost útoku, u Zlatého dolu +65 % zisk)."
+       },
+       "ability_cooldown_s": 30,
+       "ability_duration_s": 25,
+       "ability_attack_speed_mult": 1.65,
+       "ability_farm_income_mult": 1.65
+      },
+      "desc": "Pěna vydrží o +15 slizáků více. Schopnost (cooldown 30 s): na 25 s přetaktuje vybranou věž (+65 % rychlost útoku, u Zlatého dolu +65 % zisk).",
+      "visual": "Inženýr má na zádech elektrickou cívku sršící modré blesky a v ruce zlatý ovladač."
+     },
+     {
+      "tier": 5,
+      "name": "Ultrataktování",
+      "cost": 21500,
+      "km": 5,
+      "fx": {
+       "ability_permanent_stack_speed_pct": 6,
+       "ability_max_permanent_stacks": 10,
+       "global_sentry_and_trap_damage_add": 3
+      },
+      "desc": "Kromě dočasného +65% zrychlení přidá každé použití schopnosti cílové věži trvalých +6 % rychlosti (až 10× = +60 % navždy!). Všem střílnám a pastem na mapě dává +3 poškození.",
+      "visual": "Mistr technomág obklopený třemi rotujícími zlatými elektrickými prstenci a levitujícím jádrem čisté energie."
+     }
+    ],
+    [
+     {
+      "tier": 1,
+      "name": "Velké hřeby",
+      "cost": 160,
+      "km": 0,
+      "fx": {
+       "pierce_add": 5,
+       "damage_add": 1
+      },
+      "desc": "Masivní kované hřeby zvyšují průraz o +5 (celkem 8) a poškození o +1 (celkem 2).",
+      "visual": "Hřebíkomet má zesílenou ocelovou hlaveň s pásovým zásobníkem velkých hřebů."
+     },
+     {
+      "tier": 2,
+      "name": "Přišpendlení",
+      "cost": 240,
+      "km": 0,
+      "fx": {
+       "pin_stun_duration_s": 0.85
+      },
+      "desc": "Zasažení běžní slizáci jsou hřebem přišpendleni k zemi a na 0,85 s se nemohou pohnout.",
+      "visual": "Hřeby mají široké zlaté hlavičky se symbolem kotvy."
+     },
+     {
+      "tier": 3,
+      "name": "Dvojitý hřebíkomet",
+      "cost": 690,
+      "km": 0,
+      "fx": {
+       "projectiles_set": 2,
+       "attack_interval_mult": 0.55,
+       "spread_deg": 8
+      },
+      "desc": "Inženýr střílí ze dvou hřebíkometů současně a téměř dvojnásobnou rychlostí (interval ×0,55).",
+      "visual": "Trpaslík má v každé ruce jeden těžký hřebíkomet a přes hruď křížový nábojový pás."
+     },
+     {
+      "tier": 4,
+      "name": "Klecová past",
+      "cost": 2800,
+      "km": 2,
+      "fx": {
+       "deploy_bloon_trap_interval_s": 10,
+       "trap_capacity_rbe": 120,
+       "trap_cash_bonus_mult": 2
+      },
+      "desc": "Každých 10 s hodí na cestu mechanickou klec, která pohltí až 120 životů běžných slizáků a po naplnění se promění ve dvojnásobek zlaťáků.",
+      "visual": "U nohou inženýra stojí otevřená železno-zlatá mechanická truhla s ozubenými čelistmi."
+     },
+     {
+      "tier": 5,
+      "name": "Požírač králů",
+      "cost": 18900,
+      "km": 5,
+      "fx": {
+       "deploy_bloon_trap_interval_s": 4.5,
+       "trap_capacity_rbe": 1500,
+       "trap_can_capture_boss_below_hp_pct": 0.35,
+       "trap_cash_bonus_mult": 2.5
+      },
+      "desc": "Obří runová klec (kapacita 1500 životů, obnova 4,5 s, zisk 2,5× zlata) dokáže okamžitě spolknout i slizového krále pod 35 % životů (pokud má rozbitou pečeť).",
+      "visual": "Monumentální zlatá trpasličí slévárna s jeřábem spouštějícím na cestu obří diamantovou klec."
+     }
+    ]
+   ]
   }
  ],
  "heroes": [

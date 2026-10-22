@@ -149,11 +149,17 @@ function setupCanvas() {
   // ztráta grafického kontextu (málo paměti, přepnutí karty…) — po obnovení vše překreslit
   cv.addEventListener('contextlost', e => e.preventDefault());
   cv.addEventListener('contextrestored', () => { g2 = cv.getContext('2d'); TR.clearCaches(); _towerIcoReset(); });
-  cv.onpointermove = e => { view.pointer = worldPos(e); updateGhost(); };
+  cv.onpointermove = e => { view.pointer = worldPos(e); if (G) G.cursor = view.pointer; updateGhost(); };
   cv.onpointerleave = () => { view.pointer = null; if (view.ghost && !view.touchGhost) view.ghost = null; };
   cv.onpointerdown = e => {
     const p = worldPos(e); view.pointer = p;
-    if (e.button === 2) { cancelPlacing(); return; }
+    if (e.button === 2) { view.pick = null; cancelPlacing(); return; }
+    if (view.pick) {   // volba místa pro věž (terč moždíře, hlídka gryfa)
+      const { kind, t } = view.pick; view.pick = null;
+      if (kind === 'aim') { t.aim = { x: p.x, y: p.y }; t.follow = false; }
+      else if (t.gryf) { t.gryf.pt = { x: p.x, y: p.y }; t.gryf.mode = 'patrol'; }
+      window.sfx?.('click'); view.sel = t; renderSide(true); return;
+    }
     if (view.placing) {
       if (e.pointerType === 'touch' && !view.touchGhost) { view.touchGhost = true; updateGhost(); return; }   // první klepnutí jen ukáže, kam to padne
       tryPlace(p); return;
@@ -309,7 +315,7 @@ function renderSide(force) {
   if (sel && !sel.boss && !sel.obst && !sel.hero && !G.towers.includes(sel)) view.sel = null;
   if (sel?.boss && sel.boss.dead) view.sel = null;
   const sig = JSON.stringify([view.sel ? (view.sel.id || view.sel.boss?.id || 'o') : 0, view.placing, Math.floor(G.gold / 5), G.km, G.waveActive, G.wave,
-    view.sel?.up, view.sel?.level, view.sel?.target, view.sel?.mode, Math.floor((view.sel?.bank || 0) / 50), view.sel?.boss ? Math.ceil(view.sel.boss.seal?.s * 10) : 0, Math.floor(G.time / 2) * (view.sel?.hero ? 1 : 0)]);
+    view.sel?.up, view.sel?.level, view.sel?.target, view.sel?.mode, view.sel?.follow, view.sel?.gryf?.mode, Math.floor((view.sel?.bank || 0) / 50), view.sel?.boss ? Math.ceil(view.sel.boss.seal?.s * 10) : 0, Math.floor(G.time / 2) * (view.sel?.hero ? 1 : 0)]);
   const atk = NET && view.tab === 'atk' && !view.sel && !view.placing;
   const fullSig = atk ? 'atk|' + Math.floor(G.gold / 5) + '|' + G.km + '|' + attackSig() : sig;
   if (!force && fullSig === panelSig) return;
@@ -408,7 +414,12 @@ function towerPanel(t) {
   const def = TDEF[t.type];
   let h = `<div class="td-sel-head"><span class="td-shop-ico" style="--hc:${def.col}">${towerIco(def)}</span><div><b>${esc(def.name)}</b><small>${esc(def.desc)}</small></div><button type="button" class="td-x" data-act="close" aria-label="Zavřít">✕</button></div>`;
   h += statRow(t);
-  if (towerHasAttack(t)) h += `<div class="td-targets">${TARGETS.map(([k, n]) => `<button type="button" class="${t.target === k ? 'on' : ''}" data-act="target" data-t="${k}">${n}</button>`).join('')}</div>`;
+  if (t.type === 'oblehaci_mozdir') h += `<div class="td-km-acts"><button type="button" class="btn btn-primary btn-sm" data-act="pick" data-k="aim">🎯 Zvolit cíl na mapě</button>${t.fx.allow_auto_follow_target ? `<button type="button" class="btn btn-secondary btn-sm" data-act="follow">${t.follow ? '📍 Pevný cíl' : '👁️ Sledovat slizáky'}</button>` : ''}</div>`;
+  if (t.type === 'gryfi_jezdec' && t.fx.flight_modes_unlocked) {
+    const M = [['circle', '⭕ Kroužit'], ['eight', '♾️ Osmička'], ['patrol', '📍 Hlídka'], ['follow', '🖱️ Za kurzorem']], cur = t.gryf?.mode || 'circle';
+    h += `<div class="td-targets">${M.map(([k, n]) => `<button type="button" class="${cur === k ? 'on' : ''}" data-act="fly" data-m="${k}">${n}</button>`).join('')}</div>`;
+  }
+  if (towerHasAttack(t) && !(t.type === 'kladec_pasti' && !t.fx.allow_target_priority) && t.type !== 'oblehaci_mozdir' && !(t.type === 'gryfi_jezdec' && t.st.mode !== 'targeted_homing_stream')) h += `<div class="td-targets">${TARGETS.map(([k, n]) => `<button type="button" class="${t.target === k ? 'on' : ''}" data-act="target" data-t="${k}">${n}</button>`).join('')}</div>`;
   if (t.fx.toggle_submerge_mode) h += `<button type="button" class="btn btn-secondary btn-sm td-wide" data-act="mode">${t.mode === 'lighthouse' ? '⛵ Přepnout na střelbu' : '🗼 Přepnout na maják'}</button>`;
   if (t.fx.bank_mode) h += `<div class="td-bank">🏦 V bance <b>${fmt(t.bank || 0)}</b> / ${fmt(t.fx.bank_capacity || 7500)} zl <button type="button" class="btn btn-primary btn-sm" data-act="bank" ${!(t.bank > 0) ? 'disabled' : ''}>Vybrat</button></div>`;
   if (t.ability) { const left = Math.max(0, t.cdUntil - G.time); h += `<button type="button" class="btn btn-primary btn-sm td-wide" data-act="ability" ${left > 0 ? 'disabled' : ''}>✨ ${esc(t.ability.name)}${left > 0 ? ` (${Math.ceil(left)} s)` : ''}</button><p class="td-tip">${esc(t.ability.effect || '')}</p>`; }
@@ -471,6 +482,9 @@ function act(a, d) {
     case 'flare': if (G.km >= 1) { G.km--; G.revealUntil = G.time + ECON.flashcards.emergency_flare_reveal_duration_s; window.sfx?.('hint'); toast('🔦 Světlice: 15 s vidí všechny věže průhledné slizáky.'); } break;
     case 'sellkm': if (G.km >= 1) { G.km--; addGold(ECON.currencies.km_to_gold_conversion_rate); window.sfx?.('coin'); } break;
     case 'heroxp': if (G.km >= 1) { G.km--; addHeroXp(ECON.flashcards.direct_hero_xp_per_1_km); } break;
+    case 'pick': view.pick = { kind: d.k, t: sel }; toast(d.k === 'aim' ? 'Klikni na mapu, kam má moždíř střílet.' : 'Klikni, kolem kterého místa má gryf hlídkovat.'); break;
+    case 'follow': sel.follow = !sel.follow; break;
+    case 'fly': if (sel.gryf) { if (d.m === 'patrol') { view.pick = { kind: 'patrol', t: sel }; toast('Klikni, kolem kterého místa má gryf hlídkovat.'); } else sel.gryf.mode = d.m; } break;
     case 'movehero': view.placing = 'moveHero'; view.sel = null; toast('Klikni, kam hrdinu přesunout.'); break;
     case 'seal': { const km = sel.boss.def.seal?.km || 3; if (G.km >= km) { G.km -= km; sel.boss.seal.s = 0; addFx({ kind: 'sealbreak', x: sel.boss.x, y: sel.boss.y, r: sel.boss.def.r, dur: 0.6 }); window.sfx?.('combo', { n: 3 }); } break; }
     case 'clear': { const o = sel.obst; if (spend(o.remove_cost_gold)) { o.removed = true; window.sfx?.('tower'); view.sel = null; } break; }

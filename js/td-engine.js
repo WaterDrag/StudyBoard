@@ -72,6 +72,7 @@ function spawnEnemy(t, pathIdx, d, mods = [], opt = {}) {
   };
   if (opt.bounty) e.bounty = opt.bounty;
   if (def.seal && !opt.noSeal) e.seal = { s: 1, n: def.seal.n };
+  if (def.boss && G.sabotage?.bossCut && G.sabotage.until > G.time) { e.hp *= 1 - G.sabotage.bossCut; e.maxHp *= 1 - G.sabotage.bossCut; }
   const q = posAt(G.paths[pathIdx], d); e.x = q.x; e.y = q.y;
   G.enemies.push(e);
   if (def.boss && !opt.noSeal) onBossSpawn(e);
@@ -261,6 +262,9 @@ function recalcTower(t) {
     carts: 4, cartVal: Math.round((b.income_per_wave || 0) / 4), cartPct: 0, cartMul: 1 };
   const fx = {}, mults = {};
   let ability = null;
+  // Nové věže: parametry útoku jsou výchozí efekty; klíče bez jednotky (trap_lifetime_s → trap_lifetime)
+  const stripU = k => k.replace(/(_px_s|_px|_s)$/, '');
+  if (def.isNew) for (const [k, v] of Object.entries(def.attack || {})) { fx[k] = v; fx[stripU(k)] = v; }
   for (let tier = 1; tier <= 5; tier++) for (let p = 0; p < 3; p++) {
     if (t.up[p] < tier) continue;
     const u = def.paths[p][tier - 1];
@@ -275,10 +279,18 @@ function recalcTower(t) {
         else mults[s] = (mults[s] || 1) * v;
         continue;
       }
+      // vlastní klíč nové věže: _add/_mult/_set se přičítá k základu (násobek bez základu je samostatná hodnota, např. trap_cash_bonus_mult)
+      if (def.isNew && m && typeof v === 'number' && !(m[2] === 'mult' && fx[m[1]] === undefined)) {
+        const b = m[1];
+        fx[b] = m[2] === 'set' ? v : m[2] === 'add' ? (fx[b] || 0) + v : (fx[b] ?? 1) * v;
+        continue;
+      }
       fx[k] = v;
+      if (def.isNew) fx[stripU(k)] = v;
     }
   }
   for (const [s, m] of Object.entries(mults)) st[s] *= m;
+  if (ability && fx.ability_cooldown) ability.cooldown_s = fx.ability_cooldown;
   t.st = st; t.fx = fx; t.ability = ability;
   if (ability && t.abilityKey !== ability.key) { t.abilityKey = ability.key; t.cdUntil = G.time + 2; }
   if (!ability) t.abilityKey = null;
@@ -428,6 +440,7 @@ function refreshAuras() {
     if (glob.marketPct) a.spd += glob.marketPct * glob.markets;
     t.aura = a;
   }
+  if (typeof xAuras === 'function') xAuras();   // nové věže (td-xtowers.js)
 }
 // Okamžité násobiče (buffy se časem mění, proto se počítají za běhu)
 function speedMul(t) {
@@ -439,6 +452,7 @@ function speedMul(t) {
   if (t.buff && t.buff.until > G.time) m += t.buff.spd || 0;
   if (t.rainUntil > G.time) m *= 3;
   if (t.type === 'kralovsky_lucistnik' && G.archerRush > G.time) m += 1.5;
+  if (typeof xSpeed === 'function') m += xSpeed(t);
   if (G.vs) {
     if (G.vs.focusUntil > G.time) m += VS.ffa_3_to_4_players.stage_1_mild_focus.defender_attack_speed_buff_pct;
     if (G.vs.curse && G.vs.curse.id === t.id && G.vs.curse.until > G.time) m *= 0.5;
@@ -496,7 +510,7 @@ function updateProjs(dt) {
     }
     p.x += p.vx * dt; p.y += p.vy * dt; p.trav += p.spd * dt;
     if (p.lob) {   // výbušné střely letí na místo a tam vybuchnou
-      if (p.trav >= p.dist || enemiesNear(p.x, p.y, p.r).length) { p.dead = true; p.onBurst?.(p); }
+      if (p.trav >= p.dist || (!p.arc && enemiesNear(p.x, p.y, p.r).length)) { p.dead = true; p.onBurst?.(p); }
       continue;
     }
     if (p.trav > p.dist || p.x < -60 || p.y < -60 || p.x > TW + 60 || p.y > TH + 60) { p.dead = true; continue; }
@@ -776,6 +790,7 @@ function updateTower(t, dt) {
   if (t.beastUntil > G.time) {   // Proměna v běsa: paprsek s obrovským poškozením
     every('beast', 0.08, () => { const e = pickTarget(t, effRange(t) + 40); if (e) { aimAt(t, e); addFx({ kind: 'beam', x: t.x, y: t.y, tx: e.x, ty: e.y, dur: 0.09, col: '#e879f9' }); hitEnemy(e, t.beastDmg || 8, 'true', hitOpts(t)); } });
   }
+  if (typeof XT !== 'undefined' && XT[t.type]) { XT[t.type](t, dt, every); return; }   // nové věže (td-xtowers.js)
   if (!towerHasAttack(t)) return;
   if (t.type === 'strazni_hlaska') {   // Citadela: střešní balista
     t.cd -= dt * speedMul(t);
@@ -1090,6 +1105,7 @@ function livesCap() { return (DIFF[G.diff]?.lives || 150) + 200; }
 function mineIncome(t) {
   const st = t.st;
   let inc = st.carts * st.cartVal * (1 + st.cartPct) * st.cartMul;
+  if (t.ocUntil > G.time) inc *= t.ocMul || 1.65;
   inc *= 1 + (t.aura?.mine || 0);
   if (G.towers.some(o => o !== t && o.type === 'zlaty_dul' && o.fx.buff_all_other_farms_income_pct)) inc *= 1.25;
   const h = G.hero; if (h?.id === 'kronikar_oskar') inc *= 1 + (h.level >= 14 ? 0.15 : h.level >= 5 ? 0.08 : 0);
@@ -1119,6 +1135,7 @@ function endWave() {
   if (w === TD.waves.length && !G.wonShown) { G.wonShown = true; G.onWin?.(); }
 }
 function waveRewards(w) {
+  if (typeof xWaveEnd === 'function') xWaveEnd();
   // banky, životy z tržišť, příjmy z hlásky a galér, Oskar
   for (const t of G.towers) {
     if (t.type === 'zlaty_dul' && t.fx.bank_mode) {
@@ -1230,6 +1247,7 @@ function step(dt) {
     let v = e.def.speed * e.spdMul;
     if (frozen(e) || stunned(e)) v = 0;
     else if (e.slowUntil > G.time) v *= 1 - e.slowPct;
+    if (G.sabotage && G.sabotage.until > G.time && !slowImmune(e)) v *= 1 - G.sabotage.pct;
     e.d += v * dt;
     if (e.d >= path.len) {
       e.dead = true;
@@ -1248,6 +1266,7 @@ function step(dt) {
   updateProjs(dt);
   updateZones(dt);
   updateAllies(dt);
+  if (typeof updateExtras === 'function') updateExtras(dt);
   // globální schopnosti
   if (G.bladeStorm && G.bladeStorm.until > G.time) {
     G.bladeStorm.acc += dt;
@@ -1274,6 +1293,7 @@ function newGame(mapId, heroId, diff = 'medium', vs = null) {
     map, paths: map.paths.map(buildPath), time: 0, gold: ECON.singleplayer.starting_gold, lives: D.lives, diff, costMul: D.cost, km: ECON.singleplayer.starting_knowledge_points,
     wave: 0, waveActive: false, schedule: [], schedIdx: 0, waveT: 0, waveLen: 1, pauseUntil: 0, autoNext: true,
     enemies: [], towers: [], projs: [], zones: [], allies: [], fx: [], floats: [], later: [], necros: [],
+    traps: [], sentries: [], movers: [], sabotage: null,
     hero: null, heroId, revealUntil: 0, streakUntil: 0, blessUntil: 0, hornAll: 0, archerRush: 0,
     cardsThisWave: 0, cardQuotaBonus: 0, cardCdUntil: 0, streak: 0, cardsOk: 0, cardsBad: 0, debt: 0,
     stats: { pops: 0, leaks: 0, popGold: 0, wavesDone: 0, earned: 0 }, glob: {}, auraDirty: true, over: false,
