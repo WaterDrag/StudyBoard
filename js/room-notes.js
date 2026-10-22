@@ -2856,11 +2856,44 @@ function setupEditorExtras(editor, toolbar) {
     }
   });
   // V editoru se odkaz neotvírá (klik = psaní) — Ctrl+klik ho otevře jako ve Wordu.
+  // Funguje i na adresu, která je zatím jen text (starší poznámky).
   editor.addEventListener('click', e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
     const a = e.target.closest?.('a[href]');
-    if (!a || a.hasAttribute('data-page') || !(e.ctrlKey || e.metaKey)) return;
-    const u = safeWebUrl(a.getAttribute('href'));
+    if (a && a.hasAttribute('data-page')) return;
+    const u = a ? safeWebUrl(a.getAttribute('href')) : urlAtPoint(e.clientX, e.clientY);
     if (u) { e.preventDefault(); window.open(u, '_blank', 'noopener'); }
+  });
+  // S drženým Ctrl ukáže kurzor ruku nad odkazem
+  const ctrlCur = e => editor.classList.toggle('ctrl-links', e.ctrlKey || e.metaKey);
+  editor.addEventListener('mousemove', ctrlCur);
+  document.addEventListener('keydown', ctrlCur);
+  document.addEventListener('keyup', ctrlCur);
+
+  // ── Napsaná adresa se po mezeře / Enteru sama změní na odkaz ──
+  editor.addEventListener('keydown', e => {
+    if ((e.key !== ' ' && e.key !== 'Enter') || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.isCollapsed || !sel.rangeCount) return;
+    const node = sel.anchorNode;
+    if (!node || node.nodeType !== 3 || !editor.contains(node)) return;
+    if (node.parentElement.closest('a, pre, code')) return;
+    const m = node.data.slice(0, sel.anchorOffset).match(/(?:https?:\/\/|www\.)[^\s<>"]+$/i);
+    if (!m) return;
+    const word = m[0].replace(/[.,;:!?)\]]+$/, '');   // tečka za větou do odkazu nepatří
+    const url = safeWebUrl(word);
+    if (!url) return;
+    const start = sel.anchorOffset - m[0].length;
+    const r = document.createRange();
+    r.setStart(node, start); r.setEnd(node, start + word.length);
+    const a = document.createElement('a'); a.href = url;
+    r.surroundContents(a);
+    // kurzor zpátky za odkaz (mimo něj), ať se dál píše obyčejný text
+    let next = a.nextSibling;
+    if (!next || next.nodeType !== 3) { next = document.createTextNode(''); a.after(next); }
+    const after = document.createRange();
+    after.setStart(next, Math.min(next.data.length, m[0].length - word.length));   // za případnou tečku / závorku
+    after.collapse(true); sel.removeAllRanges(); sel.addRange(after);
   });
 
   // ── Vkládání: vyčistit cizí formátování ──
@@ -2871,6 +2904,18 @@ function setupEditorExtras(editor, toolbar) {
   editor.addEventListener('paste', e => {
     const cd = e.clipboardData;
     if (!cd || [...cd.items].some(i => i.type?.startsWith('image/') && i.kind === 'file')) return; // obrázek řeší setupEditorImages
+    // vložená samotná adresa = odkaz (s označeným textem: text se stane odkazem)
+    const plain = (cd.getData('text/plain') || '').trim();
+    if (/^(https?:\/\/|www\.)\S+$/i.test(plain) && !window.getSelection()?.anchorNode?.parentElement?.closest('a, pre, code')) {
+      const url = safeWebUrl(plain);
+      if (url) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed) document.execCommand('createLink', false, url);
+        else document.execCommand('insertHTML', false, `<a href="${esc(url)}">${esc(plain)}</a>&nbsp;`);
+        return;
+      }
+    }
     const html = cd.getData('text/html');
     if (!html) return;                                        // čistý text: prohlížeč to zvládne sám
     const internal = !!lastCopied && cd.getData('text/plain').trim() === lastCopied;
@@ -2935,7 +2980,7 @@ function setupEditorExtras(editor, toolbar) {
     const chars = text.replace(/\s/g, '').length;
     const w = words === 1 ? 'slovo' : words >= 2 && words <= 4 ? 'slova' : 'slov';
     status.innerHTML = `<span>${words} ${w}</span><span>${chars} znaků</span>` +
-      '<span class="rt-hint">Tip: <kbd>-</kbd> + mezera = odrážky · <kbd>#</kbd> = nadpis · <kbd>Ctrl+K</kbd> = odkaz</span>';
+      '<span class="rt-hint">Tip: <kbd>-</kbd> + mezera = odrážky · <kbd>#</kbd> = nadpis · <kbd>Ctrl+K</kbd> = odkaz · <kbd>Ctrl</kbd>+klik = otevřít odkaz</span>';
   };
   new MutationObserver(() => { if (!pending) { pending = true; requestAnimationFrame(() => { count(); clampFreeImages(editor); }); } })
     .observe(editor, { childList: true, characterData: true, subtree: true });
@@ -2943,6 +2988,21 @@ function setupEditorExtras(editor, toolbar) {
 }
 
 function closeWebLinkPop() { document.getElementById('webLinkPop')?.remove(); }
+
+// Adresa (https://… / www.…) v obyčejném textu pod kurzorem myši, nebo ''
+function urlAtPoint(x, y) {
+  // nejdřív místo, kam prohlížeč klikem postavil kurzor, jinak výpočet z pozice myši
+  const s = window.getSelection();
+  const r = document.caretRangeFromPoint?.(x, y);
+  const pos = s && s.isCollapsed && s.anchorNode?.nodeType === 3 ? { node: s.anchorNode, off: s.anchorOffset }
+    : r ? { node: r.startContainer, off: r.startOffset }
+    : (() => { const p = document.caretPositionFromPoint?.(x, y); return p ? { node: p.offsetNode, off: p.offset } : null; })();
+  if (!pos || pos.node.nodeType !== 3) return '';
+  const t = pos.node.data, re = /(?:https?:\/\/|www\.)[^\s<>"]+/gi;
+  let m;
+  while ((m = re.exec(t))) if (pos.off >= m.index && pos.off <= m.index + m[0].length) return safeWebUrl(m[0].replace(/[.,;:!?)\]]+$/, ''));
+  return '';
+}
 
 function openWebLinkPop(editor, anchor, range) {
   closeWebLinkPop();

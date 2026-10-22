@@ -536,10 +536,12 @@ function renderCardsList() {
       <div class="card-sides">
         <div>
           <div class="card-side-lbl">Přední${tag}</div>
+          ${cardImgHtml(card.frontImg, 'card-img-sm')}
           ${card.frontLang ? codeQuestionHtml(card.front, card.frontLang) : `<div class="card-side-txt">${esc(card.front)}</div>`}
         </div>
         <div>
           <div class="card-side-lbl">Zadní</div>
+          ${cardImgHtml(card.backImg, 'card-img-sm')}
           ${renderCardContent(card)}
           ${distractorBadge}
         </div>
@@ -578,6 +580,8 @@ function openEditCard(card) {
   editDistractors = [...(card.distractors || [])];
   document.getElementById('editCardFront').value   = card.front || '';
   document.getElementById('editCardBack').value    = card.back  || '';
+  setImgSlot('editCardFrontImg', card.frontImg);
+  setImgSlot('editCardBackImg', card.backImg);
   document.getElementById('editAnswerCount').value = String(card.answerCount || 4);
   editCorrects = [...(card.corrects || [])];
   renderEditCorrects();
@@ -831,15 +835,14 @@ function setupEditCardModal() {
   });
   document.getElementById('saveEditCardBtn').addEventListener('click', async () => {
     if (!EDIT_CARD_ID) return;
-    const front = document.getElementById('editCardFront').value.trim();
-    const back  = document.getElementById('editCardBack').value.trim();
-    if (!front || !back) { toast('Vyplň obě strany.'); return; }
+    const sides = readCardSides('editCardFront', 'editCardBack');
+    if (!sides) return;
     const btn = document.getElementById('saveEditCardBtn');
     btn.disabled = true;
     try {
       const answerCount = parseInt(document.getElementById('editAnswerCount').value) || 4;
       await db.collection('decks').doc(DECK_ID).collection('cards').doc(EDIT_CARD_ID).update({
-        front, back,
+        ...sides,
         corrects: editCorrects,
         frontLang: document.getElementById('editFrontLang').value || null,
         codeLang:  document.getElementById('editCodeLang').value  || null,
@@ -883,22 +886,94 @@ function setupDeleteModal() {
   });
 }
 
+// ── Obrázky na kartě ──────────────────────────────────────────
+// Každá strana může mít jeden obrázek (nahraje se na ImgBB jako v poznámkách):
+// tlačítkem, Ctrl+V do políčka nebo přetažením. Na kartě je jen jeho adresa.
+async function uploadCardImage(file) {
+  if (!file || !/^image\//.test(file.type)) throw new Error('To není obrázek.');
+  if (file.size > 16 * 1024 * 1024) throw new Error('Obrázek je větší než 16 MB.');
+  const fd = new FormData();
+  fd.append('image', file);
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: fd });
+  const json = await res.json().catch(() => null);
+  if (!json?.success) throw new Error(json?.error?.message || 'Nahrání selhalo');
+  return json.data.url;
+}
+function getImgSlot(id) { return cardImgSrc(document.getElementById(id)?.dataset.url) || null; }
+function setImgSlot(id, url) {
+  const slot = document.getElementById(id);
+  if (!slot) return;
+  const src = cardImgSrc(url);
+  slot.dataset.url = src;
+  slot.classList.remove('busy');
+  slot.innerHTML = src
+    ? `<div class="card-img-prev">${cardImgHtml(src)}<button type="button" class="card-img-rm" title="Odebrat obrázek" aria-label="Odebrat obrázek">×</button></div>`
+    : '<button type="button" class="btn btn-ghost btn-sm card-img-add">🖼️ Obrázek</button><span class="card-img-tip">nebo vlož Ctrl+V / přetáhni</span>';
+}
+async function putImgSlot(id, file) {
+  const slot = document.getElementById(id);
+  slot.classList.add('busy');
+  slot.innerHTML = '<span class="card-img-tip">⏳ Nahrávám obrázek…</span>';
+  try { setImgSlot(id, await uploadCardImage(file)); }
+  catch (e) { setImgSlot(id, null); toast('Obrázek: ' + e.message); }
+}
+function setupImgSlots() {
+  document.querySelectorAll('.card-img-slot').forEach(slot => {
+    const id = slot.id, ta = document.getElementById(slot.dataset.for);
+    setImgSlot(id, null);
+    slot.addEventListener('click', e => {
+      if (e.target.closest('.card-img-rm')) { setImgSlot(id, null); return; }
+      if (!e.target.closest('.card-img-add')) return;
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*';
+      inp.onchange = () => { if (inp.files[0]) putImgSlot(id, inp.files[0]); };
+      inp.click();
+    });
+    const fileOf = list => [...(list || [])].find(f => /^image\//.test(f.type));
+    [ta, slot].forEach(el => el && el.addEventListener('paste', e => {
+      const f = fileOf(e.clipboardData?.files);
+      if (f) { e.preventDefault(); putImgSlot(id, f); }
+    }));
+    [ta, slot].forEach(el => el && el.addEventListener('dragover', e => {
+      if ([...(e.dataTransfer?.items || [])].some(i => i.kind === 'file')) { e.preventDefault(); slot.classList.add('drag'); }
+    }));
+    [ta, slot].forEach(el => el && el.addEventListener('dragleave', () => slot.classList.remove('drag')));
+    [ta, slot].forEach(el => el && el.addEventListener('drop', e => {
+      slot.classList.remove('drag');
+      const f = fileOf(e.dataTransfer?.files);
+      if (f) { e.preventDefault(); putImgSlot(id, f); }
+    }));
+  });
+}
+// Obě strany z formuláře. Přední stranu může nahradit obrázek (dostane
+// otázku „Co je na obrázku?“), zadní text je nutný — z něj jsou odpovědi v kvízu a hrách.
+function readCardSides(frontId, backId) {
+  const frontImg = getImgSlot(frontId + 'Img'), backImg = getImgSlot(backId + 'Img');
+  if (document.querySelector(`#${frontId}Img.busy, #${backId}Img.busy`)) { toast('Počkej, obrázek se ještě nahrává.'); return null; }
+  const front = document.getElementById(frontId).value.trim() || (frontImg ? 'Co je na obrázku?' : '');
+  const back  = document.getElementById(backId).value.trim();
+  if (!front || !back) { toast(back ? 'Vyplň přední stranu nebo k ní přidej obrázek.' : 'Zadní strana potřebuje text — z něj jsou odpovědi v kvízu a hrách.'); return null; }
+  return { front, back, frontImg, backImg };
+}
+
 function setupAddCard() {
+  setupImgSlots();
   document.getElementById('addCardSubmit').addEventListener('click', async () => {
-    const front = document.getElementById('cardFront').value.trim();
-    const back  = document.getElementById('cardBack').value.trim();
-    if (!front || !back) { toast('Vyplň obě strany karty.'); return; }
+    const sides = readCardSides('cardFront', 'cardBack');
+    if (!sides) return;
     const btn = document.getElementById('addCardSubmit');
     btn.disabled = true;
     try {
       await db.collection('decks').doc(DECK_ID).collection('cards').add({
-        front, back,
+        ...sides,
         authorId:   ME.uid,
         authorName: ME.displayName || ME.email,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       document.getElementById('cardFront').value = '';
       document.getElementById('cardBack').value  = '';
+      setImgSlot('cardFrontImg', null);
+      setImgSlot('cardBackImg', null);
       toast('Karta přidána!');
     } catch (e) { toast('Chyba: ' + e.message); }
     btn.disabled = false;
@@ -1109,7 +1184,7 @@ function showStudyCard() {
   document.getElementById('flashcardWrap').classList.toggle('fc-reading', reading || cloze);
   document.getElementById('flashcardWrap').classList.toggle('fc-typing', typing || cloze);
   if (reading) {
-    fEl.innerHTML = `<div class="fc-info-term">${esc(card.front)}</div>` +
+    fEl.innerHTML = `<div class="fc-info-term">${esc(card.front)}</div>` + cardImgHtml(card.frontImg) + cardImgHtml(card.backImg) +
       (card.codeLang ? codeBlockHtml(card.back, card.codeLang) : `<div class="fc-info-body">${esc(card.back)}</div>`);
     bEl.textContent = '';
     if (fLbl) { fLbl.textContent = 'Výklad'; fLbl.hidden = false; }
@@ -1120,19 +1195,18 @@ function showStudyCard() {
       const [pre, core, post] = clozeCore(t);
       return `${esc(pre)}<input type="text" class="cloze-in" data-answer="${esc(core)}" style="width:${Math.max(3, core.length + 1)}ch" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Chybějící slovo">${esc(post)}`;
     }).join('');
-    fEl.innerHTML = `<div class="fc-info-term">${esc(card.front)}</div><div class="fc-info-body">${body}</div>`;
+    fEl.innerHTML = `<div class="fc-info-term">${esc(card.front)}</div>${cardImgHtml(card.frontImg)}<div class="fc-info-body">${body}</div>`;
     bEl.textContent = '';
     if (fLbl) { fLbl.textContent = 'Doplň chybějící slova'; fLbl.hidden = false; }
   } else {
-    if (card.frontLang) fEl.innerHTML = codeQuestionHtml(card.front, card.frontLang);
-    else fEl.textContent = card.front;
-    if (card.codeLang)  bEl.innerHTML = codeBlockHtml(card.back, card.codeLang);
-    else bEl.textContent = card.back;
+    fEl.innerHTML = cardImgHtml(card.frontImg) + (card.frontLang ? codeQuestionHtml(card.front, card.frontLang) : esc(card.front));
+    bEl.innerHTML = cardImgHtml(card.backImg) + (card.codeLang ? codeBlockHtml(card.back, card.codeLang) : esc(card.back));
     if (fLbl) fLbl.textContent = 'Otázka';
     // Otázka vytažená z komentáře v kódu nahradí nápis „Otázka“.
     if (fLbl) fLbl.hidden = !!fEl.querySelector('.code-q');
     if (bLbl) bLbl.textContent = 'Odpověď';
   }
+  document.getElementById('flashcardWrap').classList.toggle('fc-has-img', !!(cardImgSrc(card.frontImg) || cardImgSrc(card.backImg)));
   document.getElementById('studyIdx').textContent   = STUDY_IDX + 1;
   document.getElementById('studyTotal').textContent = STUDY_QUEUE.length;
   document.getElementById('studyProgFill').style.width = (STUDY_IDX / STUDY_QUEUE.length * 100) + '%';

@@ -46,7 +46,7 @@ async function mcLoadCards(decks, perDeck = 300) {
     .then(s => s.docs.slice(0, perDeck).map(c => ({ ...c.data(), id: c.id, deckId: d.id, deckName: d.name }))).catch(() => [])));
   return lists.flat().filter(c => c.front && c.back && c.kind !== 'info').map(c => ({
     id: c.id, deckId: c.deckId, deckName: c.deckName,
-    f: String(c.front), b: String(c.back), fl: c.frontLang || null, cl: c.codeLang || null,
+    f: String(c.front), b: String(c.back), fl: c.frontLang || null, cl: c.codeLang || null, fi: c.frontImg || null,
     w: (c.distractors || []).filter(Boolean).map(String),
     ok: new Set([String(c.back), ...(c.corrects || []).map(String)]),
   }));
@@ -83,6 +83,11 @@ function mcOptions(card, pool, rnd = Math.random) {
 // Otázka / odpověď: kód jako blok kódu (codehl.js ho obarví), jinak text.
 function mcCode(text, lang) { return `<pre class="code-block" data-lang="${esc(lang)}"><code>${esc(text)}</code></pre>`; }
 function mcQuestionHtml(card) {
+  // Obrázek z přední strany karty (cardImgHtml je v codehl.js)
+  const img = card.fi && typeof cardImgHtml === 'function' ? cardImgHtml(card.fi, 'mc-q-img') : '';
+  return img + mcQuestionBody(card);
+}
+function mcQuestionBody(card) {
   if (!card.fl) return `<div class="mc-q-text">${esc(card.f).replace(/\n/g, '<br>')}</div>`;
   // „// Co vypíše …?“ pod kódem je samotná otázka
   const lines = card.f.replace(/\s+$/, '').split('\n'), q = [];

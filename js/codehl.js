@@ -130,3 +130,34 @@ function enhanceCode(root = document) {
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
+
+// ── Obrázky na kartičkách (card.frontImg / card.backImg) ──────────
+// Jen https adresa a vždy námi sestavený <img>. Zmenšený obrázek jde
+// kliknutím zvětšit (klik na nezmenšený projde dál, třeba k otočení karty).
+function cardImgSrc(u) {
+  try { const x = new URL(String(u || '')); return x.protocol === 'https:' ? x.href : ''; } catch (_) { return ''; }
+}
+function cardImgHtml(u, cls) {
+  const s = cardImgSrc(u);
+  if (!s) return '';
+  const attr = s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return `<img class="card-img${cls ? ' ' + cls : ''}" src="${attr}" alt="Obrázek na kartě" loading="lazy" decoding="async">`;
+}
+document.addEventListener('click', e => {
+  const img = e.target instanceof Element && e.target.closest('img.card-img');
+  if (!img || !img.complete || img.naturalWidth < img.clientWidth * 1.15 && img.naturalHeight < img.clientHeight * 1.15) return;
+  e.stopPropagation(); e.preventDefault();
+  const ov = document.createElement('div');
+  ov.className = 'card-img-zoom';
+  ov.innerHTML = '<img alt="">';
+  ov.firstChild.src = img.src;
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = ev => { if (ev.key === 'Escape' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); close(); } };
+  ov.addEventListener('click', close);
+  document.addEventListener('keydown', onKey, true);
+  document.body.appendChild(ov);
+}, true);
+// Nenačtený obrázek (smazaný, špatná adresa) se na kartě schová; v náhledu při úpravě zůstane vidět.
+document.addEventListener('error', e => {
+  if (e.target instanceof HTMLImageElement && e.target.classList.contains('card-img')) e.target.classList.add('card-img-broken');
+}, true);

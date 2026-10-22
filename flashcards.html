@@ -67,10 +67,12 @@
             <div>
               <label class="label">Přední strana (otázka)</label>
               <textarea id="cardFront" class="input" placeholder="Otázka nebo pojem..." style="min-height:80px;"></textarea>
+              <div class="card-img-slot" id="cardFrontImg" data-for="cardFront"></div>
             </div>
             <div>
               <label class="label">Zadní strana (odpověď)</label>
               <textarea id="cardBack" class="input" placeholder="Odpověď nebo definice..." style="min-height:80px;"></textarea>
+              <div class="card-img-slot" id="cardBackImg" data-for="cardBack"></div>
             </div>
           </div>
           <button id="addCardSubmit" class="btn btn-primary">Přidat kartu</button>
@@ -264,10 +266,12 @@
       <div class="form-group">
         <label class="label">Přední strana (otázka)</label>
         <textarea id="editCardFront" class="input" style="min-height:70px;resize:vertical;"></textarea>
+        <div class="card-img-slot" id="editCardFrontImg" data-for="editCardFront"></div>
       </div>
       <div class="form-group">
         <label class="label">Zadní strana (odpověď)</label>
         <textarea id="editCardBack" class="input" style="min-height:70px;resize:vertical;"></textarea>
+        <div class="card-img-slot" id="editCardBackImg" data-for="editCardBack"></div>
       </div>
       <div class="form-group">
         <label class="label">Kód na kartě</label>

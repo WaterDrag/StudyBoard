@@ -148,6 +148,7 @@ function showQuestion() {
     qEl.innerHTML = (codeQ ? `<div class="code-q">${esc(codeQ)}</div>` : '') +
       `<pre class="code-block" data-lang="${esc(card.frontLang)}"><code>${esc(sp.code)}</code></pre>`;
   } else qEl.textContent = card.front;
+  qEl.insertAdjacentHTML('afterbegin', cardImgHtml(card.frontImg));
   // Otázka z komentáře v kódu nahradí nápis „Otázka“.
   const qLbl = document.querySelector('#quizCard .quiz-q-label');
   if (qLbl) qLbl.hidden = !!codeQ;
@@ -290,6 +291,9 @@ function finishAnswer(ok, card) {
   recordAnswer(card.id, ok);   // feed the Leitner boxes + stats
   updateStreak();
   updateScoreNav();
+  // Obrázek ze zadní strany se ukáže až po odpovědi.
+  const ansImg = cardImgHtml(card.backImg, 'card-img-ans');
+  if (ansImg) document.getElementById('quizQText').insertAdjacentHTML('beforeend', `<div class="card-img-ans-wrap"><small>Odpověď</small>${ansImg}</div>`);
   QUIZ_IDX++;
   if (ok) { setTimeout(showQuestion, 1200); return; }
   // Spatne: nech cas si v klidu precist spravnou odpoved — dal az na klik / Enter.

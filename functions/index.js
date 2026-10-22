@@ -1,4 +1,6 @@
 const crypto = require('node:crypto');
+const dns = require('node:dns').promises;
+const net = require('node:net');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { FieldPath, FieldValue, Timestamp, getFirestore } = require('firebase-admin/firestore');
@@ -184,10 +186,14 @@ function plainTextToSafeHtml(text) {
   })[character]).replace(/\r\n?/g, '\n').replace(/\n/g, '<br>');
 }
 
-// Obrázky od agenta: jen odkazy na ověřené hostingy (Wikimedia Commons,
-// ImgBB, kam nahrává i aplikace). Do HTML jde jen námi sestavený <img>
-// s escapovanou adresou a popiskem — žádné cizí atributy ani markup.
+// Obrázky od agenta: z Wikimedia Commons a ImgBB (kam nahrává i aplikace) se
+// odkazují přímo, z jakékoliv jiné veřejné https adresy si server obrázek stáhne,
+// ověří a uloží kopii na ImgBB — v poznámce pak nezmizí, ani když zdroj zmizí.
+// Do HTML jde jen námi sestavený <img> s escapovanou adresou a popiskem.
 const IMAGE_HOSTS = new Set(['upload.wikimedia.org', 'i.ibb.co']);
+const IMGBB_KEY = process.env.IMGBB_KEY || '35d2aa02584eaf0848eb0b70a4d78686';   // stejný veřejný klíč jako v js/config.js
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const IMAGE_FETCH_TIMEOUT_MS = 10_000;
 const MAX_IMAGES = 4;
 const MAX_CAPTION_LENGTH = 300;
 
@@ -203,8 +209,8 @@ function validateImages(body) {
     if (extra.length) throw new ApiError(400, `Nepovolené pole u obrázku: ${extra.join(', ')}.`);
     let url;
     try { url = new URL(image.url); } catch (_) { throw new ApiError(400, 'Adresa obrázku není platná URL.'); }
-    if (url.protocol !== 'https:' || !IMAGE_HOSTS.has(url.hostname) || url.username || url.password) {
-      throw new ApiError(400, `Obrázky jen přes https z: ${[...IMAGE_HOSTS].join(', ')}.`);
+    if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) {
+      throw new ApiError(400, 'Obrázek musí mít veřejnou adresu https://… (bez jména, hesla a jiného portu).');
     }
     const caption = image.caption === undefined ? '' : image.caption;
     if (typeof caption !== 'string' || caption.length > MAX_CAPTION_LENGTH) {
@@ -212,6 +218,76 @@ function validateImages(body) {
     }
     return { url: url.href, caption: caption.trim() };
   });
+}
+
+// Soukromé, místní a speciální adresy (ochrana před přístupem do vnitřní sítě serveru)
+function isPrivateIp(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+  }
+  const v = ip.toLowerCase();
+  if (v.startsWith('::ffff:')) return isPrivateIp(v.slice(7));
+  return v === '::' || v === '::1' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe8') || v.startsWith('fe9') ||
+    v.startsWith('fea') || v.startsWith('feb') || v.startsWith('ff');
+}
+async function assertPublicHost(hostname) {
+  const host = hostname.replace(/^\[|\]$/g, '');
+  if (/^localhost$/i.test(host) || /\.(local|internal|localhost)$/i.test(host)) throw new Error('neveřejná adresa');
+  const addrs = net.isIP(host) ? [{ address: host }] : await dns.lookup(host, { all: true });
+  if (!addrs.length || addrs.some(a => isPrivateIp(a.address))) throw new Error('neveřejná adresa');
+}
+// Typ obrázku podle prvních bajtů (Content-Type se dá zfalšovat). SVG záměrně ne — může obsahovat skripty.
+function sniffImage(buf) {
+  if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
+  if (buf.length > 6 && buf.toString('ascii', 0, 4) === 'GIF8') return 'gif';
+  if (buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  return null;
+}
+async function downloadImage(href) {
+  let url = new URL(href);
+  for (let hop = 0; hop < 4; hop++) {
+    if (url.protocol !== 'https:' || (url.port && url.port !== '443')) throw new Error('přesměrování mimo https');
+    await assertPublicHost(url.hostname);
+    const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
+      headers: { 'User-Agent': 'StudyBoardImageBot/1.0 (+https://vstudyboard.duckdns.org)', Accept: 'image/*' } });
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) { url = new URL(res.headers.get('location'), url); continue; }
+    if (!res.ok) throw new Error(`server vrátil ${res.status}`);
+    if (Number(res.headers.get('content-length') || 0) > MAX_IMAGE_BYTES) throw new Error('obrázek je větší než 8 MB');
+    const reader = res.body.getReader(), chunks = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > MAX_IMAGE_BYTES) { reader.cancel().catch(() => {}); throw new Error('obrázek je větší než 8 MB'); }
+      chunks.push(value);
+    }
+    const buf = Buffer.concat(chunks);
+    if (!sniffImage(buf)) throw new Error('není to obrázek PNG, JPEG, GIF ani WebP');
+    return buf;
+  }
+  throw new Error('příliš mnoho přesměrování');
+}
+async function storeOnImgbb(buf) {
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, {
+    method: 'POST', body: new URLSearchParams({ image: buf.toString('base64') }), signal: AbortSignal.timeout(20_000),
+  });
+  const json = await res.json().catch(() => null);
+  const out = json?.data?.url;
+  if (!res.ok || !out || new URL(out).hostname !== 'i.ibb.co') throw new Error('nepodařilo se uložit kopii');
+  return out;
+}
+// Obrázky mimo ověřené hostingy se stáhnou a uloží jako kopie na ImgBB.
+async function importImages(images) {
+  if (!images) return images;
+  return Promise.all(images.map(async (img, i) => {
+    if (IMAGE_HOSTS.has(new URL(img.url).hostname)) return img;
+    try { return { ...img, url: await storeOnImgbb(await downloadImage(img.url)) }; }
+    catch (e) { throw new ApiError(400, `Obrázek ${i + 1} (${img.url}) se nepodařilo převzít: ${e.message || e}.`); }
+  }));
 }
 
 function imageToSafeHtml({ url, caption }) {
@@ -411,8 +487,8 @@ async function createAgentNote(req, res, roomId) {
   if (has('kind') && !heading) throw new ApiError(400, 'kind může být jen "heading" (nadpis sloupce).');
   const title = validateTitle(body, heading);
   const content = heading ? '' : validateContent(body, true);
-  const images = validateImages(body);
-  if (heading && images) throw new ApiError(400, 'Nadpis nemůže mít obrázky.');
+  if (heading && validateImages(body)) throw new ApiError(400, 'Nadpis nemůže mít obrázky.');
+  const images = await importImages(validateImages(body));
   let x = 60;
   let y = 60;
   const isCell = v => Number.isInteger(v) && v >= 0;
@@ -468,8 +544,8 @@ async function updateAgentNote(req, res, roomId, noteId) {
   validateObjectBody(body, new Set(['title', 'content', 'images']));
   const title = validateTitle(body);
   const content = validateContent(body);
-  const images = validateImages(body);
-  if (images && content === undefined) throw new ApiError(400, 'Obrázky pošli spolu s polem content (obsah se nahrazuje celý).');
+  if (validateImages(body) && content === undefined) throw new ApiError(400, 'Obrázky pošli spolu s polem content (obsah se nahrazuje celý).');
+  const images = await importImages(validateImages(body));
   if (title === undefined && content === undefined) {
     throw new ApiError(400, 'Zadej alespoň jedno pole: title nebo content.');
   }
