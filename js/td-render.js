@@ -9,9 +9,12 @@ const TR = (() => {
   const spriteCache = new Map();
   function rng(seed) { let s = seed >>> 0 || 1; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
   function off(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  // Nová grafika od Gemini (js/td-sprites-*.js) — jde vypnout v okně 🔊 (localStorage td_gfx = '0')
+  const useTDS = () => { try { return !!window.TDS?.background && localStorage.getItem('td_gfx') !== '0'; } catch (_) { return !!window.TDS?.background; } };
 
   /* ── Pozadí mapy ───────────────────────────────────────────── */
   function background(map, paths) {
+    if (useTDS()) return TDS.background({ id: map.id, paths: map.paths, track_width_px: TRACK_HALF * 2, water_zones: map.water_zones || [], obstacles: map.obstacles || [] });
     if (bgCache.has(map.id)) return bgCache.get(map.id);
     const c = off(TW, TH), g = c.getContext('2d'), r = rng(map.id.length * 977 + 13);
     // tráva
@@ -194,6 +197,20 @@ const TR = (() => {
   function darken(hex, k) { const n = parseInt(hex.slice(1), 16); return `rgb(${(n >> 16) * (1 - k) | 0},${(n >> 8 & 255) * (1 - k) | 0},${(n & 255) * (1 - k) | 0})`; }
 
   function drawEnemy(g, e, t) {
+    if (useTDS() && TDS.slime) {
+      const s = { camo: e.camo, revealed: e.revealed || G.revealUntil > t, regrow: e.regrow, fort: e.fort, armored: e.armored,
+        frozen: e.frozenUntil > t, stunned: e.stunUntil > t, burn: !!(e.burn && e.burn.until > t), acid: !!(e.acid && e.acid.until > t),
+        gold: e.goldMul > 1, hit: t - e.lastHit < 0.06 && e.lastHit > 0 };
+      if (e.def.boss) { s.hpPct = Math.max(0, e.hp / e.maxHp); s.sealsTotal = e.seal ? e.seal.n : 0; s.sealsLeft = e.seal ? Math.ceil(e.seal.s * e.seal.n - 1e-6) : 0; }
+      TDS.slime(g, e.t, e.x, e.y, e.def.r, e.ang || 0, performance.now(), s);
+      if (!e.def.boss && e.def.hp > 1) {   // životy Zlatého slizu
+        const w = e.def.r * 1.8, y = e.y - e.def.r * 1.5;
+        g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(e.x - w / 2 - 1, y - 1, w + 2, 6);
+        g.fillStyle = '#facc15'; g.fillRect(e.x - w / 2, y, w * Math.max(0, e.hp / e.maxHp), 4);
+      }
+      if (e.immuneFlash && t - e.immuneFlash < 0.25) { g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(e.x, e.y, e.def.r + 5, -0.6, 0.6); g.stroke(); }
+      return;
+    }
     const r = e.def.r, spr = slimeSprite(e);
     const moving = !(e.frozenUntil > t || e.stunUntil > t);
     const sq = moving ? Math.sin(t * (e.def.speed / 9) + e.wob) * 0.08 : 0;
@@ -241,6 +258,13 @@ const TR = (() => {
   const PATH_COL = ['#f97316', '#38bdf8', '#a3e635'];
   function drawTower(g, t, time, sel) {
     const def = TDEF[t.type], r = t.r, tier = Math.max(...t.up);
+    if (useTDS() && window.TDS?.drawers?.[t.type]) {   // nová grafika (js/td-sprites-b/c.js)
+      const fired = t.firedAt != null ? Math.max(0, 1 - (G.time - t.firedAt) / 0.1) : 0;
+      const cock = Math.max(0, Math.min(1, 1 - Math.max(0, t.cd || 0) / (t.st?.interval || 1)));
+      const still = t.type === 'strazni_hlaska' || t.type === 'zlaty_dul';   // budovy se neotáčí za cílem
+      TDS.tower(g, t.type, t.x, t.y, t.r, still ? 0 : (t.ang || 0), performance.now(), t.up, { cock, mode: t.mode, beast: t.beastUntil > G.time, buffed: !!(t.buff && t.buff.until > G.time), firing: fired });
+      if (tier >= 5) { g.strokeStyle = `rgba(250,204,21,${0.4 + Math.sin(time * 3) * 0.25})`; g.lineWidth = 3; g.beginPath(); g.arc(t.x, t.y, r + 6, 0, TAU); g.stroke(); }
+    } else {
     g.save(); g.translate(t.x, t.y);
     // stín a podstavec
     g.fillStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.ellipse(3, r * 0.55, r * 1.05, r * 0.5, 0, 0, TAU); g.fill();
@@ -320,6 +344,7 @@ const TR = (() => {
       }
     }
     g.restore();
+    }
     // vyznačení úrovní cest (tečky pod věží)
     let py = t.y + r + 5;
     t.up.forEach((n, i) => {
@@ -349,6 +374,11 @@ const TR = (() => {
     g.restore();
   }
   function drawPhoenix(g, ph, time) {
+    if (useTDS() && window.TDS?.phoenix) {   // směr letu = derivace kroužení z td-engine.js
+      const a = ph.ang || 0;
+      TDS.phoenix(g, ph.x, ph.y, performance.now(), Math.atan2(1.3 * Math.cos(a * 1.3) * 220, -Math.sin(a) * 320));
+      return;
+    }
     g.save(); g.translate(ph.x, ph.y);
     const glow = g.createRadialGradient(0, 0, 2, 0, 0, 34); glow.addColorStop(0, 'rgba(254,215,170,.9)'); glow.addColorStop(1, 'rgba(249,115,22,0)');
     g.fillStyle = glow; g.beginPath(); g.arc(0, 0, 34, 0, TAU); g.fill();
@@ -360,6 +390,14 @@ const TR = (() => {
   }
   function drawHero(g, h, time) {
     const r = h.r;
+    if (useTDS() && window.TDS?.heroDrawers?.[h.id]) {
+      g.fillStyle = 'rgba(250,204,21,.18)'; g.beginPath(); g.arc(h.x, h.y, r + 6 + Math.sin(time * 2.5) * 1.5, 0, TAU); g.fill();
+      TDS.hero(g, h.id, h.x, h.y, r, h.ang || 0, performance.now(), h.level, { crit: h.critShots > 0, casting: G.time - (h.castAt ?? -9) < 0.6 });
+      g.fillStyle = '#1e1b4b'; g.beginPath(); g.arc(h.x + r * 0.85, h.y - r * 0.85, 8, 0, TAU); g.fill();
+      g.fillStyle = '#fde68a'; g.font = 'bold 10px Geist, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(h.level, h.x + r * 0.85, h.y - r * 0.85 + 0.5);
+      g.textBaseline = 'alphabetic';
+      return;
+    }
     g.save(); g.translate(h.x, h.y);
     g.fillStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.ellipse(3, r * 0.55, r * 1.05, r * 0.5, 0, 0, TAU); g.fill();
     g.fillStyle = 'rgba(250,204,21,.18)'; g.beginPath(); g.arc(0, 0, r + 6 + Math.sin(time * 2.5) * 1.5, 0, TAU); g.fill();
@@ -379,6 +417,7 @@ const TR = (() => {
 
   /* ── Střely ────────────────────────────────────────────────── */
   function drawProj(g, p, time) {
+    if (useTDS() && window.TDS?.projectileDrawers?.[p.kind]) { TDS.projectile(g, p.kind, p.x, p.y, p.ang, performance.now()); return; }
     g.save(); g.translate(p.x, p.y); g.rotate(p.ang);
     switch (p.kind) {
       case 'arrow': case 'arrowCrit': case 'ballista':
@@ -409,8 +448,17 @@ const TR = (() => {
   }
 
   /* ── Efekty ────────────────────────────────────────────────── */
+  // Efekty z části D (leak a missile zůstávají vlastní, celoplošné kreslí overlay)
+  const TDS_FX = new Set(['boom', 'boomFire', 'boomGold', 'boomSmall', 'frost', 'frostRing', 'acid', 'ring', 'reveal', 'horn', 'rune', 'tracer', 'zap', 'beam', 'meteor',
+    'splat', 'bossdie', 'sealbreak', 'upgrade', 'levelup', 'place', 'sell', 'gold', 'goldSplash', 'trap', 'shrink', 'potion', 'regrow', 'flame', 'blade']);
   function drawFx(g, f, time) {
     const k = Math.min(1, (time - f.t0) / f.dur), a = 1 - k;
+    if (useTDS() && window.TDS?.fx && TDS_FX.has(f.kind) && f.kind !== 'blade') {
+      const now = performance.now(), col = f.col === 'rainbow' ? '#f472b6' : f.col;
+      if (f.kind === 'meteor') TDS.fx(g, 'meteor', f.x + 60, f.y, 9, k, now, { tx: f.x, ty: f.y });
+      else TDS.fx(g, f.kind, f.x, f.y, f.r || (f.kind === 'tracer' ? 2 : f.kind === 'beam' ? 5 : 26), k, now, { tx: f.tx, ty: f.ty, ang: f.ang, col });
+      return;
+    }
     switch (f.kind) {
       case 'boom': case 'boomFire': case 'boomGold': case 'boomSmall': {
         const c = f.kind === 'boomGold' ? '250,204,21' : f.kind === 'boomFire' ? '239,68,68' : '249,115,22';
@@ -467,6 +515,7 @@ const TR = (() => {
 
   function drawZone(g, z, time) {
     const left = Math.min(1, (z.until - G.time) / 1);
+    if (useTDS() && window.TDS?.zone) { TDS.zone(g, z.kind, z.x, z.y, z.r, performance.now(), Math.max(0.2, left)); return; }
     g.save(); g.globalAlpha = Math.max(0.2, left);
     if (z.kind === 'fire') { for (let i = 0; i < 6; i++) { const an = i / 6 * TAU + time, d = z.r * 0.55; g.fillStyle = i % 2 ? 'rgba(249,115,22,.75)' : 'rgba(253,224,71,.75)'; g.beginPath(); g.ellipse(z.x + Math.cos(an) * d, z.y + Math.sin(an) * d * 0.6, 6, 10 + Math.sin(time * 12 + i) * 3, 0, 0, TAU); g.fill(); } }
     else if (z.kind === 'acid') { g.fillStyle = 'rgba(132,204,22,.45)'; g.beginPath(); g.ellipse(z.x, z.y, z.r, z.r * 0.7, 0, 0, TAU); g.fill(); g.fillStyle = 'rgba(217,249,157,.7)'; g.beginPath(); g.arc(z.x + Math.sin(time * 3) * 8, z.y, 3, 0, TAU); g.fill(); }
@@ -474,6 +523,7 @@ const TR = (() => {
     g.restore();
   }
   function drawAlly(g, a) {
+    if (useTDS() && window.TDS?.ally) { TDS.ally(g, a.big, a.x, a.y, a.ang || 0, performance.now()); return; }
     g.save(); g.translate(a.x, a.y);
     g.fillStyle = a.big ? '#e7e5e4' : '#f5f5f4';
     if (a.big) { g.beginPath(); g.moveTo(-14, 0); g.lineTo(0, -8); g.lineTo(14, 0); g.lineTo(0, 8); g.closePath(); g.fill(); g.fillStyle = '#16a34a'; g.beginPath(); g.arc(0, -2, 3, 0, TAU); g.fill(); }
@@ -498,7 +548,10 @@ const TR = (() => {
     const time = G.time;
     g.drawImage(background(G.map, G.paths), 0, 0);
     // odstraněné překážky
-    (G.map.obstacles || []).forEach(o => { if (o.removed) { g.fillStyle = '#4a8a3d'; rrect(g, o.x, o.y, o.width, o.height, 20); g.fill(); } });
+    const nova = useTDS();
+    (G.map.obstacles || []).forEach(o => { if (o.removed) { g.fillStyle = nova ? '#5ec447' : '#4a8a3d'; rrect(g, o.x, o.y, o.width, o.height, 20); g.fill(); } });
+    if (nova) (G.map.water_zones || []).forEach(z => waterFrozenAt(z.x + z.width / 2, z.y + z.height / 2) ? TDS.frozenWater(g, z) : TDS.water(g, z, performance.now()));
+    else
     // voda se třpytí
     (G.map.water_zones || []).forEach(z => {
       g.strokeStyle = 'rgba(219,234,254,.35)'; g.lineWidth = 1.5;

@@ -789,6 +789,7 @@ function updateTower(t, dt) {
     if (!e) return;
   }
   t.cd = t.st.interval;
+  t.firedAt = G.time;   // záblesk výstřelu v grafice
   ATTACK[t.type]?.(t, e);
 }
 
@@ -824,7 +825,7 @@ function updateAllies(dt) {
   for (const a of G.allies) {
     a.d -= a.spd * dt;
     if (a.d < 0) { a.dead = true; continue; }
-    const q = posAt(G.paths[a.path], a.d); a.x = q.x; a.y = q.y;
+    const q = posAt(G.paths[a.path], a.d); a.x = q.x; a.y = q.y; a.ang = q.ang + Math.PI;   // jdou proti slizákům
     for (const e of enemiesNear(a.x, a.y, a.big ? 22 : 12)) {
       if (a.hits.has(e) || e.path !== a.path) continue;
       a.hits.add(e);
@@ -1044,6 +1045,7 @@ function useHeroAbility(i) {
   const h = G.hero; const a = h?.abilities[i]; if (!a || a.until > G.time) return false;
   if (HERO_ABILITY[a.key]?.(h) === false) return false;
   a.until = G.time + a.cd * (1 - (G.glob?.cdRed || 0));
+  h.castAt = G.time;   // animace kouzlení v grafice
   window.sfx?.('start');
   return true;
 }

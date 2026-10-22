@@ -12,6 +12,10 @@ try { pref = { ...pref, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') };
 const view = { sel: null, ghost: null, placing: null, pointer: null };
 let speed = 1, paused = false, running = false, lastFrame = 0, acc = 0, cardOpen = null, panelSig = '', hudSig = '';
 const fmt = n => Math.floor(n).toLocaleString('cs-CZ');
+(window.SB_EXTRA_SETTINGS = window.SB_EXTRA_SETTINGS || []).push({
+  label: '🎨 Nová grafika', get: () => { try { return localStorage.getItem('td_gfx') !== '0'; } catch (_) { return true; } },
+  set: on => { try { localStorage.setItem('td_gfx', on ? '1' : '0'); } catch (_) { /* nic */ } if (G) renderSide(true); },
+});
 
 auth.onAuthStateChanged(async user => {
   if (!user) { location.href = 'index.html'; return; }
@@ -240,7 +244,7 @@ function shopPanel() {
   if (!G.hero) {
     const hd = HDEF[G.heroId], c = heroCost(G.heroId);
     h += `<div class="td-sec">Hrdina</div><button type="button" class="td-shop td-shop-hero${view.placing === G.heroId ? ' on' : ''}" data-act="buy" data-type="${G.heroId}" ${G.gold < c ? 'data-poor' : ''}>
-      <span class="td-shop-ico" style="--hc:${hd.col}">${hd.ico}</span><span><b>${esc(hd.name)}</b><small>${esc(hd.role)}</small></span><em>${c} zl</em></button>`;
+      <span class="td-shop-ico" style="--hc:${hd.col}">${heroIco(hd)}</span><span><b>${esc(hd.name)}</b><small>${esc(hd.role)}</small></span><em>${c} zl</em></button>`;
   }
   const byCat = {};
   TD.towers.forEach(t => (byCat[t.cat] = byCat[t.cat] || []).push(t));
@@ -248,7 +252,7 @@ function shopPanel() {
     h += `<div class="td-sec">${CAT_LABEL[cat]}</div><div class="td-shop-grid">` + list.map(t => {
       const c = Math.round(t.base.cost * G.costMul);
       return `<button type="button" class="td-shop${view.placing === t.id ? ' on' : ''}" data-act="buy" data-type="${t.id}" title="${esc(t.name)} — ${esc(t.desc)}" ${G.gold < c ? 'data-poor' : ''}>
-        <span class="td-shop-ico" style="--hc:${t.col}">${t.ico}</span><b>${esc(t.short)}</b><em>${c}</em></button>`;
+        <span class="td-shop-ico" style="--hc:${t.col}">${towerIco(t)}</span><b>${esc(t.short)}</b><em>${c}</em></button>`;
     }).join('') + '</div>';
   });
   if (view.placing) h += `<p class="td-tip">Klikni vedle cesty a věž se postaví. Se Shiftem můžeš stavět víc za sebou. Esc nebo pravé tlačítko zruší.</p>`;
@@ -261,8 +265,21 @@ function shopPanel() {
   return h;
 }
 const _miniCache = new Map();
+// Ikona věže do obchodu: nová grafika (TDS.towerIcon), jinak emoji
+const _towerIco = {};
+function towerIco(t) {
+  if (!(window.TDS?.drawers?.[t.id] && TDS.towerIcon) || localStorage.getItem('td_gfx') === '0') return t.ico;
+  _towerIco[t.id] = _towerIco[t.id] || TDS.towerIcon(t.id, 80).toDataURL();
+  return `<img src="${_towerIco[t.id]}" alt="">`;
+}
+function heroIco(h) {
+  if (!(window.TDS?.heroDrawers?.[h.id] && TDS.heroIcon) || localStorage.getItem('td_gfx') === '0') return h.ico;
+  _towerIco['h' + h.id] = _towerIco['h' + h.id] || TDS.heroIcon(h.id, 80).toDataURL();
+  return `<img src="${_towerIco['h' + h.id]}" alt="">`;
+}
 function miniSlime(id, mods) {
-  const key = id + (mods || []).join();
+  const key = id + (mods || []).join() + (window.TDS?.slimeIcon && localStorage.getItem('td_gfx') !== '0' ? 'N' : '');
+  if (!_miniCache.has(key) && key.endsWith('N')) { const url = TDS.slimeIcon(id, 30).toDataURL(); _miniCache.set(key, url); return url; }
   if (_miniCache.has(key)) return _miniCache.get(key);
   const def = EDEF[id], fake = { t: id, def, fort: (mods || []).includes('kamenny'), armored: def.traits.includes('armored') };
   const url = TR.slimeSprite(fake).toDataURL();
@@ -297,7 +314,7 @@ function statRow(t) {
 }
 function towerPanel(t) {
   const def = TDEF[t.type];
-  let h = `<div class="td-sel-head"><span class="td-shop-ico" style="--hc:${def.col}">${def.ico}</span><div><b>${esc(def.name)}</b><small>${esc(def.desc)}</small></div><button type="button" class="td-x" data-act="close" aria-label="Zavřít">✕</button></div>`;
+  let h = `<div class="td-sel-head"><span class="td-shop-ico" style="--hc:${def.col}">${towerIco(def)}</span><div><b>${esc(def.name)}</b><small>${esc(def.desc)}</small></div><button type="button" class="td-x" data-act="close" aria-label="Zavřít">✕</button></div>`;
   h += statRow(t);
   if (towerHasAttack(t)) h += `<div class="td-targets">${TARGETS.map(([k, n]) => `<button type="button" class="${t.target === k ? 'on' : ''}" data-act="target" data-t="${k}">${n}</button>`).join('')}</div>`;
   if (t.fx.toggle_submerge_mode) h += `<button type="button" class="btn btn-secondary btn-sm td-wide" data-act="mode">${t.mode === 'lighthouse' ? '⛵ Přepnout na střelbu' : '🗼 Přepnout na maják'}</button>`;
@@ -324,7 +341,7 @@ function towerPanel(t) {
 function heroPanel(h) {
   const def = HDEF[h.id], L = def.levels, next = L[h.level];
   const base = L[h.level - 1].xp, need = next ? next.xp : base, pct = next ? Math.min(100, (h.xp - base) / (need - base) * 100) : 100;
-  let s = `<div class="td-sel-head"><span class="td-shop-ico" style="--hc:${def.col}">${def.ico}</span><div><b>${esc(def.name)}</b><small>${esc(def.role)}</small></div><button type="button" class="td-x" data-act="close" aria-label="Zavřít">✕</button></div>`;
+  let s = `<div class="td-sel-head"><span class="td-shop-ico" style="--hc:${def.col}">${heroIco(def)}</span><div><b>${esc(def.name)}</b><small>${esc(def.role)}</small></div><button type="button" class="td-x" data-act="close" aria-label="Zavřít">✕</button></div>`;
   s += `<div class="td-lvl"><b>Úroveň ${h.level}</b><span class="td-xpbar"><i style="width:${pct}%"></i></span><small>${next ? `${fmt(h.xp)} / ${fmt(need)} XP` : 'Maximální úroveň'}</small></div>`;
   if (h.st.damage) s += `<div class="td-stats"><span>Poškození<b>${h.st.damage}</b></span><span>Dosah<b>${h.st.range} px</b></span><span>Útoky<b>${(speedMul(h) / h.st.interval).toFixed(1)}/s</b></span><span>Vidí 👻<b>${h.st.camo ? 'ano' : 'ne'}</b></span></div>`;
   s += `<p class="td-tip">📜 <b>${esc(def.passive.name)}:</b> ${esc(def.passive.description)}</p>`;
