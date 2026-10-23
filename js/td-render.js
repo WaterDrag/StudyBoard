@@ -32,7 +32,8 @@ const TR = (() => {
   }
   function supProj(g, kind, x, y, ang) {
     const d = TDSS.projectileDrawers[kind];
-    g.save(); g.translate(x, y); g.rotate(ang); g.drawImage(supCached('p|' + kind, 48, d), -24, -24); g.restore();
+    const spin = TDSS.projectileSpin?.[kind];   // čepele, sudy a lahvičky se za letu točí
+    g.save(); g.translate(x, y); g.rotate(ang + (spin ? performance.now() / 1000 * spin : 0)); g.drawImage(supCached('p|' + kind, 48, d), -24, -24); g.restore();
   }
   function hasSup(id) { return !!sup()?.drawers?.[id]; }
   function supTowerIcon(id, size) {   // stejné měřítko jako ikony Detailní grafiky (plocha 60×60)
