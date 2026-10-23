@@ -6,9 +6,11 @@
 //   soundMood('study' | 'quiz' | 'millionaire' | 'conquest' | 'zombie')
 // Prohlížeč pustí zvuk až po prvním kliknutí / klávese — hudba začne s ním.
 // Nastavení (localStorage sb_sound): hudba / efekty zapnuto + hlasitost zvlášť.
+// Na localhostu (vývoj, panel prohlížeče v Claude, který localStorage nedrží) je výchozí ticho.
 (function () {
   const KEY = 'sb_sound';
-  const DEF = { music: true, sfx: true, musicVol: 0.32, sfxVol: 0.6 };
+  const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  const DEF = { music: !LOCAL, sfx: !LOCAL, musicVol: 0.32, sfxVol: 0.6 };
   let S = (() => { try { return { ...DEF, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch (_) { return { ...DEF }; } })();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (_) { /* jen pro tuhle návštěvu */ } };
 
