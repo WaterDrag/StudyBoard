@@ -6061,7 +6061,7 @@ img.card-img { cursor: zoom-in; }
 @media (max-width: 600px) { .td-tipcard { font-size: 0.74rem; padding: 7px 8px 7px 10px; bottom: 52px; } .td-tip-ok { padding: 5px 9px; } }
 
 /* Obrana království: výběr grafiky */
-.td-pick-gfx { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.td-pick-gfx { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .td-gfx { gap: 6px; }
 .td-gfx-img { width: 100%; aspect-ratio: 26 / 15; object-fit: cover; border-radius: 10px; background: var(--bg-3); display: block; }
 
@@ -6086,3 +6086,4 @@ img.card-img { cursor: zoom-in; }
   .td-cust-row { grid-template-columns: 1fr 56px; }
   .td-cust-row > span { grid-column: 1 / -1; }
 }
+.td-wip { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; letter-spacing: .04em; vertical-align: middle; color: #1c1917; background: #facc15; }

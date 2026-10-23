@@ -88,8 +88,11 @@ const JOIN_GID = new URLSearchParams(location.search).get('g');
 let speed = 1, paused = false, running = false, lastFrame = 0, acc = 0, cardOpen = null, panelSig = '', hudSig = '';
 const fmt = n => Math.floor(n).toLocaleString('cs-CZ');
 (window.SB_EXTRA_SETTINGS = window.SB_EXTRA_SETTINGS || []).push({
-  label: '🎨 Nová grafika', get: () => { try { return localStorage.getItem('td_gfx') !== '0'; } catch (_) { return true; } },
-  set: on => { try { localStorage.setItem('td_gfx', on ? '1' : '0'); } catch (_) { /* nic */ } if (G) renderSide(true); },
+  label: '🎨 Nová grafika', get: () => gfxNow() !== '0',
+  set: on => {   // vypnutí = Kreslená; zapnutí vrátí poslední texturový styl (Super nebo Detailní)
+    try { const cur = gfxNow(); if (!on && cur !== '0') localStorage.setItem('td_gfx_tex', cur); localStorage.setItem('td_gfx', on ? (localStorage.getItem('td_gfx_tex') || '1') : '0'); } catch (_) { /* nic */ }
+    _towerIcoReset(); if (G) renderSide(true);
+  },
 });
 
 auth.onAuthStateChanged(async user => {
@@ -483,19 +486,22 @@ function shopPanel() {
   return h;
 }
 const _miniCache = new Map();
-// Ikony věží a hrdinů do obchodu: Gemini textura (TDS.towerIcon), v kreslené grafice moje kresba z mapy (TR.towerIcon)
+// Ikony věží a hrdinů do obchodu podle stylu: Super (TDSS), Detailní (TDS.towerIcon), jinak moje kresba z mapy (TR.towerIcon)
 let _towerIco = {};
 function _towerIcoReset() { _towerIco = {}; panelSig = ''; }
-function gfxIcon(key, ico, tex, drawTex, drawOwn) {
-  const own = localStorage.getItem('td_gfx') === '0' || !tex;
-  key = (own ? 'k:' : 'd:') + key;
-  _towerIco[key] = _towerIco[key] || (own ? drawOwn() : drawTex()).toDataURL();
-  return `<img src="${_towerIco[key]}" alt="">`;
+function icoImg(key, make) { _towerIco[key] = _towerIco[key] || make().toDataURL(); return `<img src="${_towerIco[key]}" alt="">`; }
+function towerIco(t) {
+  const m = gfxNow();
+  if (m === '2' && TR.hasSup(t.id)) return icoImg('s:' + t.id, () => TR.supTowerIcon(t.id, 80));
+  if (m !== '0' && window.TDS?.drawers?.[t.id] && TDS.towerIcon) return icoImg('d:' + t.id, () => TDS.towerIcon(t.id, 80));
+  return icoImg('k:' + t.id, () => TR.towerIcon(t.id, 80));
 }
-function towerIco(t) { return gfxIcon(t.id, t.ico, window.TDS?.drawers?.[t.id] && TDS.towerIcon, () => TDS.towerIcon(t.id, 80), () => TR.towerIcon(t.id, 80)); }
-function heroIco(h) { return gfxIcon('h' + h.id, h.ico, window.TDS?.heroDrawers?.[h.id] && TDS.heroIcon, () => TDS.heroIcon(h.id, 80), () => TR.heroIcon(h.id, 80)); }
+function heroIco(h) {
+  if (gfxNow() !== '0' && window.TDS?.heroDrawers?.[h.id] && TDS.heroIcon) return icoImg('d:h' + h.id, () => TDS.heroIcon(h.id, 80));
+  return icoImg('k:h' + h.id, () => TR.heroIcon(h.id, 80));
+}
 function miniSlime(id, mods) {
-  const nova = localStorage.getItem('td_gfx') !== '0', tex = EDEF[id]?.isNew ? window.TDS?.slimeDrawers?.[id] : window.TDS?.slimeIcon;
+  const nova = gfxNow() !== '0', tex = EDEF[id]?.isNew ? window.TDS?.slimeDrawers?.[id] : window.TDS?.slimeIcon;
   const key = id + (mods || []).join() + (tex && nova ? (EDEF[id]?.isNew ? 'D' : 'N') : '');
   if (!_miniCache.has(key) && key.endsWith('D')) {   // nový slizák s texturou od Gemini
     const c = document.createElement('canvas'); c.width = c.height = 30; const g = c.getContext('2d'); g.translate(15, 15);
@@ -717,17 +723,11 @@ function openTree(type) {
     <p class="td-tip">Jedna cesta jde až na úroveň 5, druhá nejvýš na 2, třetí zůstane zavřená. Úroveň 5 každé cesty smí na mapě stát jen jednou. Úrovně 4 a 5 potřebují krystaly moudrosti 💎 ze svitků.</p>
   </div>`;
   ov.hidden = false;
-  // náhled vzhledu věže na každé úrovni (nová grafika, jinak barevný kruh se znakem)
+  // náhled vzhledu věže na každé úrovni ve zvoleném stylu grafiky
   ov.querySelectorAll('canvas[data-p]').forEach(c => {
     const g = c.getContext('2d'), p = +c.dataset.p, tier = +c.dataset.t, up = [0, 0, 0];
     up[p] = tier;
-    const r = Math.min(26, b.radius_px || 20) * 1.7;
-    if (window.TDS?.drawers?.[type] && localStorage.getItem('td_gfx') !== '0') {
-      try { TDS.tower(g, type, 64, 64, r, -Math.PI / 4, 0, up, {}); } catch (_) { /* náhled není nutný */ }
-    } else {
-      g.fillStyle = def.col; g.beginPath(); g.arc(64, 64, r, 0, 6.283); g.fill();
-      g.font = r * 1.2 + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(def.ico, 64, 66);
-    }
+    TR.towerPreview(g, type, 64, 60, 1.45, up);
     g.fillStyle = ['#f97316', '#38bdf8', '#a3e635'][p];
     for (let k = 0; k < tier; k++) { g.beginPath(); g.arc(64 - (tier - 1) * 8 + k * 16, 120, 5, 0, 6.283); g.fill(); }
   });
@@ -793,16 +793,17 @@ function scanTips() {
   }
 }
 
-/* ── Výběr grafiky na úvodní obrazovce: ukázka obou stylů, volba se pamatuje (localStorage td_gfx) ── */
-const GFX = [['1', 'Detailní', 'Textury od Gemini: hodně detailů, stínů a odlesků'], ['0', 'Kreslená', 'Jednodušší ručně kreslený styl od Clauda, dobře čitelný i na telefonu']];
-const gfxNow = () => { try { return localStorage.getItem('td_gfx') === '0' ? '0' : '1'; } catch (_) { return '1'; } };
+/* ── Výběr grafiky na úvodní obrazovce: ukázka všech stylů, volba se pamatuje (localStorage td_gfx) ── */
+const GFX = [['2', 'Super', 'Nejpropracovanější textury: postavičky, vylepšení vidět na první pohled. Rozpracované — zatím gryf, moždíř a inženýr, zbytek je z Gemini (Detailní)', true],
+  ['1', 'Detailní', 'Textury od Gemini: hodně detailů, stínů a odlesků'], ['0', 'Kreslená', 'Jednodušší ručně kreslený styl od Clauda, dobře čitelný i na telefonu']];
+function gfxNow() { try { const v = localStorage.getItem('td_gfx'); return v === '0' || v === '2' ? v : '1'; } catch (_) { return '1'; } }
 let _gfxShots = null;
 function renderGfxPicker() {
   const el = $('tdGfx'); if (!el) return;
   const cur = gfxNow();
   if (!_gfxShots) _gfxShots = gfxPreviews();
-  el.innerHTML = GFX.map(([k, n, d]) => `<button type="button" class="td-opt td-gfx${cur === k ? ' on' : ''}" data-gfx="${k}">
-    <img src="${_gfxShots[k] || ''}" alt="Ukázka: ${esc(n)}" class="td-gfx-img"><b>${n}${cur === k ? ' ✓' : ''}</b><small>${d}</small></button>`).join('');
+  el.innerHTML = GFX.map(([k, n, d, wip]) => `<button type="button" class="td-opt td-gfx${cur === k ? ' on' : ''}" data-gfx="${k}">
+    <img src="${_gfxShots[k] || ''}" alt="Ukázka: ${esc(n)}" class="td-gfx-img"><b>${n}${wip ? ' <span class="td-wip" title="Work in progress — rozpracované">WIP</span>' : ''}${cur === k ? ' ✓' : ''}</b><small>${d}</small></button>`).join('');
   el.onclick = e => {
     const b = e.target.closest('[data-gfx]'); if (!b) return;
     try { localStorage.setItem('td_gfx', b.dataset.gfx); } catch (_) { /* jen pro tuhle návštěvu */ }
@@ -820,7 +821,7 @@ function gfxPreviews() {
     newGame(TD.maps[0].id, TD.heroes[0].id);
     G.gold = 1e6; G.km = 99;
     const P = G.paths[0], at = f => posAt(P, P.len * f), side = (q, d) => ({ x: q.x + Math.cos(q.ang + Math.PI / 2) * d, y: q.y + Math.sin(q.ang + Math.PI / 2) * d });
-    [['kralovsky_lucistnik', 0.14, 52, [3, 0, 0]], ['mrazivy_mag', 0.2, -52, [0, 2, 0]], ['oblehaci_katapult', 0.27, 55, [0, 3, 0]], ['lesni_druid', 0.33, -55, [2, 0, 0]]].forEach(([id, f, d, up]) => {
+    [['kralovsky_lucistnik', 0.14, 52, [3, 0, 0]], ['trpaslici_inzenyr', 0.2, -52, [3, 0, 0]], ['oblehaci_katapult', 0.27, 55, [0, 3, 0]], ['gryfi_jezdec', 0.33, -55, [0, 3, 0]], ['oblehaci_mozdir', 0.4, 55, [2, 0, 0]]].forEach(([id, f, d, up]) => {
       const p = side(at(f), d);
       if (placeProblem(id, p.x, p.y)) return;
       placeTower(id, p.x, p.y);

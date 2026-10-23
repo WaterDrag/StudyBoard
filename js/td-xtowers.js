@@ -548,12 +548,14 @@ Object.assign(ABILITY, {
 // Textury od Gemini přijdou přes TDS.<id>Extra(ctx, kind, x, y, ang, ts, s) — dokud nejsou, kreslí se tohle.
 const XR = (() => {
   const TAU = Math.PI * 2;
-  const has = id => typeof TDS !== 'undefined' && TDS[id + 'Extra'] && localStorage.getItem('td_gfx') !== '0';
+  // textura doplňku: Super (TDSS), jinak Detailní (TDS); v Kreslené null
+  const ex = id => { const m = TR.gfx(); return (m === '2' && window.TDSS?.[id + 'Extra']) || (m !== '0' && typeof TDS !== 'undefined' && TDS[id + 'Extra']) || null; };
+  const has = id => !!ex(id);
   const TRAP_SRC = { spike: 'kladec_pasti', jaw: 'kladec_pasti', mine: 'kladec_pasti', crystal: 'kladec_pasti', caltrop: 'stinovy_zved', foam: 'trpaslici_inzenyr', cage: 'trpaslici_inzenyr' };
   function emoji(g, ch, x, y, size) { g.fillStyle = '#111'; g.font = `${size}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ch, x, y); g.textBaseline = 'alphabetic'; }
   function trap(g, tr, ts) {
     const id = TRAP_SRC[tr.kind];
-    if (has(id)) { TDS[id + 'Extra'](g, tr.kind, tr.x, tr.y, 0, ts, { hp: tr.hp, fill: tr.cap ? 1 - tr.hp / tr.cap : 0 }); return; }
+    if (has(id)) { ex(id)(g, tr.kind, tr.x, tr.y, 0, ts, { hp: tr.hp, fill: tr.cap ? 1 - tr.hp / tr.cap : 0 }); return; }
     const fade = Math.min(1, (tr.until - G.time) / 2);
     g.save(); g.globalAlpha = Math.max(0.3, fade); g.translate(tr.x, tr.y);
     trapOwn(g, tr, ts);
@@ -642,23 +644,23 @@ const XR = (() => {
     for (const tr of G.traps) trap(g, tr, ts);
     for (const t of G.towers) if (t.type === 'oblehaci_mozdir' && t.aim && !(t.follow && t.fx.allow_auto_follow_target)) {   // terč moždíře
       const sel = view?.sel === t, R = t.st.expl || 52;
-      if (has('oblehaci_mozdir')) { TDS.oblehaci_mozdirExtra(g, 'target', t.aim.x, t.aim.y, 0, ts, { r: R, sel }); continue; }
+      if (has('oblehaci_mozdir')) { ex('oblehaci_mozdir')(g, 'target', t.aim.x, t.aim.y, 0, ts, { r: R, sel }); continue; }
       g.save(); g.strokeStyle = sel ? 'rgba(239,68,68,.95)' : 'rgba(239,68,68,.5)'; g.lineWidth = sel ? 2.5 : 1.5; g.setLineDash([6, 5]);
       g.beginPath(); g.arc(t.aim.x, t.aim.y, R, 0, TAU); g.stroke(); g.setLineDash([]);
       g.beginPath(); g.moveTo(t.aim.x - 9, t.aim.y); g.lineTo(t.aim.x + 9, t.aim.y); g.moveTo(t.aim.x, t.aim.y - 9); g.lineTo(t.aim.x, t.aim.y + 9); g.stroke(); g.restore();
     }
     for (const m of G.movers) {
       if (m.kind === 'tornado') {
-        if (has('lesni_druid')) { TDS.lesni_druidExtra(g, 'tornado', m.x, m.y, 0, ts, {}); continue; }
+        if (has('lesni_druid')) { ex('lesni_druid')(g, 'tornado', m.x, m.y, 0, ts, {}); continue; }
         moverOwn(g, m, ts);
       } else if (m.kind === 'ball') {
-        if (has('lesni_druid')) { TDS.lesni_druidExtra(g, 'ball', m.x, m.y, 0, ts, { r: m.r }); continue; }
+        if (has('lesni_druid')) { ex('lesni_druid')(g, 'ball', m.x, m.y, 0, ts, { r: m.r }); continue; }
         moverOwn(g, m, ts);
       } else if (m.kind === 'vine') {
-        if (has('lesni_druid')) { TDS.lesni_druidExtra(g, 'vine', m.x, m.y, 0, ts, {}); continue; }
+        if (has('lesni_druid')) { ex('lesni_druid')(g, 'vine', m.x, m.y, 0, ts, {}); continue; }
         moverOwn(g, m, ts);
       } else if (m.kind === 'sticky') {
-        if (has('stinovy_zved')) { TDS.stinovy_zvedExtra(g, 'sticky', m.x, m.y, 0, ts, { left: m.at - G.time }); continue; }
+        if (has('stinovy_zved')) { ex('stinovy_zved')(g, 'sticky', m.x, m.y, 0, ts, { left: m.at - G.time }); continue; }
         moverOwn(g, m, ts);
       }
     }
@@ -750,12 +752,12 @@ const XR = (() => {
   function star(g, x, y, r) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - Math.PI / 2, q = i % 2 ? r * 0.45 : r; g.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q); } g.closePath(); g.fill(); }
   function air(g, ts) {
     for (const s of G.sentries) {
-      if (has('trpaslici_inzenyr')) { TDS.trpaslici_inzenyrExtra(g, 'sentry_' + s.kind, s.x, s.y, s.ang, ts, { firing: s.firedAt ? Math.max(0, 1 - (G.time - s.firedAt) / 0.1) : 0 }); continue; }
+      if (has('trpaslici_inzenyr')) { ex('trpaslici_inzenyr')(g, 'sentry_' + s.kind, s.x, s.y, s.ang, ts, { firing: s.firedAt ? Math.max(0, 1 - (G.time - s.firedAt) / 0.1) : 0 }); continue; }
       sentryOwn(g, s, ts);
     }
     for (const t of G.towers) if (t.gryf) {
       const gr = t.gryf;
-      if (has('gryfi_jezdec')) { TDS.gryfi_jezdecExtra(g, 'gryf', gr.x, gr.y, gr.ang, ts, { up: t.up }); continue; }
+      if (has('gryfi_jezdec')) { ex('gryfi_jezdec')(g, 'gryf', gr.x, gr.y, gr.ang, ts, { up: t.up }); continue; }
       gryf(g, gr, t, ts);
     }
   }

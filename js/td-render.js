@@ -9,8 +9,38 @@ const TR = (() => {
   const spriteCache = new Map();
   function rng(seed) { let s = seed >>> 0 || 1; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
   function off(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
-  // Nová grafika od Gemini (js/td-sprites-*.js) — jde vypnout v okně 🔊 (localStorage td_gfx = '0')
-  const useTDS = () => { try { return !!window.TDS?.background && localStorage.getItem('td_gfx') !== '0'; } catch (_) { return !!window.TDS?.background; } };
+  // Styl grafiky (localStorage td_gfx): '1' Detailní (Gemini, js/td-sprites-*.js), '0' Kreslená (tady),
+  // '2' Super (js/td-super-*.js do window.TDSS; co ještě nemá, kreslí Detailní)
+  const gfx = () => { try { const v = localStorage.getItem('td_gfx'); return v === '0' || v === '2' ? v : '1'; } catch (_) { return '1'; } };
+  const useTDS = () => !!window.TDS?.background && gfx() !== '0';
+  const sup = () => (gfx() === '2' && window.TDSS) || null;
+
+  /* ── Super grafika: věže a střely z registru TDSS (vlastní mezipaměť, ať se nepere s Detailní) ── */
+  const supCache = new Map();
+  function supCached(key, size, draw) {
+    let c = supCache.get(key);
+    if (!c) { c = off(size, size); const g = c.getContext('2d'); g.translate(size / 2, size / 2); try { draw(g); } catch (_) { /* nic */ } supCache.set(key, c); }
+    return c;
+  }
+  function supTower(g, t, x, y, ang, s) {
+    const d = TDSS.drawers[t.type], size = Math.ceil(Math.max(24, t.r) * 4), up = t.up.join();
+    g.drawImage(supCached(['b', t.type, up, size].join('|'), size, c => d.base(c, t.up)), x - size / 2, y - size / 2);
+    g.save(); g.translate(x, y); g.rotate(ang);
+    if (s.firing > 0) d.turret(g, t.up, s);   // zákluz a záblesk se kreslí živě, jinak z mezipaměti
+    else g.drawImage(supCached(['t', t.type, up, s.buffed ? 1 : 0, size].join('|'), size, c => d.turret(c, t.up, s)), -size / 2, -size / 2);
+    g.restore();
+  }
+  function supProj(g, kind, x, y, ang) {
+    const d = TDSS.projectileDrawers[kind];
+    g.save(); g.translate(x, y); g.rotate(ang); g.drawImage(supCached('p|' + kind, 48, d), -24, -24); g.restore();
+  }
+  function hasSup(id) { return !!sup()?.drawers?.[id]; }
+  function supTowerIcon(id, size) {   // stejné měřítko jako ikony Detailní grafiky (plocha 60×60)
+    const d = window.TDSS?.drawers?.[id]; if (!d) return null;
+    const c = off(size, size), g = c.getContext('2d'); g.scale(size / 60, size / 60); g.translate(30, 30);
+    try { d.base(g, [0, 0, 0]); d.turret(g, [0, 0, 0], {}); } catch (_) { /* nic */ }
+    return c;
+  }
 
   /* ── Pozadí mapy ───────────────────────────────────────────── */
   function background(map, paths) {
@@ -433,7 +463,11 @@ const TR = (() => {
   const PATH_COL = ['#f97316', '#38bdf8', '#a3e635'];
   function drawTower(g, t, time, sel) {
     const def = TDEF[t.type], r = t.r, tier = Math.max(...t.up);
-    if (useTDS() && window.TDS?.drawers?.[t.type]) {   // nová grafika (js/td-sprites-b/c.js)
+    if (hasSup(t.type)) {   // Super grafika (js/td-super-*.js)
+      const firing = t.firedAt != null && G ? Math.max(0, 1 - (G.time - t.firedAt) / 0.12) : 0;
+      supTower(g, t, t.x, t.y, t.ang || 0, { firing, buffed: !!(t.buff && t.buff.until > G?.time) });
+      if (tier >= 5) { g.strokeStyle = `rgba(250,204,21,${0.4 + Math.sin(time * 3) * 0.25})`; g.lineWidth = 3; g.beginPath(); g.arc(t.x, t.y, r + 6, 0, TAU); g.stroke(); }
+    } else if (useTDS() && window.TDS?.drawers?.[t.type]) {   // nová grafika (js/td-sprites-b/c.js)
       const fired = t.firedAt != null ? Math.max(0, 1 - (G.time - t.firedAt) / 0.1) : 0;
       const cock = Math.max(0, Math.min(1, 1 - Math.max(0, t.cd || 0) / (t.st?.interval || 1)));
       const still = t.type === 'strazni_hlaska' || t.type === 'zlaty_dul';   // budovy se neotáčí za cílem
@@ -603,7 +637,7 @@ const TR = (() => {
     else if (t.chillUntil > G.time) { g.strokeStyle = 'rgba(125,211,252,.7)'; g.lineWidth = 2; g.setLineDash([3, 4]); g.beginPath(); g.arc(t.x, t.y, r + 4, 0, TAU); g.stroke(); g.setLineDash([]); }
     // vyznačení úrovní cest (tečky pod věží)
     let py = t.y + r + 5;
-    t.up.forEach((n, i) => {
+    if (!t.preview) t.up.forEach((n, i) => {
       if (!n) return;
       for (let k = 0; k < n; k++) { g.fillStyle = PATH_COL[i]; g.beginPath(); g.arc(t.x - (n - 1) * 3.5 + k * 7, py, 2.6, 0, TAU); g.fill(); }
       py += 6;
@@ -624,6 +658,15 @@ const TR = (() => {
   function towerIcon(type, size) {
     const r = TDEF[type]?.base.radius_px || 20;
     return iconCanvas(size, r, g => drawTower(g, { type, x: 0, y: 0, r, up: [0, 0, 0], ang: -0.6, fx: {}, st: {} }, 0, false));
+  }
+  // Náhled věže na dané úrovni (prohlížeč vylepšení) ve zvoleném stylu grafiky
+  function towerPreview(g, type, x, y, k, up) {
+    const r = TDEF[type]?.base.radius_px || 20, own = !G;
+    if (own) G = { time: 0, hornAll: 0 };
+    g.save(); g.translate(x, y); g.scale(k, k);
+    try { drawTower(g, { type, x: 0, y: 0, r, up, ang: -Math.PI / 4, fx: {}, st: {}, preview: true }, 0, false); } catch (_) { /* náhled není nutný */ }
+    g.restore();
+    if (own) G = null;
   }
   function heroIcon(id, size) {
     const r = HDEF[id]?.base.radius_px || 20;
@@ -756,6 +799,7 @@ const TR = (() => {
       g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(p.x, p.y + 3, 6 - lift / 30, 3 - lift / 60, 0, 0, TAU); g.fill();
     }
     const py = p.y - lift;
+    if (sup()?.projectileDrawers?.[p.kind]) { supProj(g, p.kind, p.x, py, p.ang); return; }
     if (useTDS() && window.TDS?.projectileDrawers?.[p.kind]) { TDS.projectile(g, p.kind, p.x, py, p.ang, performance.now()); return; }
     const kind = PROJ_ALIAS[p.kind];
     if (kind && useTDS() && window.TDS?.projectileDrawers?.[kind]) { TDS.projectile(g, kind, p.x, py, p.ang, performance.now()); return; }
@@ -953,12 +997,12 @@ const TR = (() => {
   // Prohlížeč může při nedostatku grafické paměti zahodit obsah canvasů (i předkreslených).
   // Pak se všechny předkreslené obrázky smažou a vykreslí znovu.
   function clearCaches() {
-    bgCache.clear(); spriteCache.clear();
+    bgCache.clear(); spriteCache.clear(); supCache.clear();
     if (window.TDS) { TDS.clearCacheA?.(); TDS.clearCacheD?.(); TDS.cache = {}; TDS._iconCache = {}; }
   }
   function cachesLost() {
     const bg = useTDS() ? TDS.background({ id: G.map.id, paths: G.map.paths, track_width_px: TRACK_HALF * 2, water_zones: G.map.water_zones || [], obstacles: G.map.obstacles || [] }) : bgCache.get(G.map.id);
     try { return !!bg?.getContext('2d').isContextLost?.(); } catch (_) { return false; }
   }
-  return { render, mapPreview, slimeSprite, clearCaches, cachesLost, towerIcon, heroIcon };
+  return { render, mapPreview, slimeSprite, clearCaches, cachesLost, towerIcon, heroIcon, towerPreview, hasSup, supTowerIcon, gfx };
 })();
