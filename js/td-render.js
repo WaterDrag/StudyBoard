@@ -342,7 +342,25 @@ const TR = (() => {
   function lighten(hex, k) { const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = n >> 8 & 255, b = n & 255; r += (255 - r) * k; g += (255 - g) * k; b += (255 - b) * k; return `rgb(${r | 0},${g | 0},${b | 0})`; }
   function darken(hex, k) { const n = parseInt(hex.slice(1), 16); return `rgb(${(n >> 16) * (1 - k) | 0},${(n >> 8 & 255) * (1 - k) | 0},${(n & 255) * (1 - k) | 0})`; }
 
+  // Super grafika: slizák z TDSS.slime, stavy a značky jako u ostatních stylů, lišta životů a pečeť ve stylu Super
+  function superSlime(g, e, t, S) {
+    const tp = e.def.tp || {};
+    const s = { camo: e.camo, revealed: e.revealed || G.revealUntil > t, fort: e.fort, frozen: e.frozenUntil > t, stunned: e.stunUntil > t,
+      hit: t - e.lastHit < 0.06 && e.lastHit > 0, seed: e.id || 0, flying: !!e.flying, burrowed: e.burrowUntil > t, enraged: e.rageUntil > t,
+      healing: tp.pulse_interval_s ? (e.healAt || 0) - tp.pulse_interval_s > t - 0.6 : false,
+      spawning: tp.spawn_interval_s ? (e.broodAt || 0) - tp.spawn_interval_s > t - 0.7 : false,
+      shellActive: e.prismUntil > t, magnetActive: !!tp.magnet_radius_px, chilling: !!tp.tower_attack_speed_slow_pct };
+    S.slime(g, e.t, e.x, e.y, e.def.r, e.ang || 0, performance.now(), s);
+    if (s.burrowed) return;
+    stateMarks(g, e, t);
+    if (e.regrow) regrowMark(g, e, t);
+    traitMarks(g, e, t);
+    if (S.slimeBars && (e.def.boss || e.def.hp > 1)) S.slimeBars(g, e.x, e.y, e.def.r, e.hp / e.maxHp, !!e.def.boss, e.seal && e.seal.s > 0 ? { n: e.seal.n, left: Math.ceil(e.seal.s * e.seal.n - 1e-6) } : null, performance.now());
+    if (e.immuneFlash && t - e.immuneFlash < 0.25) { g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(e.x, e.y, e.def.r + 5, -0.6, 0.6); g.stroke(); }
+  }
   function drawEnemy(g, e, t) {
+    const S = sup();
+    if (S?.slime) { superSlime(g, e, t, S); return; }
     const tex = useTDS() && window.TDS?.slimeDrawers?.[e.t];
     if (e.burrowUntil > t && !tex) { burrowMark(g, e, t); return; }   // pod zemí je vidět jen hromádka hlíny (textura si zahrabání kreslí sama)
     if (e.flying) { g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(e.x + 6, e.y + e.def.r + 8, e.def.r * 0.85, e.def.r * 0.3, 0, 0, TAU); g.fill(); }
@@ -1002,7 +1020,7 @@ const TR = (() => {
   // Prohlížeč může při nedostatku grafické paměti zahodit obsah canvasů (i předkreslených).
   // Pak se všechny předkreslené obrázky smažou a vykreslí znovu.
   function clearCaches() {
-    bgCache.clear(); spriteCache.clear(); supCache.clear(); window.TDSS?.clearCacheMap?.();
+    bgCache.clear(); spriteCache.clear(); supCache.clear(); window.TDSS?.clearCacheMap?.(); window.TDSS?.clearCacheSlimes?.();
     if (window.TDS) { TDS.clearCacheA?.(); TDS.clearCacheD?.(); TDS.cache = {}; TDS._iconCache = {}; }
   }
   function cachesLost() {

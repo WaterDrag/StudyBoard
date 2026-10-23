@@ -501,6 +501,11 @@ function heroIco(h) {
   return icoImg('k:h' + h.id, () => TR.heroIcon(h.id, 80));
 }
 function miniSlime(id, mods) {
+  if (gfxNow() === '2' && window.TDSS?.slimeIcon) {   // Super grafika
+    const k = 'S' + id;
+    if (!_miniCache.has(k)) _miniCache.set(k, TDSS.slimeIcon(id, 30).toDataURL());
+    return _miniCache.get(k);
+  }
   const nova = gfxNow() !== '0', tex = EDEF[id]?.isNew ? window.TDS?.slimeDrawers?.[id] : window.TDS?.slimeIcon;
   const key = id + (mods || []).join() + (tex && nova ? (EDEF[id]?.isNew ? 'D' : 'N') : '');
   if (!_miniCache.has(key) && key.endsWith('D')) {   // nový slizák s texturou od Gemini
@@ -794,7 +799,7 @@ function scanTips() {
 }
 
 /* ── Výběr grafiky na úvodní obrazovce: ukázka všech stylů, volba se pamatuje (localStorage td_gfx) ── */
-const GFX = [['2', 'Super', 'Nejpropracovanější textury: postavičky, vylepšení vidět na první pohled. Rozpracované — zatím mapy a věže gryf, moždíř a inženýr, zbytek je z Gemini (Detailní)', true],
+const GFX = [['2', 'Super', 'Nejpropracovanější textury: postavičky, vylepšení vidět na první pohled. Rozpracované — zatím mapy, všichni slizáci a věže gryf, moždíř a inženýr, zbytek je z Gemini (Detailní)', true],
   ['1', 'Detailní', 'Textury od Gemini: hodně detailů, stínů a odlesků'], ['0', 'Kreslená', 'Jednodušší ručně kreslený styl od Clauda, dobře čitelný i na telefonu']];
 function gfxNow() { try { const v = localStorage.getItem('td_gfx'); return v === '0' || v === '2' ? v : '1'; } catch (_) { return '1'; } }
 let _gfxShots = null;
