@@ -62,7 +62,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Velitel lučištníků",
-      "cost": 2200,
+      "cost": 1850,
       "km": 2,
       "fx": {
        "projectiles_set": 5,
@@ -75,7 +75,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pán větrného luku",
-      "cost": 14500,
+      "cost": 7300,
       "km": 5,
       "fx": {
        "projectiles_set": 7,
@@ -126,7 +126,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Blesková salva",
-      "cost": 2800,
+      "cost": 2400,
       "km": 2,
       "fx": {
        "attack_interval_mult": 0.7,
@@ -143,7 +143,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Mistr tisíce šípů",
-      "cost": 16000,
+      "cost": 8000,
       "km": 5,
       "fx": {
        "attack_interval_set": 0.08,
@@ -201,7 +201,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Ostrostřelec s arbalestem",
-      "cost": 3100,
+      "cost": 2650,
       "km": 2,
       "fx": {
        "damage_add": 6,
@@ -215,7 +215,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Lovec slizových králů",
-      "cost": 17500,
+      "cost": 8800,
       "km": 5,
       "fx": {
        "range_add_px": 100,
@@ -291,7 +291,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Ohnivý prstenec",
-      "cost": 3400,
+      "cost": 2900,
       "km": 2,
       "fx": {
        "continuous_aura": true,
@@ -306,7 +306,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Sopečná výheň",
-      "cost": 18500,
+      "cost": 9300,
       "km": 5,
       "fx": {
        "damage_set": 12,
@@ -360,7 +360,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Smršť čepelí",
-      "cost": 2900,
+      "cost": 2450,
       "km": 2,
       "fx": {
        "damage_add": 2,
@@ -376,7 +376,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Královský mlýnek",
-      "cost": 15500,
+      "cost": 7800,
       "km": 5,
       "fx": {
        "damage_add": 5,
@@ -431,7 +431,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Hodinový stroj",
-      "cost": 3200,
+      "cost": 2700,
       "km": 2,
       "fx": {
        "projectiles_set": 24,
@@ -444,7 +444,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pevnost tisíce hrotů",
-      "cost": 16800,
+      "cost": 8400,
       "km": 5,
       "fx": {
        "projectiles_set": 32,
@@ -522,7 +522,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Pán jinovatky",
-      "cost": 3800,
+      "cost": 3250,
       "km": 2,
       "fx": {
        "debuff_incoming_damage_add": 3,
@@ -535,7 +535,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Král věčné zimy",
-      "cost": 21000,
+      "cost": 10500,
       "km": 5,
       "fx": {
        "debuff_incoming_damage_add": 6,
@@ -588,7 +588,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Sněhová vánice",
-      "cost": 3300,
+      "cost": 2800,
       "km": 2,
       "fx": {
        "range_add_px": 25,
@@ -604,7 +604,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Posel doby ledové",
-      "cost": 16500,
+      "cost": 8300,
       "km": 5,
       "fx": {
        "passive_aura_slow_pct": 0.6,
@@ -662,7 +662,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Kopí severu",
-      "cost": 3600,
+      "cost": 3050,
       "km": 2,
       "fx": {
        "range_add_px": 60,
@@ -675,7 +675,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Titán ledovce",
-      "cost": 19500,
+      "cost": 9800,
       "km": 5,
       "fx": {
        "damage_add": 20,
@@ -749,7 +749,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Ochromující zásah",
-      "cost": 4800,
+      "cost": 4100,
       "km": 2,
       "fx": {
        "damage_add": 20,
@@ -761,7 +761,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Popravčí králů",
-      "cost": 22000,
+      "cost": 11000,
       "km": 5,
       "fx": {
        "damage_add": 100,
@@ -813,7 +813,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Královská zásilka",
-      "cost": 4200,
+      "cost": 3550,
       "km": 2,
       "fx": {
        "bounce_targets": 5,
@@ -831,7 +831,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Velmistr královské stráže",
-      "cost": 18000,
+      "cost": 9000,
       "km": 5,
       "fx": {
        "damage_add": 6,
@@ -886,7 +886,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Hradní varhany",
-      "cost": 3900,
+      "cost": 3300,
       "km": 2,
       "fx": {
        "attack_interval_set": 0.14,
@@ -898,7 +898,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Strážce horizontu",
-      "cost": 17200,
+      "cost": 8600,
       "km": 5,
       "fx": {
        "attack_interval_set": 0.07,
@@ -975,7 +975,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Otřes země",
-      "cost": 3500,
+      "cost": 3000,
       "km": 2,
       "fx": {
        "stun_duration_s": 1.3,
@@ -987,7 +987,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Hněv titánů",
-      "cost": 19000,
+      "cost": 9500,
       "km": 5,
       "fx": {
        "damage_add": 12,
@@ -1040,7 +1040,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Lovec obrů",
-      "cost": 3300,
+      "cost": 2800,
       "km": 2,
       "fx": {
        "bonus_moab_damage": 30,
@@ -1056,7 +1056,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Zhouba slizových králů",
-      "cost": 18500,
+      "cost": 9300,
       "km": 5,
       "fx": {
        "bonus_moab_damage": 95,
@@ -1111,7 +1111,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Řetězový výbuch",
-      "cost": 2900,
+      "cost": 2450,
       "km": 2,
       "fx": {
        "recursive_every_2nd_shot": true,
@@ -1123,7 +1123,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Kobercové bombardování",
-      "cost": 17500,
+      "cost": 8800,
       "km": 5,
       "fx": {
        "recursive_every_shot": true,
@@ -1197,7 +1197,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Sluneční svatyně na vodě",
-      "cost": 2800,
+      "cost": 2400,
       "km": 2,
       "fx": {
        "submerge_damage_aura_dps": 8,
@@ -1210,7 +1210,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Archa vědění",
-      "cost": 18000,
+      "cost": 9000,
       "km": 5,
       "fx": {
        "submerge_damage_aura_dps": 40,
@@ -1261,7 +1261,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Královská salva z moří",
-      "cost": 4100,
+      "cost": 3500,
       "km": 2,
       "fx": {
        "bonus_moab_damage": 12,
@@ -1277,7 +1277,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pán sedmi moří",
-      "cost": 21500,
+      "cost": 10800,
       "km": 5,
       "fx": {
        "passive_auto_missile_on_moab_spawn_damage": 400,
@@ -1329,7 +1329,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Průrazné oštěpy",
-      "cost": 3100,
+      "cost": 2650,
       "km": 2,
       "fx": {
        "damage_add": 1,
@@ -1342,7 +1342,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Velkoadmirál flotily",
-      "cost": 19500,
+      "cost": 9800,
       "km": 5,
       "fx": {
        "attack_interval_mult": 0.5,
@@ -1418,7 +1418,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Mistr tajemných věd",
-      "cost": 3900,
+      "cost": 3300,
       "km": 2,
       "fx": {
        "damage_add": 5,
@@ -1432,7 +1432,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Arcimág království",
-      "cost": 21000,
+      "cost": 10500,
       "km": 5,
       "fx": {
        "damage_add": 10,
@@ -1492,7 +1492,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Povolání fénixe",
-      "cost": 3600,
+      "cost": 3050,
       "km": 2,
       "fx": {
        "flame_damage_add": 1,
@@ -1509,7 +1509,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pán ohnivého fénixe",
-      "cost": 20500,
+      "cost": 10300,
       "km": 5,
       "fx": {
        "permanent_phoenix": true,
@@ -1564,7 +1564,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Nekromant",
-      "cost": 3200,
+      "cost": 2700,
       "km": 2,
       "fx": {
        "graveyard_max_souls": 50,
@@ -1579,7 +1579,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Král nemrtvých",
-      "cost": 19000,
+      "cost": 9500,
       "km": 5,
       "fx": {
        "graveyard_max_souls": 200,
@@ -1664,7 +1664,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Královský životabudič",
-      "cost": 2900,
+      "cost": 2450,
       "km": 2,
       "fx": {
        "buff_damage_add": 2,
@@ -1681,7 +1681,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Kámen mudrců",
-      "cost": 22000,
+      "cost": 11000,
       "km": 5,
       "fx": {
        "buff_is_permanent": true,
@@ -1734,7 +1734,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Lektvar běsnění",
-      "cost": 3800,
+      "cost": 3250,
       "km": 2,
       "fx": {
        "damage_add": 3,
@@ -1751,7 +1751,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Probuzení smečky",
-      "cost": 18500,
+      "cost": 9300,
       "km": 5,
       "fx": {
        "ability_upgrade": {
@@ -1805,7 +1805,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Zlatá transmutace",
-      "cost": 3100,
+      "cost": 2650,
       "km": 2,
       "fx": {
        "gold_potion_interval_s": 3,
@@ -1817,7 +1817,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Mistr zmenšování",
-      "cost": 19500,
+      "cost": 9800,
       "km": 5,
       "fx": {
        "shrink_potion_interval_s": 6,
@@ -1890,7 +1890,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Pevnost mistrů",
-      "cost": 2800,
+      "cost": 2400,
       "km": 2,
       "fx": {
        "free_tier1_upgrades_for_basic_towers": true,
@@ -1902,7 +1902,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Citadela království",
-      "cost": 18000,
+      "cost": 9000,
       "km": 5,
       "fx": {
        "free_tier2_upgrades_for_basic_towers": true,
@@ -1953,7 +1953,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Volání do zbraně",
-      "cost": 4500,
+      "cost": 3850,
       "km": 2,
       "fx": {
        "ability": {
@@ -1969,7 +1969,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Domobrana celé říše",
-      "cost": 21000,
+      "cost": 10500,
       "km": 5,
       "fx": {
        "ability_upgrade": {
@@ -2020,7 +2020,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Knihovna moudrosti",
-      "cost": 3600,
+      "cost": 3050,
       "km": 2,
       "fx": {
        "bonus_cash_from_farms_in_radius_pct": 0.2,
@@ -2032,7 +2032,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Velká akademie",
-      "cost": 15000,
+      "cost": 7500,
       "km": 5,
       "fx": {
        "absorb_nearby_farms_for_mega_income": true,
@@ -2105,7 +2105,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Královská mincovna",
-      "cost": 4500,
+      "cost": 3850,
       "km": 2,
       "fx": {
        "carts_set": 5,
@@ -2117,7 +2117,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pokladnice dračí hory",
-      "cost": 16000,
+      "cost": 10400,
       "km": 5,
       "fx": {
        "cart_value_set": 700,
@@ -2168,7 +2168,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Půjčka koruny",
-      "cost": 4800,
+      "cost": 4100,
       "km": 2,
       "fx": {
        "bank_mode": true,
@@ -2187,7 +2187,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Císařská klenotnice",
-      "cost": 18000,
+      "cost": 11700,
       "km": 5,
       "fx": {
        "bank_capacity": 20000,
@@ -2242,7 +2242,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Velký bazar",
-      "cost": 4200,
+      "cost": 3550,
       "km": 2,
       "fx": {
        "cart_mult_set": 5,
@@ -2255,7 +2255,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Srdce obchodních cest",
-      "cost": 17000,
+      "cost": 11100,
       "km": 5,
       "fx": {
        "cart_mult_set": 15,
@@ -2341,7 +2341,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Trpasličí minové pole",
-      "cost": 2800,
+      "cost": 2400,
       "km": 2,
       "fx": {
        "damage_add": 3,
@@ -2356,7 +2356,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pevnost věčných min",
-      "cost": 16500,
+      "cost": 8300,
       "km": 5,
       "fx": {
        "damage_add": 6,
@@ -2411,7 +2411,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Kobercový výsev",
-      "cost": 3300,
+      "cost": 2800,
       "km": 2,
       "fx": {
        "attack_interval_mult": 0.65,
@@ -2430,7 +2430,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Bouře oceli",
-      "cost": 17500,
+      "cost": 8800,
       "km": 5,
       "fx": {
        "attack_interval_mult": 0.5,
@@ -2485,7 +2485,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Runová barikáda",
-      "cost": 3100,
+      "cost": 2650,
       "km": 2,
       "fx": {
        "damage_add": 3,
@@ -2499,7 +2499,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Neprostupná brána království",
-      "cost": 15800,
+      "cost": 7900,
       "km": 5,
       "fx": {
        "damage_add": 8,
@@ -2585,7 +2585,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Posel bouře",
-      "cost": 3100,
+      "cost": 2650,
       "km": 2,
       "fx": {
        "secondary_ball_lightning_interval_s": 4.2,
@@ -2600,7 +2600,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Hněv nebeské bouře",
-      "cost": 18500,
+      "cost": 9300,
       "km": 5,
       "fx": {
        "tornado_affects_moab": true,
@@ -2656,7 +2656,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Dar úrody",
-      "cost": 2900,
+      "cost": 2450,
       "km": 2,
       "fx": {
        "range_add_px": 25,
@@ -2677,7 +2677,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Duch prastarého hvozdu",
-      "cost": 19500,
+      "cost": 9800,
       "km": 5,
       "fx": {
        "full_track_thorns_dps": 12,
@@ -2732,7 +2732,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Volání smečky",
-      "cost": 2650,
+      "cost": 2250,
       "km": 2,
       "fx": {
        "aura_other_druids_attack_speed_pct": 12,
@@ -2746,7 +2746,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Vtělení prastaré šelmy",
-      "cost": 16800,
+      "cost": 8400,
       "km": 5,
       "fx": {
        "damage_add": 5,
@@ -2828,7 +2828,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Mistr pěti čepelí",
-      "cost": 2550,
+      "cost": 2150,
       "km": 2,
       "fx": {
        "projectiles_set": 5,
@@ -2842,7 +2842,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Velmistr stínů",
-      "cost": 16200,
+      "cost": 8100,
       "km": 5,
       "fx": {
        "projectiles_set": 8,
@@ -2897,7 +2897,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Velká sabotáž",
-      "cost": 2900,
+      "cost": 2450,
       "km": 2,
       "fx": {
        "ability": {
@@ -2916,7 +2916,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pán noční sabotáže",
-      "cost": 17000,
+      "cost": 8500,
       "km": 5,
       "fx": {
        "ability_duration_s": 22,
@@ -2972,7 +2972,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Přísavné nálože",
-      "cost": 3200,
+      "cost": 2700,
       "km": 2,
       "fx": {
        "secondary_sticky_bomb_interval_s": 3.8,
@@ -2987,7 +2987,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Mistr demolice",
-      "cost": 18200,
+      "cost": 9100,
       "km": 5,
       "fx": {
        "sticky_bomb_global_range": true,
@@ -3075,7 +3075,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Nebeská eskadra",
-      "cost": 3600,
+      "cost": 3050,
       "km": 2,
       "fx": {
        "attack_interval_mult": 0.55,
@@ -3089,7 +3089,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pán nebeské pevnosti",
-      "cost": 20500,
+      "cost": 10300,
       "km": 5,
       "fx": {
        "projectiles_set": 24,
@@ -3147,7 +3147,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Soudný den z nebes",
-      "cost": 3400,
+      "cost": 2900,
       "km": 2,
       "fx": {
        "track_bomb_damage_add": 8,
@@ -3167,7 +3167,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Posel apokalypsy",
-      "cost": 19800,
+      "cost": 9900,
       "km": 5,
       "fx": {
        "track_bomb_damage_set": 40,
@@ -3225,7 +3225,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Přízrak oblohy",
-      "cost": 3500,
+      "cost": 3000,
       "km": 2,
       "fx": {
        "secondary_explosive_shell_every_n_shots": 2,
@@ -3240,7 +3240,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Létající citadela",
-      "cost": 21000,
+      "cost": 10500,
       "km": 5,
       "fx": {
        "independent_turrets_count": 3,
@@ -3326,7 +3326,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Drsňák",
-      "cost": 3200,
+      "cost": 2700,
       "km": 2,
       "fx": {
        "damage_add": 7,
@@ -3342,7 +3342,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Kladivo nebes",
-      "cost": 18500,
+      "cost": 9300,
       "km": 5,
       "fx": {
        "damage_add": 24,
@@ -3396,7 +3396,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Dělostřelecká baterie",
-      "cost": 3400,
+      "cost": 2900,
       "km": 2,
       "fx": {
        "attack_interval_mult": 0.5,
@@ -3417,7 +3417,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pán hromové palby",
-      "cost": 19200,
+      "cost": 9600,
       "km": 5,
       "fx": {
        "damage_add": 6,
@@ -3472,7 +3472,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Rozbíječ pečetí",
-      "cost": 3100,
+      "cost": 2650,
       "km": 2,
       "fx": {
        "strip_fortified_from_non_moab": true,
@@ -3486,7 +3486,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Popelavý soud",
-      "cost": 17800,
+      "cost": 8900,
       "km": 5,
       "fx": {
        "burn_dps_set": 45,
@@ -3576,7 +3576,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Mistr konstruktér",
-      "cost": 2950,
+      "cost": 2500,
       "km": 2,
       "fx": {
        "sentry_types_set": [
@@ -3594,7 +3594,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Pán parních automatů",
-      "cost": 17500,
+      "cost": 8800,
       "km": 5,
       "fx": {
        "sentry_damage_set": 6,
@@ -3653,7 +3653,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Přetaktování",
-      "cost": 3600,
+      "cost": 3050,
       "km": 2,
       "fx": {
        "foam_pierce_add": 15,
@@ -3674,7 +3674,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Ultrataktování",
-      "cost": 21500,
+      "cost": 10800,
       "km": 5,
       "fx": {
        "ability_permanent_stack_speed_pct": 6,
@@ -3725,7 +3725,7 @@ window.TD = {
      {
       "tier": 4,
       "name": "Klecová past",
-      "cost": 2800,
+      "cost": 2400,
       "km": 2,
       "fx": {
        "deploy_bloon_trap_interval_s": 10,
@@ -3738,7 +3738,7 @@ window.TD = {
      {
       "tier": 5,
       "name": "Požírač králů",
-      "cost": 18900,
+      "cost": 9500,
       "km": 5,
       "fx": {
        "deploy_bloon_trap_interval_s": 4.5,
@@ -4471,20 +4471,386 @@ window.TD = {
    },
    "col": "#7e22ce",
    "r": 50
+  },
+  "bublinkovy_sliz": {
+   "id": "bublinkovy_sliz",
+   "name": "Bublinkový sliz",
+   "hp": 3,
+   "speed": 95,
+   "kids": [
+    {
+     "id": "lucni_slizak",
+     "n": 2,
+     "mods": null
+    }
+   ],
+   "gold": 2,
+   "leak": 7,
+   "traits": [
+    "flying"
+   ],
+   "look": "Světle tyrkysový průsvitný slizák s drobnými bílými křidélky po stranách, který se vznáší v duhové mýdlové bublině s výrazným stínem pod sebou.",
+   "boss": false,
+   "seal": null,
+   "col": "#5eead4",
+   "r": 11,
+   "tp": {
+    "ignores_ground_traps": true,
+    "ignores_ground_zones": true,
+    "elevation_shadow_offset_px": 10
+   },
+   "isNew": true
+  },
+  "zuivy_sliz": {
+   "id": "zuivy_sliz",
+   "name": "Zuřivý sliz",
+   "hp": 6,
+   "speed": 65,
+   "kids": [
+    {
+     "id": "bleskovy_sliz",
+     "n": 2,
+     "mods": null
+    }
+   ],
+   "gold": 4,
+   "leak": 16,
+   "traits": [
+    "enrage_on_hit"
+   ],
+   "look": "Karmínově červený slizák se zamračeným obočím, vyceněnými bílými tesáky a pulzujícími žlutými žilkami, ze kterého při zásahu stoupá pára.",
+   "boss": false,
+   "seal": null,
+   "col": "#dc2626",
+   "r": 11,
+   "tp": {
+    "speed_boost_per_hit_pct": 25,
+    "max_speed_boost_pct": 125,
+    "enrage_duration_s": 3,
+    "immune_to_knockback_while_enraged": true
+   },
+   "isNew": true
+  },
+  "delivy_sliz": {
+   "id": "delivy_sliz",
+   "name": "Dělivý sliz",
+   "hp": 4,
+   "speed": 70,
+   "kids": [
+    {
+     "id": "lesni_slizak",
+     "n": 4,
+     "mods": null
+    }
+   ],
+   "gold": 4,
+   "leak": 20,
+   "traits": [
+    "swarm_split"
+   ],
+   "look": "Limetkově zelený dvoulaločný slizák připomínající dělící se buňku se čtyřma malýma očima a dvěma pulzujícími oranžovými jádry uvnitř.",
+   "boss": false,
+   "seal": null,
+   "col": "#84cc16",
+   "r": 12,
+   "tp": {
+    "spawn_spread_px": 22,
+    "children_inherit_modifiers": true,
+    "children_speed_boost_duration_s": 1.2,
+    "children_speed_boost_pct": 30
+   },
+   "isNew": true
+  },
+  "stitonos_sliz": {
+   "id": "stitonos_sliz",
+   "name": "Štítonoš",
+   "hp": 18,
+   "speed": 50,
+   "kids": [
+    {
+     "id": "prilbosliz",
+     "n": 1,
+     "mods": null
+    }
+   ],
+   "gold": 8,
+   "leak": 41,
+   "traits": [
+    "armored",
+    "shield_aura"
+   ],
+   "look": "Mohutný modrošedý slizák držící před sebou široký dubový pavézový štít pobitý zlatými nýty, kolem kterého září modrý ochranný kruh.",
+   "boss": false,
+   "seal": null,
+   "col": "#64748b",
+   "r": 14,
+   "tp": {
+    "aura_radius_px": 75,
+    "ally_damage_reduction_pct": 0.5,
+    "grants_pierce_consumption_add": 1,
+    "does_not_stack_with_other_shield_auras": true
+   },
+   "isNew": true
+  },
+  "samansky_sliz": {
+   "id": "samansky_sliz",
+   "name": "Šamanský sliz",
+   "hp": 14,
+   "speed": 60,
+   "kids": [
+    {
+     "id": "duhovy_sliz",
+     "n": 2,
+     "mods": null
+    }
+   ],
+   "gold": 9,
+   "leak": 38,
+   "traits": [
+    "healer_pulse"
+   ],
+   "look": "Smaragdově zelený slizák s dřevěnou kmenovou maskou s barevnými pírky a malou vyřezávanou holí se zeleným drahokamem uvnitř těla.",
+   "boss": false,
+   "seal": null,
+   "col": "#059669",
+   "r": 13,
+   "tp": {
+    "pulse_interval_s": 3,
+    "pulse_radius_px": 95,
+    "heal_non_boss_hp": 4,
+    "heal_boss_hp": 25,
+    "cleanse_burn_and_acid": true,
+    "triggers_regrow_layer": true
+   },
+   "isNew": true
+  },
+  "krtci_sliz": {
+   "id": "krtci_sliz",
+   "name": "Krtčí sliz",
+   "hp": 12,
+   "speed": 75,
+   "kids": [
+    {
+     "id": "cerny_sliz",
+     "n": 2,
+     "mods": null
+    }
+   ],
+   "gold": 7,
+   "leak": 30,
+   "traits": [
+    "burrower"
+   ],
+   "look": "Zemitě hnědý slizák s hornickou přilbou se svítilnou na čele a dvěma kovovými vrtáky po stranách těla, za kterým zůstává vyrytá brázda.",
+   "boss": false,
+   "seal": null,
+   "col": "#92400e",
+   "r": 12,
+   "tp": {
+    "burrow_trigger_on_first_hit": true,
+    "burrow_cooldown_s": 6.5,
+    "burrow_duration_s": 1.8,
+    "burrow_speed_mult": 1.35,
+    "untargetable_while_burrowed": true,
+    "damaged_by_ground_traps_and_explosions_while_burrowed": true
+   },
+   "isNew": true
+  },
+  "magneticky_sliz": {
+   "id": "magneticky_sliz",
+   "name": "Magnetický sliz",
+   "hp": 24,
+   "speed": 55,
+   "kids": [
+    {
+     "id": "zlaty_sliz",
+     "n": 1,
+     "mods": null
+    },
+    {
+     "id": "prilbosliz",
+     "n": 1,
+     "mods": null
+    }
+   ],
+   "gold": 14,
+   "leak": 79,
+   "traits": [
+    "armored",
+    "projectile_magnet"
+   ],
+   "look": "Kovově stříbrný slizák s velkým červeno-modrým podkovovitým magnetem trčícím z hlavy, kolem kterého rotují modré magnetické siločáry.",
+   "boss": false,
+   "seal": null,
+   "col": "#cbd5e1",
+   "r": 14,
+   "tp": {
+    "magnet_radius_px": 75,
+    "redirects_sharp_and_normal_projectiles": true,
+    "consumes_extra_pierce": 2,
+    "sharp_damage_reduction_pct": 0.5,
+    "redirect_chance": 0.5
+   },
+   "isNew": true
+  },
+  "mrazivy_plazivec": {
+   "id": "mrazivy_plazivec",
+   "name": "Mrazivý plazivec",
+   "hp": 20,
+   "speed": 65,
+   "kids": [
+    {
+     "id": "snezny_sliz",
+     "n": 3,
+     "mods": null
+    }
+   ],
+   "gold": 12,
+   "leak": 53,
+   "traits": [
+    "freeze_immune",
+    "chilling_presence"
+   ],
+   "look": "Ledově azurový průsvitný slizák s korunou z ostrých špičatých rampouchů na zádech, který za sebou zanechává namrzlou bílou stopu.",
+   "boss": false,
+   "seal": null,
+   "col": "#7dd3fc",
+   "r": 13,
+   "tp": {
+    "aura_radius_px": 100,
+    "tower_attack_speed_slow_pct": 30,
+    "death_frost_nova_radius_px": 95,
+    "death_frost_nova_stun_towers_s": 2,
+    "energy_and_fire_towers_immune_to_chill": true
+   },
+   "isNew": true
+  },
+  "kralovna_roje": {
+   "id": "kralovna_roje",
+   "name": "Královna roje",
+   "hp": 320,
+   "speed": 35,
+   "kids": [
+    {
+     "id": "delivy_sliz",
+     "n": 4,
+     "mods": null
+    },
+    {
+     "id": "bublinkovy_sliz",
+     "n": 6,
+     "mods": null
+    }
+   ],
+   "gold": 160,
+   "leak": 442,
+   "traits": [
+    "boss",
+    "brood_spawner"
+   ],
+   "look": "Obrovský jantarově zlatý a smaragdový slizák s královskou čelenkou s tykadly, medovými plástvemi uvnitř rosolu a průsvitnými hmyzími křídly.",
+   "boss": true,
+   "seal": {
+    "n": 3,
+    "red": 0.75,
+    "km": 3,
+    "decay": 0.02
+   },
+   "col": "#f59e0b",
+   "r": 36,
+   "tp": {
+    "spawn_interval_s": 4.5,
+    "spawn_type": "delivy_sliz",
+    "spawn_count": 2,
+    "speed_aura_radius_px": 110,
+    "ally_speed_boost_pct": 25
+   },
+   "isNew": true
+  },
+  "krystalovy_behemot": {
+   "id": "krystalovy_behemot",
+   "name": "Krystalový behemot",
+   "hp": 1200,
+   "speed": 25,
+   "kids": [
+    {
+     "id": "magneticky_sliz",
+     "n": 3,
+     "mods": null
+    },
+    {
+     "id": "zlaty_sliz",
+     "n": 4,
+     "mods": null
+    }
+   ],
+   "gold": 450,
+   "leak": 1661,
+   "traits": [
+    "boss",
+    "armored",
+    "magic_immune",
+    "prismatic_shell"
+   ],
+   "look": "Kolosální indigově modrý slizák posetý obřími zářícími fialovými a tyrkysovými krystaly s platinovou korunou a geodou v hrudi.",
+   "boss": true,
+   "seal": {
+    "n": 4,
+    "red": 0.75,
+    "km": 4,
+    "decay": 0.015
+   },
+   "col": "#4338ca",
+   "r": 44,
+   "tp": {
+    "shell_cycle_interval_s": 8,
+    "shell_active_duration_s": 2.5,
+    "shell_damage_reduction_pct": 0.8,
+    "shell_pulse_stuns_nearest_towers_count": 2,
+    "shell_pulse_tower_stun_duration_s": 2
+   },
+   "isNew": true
   }
  },
  "mods": {
   "duchsliz": {
-   "name": "Duchsliz",
-   "effect": "Průhledný slizák – mohou na něj útočit pouze věže s viděním neviditelných nebo po osvětlení Světelnou světlicí."
+   "name": "Duchsliz (Průhledný)",
+   "effect": "Slizák je poloprůhledný. Mohou na něj útočit pouze věže s vlastností can_see_camo nebo po odhalení odhalovací schopností.",
+   "params": {
+    "requires_camo_vision": true
+   }
   },
   "dorustajici": {
-   "name": "Dorůstající sliz",
-   "effect": "Pokud není po dobu 3.0 s zasažen, doroste o 1 vrstvu zpět až do své výchozí podoby."
+   "name": "Dorůstající",
+   "effect": "Pokud slizák neutrpí poškození po dobu 3,0 s, obnoví si 25 % max. HP nebo doroste o 1 vrstvu zpět až do své původní podoby.",
+   "params": {
+    "regen_delay_s": 3,
+    "regen_layer_interval_s": 2,
+    "multi_hp_regen_pct_per_tick": 0.25
+   }
   },
   "kamenny": {
-   "name": "Kamenný sliz",
-   "effect": "Ztuhlý v kamenném krunýři – má dvojnásobek (2.0×) životů oproti běžné verzi."
+   "name": "Kamenný krunýř",
+   "effect": "Slizák má kamenný obal, který zdvojnásobuje jeho životy (2× HP, u 1 HP slizáků vyžaduje 2 zásahy k proražení vrstvy).",
+   "params": {
+    "hp_multiplier": 2
+   }
+  },
+  "zrychleny": {
+   "name": "Větrný spěch",
+   "effect": "Slizák je poháněn větrnou magií: pohybuje se o 35 % rychleji a trvání zpomalení i omráčení je na něm zkráceno o 40 %.",
+   "params": {
+    "speed_multiplier": 1.35,
+    "cc_duration_multiplier": 0.6
+   }
+  },
+  "runovy_stit": {
+   "name": "Runová bublina",
+   "effect": "Slizák má osobní magickou bariéru, která zcela pohltí první 1 zásah libovolné síly a při rozbití mu udělí nezasahutelnost na 0,25 s.",
+   "params": {
+    "absorb_hits_count": 1,
+    "invulnerability_on_break_s": 0.25
+   }
   }
  },
  "waves": [
@@ -4509,9 +4875,16 @@ window.TD = {
    "groups": [
     {
      "id": "kapicka_slizu",
-     "n": 30,
-     "every": 0.65,
+     "n": 18,
+     "every": 0.75,
      "at": 0,
+     "mods": []
+    },
+    {
+     "id": "lucni_slizak",
+     "n": 6,
+     "every": 1.1,
+     "at": 6,
      "mods": []
     }
    ]
@@ -4522,16 +4895,16 @@ window.TD = {
    "why": null,
    "groups": [
     {
-     "id": "kapicka_slizu",
-     "n": 15,
-     "every": 0.6,
+     "id": "lucni_slizak",
+     "n": 11,
+     "every": 0.85,
      "at": 0,
      "mods": []
     },
     {
-     "id": "lucni_slizak",
+     "id": "kapicka_slizu",
      "n": 8,
-     "every": 0.9,
+     "every": 0.5,
      "at": 5,
      "mods": []
     }
@@ -4544,9 +4917,16 @@ window.TD = {
    "groups": [
     {
      "id": "lucni_slizak",
-     "n": 22,
-     "every": 0.6,
+     "n": 9,
+     "every": 0.75,
      "at": 0,
+     "mods": []
+    },
+    {
+     "id": "lesni_slizak",
+     "n": 5,
+     "every": 1.1,
+     "at": 4,
      "mods": []
     }
    ]
@@ -4557,17 +4937,17 @@ window.TD = {
    "why": null,
    "groups": [
     {
-     "id": "lucni_slizak",
-     "n": 15,
-     "every": 0.5,
+     "id": "lesni_slizak",
+     "n": 5,
+     "every": 0.9,
      "at": 0,
      "mods": []
     },
     {
-     "id": "lesni_slizak",
-     "n": 8,
-     "every": 0.8,
-     "at": 6,
+     "id": "delivy_sliz",
+     "n": 2,
+     "every": 1.8,
+     "at": 5,
      "mods": []
     }
    ]
@@ -4575,20 +4955,20 @@ window.TD = {
   {
    "n": 6,
    "gold": 125,
-   "why": null,
+   "why": "První létající Bublinkové slizy: přeletí pasti na zemi (Kladeč pastí, ježky, pěnu), takže je nutné mít přímé střelce.",
    "groups": [
     {
-     "id": "kapicka_slizu",
-     "n": 15,
-     "every": 0.3,
+     "id": "lesni_slizak",
+     "n": 10,
+     "every": 0.8,
      "at": 0,
      "mods": []
     },
     {
-     "id": "lesni_slizak",
-     "n": 15,
-     "every": 0.6,
-     "at": 4,
+     "id": "bublinkovy_sliz",
+     "n": 6,
+     "every": 1.1,
+     "at": 3,
      "mods": []
     }
    ]
@@ -4600,16 +4980,16 @@ window.TD = {
    "groups": [
     {
      "id": "lesni_slizak",
-     "n": 20,
-     "every": 0.5,
+     "n": 18,
+     "every": 0.7,
      "at": 0,
      "mods": []
     },
     {
      "id": "bleskovy_sliz",
-     "n": 6,
-     "every": 0.7,
-     "at": 8,
+     "n": 8,
+     "every": 0.9,
+     "at": 4,
      "mods": []
     }
    ]
@@ -4617,22 +4997,29 @@ window.TD = {
   {
    "n": 8,
    "gold": 135,
-   "why": null,
+   "why": "Dorůstající Dělivé slizy a první Zuřiví slizáci, kteří se po zásahu výrazně zrychlí.",
    "groups": [
     {
-     "id": "lesni_slizak",
-     "n": 15,
-     "every": 0.5,
+     "id": "delivy_sliz",
+     "n": 3,
+     "every": 1.4,
      "at": 0,
      "mods": [
       "dorustajici"
      ]
     },
     {
+     "id": "zuivy_sliz",
+     "n": 3,
+     "every": 1.6,
+     "at": 4,
+     "mods": []
+    },
+    {
      "id": "bleskovy_sliz",
-     "n": 12,
-     "every": 0.45,
-     "at": 6,
+     "n": 5,
+     "every": 0.75,
+     "at": 7,
      "mods": []
     }
    ]
@@ -4640,57 +5027,78 @@ window.TD = {
   {
    "n": 9,
    "gold": 140,
-   "why": null,
+   "why": "První průhlední slizáci (Duchsliz). Nutný Stínový zvěd, Kladeč pastí, Obléhací moždíř nebo vylepšení detekce.",
    "groups": [
     {
      "id": "lesni_slizak",
-     "n": 35,
-     "every": 0.25,
+     "n": 20,
+     "every": 0.65,
      "at": 0,
      "mods": []
+    },
+    {
+     "id": "lucni_slizak",
+     "n": 12,
+     "every": 0.9,
+     "at": 3,
+     "mods": [
+      "duchsliz"
+     ]
     }
    ]
   },
   {
    "n": 10,
    "gold": 145,
-   "why": null,
+   "why": "První obrnění Štítonoši a Přilboslizy! Obyčejné ostré šípy a magie se odrazí — nutný Alchymista, Katapult, Moždíř nebo průraz přileb.",
    "groups": [
     {
-     "id": "lucni_slizak",
-     "n": 50,
-     "every": 0.15,
+     "id": "stitonos_sliz",
+     "n": 2,
+     "every": 3.5,
      "at": 0,
      "mods": []
     },
     {
-     "id": "bleskovy_sliz",
-     "n": 15,
-     "every": 0.35,
-     "at": 7,
-     "mods": [
-      "dorustajici"
-     ]
+     "id": "lesni_slizak",
+     "n": 14,
+     "every": 0.45,
+     "at": 1,
+     "mods": []
+    },
+    {
+     "id": "prilbosliz",
+     "n": 2,
+     "every": 2,
+     "at": 6,
+     "mods": []
     }
    ]
   },
   {
    "n": 11,
    "gold": 150,
-   "why": null,
+   "why": "Imunity vůči výbuchům (Černý sliz) a mrazu (Sněžný sliz) doprovázené létajícími Bublinkami.",
    "groups": [
     {
      "id": "cerny_sliz",
-     "n": 10,
-     "every": 0.7,
+     "n": 7,
+     "every": 0.85,
      "at": 0,
      "mods": []
     },
     {
      "id": "snezny_sliz",
-     "n": 10,
-     "every": 0.7,
-     "at": 5,
+     "n": 7,
+     "every": 0.85,
+     "at": 3,
+     "mods": []
+    },
+    {
+     "id": "bublinkovy_sliz",
+     "n": 9,
+     "every": 0.75,
+     "at": 6,
      "mods": []
     }
    ]
@@ -4698,23 +5106,30 @@ window.TD = {
   {
    "n": 12,
    "gold": 155,
-   "why": "První vlna průhledných Duchslizů. Hráč buď musí mít postavený detekční upgrade věže, nebo musí utratit 1 KM z kartiček za Světelnou světlici.",
+   "why": "Krtčí slizáci se po prvním zásahu zahrabou pod zem a proklouznou kolem přední linie; Šamanští slizáci léčí zraněné.",
    "groups": [
     {
-     "id": "lesni_slizak",
-     "n": 12,
-     "every": 0.6,
+     "id": "krtci_sliz",
+     "n": 2,
+     "every": 1.3,
      "at": 0,
+     "mods": []
+    },
+    {
+     "id": "samansky_sliz",
+     "n": 1,
+     "every": 2.4,
+     "at": 2,
+     "mods": []
+    },
+    {
+     "id": "lesni_slizak",
+     "n": 4,
+     "every": 0.65,
+     "at": 4,
      "mods": [
       "duchsliz"
      ]
-    },
-    {
-     "id": "bleskovy_sliz",
-     "n": 15,
-     "every": 0.4,
-     "at": 6,
-     "mods": []
     }
    ]
   },
@@ -4724,40 +5139,54 @@ window.TD = {
    "why": null,
    "groups": [
     {
-     "id": "cerny_sliz",
-     "n": 15,
-     "every": 0.4,
+     "id": "zuivy_sliz",
+     "n": 5,
+     "every": 1,
      "at": 0,
-     "mods": []
-    },
-    {
-     "id": "bleskovy_sliz",
-     "n": 20,
-     "every": 0.3,
-     "at": 4,
      "mods": [
       "dorustajici"
      ]
+    },
+    {
+     "id": "delivy_sliz",
+     "n": 5,
+     "every": 1.1,
+     "at": 3,
+     "mods": []
+    },
+    {
+     "id": "cerny_sliz",
+     "n": 6,
+     "every": 0.7,
+     "at": 6,
+     "mods": []
     }
    ]
   },
   {
    "n": 14,
    "gold": 165,
-   "why": null,
+   "why": "Runové slizy imunní vůči magii a ohni kryté Štítonoši a kamenným krunýřem. Nutná silná fyzická či výbušná obrana.",
    "groups": [
     {
      "id": "runovy_sliz",
-     "n": 14,
-     "every": 0.5,
+     "n": 11,
+     "every": 0.8,
      "at": 0,
      "mods": []
     },
     {
+     "id": "stitonos_sliz",
+     "n": 3,
+     "every": 2.8,
+     "at": 2,
+     "mods": []
+    },
+    {
      "id": "lesni_slizak",
-     "n": 25,
-     "every": 0.25,
-     "at": 5,
+     "n": 16,
+     "every": 0.55,
+     "at": 3,
      "mods": [
       "kamenny"
      ]
@@ -4767,22 +5196,31 @@ window.TD = {
   {
    "n": 15,
    "gold": 170,
-   "why": null,
+   "why": "Průhledné létající Bublinky (nelze je chytit pastmi na zemi!) a obrnění Přilboslizy.",
    "groups": [
     {
      "id": "prilbosliz",
-     "n": 8,
+     "n": 7,
      "every": 1.1,
      "at": 0,
      "mods": []
     },
     {
-     "id": "bleskovy_sliz",
-     "n": 15,
-     "every": 0.35,
-     "at": 4,
+     "id": "bublinkovy_sliz",
+     "n": 9,
+     "every": 0.75,
+     "at": 2,
      "mods": [
       "duchsliz"
+     ]
+    },
+    {
+     "id": "bleskovy_sliz",
+     "n": 9,
+     "every": 0.6,
+     "at": 5,
+     "mods": [
+      "zrychleny"
      ]
     }
    ]
@@ -4790,20 +5228,27 @@ window.TD = {
   {
    "n": 16,
    "gold": 175,
-   "why": null,
+   "why": "Magnetičtí slizáci přitahují ostré projektily na svůj pancíř a Mraziví plazivci zpomalují okolní věže.",
    "groups": [
     {
-     "id": "duhovy_sliz",
-     "n": 12,
-     "every": 0.6,
+     "id": "magneticky_sliz",
+     "n": 2,
+     "every": 3,
      "at": 0,
      "mods": []
     },
     {
-     "id": "runovy_sliz",
-     "n": 15,
-     "every": 0.4,
-     "at": 5,
+     "id": "duhovy_sliz",
+     "n": 8,
+     "every": 0.65,
+     "at": 1,
+     "mods": []
+    },
+    {
+     "id": "mrazivy_plazivec",
+     "n": 3,
+     "every": 2.2,
+     "at": 4,
      "mods": []
     }
    ]
@@ -4814,21 +5259,30 @@ window.TD = {
    "why": null,
    "groups": [
     {
-     "id": "prilbosliz",
-     "n": 10,
-     "every": 0.8,
+     "id": "samansky_sliz",
+     "n": 2,
+     "every": 2,
      "at": 0,
+     "mods": [
+      "kamenny"
+     ]
+    },
+    {
+     "id": "prilbosliz",
+     "n": 4,
+     "every": 1,
+     "at": 1,
      "mods": [
       "dorustajici"
      ]
     },
     {
-     "id": "duhovy_sliz",
-     "n": 10,
-     "every": 0.5,
-     "at": 6,
+     "id": "krtci_sliz",
+     "n": 4,
+     "every": 0.9,
+     "at": 4,
      "mods": [
-      "dorustajici"
+      "duchsliz"
      ]
     }
    ]
@@ -4836,12 +5290,12 @@ window.TD = {
   {
    "n": 18,
    "gold": 185,
-   "why": null,
+   "why": "Masivní roj Dělivých slizů a první tuhé Zlaté slizy. Nutné silné plošné poškození (Čepová věž, Moždíř, Druid).",
    "groups": [
     {
-     "id": "lesni_slizak",
-     "n": 60,
-     "every": 0.1,
+     "id": "delivy_sliz",
+     "n": 16,
+     "every": 0.55,
      "at": 0,
      "mods": [
       "dorustajici"
@@ -4850,8 +5304,8 @@ window.TD = {
     {
      "id": "zlaty_sliz",
      "n": 4,
-     "every": 1.5,
-     "at": 5,
+     "every": 2.2,
+     "at": 4,
      "mods": []
     }
    ]
@@ -4859,19 +5313,28 @@ window.TD = {
   {
    "n": 19,
    "gold": 190,
-   "why": null,
+   "why": "Zlaté slizy s osobní Runovou bublinou kryté Magnetickými slizáky a průhlednými Duhovými slizy.",
    "groups": [
     {
      "id": "zlaty_sliz",
-     "n": 8,
-     "every": 0.9,
+     "n": 5,
+     "every": 1.6,
      "at": 0,
+     "mods": [
+      "runovy_stit"
+     ]
+    },
+    {
+     "id": "magneticky_sliz",
+     "n": 3,
+     "every": 2.4,
+     "at": 2,
      "mods": []
     },
     {
      "id": "duhovy_sliz",
-     "n": 15,
-     "every": 0.4,
+     "n": 11,
+     "every": 0.65,
      "at": 4,
      "mods": [
       "duchsliz"
@@ -4882,7 +5345,7 @@ window.TD = {
   {
    "n": 20,
    "gold": 195,
-   "why": "První Boss (Slizový obr) chráněný Runovou pečetí (75% redukce poškození). Pro proražení štítu je nutné správně zodpovědět 2 kartičky během souboje nebo zaplatit 3 KM, a mít aspoň jednu věž úrovně 4 (stojí 2 KM).",
+   "why": "První Boss (Slizový obr) s Runovou pečetí (75% redukce poškození) doprovázený Štítonoši a Šamany. Zodpověz kartičky pro prolomení pečeti!",
    "groups": [
     {
      "id": "slizovy_obr",
@@ -4892,9 +5355,16 @@ window.TD = {
      "mods": []
     },
     {
-     "id": "prilbosliz",
-     "n": 6,
-     "every": 1,
+     "id": "stitonos_sliz",
+     "n": 3,
+     "every": 2.2,
+     "at": 2,
+     "mods": []
+    },
+    {
+     "id": "samansky_sliz",
+     "n": 3,
+     "every": 2.5,
      "at": 4,
      "mods": []
     }
@@ -4903,45 +5373,63 @@ window.TD = {
   {
    "n": 21,
    "gold": 200,
-   "why": "Od vlny 21 klesá zlaťáková odměna za ničení slizáků na 40 % – příjem ze svitků (kartiček) a věží úrovně 4 se stává klíčovým.",
+   "why": "Rychlý podzemní útok Krtčích slizů a létajících Bublinek se štítem.",
    "groups": [
     {
-     "id": "zlaty_sliz",
-     "n": 12,
-     "every": 0.6,
+     "id": "krtci_sliz",
+     "n": 14,
+     "every": 0.75,
      "at": 0,
+     "mods": [
+      "zrychleny"
+     ]
+    },
+    {
+     "id": "zlaty_sliz",
+     "n": 10,
+     "every": 1.2,
+     "at": 2,
      "mods": []
     },
     {
-     "id": "runovy_sliz",
-     "n": 25,
-     "every": 0.2,
+     "id": "bublinkovy_sliz",
+     "n": 18,
+     "every": 0.55,
      "at": 4,
-     "mods": []
+     "mods": [
+      "runovy_stit"
+     ]
     }
    ]
   },
   {
    "n": 22,
    "gold": 205,
-   "why": null,
+   "why": "Průhlední Štítonoši a Mraziví plazivci! Bez odhalení průhlednosti (Světlo odhalení, Kouřová clona, Čisticí pěna, Světlice) projdou obranou.",
    "groups": [
     {
-     "id": "duhovy_sliz",
-     "n": 30,
-     "every": 0.25,
+     "id": "stitonos_sliz",
+     "n": 7,
+     "every": 1.6,
      "at": 0,
      "mods": [
-      "dorustajici"
+      "duchsliz"
      ]
     },
     {
-     "id": "prilbosliz",
-     "n": 12,
-     "every": 0.5,
-     "at": 3,
+     "id": "mrazivy_plazivec",
+     "n": 7,
+     "every": 1.5,
+     "at": 2,
+     "mods": []
+    },
+    {
+     "id": "duhovy_sliz",
+     "n": 21,
+     "every": 0.45,
+     "at": 4,
      "mods": [
-      "duchsliz"
+      "dorustajici"
      ]
     }
    ]
@@ -4949,22 +5437,31 @@ window.TD = {
   {
    "n": 23,
    "gold": 210,
-   "why": null,
+   "why": "Dva Slizoví obři krytí Magnetickými slizáky, kteří stahují střely ostrostřelců na sebe.",
    "groups": [
     {
      "id": "slizovy_obr",
      "n": 2,
-     "every": 5,
+     "every": 6,
      "at": 0,
      "mods": []
     },
     {
-     "id": "zlaty_sliz",
-     "n": 10,
-     "every": 0.5,
-     "at": 2,
+     "id": "magneticky_sliz",
+     "n": 6,
+     "every": 2,
+     "at": 1,
      "mods": [
       "kamenny"
+     ]
+    },
+    {
+     "id": "zuivy_sliz",
+     "n": 15,
+     "every": 0.65,
+     "at": 3,
+     "mods": [
+      "zrychleny"
      ]
     }
    ]
@@ -4972,12 +5469,12 @@ window.TD = {
   {
    "n": 24,
    "gold": 215,
-   "why": null,
+   "why": "Průhledné Zlaté slizy a rychlé Runové slizy s magickou imunitou.",
    "groups": [
     {
      "id": "zlaty_sliz",
-     "n": 15,
-     "every": 0.4,
+     "n": 13,
+     "every": 0.9,
      "at": 0,
      "mods": [
       "duchsliz"
@@ -4985,11 +5482,21 @@ window.TD = {
     },
     {
      "id": "runovy_sliz",
-     "n": 30,
-     "every": 0.15,
-     "at": 5,
+     "n": 22,
+     "every": 0.5,
+     "at": 2,
      "mods": [
-      "dorustajici"
+      "dorustajici",
+      "zrychleny"
+     ]
+    },
+    {
+     "id": "samansky_sliz",
+     "n": 7,
+     "every": 1.5,
+     "at": 4,
+     "mods": [
+      "runovy_stit"
      ]
     }
    ]
@@ -4997,22 +5504,31 @@ window.TD = {
   {
    "n": 25,
    "gold": 220,
-   "why": null,
+   "why": "Nový Boss: Královna roje (3 Runové pečeti)! Neustále rodí Dělivé slizy a zrychluje celý roj kolem sebe. Ideální chvíle pro první věž úrovně 5.",
    "groups": [
     {
-     "id": "slizovy_obr",
-     "n": 3,
-     "every": 4,
+     "id": "kralovna_roje",
+     "n": 1,
+     "every": 1,
      "at": 0,
      "mods": []
     },
     {
-     "id": "prilbosliz",
-     "n": 20,
-     "every": 0.3,
+     "id": "bublinkovy_sliz",
+     "n": 24,
+     "every": 0.45,
      "at": 2,
      "mods": [
-      "kamenny"
+      "zrychleny"
+     ]
+    },
+    {
+     "id": "delivy_sliz",
+     "n": 16,
+     "every": 0.75,
+     "at": 4,
+     "mods": [
+      "dorustajici"
      ]
     }
    ]
@@ -5020,24 +5536,33 @@ window.TD = {
   {
    "n": 26,
    "gold": 225,
-   "why": null,
+   "why": "Těžká obrněná kolona: Kamenný Slizový obr doprovázený Štítonoši a Magnetickými slizáky.",
    "groups": [
-    {
-     "id": "duhovy_sliz",
-     "n": 50,
-     "every": 0.12,
-     "at": 0,
-     "mods": [
-      "dorustajici"
-     ]
-    },
     {
      "id": "slizovy_obr",
      "n": 1,
      "every": 1,
-     "at": 5,
+     "at": 0,
      "mods": [
       "kamenny"
+     ]
+    },
+    {
+     "id": "stitonos_sliz",
+     "n": 10,
+     "every": 1.2,
+     "at": 1,
+     "mods": [
+      "kamenny"
+     ]
+    },
+    {
+     "id": "magneticky_sliz",
+     "n": 8,
+     "every": 1.5,
+     "at": 3,
+     "mods": [
+      "runovy_stit"
      ]
     }
    ]
@@ -5045,37 +5570,67 @@ window.TD = {
   {
    "n": 27,
    "gold": 230,
-   "why": null,
+   "why": "Bleskový útok Zuřivých a Krtčích slizáků podpořený Zlatými slizy.",
    "groups": [
     {
      "id": "zlaty_sliz",
-     "n": 35,
-     "every": 0.15,
+     "n": 25,
+     "every": 0.55,
      "at": 0,
-     "mods": []
+     "mods": [
+      "zrychleny"
+     ]
+    },
+    {
+     "id": "zuivy_sliz",
+     "n": 20,
+     "every": 0.5,
+     "at": 2,
+     "mods": [
+      "kamenny",
+      "dorustajici"
+     ]
+    },
+    {
+     "id": "krtci_sliz",
+     "n": 16,
+     "every": 0.65,
+     "at": 4,
+     "mods": [
+      "duchsliz"
+     ]
     }
    ]
   },
   {
    "n": 28,
    "gold": 235,
-   "why": null,
+   "why": "Tři Slizoví obři léčení skupinou kamenných Šamanů a krytí Mrazivými plazivci.",
    "groups": [
     {
      "id": "slizovy_obr",
-     "n": 4,
-     "every": 2.5,
+     "n": 3,
+     "every": 4.5,
      "at": 0,
      "mods": []
     },
     {
-     "id": "zlaty_sliz",
-     "n": 15,
-     "every": 0.3,
-     "at": 3,
+     "id": "samansky_sliz",
+     "n": 12,
+     "every": 1.1,
+     "at": 1,
      "mods": [
       "kamenny",
       "dorustajici"
+     ]
+    },
+    {
+     "id": "mrazivy_plazivec",
+     "n": 12,
+     "every": 1.1,
+     "at": 3,
+     "mods": [
+      "runovy_stit"
      ]
     }
    ]
@@ -5083,22 +5638,33 @@ window.TD = {
   {
    "n": 29,
    "gold": 240,
-   "why": null,
+   "why": "Kamenné Zlaté slizy s Runovou bublinou a masivní letecký nálet průhledných Bublinek.",
    "groups": [
     {
      "id": "zlaty_sliz",
-     "n": 25,
-     "every": 0.2,
+     "n": 22,
+     "every": 0.6,
      "at": 0,
      "mods": [
+      "kamenny",
+      "runovy_stit"
+     ]
+    },
+    {
+     "id": "bublinkovy_sliz",
+     "n": 30,
+     "every": 0.35,
+     "at": 2,
+     "mods": [
+      "duchsliz",
       "kamenny"
      ]
     },
     {
      "id": "slizovy_obr",
      "n": 2,
-     "every": 3,
-     "at": 4,
+     "every": 5,
+     "at": 5,
      "mods": [
       "kamenny"
      ]
@@ -5108,7 +5674,7 @@ window.TD = {
   {
    "n": 30,
    "gold": 245,
-   "why": "Druhý hlavní Boss (Rudý arcisliz) se 3 Runovými pečetěmi a nutnost mít první věž úrovně 5 (vyžaduje 5 KM).",
+   "why": "Velký Boss: Rudý arcisliz (700 HP) doprovázený Královnou roje a Magnetickými slizáky! Nutné prolomit Runové pečeti svitky a soustředit palbu.",
    "groups": [
     {
      "id": "rudy_arcisliz",
@@ -5118,10 +5684,26 @@ window.TD = {
      "mods": []
     },
     {
+     "id": "kralovna_roje",
+     "n": 1,
+     "every": 1,
+     "at": 6,
+     "mods": []
+    },
+    {
+     "id": "magneticky_sliz",
+     "n": 10,
+     "every": 1.4,
+     "at": 2,
+     "mods": [
+      "kamenny"
+     ]
+    },
+    {
      "id": "zlaty_sliz",
-     "n": 12,
-     "every": 0.4,
-     "at": 5,
+     "n": 15,
+     "every": 0.8,
+     "at": 4,
      "mods": [
       "duchsliz"
      ]
@@ -5131,22 +5713,35 @@ window.TD = {
   {
    "n": 31,
    "gold": 250,
-   "why": null,
+   "why": "Čtyři Slizoví obři v doprovodu bleskových průhledných Runových slizů a Krtků.",
    "groups": [
     {
      "id": "slizovy_obr",
-     "n": 6,
-     "every": 1.8,
+     "n": 4,
+     "every": 3.5,
      "at": 0,
-     "mods": []
+     "mods": [
+      "zrychleny"
+     ]
     },
     {
      "id": "runovy_sliz",
-     "n": 40,
-     "every": 0.1,
-     "at": 2,
+     "n": 35,
+     "every": 0.35,
+     "at": 1,
      "mods": [
-      "duchsliz"
+      "duchsliz",
+      "zrychleny"
+     ]
+    },
+    {
+     "id": "krtci_sliz",
+     "n": 20,
+     "every": 0.55,
+     "at": 3,
+     "mods": [
+      "kamenny",
+      "runovy_stit"
      ]
     }
    ]
@@ -5154,24 +5749,32 @@ window.TD = {
   {
    "n": 32,
    "gold": 255,
-   "why": null,
+   "why": "Nový Boss: Krystalový behemot (1200 HP, obrněný, imunní vůči magii, krystalový štít omračující věže)! Nutná těžká fyzická/výbušná či pravá (normal) obrana.",
    "groups": [
     {
-     "id": "zlaty_sliz",
-     "n": 50,
-     "every": 0.08,
+     "id": "krystalovy_behemot",
+     "n": 1,
+     "every": 1,
      "at": 0,
+     "mods": []
+    },
+    {
+     "id": "stitonos_sliz",
+     "n": 12,
+     "every": 1.1,
+     "at": 2,
      "mods": [
-      "dorustajici"
+      "kamenny"
      ]
     },
     {
-     "id": "slizovy_obr",
-     "n": 3,
-     "every": 2,
+     "id": "samansky_sliz",
+     "n": 10,
+     "every": 1.4,
      "at": 4,
      "mods": [
-      "kamenny"
+      "duchsliz",
+      "dorustajici"
      ]
     }
    ]
@@ -5179,37 +5782,71 @@ window.TD = {
   {
    "n": 33,
    "gold": 260,
-   "why": null,
+   "why": "Dvojitá Královna roje a obří vlna dorůstajících Dělivých a Zlatých slizů.",
    "groups": [
     {
-     "id": "rudy_arcisliz",
-     "n": 1,
-     "every": 1,
+     "id": "kralovna_roje",
+     "n": 2,
+     "every": 7,
      "at": 0,
-     "mods": []
+     "mods": [
+      "zrychleny"
+     ]
     },
     {
-     "id": "slizovy_obr",
-     "n": 4,
-     "every": 1.5,
+     "id": "delivy_sliz",
+     "n": 35,
+     "every": 0.35,
+     "at": 1,
+     "mods": [
+      "kamenny",
+      "dorustajici"
+     ]
+    },
+    {
+     "id": "zlaty_sliz",
+     "n": 30,
+     "every": 0.45,
      "at": 3,
-     "mods": []
+     "mods": [
+      "dorustajici"
+     ]
     }
    ]
   },
   {
    "n": 34,
    "gold": 265,
-   "why": null,
+   "why": "Průhledná armáda: Kamenné průhledné Zlaté slizy, Mraziví plazivci a Zuřiví slizáci s Runovou bublinou.",
    "groups": [
     {
      "id": "zlaty_sliz",
-     "n": 40,
-     "every": 0.1,
+     "n": 35,
+     "every": 0.4,
      "at": 0,
      "mods": [
       "kamenny",
       "duchsliz"
+     ]
+    },
+    {
+     "id": "mrazivy_plazivec",
+     "n": 16,
+     "every": 0.8,
+     "at": 2,
+     "mods": [
+      "kamenny",
+      "runovy_stit"
+     ]
+    },
+    {
+     "id": "zuivy_sliz",
+     "n": 25,
+     "every": 0.45,
+     "at": 4,
+     "mods": [
+      "kamenny",
+      "zrychleny"
      ]
     }
    ]
@@ -5217,22 +5854,33 @@ window.TD = {
   {
    "n": 35,
    "gold": 270,
-   "why": "První útok extrémně rychlých Stínoslizů Přízraků (kombinace Boss + Duchsliz + Přilbosliz + Černý sliz) s Runovou pečetí.",
+   "why": "Tři Stínoslizové Přízraky (průhlední, obrnění, imunní vůči výbuchům) doprovázení Krtčími a Magnetickými slizáky!",
    "groups": [
     {
      "id": "stinosliz_prizrak",
      "n": 3,
-     "every": 2.5,
+     "every": 4.5,
      "at": 0,
      "mods": []
     },
     {
-     "id": "zlaty_sliz",
-     "n": 20,
-     "every": 0.2,
+     "id": "magneticky_sliz",
+     "n": 12,
+     "every": 1,
      "at": 1,
      "mods": [
+      "duchsliz",
       "kamenny"
+     ]
+    },
+    {
+     "id": "krtci_sliz",
+     "n": 24,
+     "every": 0.5,
+     "at": 3,
+     "mods": [
+      "zrychleny",
+      "runovy_stit"
      ]
     }
    ]
@@ -5240,22 +5888,30 @@ window.TD = {
   {
    "n": 36,
    "gold": 275,
-   "why": null,
+   "why": "Dva Rudí arcislizové a Krystalový behemot v jedné vlně krytí Štítonoši.",
    "groups": [
     {
      "id": "rudy_arcisliz",
      "n": 2,
-     "every": 4,
+     "every": 6.5,
      "at": 0,
      "mods": []
     },
     {
-     "id": "slizovy_obr",
-     "n": 5,
-     "every": 1.2,
-     "at": 2,
+     "id": "krystalovy_behemot",
+     "n": 1,
+     "every": 1,
+     "at": 4,
+     "mods": []
+    },
+    {
+     "id": "stitonos_sliz",
+     "n": 16,
+     "every": 0.85,
+     "at": 1,
      "mods": [
-      "kamenny"
+      "kamenny",
+      "runovy_stit"
      ]
     }
    ]
@@ -5263,22 +5919,35 @@ window.TD = {
   {
    "n": 37,
    "gold": 280,
-   "why": null,
+   "why": "Čtyři Stínoslizové Přízraky, dvě Královny roje a hejno kamenných létajících Bublinek.",
    "groups": [
     {
      "id": "stinosliz_prizrak",
-     "n": 5,
-     "every": 1.5,
+     "n": 4,
+     "every": 3.8,
      "at": 0,
-     "mods": []
+     "mods": [
+      "zrychleny"
+     ]
     },
     {
-     "id": "rudy_arcisliz",
-     "n": 1,
-     "every": 1,
-     "at": 4,
+     "id": "kralovna_roje",
+     "n": 2,
+     "every": 6,
+     "at": 2,
      "mods": [
       "kamenny"
+     ]
+    },
+    {
+     "id": "bublinkovy_sliz",
+     "n": 40,
+     "every": 0.3,
+     "at": 1,
+     "mods": [
+      "kamenny",
+      "duchsliz",
+      "runovy_stit"
      ]
     }
    ]
@@ -5286,56 +5955,95 @@ window.TD = {
   {
    "n": 38,
    "gold": 285,
-   "why": null,
+   "why": "Dva Krystaloví behemoti, dva Rudí arcislizové a 50 kamenných dorůstajících Zlatých slizů se Šamany.",
    "groups": [
     {
-     "id": "rudy_arcisliz",
-     "n": 3,
-     "every": 3,
+     "id": "krystalovy_behemot",
+     "n": 2,
+     "every": 7,
      "at": 0,
      "mods": []
     },
     {
+     "id": "rudy_arcisliz",
+     "n": 2,
+     "every": 6,
+     "at": 3,
+     "mods": [
+      "kamenny"
+     ]
+    },
+    {
      "id": "zlaty_sliz",
-     "n": 60,
-     "every": 0.06,
+     "n": 50,
+     "every": 0.3,
      "at": 1,
      "mods": [
       "kamenny",
       "dorustajici"
+     ]
+    },
+    {
+     "id": "samansky_sliz",
+     "n": 16,
+     "every": 0.8,
+     "at": 2,
+     "mods": [
+      "kamenny",
+      "runovy_stit"
      ]
     }
    ]
   },
   {
    "n": 39,
-   "gold": 290,
-   "why": null,
+   "gold": 295,
+   "why": "Předposlední zkouška: 5 kamenných Stínoslizů Přízraků, 2 Krystaloví behemoti a elita Magnetických i Mrazivých slizáků.",
    "groups": [
     {
      "id": "stinosliz_prizrak",
-     "n": 6,
-     "every": 1,
+     "n": 5,
+     "every": 3.2,
      "at": 0,
      "mods": [
       "kamenny"
      ]
     },
     {
-     "id": "rudy_arcisliz",
+     "id": "krystalovy_behemot",
      "n": 2,
-     "every": 3,
-     "at": 3,
+     "every": 6.5,
+     "at": 2,
      "mods": [
       "kamenny"
+     ]
+    },
+    {
+     "id": "magneticky_sliz",
+     "n": 18,
+     "every": 0.75,
+     "at": 1,
+     "mods": [
+      "kamenny",
+      "runovy_stit"
+     ]
+    },
+    {
+     "id": "mrazivy_plazivec",
+     "n": 18,
+     "every": 0.75,
+     "at": 3,
+     "mods": [
+      "kamenny",
+      "zrychleny"
      ]
     }
    ]
   },
   {
    "n": 40,
-   "gold": 295,
-   "why": "Finální Boss (Prastarý král slizů) se 4 Runovými pečetěmi a 4 000 životy. Vyžaduje nejméně dvě věže úrovně 5 a aktivní prolomení pečetí přes kartičky.",
+   "gold": 500,
+   "why": "Finální bitva o království! Prastarý král slizů (4000 HP) doprovázený Krystalovým behemotem, Královnou roje, Stínoslizy a královskou gardou Štítonošů a Šamanů!",
    "groups": [
     {
      "id": "prastary_kral_slizu",
@@ -5345,11 +6053,49 @@ window.TD = {
      "mods": []
     },
     {
+     "id": "krystalovy_behemot",
+     "n": 1,
+     "every": 1,
+     "at": 5,
+     "mods": []
+    },
+    {
+     "id": "kralovna_roje",
+     "n": 1,
+     "every": 1,
+     "at": 8,
+     "mods": [
+      "zrychleny"
+     ]
+    },
+    {
      "id": "stinosliz_prizrak",
      "n": 2,
-     "every": 3,
-     "at": 8,
-     "mods": []
+     "every": 4,
+     "at": 10,
+     "mods": [
+      "runovy_stit"
+     ]
+    },
+    {
+     "id": "stitonos_sliz",
+     "n": 12,
+     "every": 1.2,
+     "at": 2,
+     "mods": [
+      "kamenny",
+      "runovy_stit"
+     ]
+    },
+    {
+     "id": "samansky_sliz",
+     "n": 12,
+     "every": 1.5,
+     "at": 3,
+     "mods": [
+      "kamenny",
+      "duchsliz"
+     ]
     }
    ]
   }

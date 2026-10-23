@@ -17,7 +17,152 @@ function setupNotes() {
       loadCommentCounts();      // first snapshot only (guarded inside)
       applyCommentBadges();     // re-decorate re-rendered cards
       updateMinimap();
+      if (EDIT_SESSION) renderEditBanner();
     });
+}
+
+// ── Kdo poznámku upravuje + ochrana proti přepsání ─────────────
+// Při úpravě se do poznámky zapíše editing.{uid} = { name, at } a každých 25 s
+// se obnovuje; starší než 90 s se nepočítá (zavřený prohlížeč). Při uložení se
+// porovná uložený obsah s tím, co bylo při otevření — když ho mezitím změnil
+// někdo jiný, nepřepíše se naslepo, ale nabídne se volba.
+const EDIT_STALE_MS = 90e3;
+let EDIT_SESSION = null;   // { id, pageId, base: { content, title }, timer }
+const myEditName = () => ME.displayName || ME.email?.split('@')[0] || 'Někdo';
+const noteRef = id => db.collection('rooms').doc(ROOM_ID).collection('notes').doc(id);
+function editingOthers(note) {
+  return Object.entries(note?.editing || {})
+    .filter(([uid, v]) => uid !== ME.uid && v && Date.now() - (v.at?.toMillis?.() || 0) < EDIT_STALE_MS)
+    .map(([, v]) => v.name || 'Někdo');
+}
+function editSnapshotOf(note, pageId) {
+  if (pageId) { const p = pageById(note, pageId); return { content: p?.content || '', title: p?.title || '' }; }
+  return { content: note?.content || '', title: note?.title || '' };
+}
+function startEditSession(id, pageId) {
+  stopEditSession();
+  EDIT_SESSION = { id, pageId: pageId || null, base: editSnapshotOf(NOTES_MAP.get(id), pageId) };
+  const beat = () => noteRef(id).update({ [`editing.${ME.uid}`]: { name: myEditName(), at: firebase.firestore.FieldValue.serverTimestamp() } }).catch(() => {});
+  beat();
+  EDIT_SESSION.timer = setInterval(beat, 25e3);
+  renderEditBanner();
+}
+function stopEditSession() {
+  if (!EDIT_SESSION) return;
+  clearInterval(EDIT_SESSION.timer);
+  noteRef(EDIT_SESSION.id).update({ [`editing.${ME.uid}`]: firebase.firestore.FieldValue.delete() }).catch(() => {});
+  EDIT_SESSION = null;
+  renderEditBanner();
+}
+function renderEditBanner() {
+  const el = document.getElementById('editWhoBanner'); if (!el) return;
+  const names = EDIT_SESSION ? editingOthers(NOTES_MAP.get(EDIT_SESSION.id)) : [];
+  el.hidden = !names.length;
+  if (names.length) el.textContent = `✏️ ${names.join(', ')} ${names.length > 1 ? 'teď tuhle poznámku taky upravují' : 'teď tuhle poznámku taky upravuje'}. Když uloží dřív, při uložení dostaneš na výběr, co s tím.`;
+}
+// Na lístečku na nástěnce: kdo ho právě upravuje
+function paintEditing(el, note) {
+  const names = editingOthers(note);
+  let b = el.querySelector('.note-editing');
+  if (!names.length) { b?.remove(); return; }
+  if (!b) { b = document.createElement('span'); b.className = 'note-editing'; el.querySelector('.note-header')?.appendChild(b); }
+  b.textContent = '✏️ ' + names.join(', ');
+  b.title = names.join(', ') + ' teď poznámku upravuje';
+}
+// Sloučení dvou verzí přes AI: tři verze (původní, uložená, moje) → jedna.
+function mergePrompt(base, theirs, mine, who) {
+  return `Dva lidé upravovali současně stejnou poznámku (HTML). Slouč jejich verze do jedné.
+
+Pravidla:
+- Zachovej VŠECHNY změny z obou verzí oproti původní: co kdo přidal, opravil nebo smazal.
+- Když se změny týkají stejného místa a odporují si, dej obě znění za sebe a druhé uveď „(${who}:)“.
+- Nic nového nevymýšlej a nic neshrnuj, jen slučuj. Neopakuj stejný text dvakrát.
+- Zachovej HTML formátování (nadpisy, seznamy, tabulky, tučné písmo, barvy, obrázky, bloky kódu).
+- Odpověz jen výsledným HTML v jednom bloku \`\`\`html … \`\`\`, bez dalšího textu.
+
+=== PŮVODNÍ VERZE (když oba začali upravovat) ===
+${base || '(prázdná)'}
+
+=== VERZE, KTEROU MEZITÍM ULOŽIL(A) ${who.toUpperCase()} ===
+${theirs || '(prázdná)'}
+
+=== MOJE VERZE ===
+${mine || '(prázdná)'}`;
+}
+// HTML z AI: jen obsah, žádné skripty, události ani javascript: odkazy
+function sanitizeAiHtml(raw) {
+  const m = String(raw || '').match(/\x60{3}(?:html)?\s*([\s\S]*?)\x60{3}/i);
+  const doc = new DOMParser().parseFromString(m ? m[1] : raw, 'text/html');
+  doc.body.querySelectorAll('script,style,iframe,object,embed,link,meta,form,input,button,textarea,select').forEach(x => x.remove());
+  doc.body.querySelectorAll('*').forEach(x => [...x.attributes].forEach(a => {
+    if (/^on/i.test(a.name) || (/^(href|src|xlink:href|action)$/i.test(a.name) && /^\s*(javascript|data:text)/i.test(a.value))) x.removeAttribute(a.name);
+  }));
+  return doc.body.innerHTML.trim();
+}
+// Okno „někdo mezitím uložil“ → 'overwrite' | 'copy' | 'back' | 'merged' (sloučená verze je v editoru)
+function askEditConflict(fresh, pageId, mine, base) {
+  return new Promise(resolve => {
+    let ov = document.getElementById('editConflictModal');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.className = 'modal-overlay'; ov.id = 'editConflictModal'; ov.setAttribute('data-persist', '');
+      ov.innerHTML = `<div class="modal" style="max-width:560px;">
+        <div class="modal-header"><h3 id="ecTitle"></h3></div>
+        <p class="ec-text" id="ecText"></p>
+        <details class="ec-prev"><summary>Zobrazit uloženou verzi</summary><div class="note-detail-content" id="ecPreview"></div></details>
+        <div class="ec-btns">
+          <button type="button" class="btn btn-primary" data-ec-open="ai">🤖 Sloučit obě verze přes AI</button>
+          <button type="button" class="btn btn-secondary" data-ec="copy">Uložit moji verzi jako novou poznámku</button>
+          <button type="button" class="btn btn-secondary" data-ec="overwrite">Přepsat uloženou verzi mou</button>
+          <button type="button" class="btn btn-ghost" data-ec="back">Zpět k úpravám</button>
+        </div>
+        <div class="ec-ai" id="ecAi" hidden>
+          <div class="ec-ai-row"><button type="button" class="btn btn-primary btn-sm" data-ec-ai="gemini">✨ Sloučit přes Gemini</button><span class="ec-ai-status" id="ecAiStatus"></span></div>
+          <div class="ec-ai-h">nebo přes jinou AI (ChatGPT, Claude…)</div>
+          <div class="ec-ai-row"><button type="button" class="btn btn-secondary btn-sm" data-ec-ai="copy">📋 Zkopírovat zadání</button><span class="ec-ai-status" id="ecAiCopyMsg"></span></div>
+          <textarea class="input" id="ecAiPaste" rows="4" placeholder="Sem vlož odpověď z AI…"></textarea>
+          <div class="ec-ai-row"><button type="button" class="btn btn-secondary btn-sm" data-ec-ai="paste">Použít vloženou odpověď</button></div>
+          <p class="ec-ai-note">Sloučená verze se vloží do editoru — zkontroluj ji a teprve pak ulož.</p>
+        </div></div>`;
+      document.body.appendChild(ov);
+    }
+    const who = fresh.updatedBy?.name || 'Někdo jiný';
+    document.getElementById('ecTitle').textContent = `⚠️ ${who} mezitím poznámku uložil(a)`;
+    document.getElementById('ecText').textContent = `Od chvíle, kdy jsi začal(a) upravovat, se uložená verze změnila (${fmtTs(fresh.updatedAt)}). Kdybys ji teď přepsal(a), zmizelo by, co změnil(a) ${who === 'Někdo jiný' ? 'někdo jiný' : who}.`;
+    const snap = editSnapshotOf(fresh, pageId);
+    setNoteContent(document.getElementById('ecPreview'), { contentType: 'html', content: snap.content });
+    ov.querySelector('.ec-prev').open = false;
+    const aiBox = document.getElementById('ecAi'), aiStatus = document.getElementById('ecAiStatus'), copyMsg = document.getElementById('ecAiCopyMsg');
+    aiBox.hidden = true; aiStatus.textContent = ''; copyMsg.textContent = ''; document.getElementById('ecAiPaste').value = '';
+    const prompt = mergePrompt(base.content, snap.content, mine, who);
+    const useMerged = raw => {
+      const html = sanitizeAiHtml(raw);
+      if (!html) { aiStatus.textContent = 'Odpověď AI je prázdná.'; return; }
+      document.getElementById('noteEditorEdit').innerHTML = html;
+      closeModal('editConflictModal');
+      resolve('merged');
+    };
+    ov.onclick = async e => {
+      if (e.target.closest('[data-ec-open]')) { aiBox.hidden = !aiBox.hidden; return; }
+      const ai = e.target.closest('[data-ec-ai]')?.dataset.ecAi;
+      if (ai === 'gemini') {
+        const b = e.target.closest('button'); b.disabled = true; aiStatus.textContent = 'Slučuji…';
+        try { useMerged(await aiGenerate(prompt, { temperature: 0.2, maxOutputTokens: 8000, statusElementId: 'ecAiStatus' })); }
+        catch (er) { aiStatus.innerHTML = aiErrorMessage(er); }
+        finally { b.disabled = false; }
+        return;
+      }
+      if (ai === 'copy') {
+        try { await copyToClipboard(prompt); copyMsg.textContent = 'Zkopírováno — vlož to do chatu s AI a odpověď sem.'; }
+        catch (_) { const ta = document.getElementById('ecAiPaste'); ta.value = prompt; ta.select(); copyMsg.textContent = 'Schránku prohlížeč nepustil — zadání je v poli níž, zkopíruj ho Ctrl+C a pak ho nahraď odpovědí.'; }
+        return;
+      }
+      if (ai === 'paste') { useMerged(document.getElementById('ecAiPaste').value); return; }
+      const b = e.target.closest('[data-ec]'); if (!b) return;
+      closeModal('editConflictModal'); resolve(b.dataset.ec);
+    };
+    openModal('editConflictModal');
+  });
 }
 function canEdit(note) {
   if (MY_ROLE === 'owner')  return true;
@@ -223,6 +368,7 @@ function renderNote(id, note) {
 
   setNoteCardContent(el.querySelector('.note-content'), note);
   wireNoteButtons(el, id, note);
+  paintEditing(el, note);
 
   if (canMove(note)) makeDraggable(el, id);
   else el.style.cursor = 'pointer';
@@ -391,6 +537,7 @@ function patchNote(id, note) {
   el.style.background = note.color || '#fef9c3';
   setNoteCardContent(el.querySelector('.note-content'), note);
   el.querySelector('.note-time').textContent = fmtTs(note.updatedAt || note.createdAt);
+  paintEditing(el, note);
 
   const btns = el.querySelector('.note-btns');
   if (btns) {
@@ -1390,10 +1537,11 @@ function stripUndefined(v) {
   return v;
 }
 
-async function savePages(noteId, pages) {
+async function savePages(noteId, pages, extra) {
   pages = stripUndefined(pages);
   await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(noteId).update({
     pages,
+    ...extra,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   });
   // Update the local copy straight away. Without this every caller renders
@@ -1652,6 +1800,7 @@ function editCurrentChapter() {
   document.getElementById('noteEditorEdit').innerHTML = page.content || '';
   document.getElementById('editModalTitle').textContent = 'Upravit kapitolu';
   openModal('editModal');
+  startEditSession(note.id, page.id);
 }
 
 
@@ -3408,6 +3557,10 @@ function setupAdd() {
 
 // ── Edit note ─────────────────────────────────────────────────
 function setupEdit() {
+  const editModal = document.getElementById('editModal');
+  new MutationObserver(() => { if (!editModal.classList.contains('open')) stopEditSession(); })
+    .observe(editModal, { attributes: true, attributeFilter: ['class'] });
+  window.addEventListener('pagehide', stopEditSession);
   const editColorCustom      = document.getElementById('editColorCustom');
   const editColorCustomInput = document.getElementById('editColorCustomInput');
   editColorCustom.dataset.color = editColorCustomInput.value;
@@ -3440,12 +3593,39 @@ function setupEdit() {
     btn.disabled = true;
 
     try {
+      if (EDIT_SESSION && EDIT_SESSION.id === EDIT_ID) {
+        const fresh = (await noteRef(EDIT_ID).get()).data() || {};
+        const now = editSnapshotOf({ id: EDIT_ID, ...fresh }, EDIT_PAGE_ID), base = EDIT_SESSION.base;
+        if (now.content !== base.content || now.title !== base.title) {
+          const choice = await askEditConflict({ id: EDIT_ID, ...fresh }, EDIT_PAGE_ID, content, base);
+          if (choice === 'back') { btn.disabled = false; return; }
+          if (choice === 'merged') {   // sloučená verze je v editoru; další uložení už počítá s tou uloženou
+            EDIT_SESSION.base = now;
+            toast('Sloučená verze je v editoru — zkontroluj ji a ulož.');
+            btn.disabled = false;
+            return;
+          }
+          if (choice === 'copy') {
+            const orig = NOTES_MAP.get(EDIT_ID) || {};
+            await db.collection('rooms').doc(ROOM_ID).collection('notes').add({
+              content, contentType: 'html', title: (title || orig.title || '').slice(0, 64) + ' (moje verze)', color,
+              x: (orig.x || 0) + 40, y: (orig.y || 0) + 40,
+              authorId: ME.uid, authorName: ME.displayName || ME.email,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            closeModal('editModal');
+            toast('Tvoje verze je uložená jako nová poznámka vedle původní.');
+            btn.disabled = false;
+            return;
+          }
+        }
+      }
       if (EDIT_PAGE_ID) {
         // Editing one chapter of a guide — the note's own content is left alone.
         const note = NOTES_MAP.get(EDIT_ID);
         const pages = pagesOf(note).map(p =>
           p.id === EDIT_PAGE_ID ? { ...p, title: title || p.title, content } : p);
-        await savePages(EDIT_ID, pages);
+        await savePages(EDIT_ID, pages, { updatedBy: { uid: ME.uid, name: myEditName() } });
         if (GUIDE && GUIDE.noteId === EDIT_ID) { NOTES_MAP.get(EDIT_ID).pages = pages; renderGuide(); }
       } else {
         await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(EDIT_ID).update({
@@ -3453,6 +3633,7 @@ function setupEdit() {
           contentType: 'html',
           title: title || null,
           color,
+          updatedBy: { uid: ME.uid, name: myEditName() },
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
       }
@@ -3497,6 +3678,7 @@ function openEdit(id, note) {
   }
 
   openModal('editModal');
+  startEditSession(id, null);
   setTimeout(() => editor.focus(), 80);
 }
 

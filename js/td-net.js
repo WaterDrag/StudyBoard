@@ -354,7 +354,17 @@ function attackPanel() {
 }
 function attackSig() {
   return [G.vs.eco, NET.tgt, NET.manual, NET.petrify, G.wave, NET.mates.map(vsAlive).join(), NET.opps.map(u => vsAlive(u) + ':' + (NET.st[u]?.fs || 0)).join(),
-    ...VS.sends.map(sd => (NET.queue[sd.id] || 0) + ':' + Math.ceil(Math.max(0, (NET.cd[sd.id] || 0) - G.time) * 2)), Math.floor((G.vs.ecoAt - G.time) * 2)].join('|');
+    ...VS.sends.map(sd => (NET.queue[sd.id] || 0) + ':' + +((NET.cd[sd.id] || 0) > G.time) + ':' + +(G.gold >= vsSendCost(sd))), +(G.gold >= 100), +(G.gold >= 500)].join('|');
+}
+// Ukazatel příjmu a odpočty útoků se posouvají přímo (překreslování panelu by „žralo“ kliknutí)
+function vsLiveBars() {
+  const side = $('tdSide');
+  const bar = side.querySelector('.td-ecobar i');
+  if (bar) bar.style.width = (1 - Math.max(0, G.vs.ecoAt - G.time) / VS.eco_payout_interval_s) * 100 + '%';
+  side.querySelectorAll('.td-send[data-id]').forEach(b => {
+    const sd = VS.sends.find(x => x.id === b.dataset.id), cd = b.querySelector('.td-cd');
+    if (sd && cd) cd.style.setProperty('--p', Math.max(0, Math.min(1, ((NET.cd[sd.id] || 0) - G.time) / sd.cooldown_s)));
+  });
 }
 function vsAct(a, d) {
   const [pet, cur] = VS.sabotages;

@@ -6014,3 +6014,48 @@ img.card-img { cursor: zoom-in; }
 .rt-cm-empty { grid-column: 1 / -1; color: var(--text-faint, var(--text-muted)); font-size: 0.72rem; }
 .rt-cmenu-hl .rt-cm-grid:not(.rt-cm-hl) { grid-template-columns: repeat(5, 26px); gap: 4px; }
 .rt-cmenu-hl .rt-cm-grid:not(.rt-cm-hl) .rt-sw { height: 26px; }
+
+/* Kdo poznámku upravuje + okno „někdo mezitím uložil“ */
+.edit-who { margin: -4px 0 12px; padding: 8px 12px; border-radius: 10px; font-size: 0.84rem; line-height: 1.45; background: color-mix(in srgb, #f59e0b 14%, var(--bg-2)); border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--border)); color: var(--text); }
+.edit-who[hidden] { display: none; }
+.note-editing { margin-left: auto; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 600; background: rgba(245,158,11,.9); color: #1c1917; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; animation: noteEditPulse 1.6s ease-in-out infinite; }
+@keyframes noteEditPulse { 50% { opacity: .65; } }
+.ec-text { font-size: 0.9rem; line-height: 1.5; color: var(--text-muted); margin: 0 0 12px; }
+.ec-prev { margin-bottom: 14px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+.ec-prev summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+.ec-prev .note-detail-content { max-height: 40vh; overflow: auto; margin-top: 8px; }
+.ec-btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.ec-ai { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; padding: 12px; border-radius: 12px; background: var(--bg-3); }
+.ec-ai[hidden] { display: none; }
+.ec-ai-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ec-ai-status { font-size: 0.8rem; color: var(--text-muted); }
+.ec-ai-h { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
+.ec-ai-note { font-size: 0.76rem; color: var(--text-faint, var(--text-muted)); margin: 0; }
+
+/* Obrana království: prohlížeč vylepšení */
+.td-tree-box { width: min(980px, 100%); max-height: 92vh; overflow-y: auto; border-radius: 18px; padding: 14px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: 0 24px 70px -20px #000; display: flex; flex-direction: column; gap: 12px; color: var(--text); }
+.td-tree-head { display: flex; gap: 12px; align-items: flex-start; }
+.td-tree-head > div { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.td-tree-head b { font-size: 1.05rem; }
+.td-tree-head small { color: var(--text-muted); font-size: 0.8rem; line-height: 1.4; }
+.td-tree-stats { color: var(--text) !important; }
+.td-tree-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.td-tree-col { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; background: var(--bg-3); border-top: 3px solid var(--pc); }
+.td-tree-ph { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--pc); }
+.td-tree-u { display: flex; gap: 8px; align-items: flex-start; padding: 6px; border-radius: 10px; background: var(--bg-2); border: 1px solid transparent; }
+.td-tree-u.own { border-color: var(--pc); background: color-mix(in srgb, var(--pc) 10%, var(--bg-2)); }
+.td-tree-u canvas { width: 64px; height: 64px; flex-shrink: 0; border-radius: 10px; background: color-mix(in srgb, #5ec447 55%, var(--bg-3)); }
+.td-tree-u > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.td-tree-u b { font-size: 0.82rem; }
+.td-tree-u em { font-style: normal; font-size: 0.76rem; font-weight: 700; color: #facc15; }
+.td-tree-u small { font-size: 0.72rem; color: var(--text-muted); line-height: 1.35; }
+.td-modal#tdTree[hidden] { display: none; }
+@media (max-width: 760px) { .td-tree-grid { grid-template-columns: 1fr; } }
+
+/* Obrana království: tip při prvním setkání (jako v BTD) */
+.td-tipcard { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 14px; background: linear-gradient(180deg, #3b82f6, #2563eb); border: 2px solid #bfdbfe; color: #fff; font-size: 0.86rem; line-height: 1.45; box-shadow: 0 10px 30px -10px rgba(0,0,0,.6); z-index: 5; animation: tdTipIn .25s ease-out; }
+.td-tipcard[hidden] { display: none; }
+.td-tipcard span { flex: 1; }
+.td-tip-ok { flex-shrink: 0; border: 0; border-radius: 10px; padding: 7px 12px; background: #fff; color: #1d4ed8; font: inherit; font-weight: 700; cursor: pointer; }
+@keyframes tdTipIn { from { opacity: 0; transform: translate(-50%, 10px); } }
+@media (max-width: 600px) { .td-tipcard { font-size: 0.74rem; padding: 7px 8px 7px 10px; bottom: 52px; } .td-tip-ok { padding: 5px 9px; } }

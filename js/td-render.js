@@ -197,12 +197,17 @@ const TR = (() => {
   function darken(hex, k) { const n = parseInt(hex.slice(1), 16); return `rgb(${(n >> 16) * (1 - k) | 0},${(n >> 8 & 255) * (1 - k) | 0},${(n & 255) * (1 - k) | 0})`; }
 
   function drawEnemy(g, e, t) {
-    if (useTDS() && TDS.slime) {
+    if (e.burrowUntil > t) { burrowMark(g, e, t); return; }   // pod zemí je vidět jen hromádka hlíny
+    if (e.flying) { g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(e.x + 6, e.y + e.def.r + 8, e.def.r * 0.85, e.def.r * 0.3, 0, 0, TAU); g.fill(); }
+    // noví slizáci (part5): vlastní textura přes TDS.slimeDrawers, jinak náhradní grafika s jejich barvou
+    if (useTDS() && TDS.slime && (!e.def.isNew || window.TDS?.slimeDrawers?.[e.t])) {
       const s = { camo: e.camo, revealed: e.revealed || G.revealUntil > t, regrow: e.regrow, fort: e.fort, armored: e.armored,
         frozen: e.frozenUntil > t, stunned: e.stunUntil > t, burn: !!(e.burn && e.burn.until > t), acid: !!(e.acid && e.acid.until > t),
         gold: e.goldMul > 1, hit: t - e.lastHit < 0.06 && e.lastHit > 0 };
       if (e.def.boss) { s.hpPct = Math.max(0, e.hp / e.maxHp); s.sealsTotal = e.seal ? e.seal.n : 0; s.sealsLeft = e.seal ? Math.ceil(e.seal.s * e.seal.n - 1e-6) : 0; }
-      TDS.slime(g, e.t, e.x, e.y, e.def.r, e.ang || 0, performance.now(), s);
+      if (e.def.isNew) { newSlime(g, e, t, s); stateMarks(g, e, t); } else TDS.slime(g, e.t, e.x, e.y, e.def.r, e.ang || 0, performance.now(), s);
+      if (e.regrow) regrowMark(g, e, t);
+      traitMarks(g, e, t);
       if (!e.def.boss && e.def.hp > 1) {   // životy Zlatého slizu
         const w = e.def.r * 1.8, y = e.y - e.def.r * 1.5;
         g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(e.x - w / 2 - 1, y - 1, w + 2, 6);
@@ -233,6 +238,8 @@ const TR = (() => {
     if (e.acid && e.acid.until > t) { g.fillStyle = 'rgba(163,230,53,.75)'; g.beginPath(); g.arc(e.x + Math.sin(t * 7 + e.id) * r * 0.5, e.y - r * 0.3 - ((t * 20 + e.id) % 10), 2, 0, TAU); g.fill(); }
     if (e.goldMul > 1) { g.strokeStyle = 'rgba(250,204,21,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(e.x, e.y, r + 2, 0, TAU); g.stroke(); }
     if (e.immuneFlash && t - e.immuneFlash < 0.25) { g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(e.x, e.y, r + 5, -0.6, 0.6); g.stroke(); }
+    if (e.regrow) regrowMark(g, e, t);
+    traitMarks(g, e, t);
     // bossové: životy a pečeť
     if (e.def.boss || e.def.hp > 1) {
       const w = e.def.boss ? r * 2 : r * 1.8, y = e.y - r * (e.def.boss ? 1.75 : 1.4);
@@ -251,6 +258,54 @@ const TR = (() => {
       }
       g.restore();
     }
+  }
+  // Textura nového slizáka od Gemini (TDS.slimeDrawers[id](ctx, r, ts, s)): natočená po směru pohybu
+  function newSlime(g, e, t, s) {
+    g.save(); g.translate(e.x, e.y);
+    if (e.camo && !s.revealed) g.globalAlpha = 0.42;
+    g.rotate(e.ang || 0);
+    try { TDS.slimeDrawers[e.t](g, e.def.r, performance.now(), { ...s, shield: e.shieldUntil > t, enraged: e.rageUntil > t, bubble: e.bubble > 0, prism: e.prismUntil > t, flying: !!e.flying }); } catch (_) { /* nic */ }
+    g.restore();
+  }
+  // Stavy pro textury nových slizáků (ty kreslí jen tělo)
+  function stateMarks(g, e, t) {
+    const r = e.def.r;
+    if (e.frozenUntil > t) { g.fillStyle = 'rgba(186,230,253,.55)'; g.beginPath(); g.arc(e.x, e.y, r * 1.08, 0, TAU); g.fill(); g.strokeStyle = '#e0f2fe'; g.lineWidth = 1.5; g.stroke(); }
+    if (e.stunUntil > t) for (let i = 0; i < 3; i++) { const a = t * 5 + i * 2.1; g.fillStyle = '#fde047'; star(g, e.x + Math.cos(a) * r * 0.9, e.y - r * 1.1 + Math.sin(a) * 3, 3.5); }
+    if (e.burn && e.burn.until > t) { g.fillStyle = `rgba(249,115,22,${0.6 + Math.sin(t * 20) * 0.2})`; g.beginPath(); g.ellipse(e.x + Math.sin(t * 9) * 2, e.y - r * 0.6, 3.5, 6, 0, 0, TAU); g.fill(); }
+    if (e.acid && e.acid.until > t) { g.fillStyle = 'rgba(163,230,53,.75)'; g.beginPath(); g.arc(e.x + Math.sin(t * 7 + e.id) * r * 0.5, e.y - r * 0.3 - ((t * 20 + e.id) % 10), 2, 0, TAU); g.fill(); }
+    if (e.goldMul > 1) { g.strokeStyle = 'rgba(250,204,21,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(e.x, e.y, r + 2, 0, TAU); g.stroke(); }
+    if (e.camo && !e.revealed && !(G.revealUntil > t)) { g.strokeStyle = 'rgba(255,255,255,.55)'; g.setLineDash([3, 4]); g.lineWidth = 1.2; g.beginPath(); g.arc(e.x, e.y, r + 3, 0, TAU); g.stroke(); g.setLineDash([]); }
+  }
+  // Značky schopností nových slizáků (aby šly poznat i bez textur)
+  function traitMarks(g, e, t) {
+    const r = e.def.r, tp = e.def.tp;
+    if (e.shieldUntil > t) { g.strokeStyle = 'rgba(96,165,250,.75)'; g.lineWidth = 1.6; g.beginPath(); g.arc(e.x, e.y, r + 2.5, -2.4, -0.7); g.stroke(); }
+    if (tp?.ally_damage_reduction_pct) { g.fillStyle = 'rgba(96,165,250,.08)'; g.strokeStyle = 'rgba(96,165,250,.35)'; g.lineWidth = 1; g.beginPath(); g.arc(e.x, e.y, tp.aura_radius_px || 75, 0, TAU); g.fill(); g.stroke(); }
+    if (e.rageUntil > t) { g.strokeStyle = `rgba(239,68,68,${0.5 + Math.sin(t * 14) * 0.3})`; g.lineWidth = 2.5; g.beginPath(); g.arc(e.x, e.y, r + 3, 0, TAU); g.stroke(); }
+    if (e.bubble > 0) { g.strokeStyle = 'rgba(165,243,252,.9)'; g.fillStyle = 'rgba(165,243,252,.15)'; g.lineWidth = 1.5; g.beginPath(); g.arc(e.x, e.y, r + 5, 0, TAU); g.fill(); g.stroke(); }
+    if (e.haste) { g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.4; const a = (e.ang || 0) + Math.PI; for (let i = -1; i <= 1; i++) { const ox = e.x + Math.cos(a) * (r + 3) + Math.cos(a + 1.57) * i * r * 0.45, oy = e.y + Math.sin(a) * (r + 3) + Math.sin(a + 1.57) * i * r * 0.45; g.beginPath(); g.moveTo(ox, oy); g.lineTo(ox + Math.cos(a) * 7, oy + Math.sin(a) * 7); g.stroke(); } }
+    if (e.prismUntil > t) { g.strokeStyle = 'rgba(196,181,253,.95)'; g.fillStyle = 'rgba(167,139,250,.22)'; g.lineWidth = 2.5; g.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + t; i ? g.lineTo(e.x + Math.cos(a) * (r + 8), e.y + Math.sin(a) * (r + 8)) : g.moveTo(e.x + Math.cos(a) * (r + 8), e.y + Math.sin(a) * (r + 8)); } g.closePath(); g.fill(); g.stroke(); }
+    if (tp?.magnet_radius_px) { g.strokeStyle = 'rgba(59,130,246,.45)'; g.lineWidth = 1.2; for (let i = 0; i < 2; i++) { g.beginPath(); g.arc(e.x, e.y, r + 6 + i * 6, t * 3 + i, t * 3 + i + 2.2); g.stroke(); } }
+    if (e.flying && (!useTDS() || !window.TDS?.slimeDrawers?.[e.t])) { g.fillStyle = 'rgba(255,255,255,.85)'; for (const sd of [-1, 1]) { g.beginPath(); g.ellipse(e.x + sd * r * 0.95, e.y - r * 0.2, r * 0.45, r * 0.22, sd * (0.5 + Math.sin(t * 18) * 0.3), 0, TAU); g.fill(); } }
+  }
+  function burrowMark(g, e, t) {
+    const r = e.def.r;
+    g.fillStyle = '#78350f'; g.beginPath(); g.ellipse(e.x, e.y + 2, r * 0.95, r * 0.55, 0, 0, TAU); g.fill();
+    g.fillStyle = '#a16207'; for (let i = 0; i < 4; i++) { const a = i * 1.6 + t * 6; g.beginPath(); g.arc(e.x + Math.cos(a) * r * 0.7, e.y + Math.sin(a) * r * 0.35, 2, 0, TAU); g.fill(); }
+  }
+  // Dorůstající slizák: pulzující zelený kruh a odznak se šipkou dokola (lísteček na hlavě byl moc nenápadný)
+  function regrowMark(g, e, t) {
+    const r = e.def.r, a = 0.45 + Math.sin(t * 5 + e.wob) * 0.25;
+    g.strokeStyle = `rgba(74,222,128,${a})`; g.lineWidth = 2;
+    g.beginPath(); g.arc(e.x, e.y, r + 3.5, 0, TAU); g.stroke();
+    const br = Math.max(4.5, Math.min(8, r * 0.45)), bx = e.x + r * 0.8, by = e.y - r * 0.8;
+    g.fillStyle = '#16a34a'; g.beginPath(); g.arc(bx, by, br, 0, TAU); g.fill();
+    g.strokeStyle = '#052e16'; g.lineWidth = 1; g.stroke();
+    g.strokeStyle = '#fff'; g.lineWidth = Math.max(1.2, br * 0.28);
+    g.beginPath(); g.arc(bx, by, br * 0.52, -0.2, 4.6); g.stroke();
+    const ex = bx + Math.cos(-0.2) * br * 0.52, ey = by + Math.sin(-0.2) * br * 0.52;
+    g.fillStyle = '#fff'; g.beginPath(); g.moveTo(ex + br * 0.32, ey - br * 0.05); g.lineTo(ex - br * 0.28, ey - br * 0.1); g.lineTo(ex + br * 0.02, ey + br * 0.42); g.closePath(); g.fill();
   }
   function star(g, x, y, s) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - Math.PI / 2, q = i % 2 ? s * 0.45 : s; i ? g.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q) : g.moveTo(x + Math.cos(a) * q, y + Math.sin(a) * q); } g.closePath(); g.fill(); }
 
@@ -351,6 +406,8 @@ const TR = (() => {
     }
     g.restore();
     }
+    if (t.stunUntil > G.time) { g.fillStyle = 'rgba(186,230,253,.45)'; g.strokeStyle = '#e0f2fe'; g.lineWidth = 2; g.beginPath(); g.arc(t.x, t.y, r + 4, 0, TAU); g.fill(); g.stroke(); }
+    else if (t.chillUntil > G.time) { g.strokeStyle = 'rgba(125,211,252,.7)'; g.lineWidth = 2; g.setLineDash([3, 4]); g.beginPath(); g.arc(t.x, t.y, r + 4, 0, TAU); g.stroke(); g.setLineDash([]); }
     // vyznačení úrovní cest (tečky pod věží)
     let py = t.y + r + 5;
     t.up.forEach((n, i) => {
@@ -548,7 +605,7 @@ const TR = (() => {
       const k = Math.min(1, (time - f.t0) / f.dur), a = 1 - k;
       if (f.kind === 'blizzard') { g.fillStyle = `rgba(224,242,254,${a * 0.35})`; g.fillRect(0, 0, TW, TH); }
       if (f.kind === 'carpet') { g.fillStyle = `rgba(249,115,22,${a * 0.18})`; g.fillRect(0, 0, TW, TH); }
-      if (f.kind === 'bossin') { g.fillStyle = `rgba(124,58,237,${a * 0.18})`; g.fillRect(0, 0, TW, TH); }
+      if (f.kind === 'bossin') { g.strokeStyle = `rgba(167,139,250,${a * 0.85})`; g.lineWidth = 4; g.beginPath(); g.arc(f.x, f.y, 30 + k * 110, 0, TAU); g.stroke(); }   // příchod krále: jen kruh na místě, ne celá obrazovka
     }
     if (G.revealUntil > time) { g.fillStyle = 'rgba(255,255,255,.04)'; g.fillRect(0, 0, TW, TH); }
     if (G.slowmo) { g.fillStyle = 'rgba(30,27,75,.18)'; g.fillRect(0, 0, TW, TH); }

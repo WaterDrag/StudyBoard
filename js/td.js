@@ -88,6 +88,7 @@ async function startGame() {
 }
 // Společné pro sólo i versus: přepnout na hru a rozjet smyčku
 function beginPlay() {
+  tipSeen = new Set(); tipQueue = []; hideTip(true);
   ['tdSetup', 'tdEnd', 'tdLobby'].forEach(id => { $(id).hidden = true; });
   $('tdGame').hidden = false;
   $('tdGame').classList.toggle('td-vs', !!NET);
@@ -192,7 +193,9 @@ function tryPlace(p) {
 let keyShift = false;
 function cancelPlacing() { view.placing = null; view.ghost = null; view.touchGhost = false; renderSide(true); }
 function clickWorld(p) {
-  const hit = [G.hero, ...G.towers].filter(Boolean).find(t => Math.hypot(t.x - p.x, t.y - p.y) <= t.r + 4);
+  // nejbližší věž v okruhu, který odpovídá kresbě (ta je větší než poloměr věže) — na telefonu se jinak netrefí
+  let hit = null, hd = Infinity;
+  for (const t of [G.hero, ...G.towers].filter(Boolean)) { const d = Math.hypot(t.x - p.x, t.y - p.y); if (d <= Math.max(t.r * 1.45, t.r + 10) && d < hd) { hd = d; hit = t; } }
   if (hit) { view.sel = hit; view.tab = 'def'; window.sfx?.('click'); renderSide(true); return; }
   const boss = G.enemies.find(e => e.def.boss && Math.hypot(e.x - p.x, e.y - p.y) <= e.def.r + 6);
   if (boss) { view.sel = { boss }; renderSide(true); return; }
@@ -203,6 +206,7 @@ function clickWorld(p) {
 
 /* ── Klávesy ───────────────────────────────────────────────────── */
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('tdTree') && !$('tdTree').hidden) { $('tdTree').hidden = true; return; }
   keyShift = e.shiftKey;
   if (!running || e.target.closest?.('input,textarea')) return;
   if (cardOpen) { const n = +e.key; if (n >= 1 && n <= 4) { const b = $('tdCardOpts').children[n - 1]; b?.click(); } if (e.key === 'Escape') closeCard(); return; }
@@ -264,6 +268,8 @@ function frameBody(now) {
   TR.render(g2, view);
   updateHud();
   if (Math.floor(now / 250) !== Math.floor((now - real * 1000) / 250)) renderSide();
+  if (NET && view.tab === 'atk') vsLiveBars();
+  if (frameNo % 30 === 0) scanTips();
 }
 
 /* ── HUD a lišta schopností ────────────────────────────────────── */
@@ -288,7 +294,6 @@ function updateHud() {
   const bosses = G.enemies.filter(e => e.seal && e.seal.s > 0);
   const ban = $('tdBanner');
   if (NET && G.time < 0.01) { /* odpočet ukazuje smyčka */ }
-  else if (bosses.length) { ban.hidden = false; ban.innerHTML = `🔮 <b>Runová pečeť</b> chrání ${bosses.length > 1 ? 'krále' : esc(bosses[0].def.name)} — správný svitek ji oslabí, nebo klikni na krále a rozbij ji za 💎.`; }
   else ban.hidden = true;
   // schopnosti
   const abil = [];
@@ -314,11 +319,11 @@ function renderSide(force) {
   const sel = view.sel;
   if (sel && !sel.boss && !sel.obst && !sel.hero && !G.towers.includes(sel)) view.sel = null;
   if (sel?.boss && sel.boss.dead) view.sel = null;
-  const sig = JSON.stringify([view.sel ? (view.sel.id || view.sel.boss?.id || 'o') : 0, view.placing, Math.floor(G.gold / 5), G.km, G.waveActive, G.wave,
+  const sig = JSON.stringify([view.sel ? (view.sel.id || view.sel.boss?.id || 'o') : 0, view.placing, affordSig(), G.km, G.waveActive, G.wave,
     view.sel?.up, view.sel?.level, view.sel?.target, view.sel?.mode, view.sel?.follow, view.sel?.gryf?.mode, Math.floor((view.sel?.bank || 0) / 50), view.sel?.boss ? Math.ceil(view.sel.boss.seal?.s * 10) : 0, Math.floor(G.time / 2) * (view.sel?.hero ? 1 : 0)]);
   const atk = NET && view.tab === 'atk' && !view.sel && !view.placing;
-  const fullSig = atk ? 'atk|' + Math.floor(G.gold / 5) + '|' + G.km + '|' + attackSig() : sig;
-  if (!force && fullSig === panelSig) return;
+  const fullSig = atk ? 'atk|' + G.km + '|' + attackSig() : sig;
+  if (!force && (fullSig === panelSig || sidePressed)) return;   // během stisku tlačítka panel nepřekreslovat (kliknutí by se ztratilo)
   panelSig = fullSig;
   const side = $('tdSide');
   // zachovat rozbalené úrovně hrdiny a posun panelu, když jde jen o obnovení stejného výběru
@@ -329,7 +334,40 @@ function renderSide(force) {
   side.innerHTML = tabs + (atk ? attackPanel() : view.sel ? (view.sel.boss ? bossPanel(view.sel.boss) : view.sel.obst ? obstPanel(view.sel.obst) : view.sel.hero ? heroPanel(view.sel) : towerPanel(view.sel)) : shopPanel());
   if (levelsOpen) side.querySelector('.td-levels')?.setAttribute('open', '');
   side.scrollTop = scroll;
-  side.querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, b.dataset));
+  wireSide(side);
+}
+// Které nákupy si teď hráč může dovolit — panel se překreslí, jen když se to změní
+function affordSig() {
+  const g = G.gold, sel = view.sel;
+  if (sel && !sel.hero && !sel.boss && !sel.obst && TDEF[sel.type]) return [0, 1, 2].map(p => { const c = upgradeCost(sel, p); return c ? +(g >= c.gold) : 2; }).join('') + (g >= 250 ? 'm' : '') + Math.round(sellValue(sel));
+  if (sel?.hero) return g >= 250 ? 'm' : '';
+  if (sel?.obst) return +(g >= sel.obst.remove_cost_gold);
+  return TD.towers.map(t => +(g >= Math.round(t.base.cost * G.costMul))).join('') + (G.hero ? '' : +(g >= heroCost(G.heroId)));
+}
+// Tlačítka v panelu reagují už na stisk (pointerdown): panel se může překreslit
+// mezi stiskem a puštěním a obyčejné kliknutí by pak zmizelo. Klávesnice jde přes click.
+let sidePressed = false, sideDownAt = 0;
+function wireSide(side) {
+  if (side._wired) return;
+  side._wired = true;
+  side.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const b = e.target.closest('[data-act]');
+    sidePressed = true;
+    // dotyk: jen klepnutí (click) — při posouvání panelu prstem se nesmí nic koupit; panel se během držení stejně nepřekreslí
+    if (!b || b.disabled || e.pointerType === 'touch') return;
+    e.preventDefault();
+    sideDownAt = performance.now();
+    act(b.dataset.act, { ...b.dataset });
+  });
+  side.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]');
+    if (!b || b.disabled || (e.detail > 0 && performance.now() - sideDownAt < 800)) return;   // myš/dotyk už vyřídil pointerdown
+    act(b.dataset.act, { ...b.dataset });
+  });
+  const up = () => { if (!sidePressed) return; sidePressed = false; renderSide(); };
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
 }
 function shopPanel() {
   let h = '';
@@ -349,6 +387,7 @@ function shopPanel() {
   });
   if (NET) h = `<div class="td-vs-eco">💰 Příjem <b>${fmt(G.vs.eco)} zl</b> / ${VS.eco_payout_interval_s} s — zvedneš ho posíláním slizáků v záložce ⚔️ Útok.</div>` + h;
   if (view.placing) h += `<p class="td-tip">Klikni vedle cesty a věž se postaví. Se Shiftem můžeš stavět víc za sebou. Esc nebo pravé tlačítko zruší.</p>`;
+  if (view.placing && TDEF[view.placing]) h += `<button type="button" class="btn btn-ghost btn-sm td-wide" data-act="tree" data-type="${view.placing}">📖 Všechna vylepšení: ${esc(TDEF[view.placing].short)}</button>`;
   // krystaly
   h += `<div class="td-sec">Krystaly moudrosti 💎</div><div class="td-km-acts">
     <button type="button" class="btn btn-secondary btn-sm" data-act="flare" ${G.km < 1 ? 'disabled' : ''} title="Na 15 s odhalí všechny průhledné Duchslizy">🔦 Světlice (1 💎)</button>
@@ -372,7 +411,7 @@ function heroIco(h) {
   return `<img src="${_towerIco['h' + h.id]}" alt="">`;
 }
 function miniSlime(id, mods) {
-  const key = id + (mods || []).join() + (window.TDS?.slimeIcon && localStorage.getItem('td_gfx') !== '0' ? 'N' : '');
+  const key = id + (mods || []).join() + (window.TDS?.slimeIcon && !EDEF[id]?.isNew && localStorage.getItem('td_gfx') !== '0' ? 'N' : '');
   if (!_miniCache.has(key) && key.endsWith('N')) { const url = TDS.slimeIcon(id, 30).toDataURL(); _miniCache.set(key, url); return url; }
   if (_miniCache.has(key)) return _miniCache.get(key);
   const def = EDEF[id], fake = { t: id, def, fort: (mods || []).includes('kamenny'), armored: def.traits.includes('armored') };
@@ -385,10 +424,11 @@ function nextWavePanel() {
   const w = waveDef(n);
   const groups = {};
   w.def.groups.forEach(gr => { const k = gr.id + '|' + (gr.mods || []).join(','); groups[k] = (groups[k] || 0) + Math.round(gr.n * w.cnt); });
-  const BADGE = { duchsliz: ['👻', 'průhledný — vidí ho jen některé věže'], dorustajici: ['🌱', 'dorůstá'], kamenny: ['🪨', 'kamenný — 2× životy'] };
+  const BADGE = { duchsliz: ['👻', 'průhledný — vidí ho jen některé věže'], dorustajici: ['🌱', 'dorůstá'], kamenny: ['🪨', 'kamenný — 2× životy'], zrychleny: ['💨', 'větrný spěch — rychlejší, zpomalení a omráčení kratší'], runovy_stit: ['🔵', 'runová bublina — pohltí první zásah'] };
+  const TRAIT = { flying: '🫧', enrage_on_hit: '😡', swarm_split: '✳️', shield_aura: '🛡️', healer_pulse: '💚', burrower: '⛏️', projectile_magnet: '🧲', chilling_presence: '🧊', brood_spawner: '🐝', prismatic_shell: '💎' };
   const chips = Object.entries(groups).map(([k, cnt]) => {
     const [id, m] = k.split('|'), mods = m ? m.split(',') : [], def = EDEF[id];
-    const traits = [...mods.map(x => BADGE[x]?.[0]).filter(Boolean), def.armored || def.traits.includes('armored') ? '🪖' : '', def.traits.includes('explosion_immune') ? '💥🚫' : '', def.traits.includes('freeze_immune') ? '❄️🚫' : '', def.traits.includes('magic_immune') ? '🔮🚫' : ''].join('');
+    const traits = [...mods.map(x => BADGE[x]?.[0]).filter(Boolean), def.armored || def.traits.includes('armored') ? '🪖' : '', def.traits.includes('explosion_immune') ? '💥🚫' : '', def.traits.includes('freeze_immune') ? '❄️🚫' : '', def.traits.includes('magic_immune') ? '🔮🚫' : '', ...def.traits.map(x => TRAIT[x] || '')].join('');
     return `<span class="td-chip" title="${esc(def.name)}${mods.length ? ' · ' + mods.map(x => BADGE[x]?.[1]).join(', ') : ''}"><img src="${miniSlime(id, mods)}" alt=""><b>${cnt}×</b><small>${esc(def.name)} ${traits}</small></span>`;
   }).join('');
   return `<div class="td-sec">${G.waveActive ? 'Právě jde' : 'Další vlna'}: ${n}</div><div class="td-chips">${chips}</div>${w.def.why && n <= TD.waves.length ? `<p class="td-warn">⚠️ ${esc(w.def.why)}</p>` : ''}`;
@@ -438,6 +478,7 @@ function towerPanel(t) {
     h += `<div class="td-path td-p${p}"><div class="td-path-h"><span>Cesta ${p + 1}</span><span class="td-pips">${pips}</span></div><small class="td-cur">${esc(cur)}</small>${btn}</div>`;
   }
   h += '</div>';
+  h += `<button type="button" class="btn btn-ghost btn-sm td-wide" data-act="tree" data-type="${t.type}">📖 Všechna vylepšení</button>`;
   h += `<button type="button" class="btn btn-secondary btn-sm td-wide td-sell" data-act="sell">Prodat za ${fmt(sellValue(t))} zl${t.kmSpent ? ` + ${t.kmSpent} 💎` : ''}</button>`;
   return h;
 }
@@ -472,6 +513,7 @@ function act(a, d) {
   if (NET && vsAct(a, d)) { renderSide(true); return; }
   switch (a) {
     case 'buy': view.tab = 'def'; if (view.placing === d.type) cancelPlacing(); else { view.placing = d.type; view.sel = null; view.touchGhost = false; updateGhost(); renderSide(true); } return;
+    case 'tree': openTree(d.type); return;
     case 'close': view.sel = null; break;
     case 'target': sel.target = d.t; break;
     case 'mode': sel.mode = sel.mode === 'lighthouse' ? null : 'lighthouse'; break;
@@ -558,3 +600,104 @@ function answerCard(i) {
 function closeCard() { cardOpen = null; $('tdCard').hidden = true; if (G) G.slowmo = false; }
 $('tdCardClose').onclick = () => closeCard();
 $('tdCard').addEventListener('click', e => { if (e.target.id === 'tdCard' && cardOpen?.done) closeCard(); });
+
+/* ── Prohlížeč vylepšení: všechny úrovně všech tří cest s náhledem vzhledu ── */
+function openTree(type) {
+  const def = TDEF[type]; if (!def) return;
+  let ov = $('tdTree');
+  if (!ov) {
+    ov = document.createElement('div'); ov.className = 'td-modal'; ov.id = 'tdTree';
+    ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('[data-tree-close]')) ov.hidden = true; });
+    document.body.appendChild(ov);
+  }
+  const mul = G ? G.costMul : (DIFF[pref.diff]?.cost || 1), sel = view.sel && view.sel.type === type ? view.sel : null;
+  const b = def.base;
+  const stats = [b.damage ? `Poškození ${b.damage}` : '', b.range_px ? `Dosah ${b.range_px >= 1900 ? 'celá mapa' : b.range_px + ' px'}` : '', b.attack_interval_s ? `Útok každých ${b.attack_interval_s} s` : '',
+    b.pierce > 1 ? `Průraz ${b.pierce}` : '', b.damage_type && b.damage_type !== 'none' ? `Typ: ${DMG_LABEL[b.damage_type] || b.damage_type}` : '', b.can_see_camo ? 'Vidí 👻' : ''].filter(Boolean);
+  ov.innerHTML = `<div class="td-tree-box" role="dialog" aria-label="Vylepšení: ${esc(def.name)}">
+    <div class="td-tree-head"><span class="td-shop-ico" style="--hc:${def.col}">${towerIco(def)}</span>
+      <div><b>${esc(def.name)}</b><small>${esc(def.desc)}</small><small class="td-tree-stats">${Math.round(b.cost * mul)} zl · ${stats.join(' · ')}</small></div>
+      <button type="button" class="td-x" data-tree-close aria-label="Zavřít">✕</button></div>
+    <div class="td-tree-grid">${[0, 1, 2].map(p => `<div class="td-tree-col td-p${p}"><div class="td-tree-ph">Cesta ${p + 1}</div>${def.paths[p].map((u, i) => {
+      const own = sel && sel.up[p] > i, cost = Math.round(u.cost * mul);
+      return `<div class="td-tree-u${own ? ' own' : ''}"><canvas width="128" height="128" data-p="${p}" data-t="${i + 1}"></canvas>
+        <div><b>${i + 1}. ${esc(u.name)}${own ? ' ✓' : ''}</b><em>${fmt(cost)} zl${u.km ? ` + ${u.km} 💎` : ''}</em><small>${esc(u.desc)}</small></div></div>`;
+    }).join('')}</div>`).join('')}</div>
+    <p class="td-tip">Jedna cesta jde až na úroveň 5, druhá nejvýš na 2, třetí zůstane zavřená. Úroveň 5 každé cesty smí na mapě stát jen jednou. Úrovně 4 a 5 potřebují krystaly moudrosti 💎 ze svitků.</p>
+  </div>`;
+  ov.hidden = false;
+  // náhled vzhledu věže na každé úrovni (nová grafika, jinak barevný kruh se znakem)
+  ov.querySelectorAll('canvas[data-p]').forEach(c => {
+    const g = c.getContext('2d'), p = +c.dataset.p, tier = +c.dataset.t, up = [0, 0, 0];
+    up[p] = tier;
+    const r = Math.min(26, b.radius_px || 20) * 1.7;
+    if (window.TDS?.drawers?.[type] && localStorage.getItem('td_gfx') !== '0') {
+      try { TDS.tower(g, type, 64, 64, r, -Math.PI / 4, 0, up, {}); } catch (_) { /* náhled není nutný */ }
+    } else {
+      g.fillStyle = def.col; g.beginPath(); g.arc(64, 64, r, 0, 6.283); g.fill();
+      g.font = r * 1.2 + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(def.ico, 64, 66);
+    }
+    g.fillStyle = ['#f97316', '#38bdf8', '#a3e635'][p];
+    for (let k = 0; k < tier; k++) { g.beginPath(); g.arc(64 - (tier - 1) * 8 + k * 16, 120, 5, 0, 6.283); g.fill(); }
+  });
+}
+
+/* ── Tipy při prvním setkání (jako v BTD): každý nejvýš 2× celkem, pak už nikdy ── */
+const TIPS = {
+  seal: '🔮 Král má <b>runovou pečeť</b>: dostává o 75 % menší poškození. Každý správný svitek ubere jednu pečeť, nebo klikni na krále a rozbij ji za 💎.',
+  duchsliz: '👻 <b>Průhlední slizáci</b>: vidí je jen některé věže (Kladeč pastí, Stínový zvěd, Moždíř, jiné až s vylepšením). Pomůže i 🔦 Světlice za 1 💎.',
+  armored: '🪖 <b>Železná helma</b>: ostré střely a magie ji neproniknou. Použij výbuchy, alchymistu, oheň nebo pravé poškození.',
+  dorustajici: '🌱 <b>Dorůstající slizák</b> (zelený odznak ↻): když ho 3 s nic nezasáhne, doroste zpátky o vrstvu.',
+  kamenny: '🪨 <b>Kamenný krunýř</b>: slizák má dvojnásobek životů.',
+  zrychleny: '💨 <b>Větrný spěch</b>: o 35 % rychlejší a zpomalení i omráčení na něj platí kratší dobu.',
+  runovy_stit: '🔵 <b>Runová bublina</b>: pohltí celý první zásah.',
+  flying: '🫧 <b>Létající slizák</b>: přeletí pasti, pěnu i louže na cestě — potřebuješ věže, které střílí.',
+  enrage_on_hit: '😡 <b>Zuřivý sliz</b>: každý zásah ho zrychlí. Zab ho pár silnými ranami.',
+  swarm_split: '✳️ <b>Dělivý sliz</b>: rozpadne se na roj, který se rozprskne po cestě. Hodí se plošné poškození.',
+  shield_aura: '🛡️ <b>Štítonoš</b>: slizáci v jeho modrém kruhu dostávají poloviční poškození. Zab ho první (cílení Nejsilnější).',
+  healer_pulse: '💚 <b>Šamanský sliz</b>: léčí slizáky kolem sebe a smývá z nich hoření i kyselinu.',
+  burrower: '⛏️ <b>Krtčí sliz</b>: po zásahu se zahrabe a nejde zaměřit — zasáhnou ho jen pasti a výbuchy.',
+  projectile_magnet: '🧲 <b>Magnetický sliz</b>: stahuje na sebe ostré střely a bere jim průraz.',
+  chilling_presence: '🧊 <b>Mrazivý plazivec</b>: zpomaluje věže kolem sebe a po smrti je na chvíli zmrazí. Ohnivým věžím mráz nevadí.',
+  brood_spawner: '🐝 <b>Královna roje</b>: pořád rodí Dělivé slizy a zrychluje slizáky kolem sebe.',
+  prismatic_shell: '💎 <b>Krystalový behemot</b>: každých 8 s se obalí krystalem (−80 % poškození) a omráčí dvě nejbližší věže.',
+};
+let tipSeen = new Set(), tipQueue = [], tipTimer = null;
+function tipCounts() { try { return JSON.parse(localStorage.getItem('td_tips') || '{}') || {}; } catch (_) { return null; } }
+function showTip(k) {
+  if (tipSeen.has(k) || !TIPS[k]) return;
+  tipSeen.add(k);
+  const c = tipCounts(); if (!c || (c[k] || 0) >= 2) return;
+  tipQueue.push(k); nextTip();
+}
+function nextTip() {
+  if (tipTimer || !tipQueue.length) return;
+  const k = tipQueue.shift(), c = tipCounts() || {};
+  c[k] = (c[k] || 0) + 1;
+  try { localStorage.setItem('td_tips', JSON.stringify(c)); } catch (_) { /* nic */ }
+  const el = $('tdTip');
+  el.innerHTML = `<span>${TIPS[k]}</span><button type="button" class="td-tip-ok">Rozumím</button>`;
+  el.querySelector('button').onclick = () => hideTip();
+  el.hidden = false;
+  tipTimer = setTimeout(() => hideTip(), 9000);
+}
+function hideTip(reset) {
+  clearTimeout(tipTimer); tipTimer = null;
+  const el = $('tdTip'); if (el) el.hidden = true;
+  if (!reset) setTimeout(nextTip, 500);
+}
+// Co nového je teď na mapě (volá se párkrát za sekundu)
+function scanTips() {
+  if (!G || !running) return;
+  for (const e of G.enemies) {
+    if (e.dead || e.d < 0) continue;
+    if (e.seal && e.seal.s > 0) showTip('seal');
+    if (e.camo) showTip('duchsliz');
+    if (e.armored && !isBoss(e)) showTip('armored');
+    if (e.regrow) showTip('dorustajici');
+    if (e.fort) showTip('kamenny');
+    if (e.haste) showTip('zrychleny');
+    if (e.bubble > 0) showTip('runovy_stit');
+    for (const t of e.def.traits) if (TIPS[t]) showTip(t);
+  }
+}

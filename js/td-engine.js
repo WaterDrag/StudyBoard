@@ -71,6 +71,10 @@ function spawnEnemy(t, pathIdx, d, mods = [], opt = {}) {
     goldMul: 1, coated: false, spdMul: opt.spdMul || 1, hpMulKids: opt.hpMul || 1, dead: false, wob: Math.random() * 6.28,
   };
   if (opt.bounty) e.bounty = opt.bounty;
+  if (mods.includes('zrychleny')) { e.haste = true; e.spdMul *= 1.35; } else if (opt.haste) e.haste = true;   // rychlost potomci dědí v spdMul
+  if (mods.includes('runovy_stit')) e.bubble = 1;
+  if (def.traits.includes('flying')) e.flying = true;
+  if (opt.boostUntil) { e.boostUntil = opt.boostUntil; e.boostPct = opt.boostPct; }
   if (def.seal && !opt.noSeal) e.seal = { s: 1, n: def.seal.n };
   if (def.boss && G.sabotage?.bossCut && G.sabotage.until > G.time) { e.hp *= 1 - G.sabotage.bossCut; e.maxHp *= 1 - G.sabotage.bossCut; }
   const q = posAt(G.paths[pathIdx], d); e.x = q.x; e.y = q.y;
@@ -82,18 +86,23 @@ const isBoss = e => e.def.boss;
 const slowImmune = e => e.def.traits.includes('unstoppable_slow_immune');
 function frozen(e) { return e.frozenUntil > G.time; }
 function stunned(e) { return e.stunUntil > G.time; }
+const ccMul = e => (e.haste ? 0.6 : 1);
 function slow(e, pct, until) {
   if (slowImmune(e)) return;
+  if (e.haste) until = G.time + (until - G.time) * 0.6;
   if (pct >= e.slowPct || e.slowUntil < G.time) { e.slowPct = pct; e.slowUntil = Math.max(until, e.slowUntil < G.time ? 0 : e.slowUntil); }
 }
 function freeze(e, dur, src) {
   if (e.def.traits.includes('freeze_immune') || slowImmune(e)) return false;
-  e.frozenUntil = Math.max(e.frozenUntil, G.time + dur);
+  e.frozenUntil = Math.max(e.frozenUntil, G.time + dur * ccMul(e));
   if (src?.fx?.allow_sharp_on_frozen) e.brittle = true;
   return true;
 }
-function stun(e, dur) { if (slowImmune(e)) return; e.stunUntil = Math.max(e.stunUntil, G.time + dur); }
+function stun(e, dur) { if (slowImmune(e)) return; e.stunUntil = Math.max(e.stunUntil, G.time + dur * ccMul(e)); }
+// Odhození zpět po cestě (Zuřivý sliz je v zuřivosti nepohnutelný)
+const canKnock = e => !isBoss(e) && !(e.rageUntil > G.time && e.def.tp?.immune_to_knockback_while_enraged);
 function visibleTo(e, t) {
+  if (e.burrowUntil > G.time) return false;   // zahrabaný Krtčí sliz se nedá zaměřit
   if (!e.camo || e.revealed || G.revealUntil > G.time) return true;
   return !!(t && (t.st?.camo || t.aura?.camo));
 }
@@ -113,10 +122,13 @@ function canDamage(e, type, o) {
 // Zásah. dmg = základ, o = { boss, camoB, heavy, fortB, lead, ignoreRune, src, cash }
 function hitEnemy(e, dmg, type, o = {}) {
   if (e.dead || dmg <= 0) return false;
+  if (e.invulnUntil > G.time) return true;                              // Runová bublina právě praskla
+  if (e.burrowUntil > G.time && !o.aoe && !o.trap) return false;          // pod zemí zasáhnou jen pasti a výbuchy
   const src = o.src;
   if (src?.aura?.trueD) type = 'true';   // Královská zbrojnice: vše v dosahu zraní cokoliv
   else if (src?.buff && src.buff.until > G.time && src.buff.lead) o = { ...o, lead: true };
   if (!canDamage(e, type, o)) { e.immuneFlash = G.time; return false; }
+  if (e.bubble > 0) { e.bubble--; e.invulnUntil = G.time + 0.25; addFx({ kind: 'sealbreak', x: e.x, y: e.y, r: e.def.r, dur: 0.4 }); return true; }
   let d = dmg;
   if (isBoss(e)) d += o.boss || 0;
   if (e.camo && o.camoB) d += o.camoB;
@@ -124,13 +136,25 @@ function hitEnemy(e, dmg, type, o = {}) {
   if (e.fort && o.fortB) d += o.fortB;
   if (e.vulnUntil > G.time && (!isBoss(e) || e.vulnBoss)) d += e.vuln;
   if (e.vulnMulUntil > G.time) d *= e.vulnMul;
+  const tp = e.def.tp;
+  if (e.shieldUntil > G.time) d *= 1 - (e.shieldPct || 0.5);                                   // Štítonoš poblíž
+  if (e.prismUntil > G.time) d *= 1 - (tp?.shell_damage_reduction_pct || 0.8);                 // krystalový krunýř behemota
+  if (type === 'sharp' && tp?.sharp_damage_reduction_pct) d *= 1 - tp.sharp_damage_reduction_pct;   // Magnetický sliz
   if (e.seal && e.seal.s > 0) d *= 1 - e.def.seal.red;
   e.hp -= d; e.lastHit = G.time;
+  if (tp && e.hp > 0) {
+    if (tp.speed_boost_per_hit_pct) { e.rage = Math.min(pctOf(tp.max_speed_boost_pct || 125), (e.rageUntil > G.time ? e.rage : 0) + pctOf(tp.speed_boost_per_hit_pct)); e.rageUntil = G.time + (tp.enrage_duration_s || 3); }
+    if (tp.burrow_duration_s && !(e.burrowUntil > G.time) && G.time >= (e.burrowReady || 0)) {
+      e.burrowUntil = G.time + tp.burrow_duration_s; e.burrowReady = G.time + (tp.burrow_cooldown_s || 6.5);
+      addFx({ kind: 'splat', x: e.x, y: e.y, r: e.def.r, col: '#78350f', dur: 0.4 });
+    }
+  }
   if (o.src) o.src.dmgDone = (o.src.dmgDone || 0) + Math.min(d, d + e.hp);
   if (e.hp <= 0) killEnemy(e, -e.hp, type, o);
   return true;
 }
 
+const pctOf = v => (v > 1 ? v / 100 : v || 0);
 function cashScale() {
   const w = Math.max(1, G.wave);
   const r = ECON.singleplayer.pop_reward_scaling_by_wave.find(s => w >= s.from_wave && w <= s.to_wave);
@@ -147,18 +171,27 @@ function killEnemy(e, overflow, type, o) {
   if (e.bounty) { addGold(e.bounty); G.stats.bounty = (G.stats.bounty || 0) + e.bounty; floatText(e.x, e.y - 14, '+' + Math.round(e.bounty), '#fde047'); }
   for (const t of G.necros) if (Math.hypot(t.x - e.x, t.y - e.y) < t.st.range) { t.souls = Math.min(t.fx.graveyard_max_souls || 50, (t.souls || 0) + 1); break; }
   if (e.coated && isBoss(e)) explode(e.x, e.y, e.coatR, e.maxHp * e.coatPct, 'true', 999, null, { kind: 'boom' });
+  if (e.def.tp?.death_frost_nova_radius_px) {
+    const r = e.def.tp.death_frost_nova_radius_px;
+    addFx({ kind: 'frostRing', x: e.x, y: e.y, r, dur: 0.5 });
+    for (const t of G.towers) if (Math.hypot(t.x - e.x, t.y - e.y) <= r) t.stunUntil = Math.max(t.stunUntil || 0, G.time + (e.def.tp.death_frost_nova_stun_towers_s || 2));
+  }
   if (isBoss(e)) addFx({ kind: 'bossdie', x: e.x, y: e.y, r: e.def.r, col: e.def.col, dur: 0.6 });
   else if (Math.random() < 0.35 || e.def.hp > 1) addFx({ kind: 'splat', x: e.x, y: e.y, r: e.def.r, col: e.def.col, dur: 0.35 });
   // potomci (vrstvy)
   if (e.shrunk) return;
-  const kids = [];
+  const kids = [], tpk = e.def.tp || {}, swarm = !!tpk.spawn_spread_px;
   e.def.kids.forEach(k => {
     for (let i = 0; i < k.n; i++) {
       const mods = k.mods ? [...k.mods] : [];
       if (e.camo && !mods.includes('duchsliz')) mods.push('duchsliz');
       if (e.regrow && !mods.includes('dorustajici')) mods.push('dorustajici');
-      const kid = spawnEnemy(k.id, e.path, Math.max(-20, e.d - kids.length * 7), mods,
-        { hist: e.regrow || mods.includes('dorustajici') ? [...e.hist, e.t] : [], origin: e.origin, noSeal: true, spdMul: e.spdMul, hpMul: e.hpMulKids || 1 });
+      if (swarm && e.fort && tpk.children_inherit_modifiers && !mods.includes('kamenny')) mods.push('kamenny');
+      // Dělivý sliz: roj se rozprskne dopředu i dozadu po cestě a chvíli zrychlí
+      const off = swarm ? ((kids.length % 2 ? 1 : -1) * Math.ceil(kids.length / 2) * tpk.spawn_spread_px / 2) : -kids.length * 7;
+      const kid = spawnEnemy(k.id, e.path, Math.max(-20, e.d + off), mods,
+        { hist: e.regrow || mods.includes('dorustajici') ? [...e.hist, e.t] : [], origin: e.origin, noSeal: true, spdMul: e.spdMul, hpMul: e.hpMulKids || 1, haste: e.haste,
+          boostUntil: swarm ? G.time + (tpk.children_speed_boost_duration_s || 1.2) : 0, boostPct: pctOf(tpk.children_speed_boost_pct || 30) });
       if (!kid) continue;
       kid.revealed = e.revealed; kid.armored = kid.armored && !e.stripLeadKids;
       kid.lastHit = G.time; kid.goldMul = e.goldMul > 1 ? e.goldMul : 1;
@@ -453,6 +486,7 @@ function speedMul(t) {
   if (t.rainUntil > G.time) m *= 3;
   if (t.type === 'kralovsky_lucistnik' && G.archerRush > G.time) m += 1.5;
   if (typeof xSpeed === 'function') m += xSpeed(t);
+  if (t.chillUntil > G.time) m *= 0.7;   // mráz Mrazivého plazivce
   if (G.vs) {
     if (G.vs.focusUntil > G.time) m += VS.ffa_3_to_4_players.stage_1_mild_focus.defender_attack_speed_buff_pct;
     if (G.vs.curse && G.vs.curse.id === t.id && G.vs.curse.until > G.time) m *= 0.5;
@@ -491,14 +525,22 @@ function explode(x, y, r, dmg, type, pierce, src, o = {}) {
   for (const e of list) {
     if (n >= pierce) break;
     n++;
-    const ok = hitEnemy(e, dmg, type, src ? hitOpts(src, o.hit) : (o.hit || {}));
+    const ok = hitEnemy(e, dmg, type, src ? hitOpts(src, { ...o.hit, aoe: true }) : { ...(o.hit || {}), aoe: true });
     if (!e.dead && ok !== false) o.each?.(e);
   }
   return n;
 }
 function updateProjs(dt) {
+  const mags = G.enemies.filter(e => !e.dead && e.def.tp?.magnet_radius_px);
   for (const p of G.projs) {
     if (p.dead) continue;
+    if (mags.length && !p.lob && (p.type === 'sharp' || p.type === 'normal')) {   // Magnetický sliz stáhne střelu na sebe
+      for (const m of mags) if (!p.hits.has(m) && Math.hypot(m.x - p.x, m.y - p.y) <= m.def.tp.magnet_radius_px) {
+        if (p.magRoll == null) p.magRoll = Math.random() < (m.def.tp.redirect_chance ?? 1);   // každá střela si „hodí“ jen jednou
+        if (p.magRoll) { p.homing = true; p.tgt = m; }
+        break;
+      }
+    }
     if (p.homing) {
       if (!p.tgt || p.tgt.dead) p.tgt = pickTarget({ x: p.x, y: p.y, target: 'close', st: p.src?.st, aura: p.src?.aura }, 260);
       if (p.tgt) {
@@ -520,6 +562,8 @@ function updateProjs(dt) {
       const dmg = typeof p.dmg === 'function' ? p.dmg(e) : p.dmg;
       hitEnemy(e, dmg, p.type, p.src ? hitOpts(p.src, p.hit) : (p.hit || {}));
       p.onHit?.(p, e);
+      if (e.def.tp?.consumes_extra_pierce) p.pierce -= e.def.tp.consumes_extra_pierce;
+      if (e.shieldUntil > G.time) p.pierce -= 1;
       if (--p.pierce <= 0) { p.dead = true; break; }
     }
   }
@@ -535,6 +579,7 @@ function updateZones(dt) {
     const k = z.acc; z.acc = 0;
     let n = 0;
     for (const e of enemiesNear(z.x, z.y, z.r)) {
+      if (e.flying) continue;
       if (n++ >= (z.pierce || 999)) break;
       hitEnemy(e, z.dps * k, z.type || 'normal', z.src ? hitOpts(z.src) : {});
       if (z.slow) slow(e, z.slow, G.time + 0.4);
@@ -656,7 +701,7 @@ const ATTACK = {
     const second = t.fx.recursive_every_shot || (t.fx.recursive_every_2nd_shot && t.shots % 2 === 0);
     shoot({ x: t.x, y: t.y, ang: t.ang, spd: projSpeed(t, t.st.pspeed > 1 ? 380 : 330), dist: d, lob: true, r: 9, kind: t.fx.bonus_moab_damage >= 15 ? 'harpoonBolt' : 'barrel', src: t,
       onBurst: p => {
-        const stunE = x => { if (t.fx.stun_duration_s && (!isBoss(x) || t.fx.can_stun_moab)) stun(x, t.fx.stun_duration_s); if (t.fx.knockback_px && !isBoss(x)) x.d = Math.max(0, x.d - t.fx.knockback_px); };
+        const stunE = x => { if (t.fx.stun_duration_s && (!isBoss(x) || t.fx.can_stun_moab)) stun(x, t.fx.stun_duration_s); if (t.fx.knockback_px && canKnock(x)) x.d = Math.max(0, x.d - t.fx.knockback_px); };
         explode(p.x, p.y, t.st.expl || 45, effDamage(t), t.st.type, effPierce(t), t, { kind: 'boom', each: stunE });
         if (t.fx.sub_fragments) for (let i = 0; i < t.fx.sub_fragments; i++) shoot({ x: p.x, y: p.y, ang: i / t.fx.sub_fragments * 6.283, spd: 420, dist: 90, dmg: t.fx.fragment_damage || 1, type: t.fx.fragment_damage_type || 'sharp', pierce: 2, src: t, kind: 'shard', r: 5 });
         if (t.fx.cluster_bombs) {
@@ -718,6 +763,7 @@ function towerHasAttack(t) {
 }
 
 function updateTower(t, dt) {
+  if (t.stunUntil > G.time) return;   // zmrazená věž (Mrazivý plazivec, Krystalový behemot)
   // DoT a buffy od alchymisty se řeší jinde; tady útoky a pasivní schopnosti
   const fx = t.fx;
   // pasivní pomocné časovače
@@ -1202,6 +1248,52 @@ function vsIncoming(sendId, count, mods, bountyPct = VS.defense_bounty_cashback_
   G.schedule = rest; G.schedIdx = 0;
 }
 
+/* ── Schopnosti slizáků (part5): štíty, léčení, mráz, roj, krystalový krunýř ── */
+function regrowLayer(e) {
+  const up = e.hist.pop(), def = EDEF[up];
+  e.t = up; e.def = def; e.hp = e.maxHp = def.hp; e.regAt = G.time; e.armored = def.traits.includes('armored');
+  addFx({ kind: 'regrow', x: e.x, y: e.y, r: def.r, dur: 0.4 });
+}
+function slimeTraits() {
+  for (const e of G.enemies) {
+    const tp = e.def.tp;
+    if (e.dead || !tp || e.d < 0) continue;
+    if (tp.ally_damage_reduction_pct) for (const a of enemiesNear(e.x, e.y, tp.aura_radius_px || 75)) if (a !== e) { a.shieldUntil = G.time + 0.15; a.shieldPct = tp.ally_damage_reduction_pct; }
+    if (tp.pulse_interval_s) {   // Šamanský sliz léčí okolí
+      if (e.healAt == null) e.healAt = G.time + 1;
+      if (G.time >= e.healAt) {
+        e.healAt = G.time + tp.pulse_interval_s;
+        const r = tp.pulse_radius_px || 95;
+        addFx({ kind: 'ring', x: e.x, y: e.y, r, dur: 0.5, col: '#4ade80' });
+        for (const a of enemiesNear(e.x, e.y, r)) {
+          if (isBoss(a) || a.def.hp > 1) a.hp = Math.min(a.maxHp, a.hp + (isBoss(a) ? tp.heal_boss_hp || 25 : tp.heal_non_boss_hp || 4));
+          if (tp.cleanse_burn_and_acid) { a.burn = null; a.acid = null; }
+          if (tp.triggers_regrow_layer && a.regrow && a.hist.length) regrowLayer(a);
+        }
+      }
+    }
+    if (tp.tower_attack_speed_slow_pct) { const r = tp.aura_radius_px || 100; for (const t of G.towers) if (t.st.type !== 'energy' && Math.hypot(t.x - e.x, t.y - e.y) <= r) t.chillUntil = G.time + 0.15; }
+    if (tp.spawn_interval_s) {   // Královna roje rodí Dělivé slizy a zrychluje okolí
+      if (e.broodAt == null) e.broodAt = G.time + tp.spawn_interval_s;
+      if (G.time >= e.broodAt) {
+        e.broodAt = G.time + tp.spawn_interval_s;
+        for (let i = 0; i < (tp.spawn_count || 2); i++) spawnEnemy(tp.spawn_type || 'delivy_sliz', e.path, Math.max(0, e.d - 14 - i * 12), [], { noSeal: true });
+        addFx({ kind: 'splat', x: e.x, y: e.y, r: e.def.r * 0.7, col: e.def.col, dur: 0.4 });
+      }
+      for (const a of enemiesNear(e.x, e.y, tp.speed_aura_radius_px || 110)) if (a !== e) { a.queenUntil = G.time + 0.15; a.queenPct = pctOf(tp.ally_speed_boost_pct || 25); }
+    }
+    if (tp.shell_cycle_interval_s) {   // Krystalový behemot: krunýř a omráčení nejbližších věží
+      if (e.prismAt == null) e.prismAt = G.time + tp.shell_cycle_interval_s;
+      if (G.time >= e.prismAt) {
+        e.prismAt = G.time + tp.shell_cycle_interval_s; e.prismUntil = G.time + (tp.shell_active_duration_s || 2.5);
+        addFx({ kind: 'frostRing', x: e.x, y: e.y, r: e.def.r * 2.4, dur: 0.6 });
+        G.towers.slice().sort((a, b) => Math.hypot(a.x - e.x, a.y - e.y) - Math.hypot(b.x - e.x, b.y - e.y)).slice(0, tp.shell_pulse_stuns_nearest_towers_count || 2)
+          .forEach(t => { t.stunUntil = Math.max(t.stunUntil || 0, G.time + (tp.shell_pulse_tower_stun_duration_s || 2)); });
+      }
+    }
+  }
+}
+
 /* ── Hlavní krok simulace ──────────────────────────────────────── */
 function step(dt) {
   if (G.over) return;
@@ -1228,6 +1320,7 @@ function step(dt) {
     startWave();
   }
   rebuildGrid();
+  slimeTraits();
   // pohyb slizáků
   for (const e of G.enemies) {
     if (e.dead) continue;
@@ -1238,13 +1331,16 @@ function step(dt) {
     if (e.dead) continue;
     // štít bosse slábne sám od sebe
     if (e.seal && e.seal.s > 0) e.seal.s = Math.max(0, e.seal.s - e.def.seal.decay * dt);
-    // dorůstání
-    if (e.regrow && e.hist.length && G.time - e.lastHit > 3 && !G.towers.some(h => h.fx.block_regrow_in_radius && Math.hypot(h.x - e.x, h.y - e.y) <= h.st.range)) {
-      const up = e.hist.pop(), def = EDEF[up];
-      e.t = up; e.def = def; e.hp = e.maxHp = def.hp; e.lastHit = G.time; e.armored = def.traits.includes('armored');
-      addFx({ kind: 'regrow', x: e.x, y: e.y, r: def.r, dur: 0.4 });
+    // dorůstání: 3 s bez zásahu, pak každé 2 s o vrstvu zpět (u tužších slizáků 25 % životů)
+    if (e.regrow && G.time - e.lastHit > 3 && G.time - (e.regAt || 0) >= 2 && !G.towers.some(h => h.fx.block_regrow_in_radius && Math.hypot(h.x - e.x, h.y - e.y) <= h.st.range)) {
+      if (e.hist.length) regrowLayer(e);
+      else if (e.def.hp > 1 && e.hp < e.maxHp) { e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.25); e.regAt = G.time; addFx({ kind: 'regrow', x: e.x, y: e.y, r: e.def.r, dur: 0.4 }); }
     }
     let v = e.def.speed * e.spdMul;
+    if (e.rageUntil > G.time) v *= 1 + e.rage;
+    if (e.boostUntil > G.time) v *= 1 + e.boostPct;
+    if (e.queenUntil > G.time) v *= 1 + (e.queenPct || 0.25);
+    if (e.burrowUntil > G.time) v *= e.def.tp?.burrow_speed_mult || 1.35;
     if (frozen(e) || stunned(e)) v = 0;
     else if (e.slowUntil > G.time) v *= 1 - e.slowPct;
     if (G.sabotage && G.sabotage.until > G.time && !slowImmune(e)) v *= 1 - G.sabotage.pct;

@@ -164,7 +164,7 @@ const XT = {
       if (fx.strip_camo_on_hit) { x.revealed = true; if (fx.decamo_radius) for (const y of enemiesNear(x.x, x.y, fx.decamo_radius)) y.revealed = true; }
       if (x.immuneFlash === G.time) return;   // nezraněného slizáka nezdržuj (jinak by ho držel věčně)
       if (fx.slow_after_hit_pct) slow(x, pctv(fx.slow_after_hit_pct), G.time + (fx.slow_duration || 1.5));
-      if (fx.knockback_chance && !isBoss(x) && Math.random() < fx.knockback_chance) x.d = Math.max(0, x.d - (fx.knockback || 28));
+      if (fx.knockback_chance && canKnock(x) && Math.random() < fx.knockback_chance) x.d = Math.max(0, x.d - (fx.knockback || 28));
     };
     for (let i = 0; i < n; i++) {
       const ang = t.ang + (n > 1 ? (i / (n - 1) - 0.5) * spread : 0);
@@ -319,7 +319,7 @@ function trapHit(tr, e) {
     tr.hp--;
     return;
   }
-  hitEnemy(e, tr.dmg + (G.xTrapAdd || 0), tr.type || 'sharp', s ? hitOpts(s) : {});
+  hitEnemy(e, tr.dmg + (G.xTrapAdd || 0), tr.type || 'sharp', s ? hitOpts(s, { trap: true }) : { trap: true });
   if (s?.type === 'kladec_pasti') {
     if (fx.burn_dps && !e.dead) e.burn = { dps: fx.burn_dps, until: G.time + (fx.burn_duration || 3), src: s };
     if (fx.stun_duration && !isBoss(e)) stun(e, fx.stun_duration);
@@ -378,7 +378,7 @@ function updateExtras(dt) {
       if (G.time > tr.until) { tr.dead = true; continue; }
       for (const e of enemiesNear(tr.x, tr.y, tr.r)) {
         if (tr.hp <= 0) break;
-        if (e.dead || tr.hits.has(e)) continue;
+        if (e.dead || e.flying || tr.hits.has(e)) continue;   // létající pasti přeletí
         tr.hits.add(e);
         if (tr.kind === 'cage') cageTake(tr, e); else trapHit(tr, e);
       }
@@ -421,7 +421,7 @@ function updateExtras(dt) {
           const kb = isBoss(e) ? (fx.tornado_affects_moab ? fx.tornado_moab_knockback || 55 : 0) : fx.tornado_knockback || 95;
           if (isBoss(e) && !kb) continue;
           m.pierce--;
-          if (!slowImmune(e)) e.d = Math.max(0, e.d - kb);
+          if (!slowImmune(e) && (isBoss(e) || canKnock(e))) e.d = Math.max(0, e.d - kb);
           if (fx.strip_camo_on_hit) e.revealed = true;
         }
       } else if (m.kind === 'ball') {
