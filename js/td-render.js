@@ -44,6 +44,8 @@ const TR = (() => {
 
   /* ── Pozadí mapy ───────────────────────────────────────────── */
   function background(map, paths) {
+    const S = sup();
+    if (S?.background) return S.background({ id: map.id, paths: map.paths, track_width_px: TRACK_HALF * 2, water_zones: map.water_zones || [], obstacles: map.obstacles || [] });
     if (useTDS()) return TDS.background({ id: map.id, paths: map.paths, track_width_px: TRACK_HALF * 2, water_zones: map.water_zones || [], obstacles: map.obstacles || [] });
     if (bgCache.has(map.id)) return bgCache.get(map.id);
     const c = off(TW, TH), g = c.getContext('2d'), r = rng(map.id.length * 977 + 13);
@@ -936,8 +938,10 @@ const TR = (() => {
     g.drawImage(background(G.map, G.paths), 0, 0);
     // odstraněné překážky
     const nova = useTDS();
-    (G.map.obstacles || []).forEach(o => { if (o.removed) { g.fillStyle = nova ? '#5ec447' : '#4a8a3d'; rrect(g, o.x, o.y, o.width, o.height, 20); g.fill(); } });
-    if (nova) (G.map.water_zones || []).forEach(z => waterFrozenAt(z.x + z.width / 2, z.y + z.height / 2) ? TDS.frozenWater(g, z) : TDS.water(g, z, performance.now()));
+    const S = sup();
+    (G.map.obstacles || []).forEach(o => { if (o.removed) { if (S?.clearedObstacle) { S.clearedObstacle(g, o); return; } g.fillStyle = nova ? '#5ec447' : '#4a8a3d'; rrect(g, o.x, o.y, o.width, o.height, 20); g.fill(); } });
+    if (S?.water) (G.map.water_zones || []).forEach(z => waterFrozenAt(z.x + z.width / 2, z.y + z.height / 2) ? S.frozenWater(g, z) : S.water(g, z, performance.now()));
+    else if (nova) (G.map.water_zones || []).forEach(z => waterFrozenAt(z.x + z.width / 2, z.y + z.height / 2) ? TDS.frozenWater(g, z) : TDS.water(g, z, performance.now()));
     else
     // voda se třpytí
     (G.map.water_zones || []).forEach(z => {
@@ -983,6 +987,7 @@ const TR = (() => {
       g.globalAlpha = 1;
       if (gh.bad) { g.fillStyle = '#fecaca'; g.font = 'bold 12px Geist, sans-serif'; g.fillText(gh.bad, gh.x, gh.y - def.base.radius_px - 10); }
     }
+    S?.ambient?.(g, performance.now());   // stíny mraků, motýli (Super)
     overlay(g, time);
   }
 
@@ -997,11 +1002,12 @@ const TR = (() => {
   // Prohlížeč může při nedostatku grafické paměti zahodit obsah canvasů (i předkreslených).
   // Pak se všechny předkreslené obrázky smažou a vykreslí znovu.
   function clearCaches() {
-    bgCache.clear(); spriteCache.clear(); supCache.clear();
+    bgCache.clear(); spriteCache.clear(); supCache.clear(); window.TDSS?.clearCacheMap?.();
     if (window.TDS) { TDS.clearCacheA?.(); TDS.clearCacheD?.(); TDS.cache = {}; TDS._iconCache = {}; }
   }
   function cachesLost() {
-    const bg = useTDS() ? TDS.background({ id: G.map.id, paths: G.map.paths, track_width_px: TRACK_HALF * 2, water_zones: G.map.water_zones || [], obstacles: G.map.obstacles || [] }) : bgCache.get(G.map.id);
+    const mo = { id: G.map.id, paths: G.map.paths, track_width_px: TRACK_HALF * 2, water_zones: G.map.water_zones || [], obstacles: G.map.obstacles || [] };
+    const bg = sup()?.background ? sup().background(mo) : useTDS() ? TDS.background({ id: G.map.id, paths: G.map.paths, track_width_px: TRACK_HALF * 2, water_zones: G.map.water_zones || [], obstacles: G.map.obstacles || [] }) : bgCache.get(G.map.id);
     try { return !!bg?.getContext('2d').isContextLost?.(); } catch (_) { return false; }
   }
   return { render, mapPreview, slimeSprite, clearCaches, cachesLost, towerIcon, heroIcon, towerPreview, hasSup, supTowerIcon, gfx };
