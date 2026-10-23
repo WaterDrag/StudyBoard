@@ -6059,3 +6059,8 @@ img.card-img { cursor: zoom-in; }
 .td-tip-ok { flex-shrink: 0; border: 0; border-radius: 10px; padding: 7px 12px; background: #fff; color: #1d4ed8; font: inherit; font-weight: 700; cursor: pointer; }
 @keyframes tdTipIn { from { opacity: 0; transform: translate(-50%, 10px); } }
 @media (max-width: 600px) { .td-tipcard { font-size: 0.74rem; padding: 7px 8px 7px 10px; bottom: 52px; } .td-tip-ok { padding: 5px 9px; } }
+
+/* Obrana království: výběr grafiky */
+.td-pick-gfx { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.td-gfx { gap: 6px; }
+.td-gfx-img { width: 100%; aspect-ratio: 26 / 15; object-fit: cover; border-radius: 10px; background: var(--bg-3); display: block; }

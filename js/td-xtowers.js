@@ -614,11 +614,40 @@ const XR = (() => {
     for (const t of G.towers) if (t.gryf) {
       const gr = t.gryf;
       if (has('gryfi_jezdec')) { TDS.gryfi_jezdecExtra(g, 'gryf', gr.x, gr.y, gr.ang, ts, { up: t.up }); continue; }
-      g.save();
-      g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(gr.x + 10, gr.y + 18, 16, 8, 0, 0, TAU); g.fill();
-      emoji(g, Math.max(...t.up) >= 5 ? '🦁' : '🦅', gr.x, gr.y, 30 + Math.max(...t.up) * 2);
+      gryf(g, gr, t, ts);
+    }
+  }
+  // Gryf v kresleném stylu: tělo, mávající křídla, bílá hlava se zobákem a jezdec (zbroj podle úrovní)
+  function gryf(g, gr, t, ts) {
+    const tier = Math.max(...t.up), s = 1 + tier * 0.06, flap = Math.sin(ts / 90) * 0.35;
+    const armor = tier >= 5 ? '#facc15' : tier >= 4 ? '#60a5fa' : null;
+    g.save();
+    g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(gr.x + 10, gr.y + 18, 16 * s, 7 * s, 0, 0, TAU); g.fill();
+    g.translate(gr.x, gr.y); g.rotate(gr.ang); g.scale(s, s);
+    for (const sd of [-1, 1]) {   // křídla
+      g.save(); g.rotate(sd * (0.25 + flap));
+      g.fillStyle = tier >= 5 ? '#fde68a' : '#d6a35c'; g.strokeStyle = '#5b3a1e'; g.lineWidth = 1.4;
+      // široké křídlo: náběžná hrana dopředu, zadní hrana z vroubkovaných letek
+      g.beginPath(); g.moveTo(3, sd * 3); g.quadraticCurveTo(8, sd * 18, -1, sd * 30);
+      const fe = [[-7, 27], [-11, 20], [-13, 13], [-9, 5]];
+      let px = -1, py = 30;
+      for (const [fx, fy] of fe) { g.quadraticCurveTo((px + fx) / 2 - 4, sd * ((py + fy) / 2), fx, sd * fy); px = fx; py = fy; }
+      g.closePath(); g.fill(); g.stroke();
+      g.fillStyle = tier >= 5 ? '#fef3c7' : '#e9c48a';   // světlejší krovky u ramene
+      g.beginPath(); g.moveTo(3, sd * 3); g.quadraticCurveTo(6, sd * 12, 1, sd * 17); g.quadraticCurveTo(-4, sd * 12, -6, sd * 5); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(91,58,30,.45)'; g.lineWidth = 1; for (const [fx, fy] of fe.slice(0, 3)) { g.beginPath(); g.moveTo(fx + 1, sd * fy); g.lineTo(2, sd * (fy * 0.55)); g.stroke(); }
       g.restore();
     }
+    g.fillStyle = '#b07d3e'; g.strokeStyle = '#5b3a1e'; g.lineWidth = 1.5;   // tělo lva
+    g.beginPath(); g.ellipse(-3, 0, 11, 6.5, 0, 0, TAU); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(-13, 0); g.quadraticCurveTo(-20, 4 + flap * 6, -23, 1); g.stroke();   // ocas
+    if (armor) { g.fillStyle = armor; g.fillRect(-8, -4, 7, 8); }
+    g.fillStyle = '#f8fafc'; g.beginPath(); g.arc(8, 0, 5, 0, TAU); g.fill(); g.stroke();   // orlí hlava
+    g.fillStyle = '#f59e0b'; g.beginPath(); g.moveTo(12, -2); g.lineTo(17, 0); g.lineTo(12, 2.2); g.closePath(); g.fill();
+    g.fillStyle = '#111'; g.beginPath(); g.arc(9.5, -2.2, 0.9, 0, TAU); g.arc(9.5, 2.2, 0.9, 0, TAU); g.fill();
+    g.fillStyle = t.up[1] >= 3 ? '#b91c1c' : '#2563eb'; g.beginPath(); g.arc(-3, 0, 3.6, 0, TAU); g.fill();   // jezdec
+    g.fillStyle = armor || '#cbd5e1'; g.beginPath(); g.arc(-2.4, 0, 2.2, 0, TAU); g.fill();
+    g.restore();
   }
   return { ground, air, emoji };
 })();

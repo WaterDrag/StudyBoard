@@ -43,6 +43,7 @@ function renderSetup() {
     .map(([k, n, d]) => `<button type="button" class="td-opt${pref.mode === k ? ' on' : ''}" data-mode="${k}"><b>${n}</b><small>${d}</small></button>`).join('');
   $('tdModes').onclick = e => { const b = e.target.closest('[data-mode]'); if (!b) return; pref.mode = b.dataset.mode; savePref(); renderSetup(); };
   $('tdModeStep').hidden = joining;
+  renderGfxPicker();
   $('tdMapStep').hidden = joining;
   $('tdDiffStep').hidden = vs;
   $('tdJoinInfo').hidden = !joining;
@@ -411,7 +412,13 @@ function heroIco(h) {
   return `<img src="${_towerIco['h' + h.id]}" alt="">`;
 }
 function miniSlime(id, mods) {
-  const key = id + (mods || []).join() + (window.TDS?.slimeIcon && !EDEF[id]?.isNew && localStorage.getItem('td_gfx') !== '0' ? 'N' : '');
+  const nova = localStorage.getItem('td_gfx') !== '0', tex = EDEF[id]?.isNew ? window.TDS?.slimeDrawers?.[id] : window.TDS?.slimeIcon;
+  const key = id + (mods || []).join() + (tex && nova ? (EDEF[id]?.isNew ? 'D' : 'N') : '');
+  if (!_miniCache.has(key) && key.endsWith('D')) {   // nový slizák s texturou od Gemini
+    const c = document.createElement('canvas'); c.width = c.height = 30; const g = c.getContext('2d'); g.translate(15, 15);
+    try { TDS.slimeDrawers[id](g, EDEF[id].boss ? 12 : 10, 0, {}); } catch (_) { /* nic */ }
+    const url = c.toDataURL(); _miniCache.set(key, url); return url;
+  }
   if (!_miniCache.has(key) && key.endsWith('N')) { const url = TDS.slimeIcon(id, 30).toDataURL(); _miniCache.set(key, url); return url; }
   if (_miniCache.has(key)) return _miniCache.get(key);
   const def = EDEF[id], fake = { t: id, def, fort: (mods || []).includes('kamenny'), armored: def.traits.includes('armored') };
@@ -700,4 +707,63 @@ function scanTips() {
     if (e.bubble > 0) showTip('runovy_stit');
     for (const t of e.def.traits) if (TIPS[t]) showTip(t);
   }
+}
+
+/* ── Výběr grafiky na úvodní obrazovce: ukázka obou stylů, volba se pamatuje (localStorage td_gfx) ── */
+const GFX = [['1', 'Detailní', 'Textury od Gemini: hodně detailů, stínů a odlesků'], ['0', 'Kreslená', 'Jednodušší ručně kreslený styl od Clauda, dobře čitelný i na telefonu']];
+const gfxNow = () => { try { return localStorage.getItem('td_gfx') === '0' ? '0' : '1'; } catch (_) { return '1'; } };
+let _gfxShots = null;
+function renderGfxPicker() {
+  const el = $('tdGfx'); if (!el) return;
+  const cur = gfxNow();
+  if (!_gfxShots) _gfxShots = gfxPreviews();
+  el.innerHTML = GFX.map(([k, n, d]) => `<button type="button" class="td-opt td-gfx${cur === k ? ' on' : ''}" data-gfx="${k}">
+    <img src="${_gfxShots[k] || ''}" alt="Ukázka: ${esc(n)}" class="td-gfx-img"><b>${n}${cur === k ? ' ✓' : ''}</b><small>${d}</small></button>`).join('');
+  el.onclick = e => {
+    const b = e.target.closest('[data-gfx]'); if (!b) return;
+    try { localStorage.setItem('td_gfx', b.dataset.gfx); } catch (_) { /* jen pro tuhle návštěvu */ }
+    _towerIcoReset(); window.sfx?.('click'); renderSetup();
+  };
+}
+// Stejná malá scéna (cesta, věže, hrdina, slizáci) vykreslená v obou stylech
+function gfxPreviews() {
+  const out = {};
+  let saved = null;
+  try { saved = localStorage.getItem('td_gfx'); } catch (_) { return out; }
+  const keep = G, sfx = window.sfx;
+  window.sfx = null;   // stavění ukázkových věží nemá cvakat
+  try {
+    newGame(TD.maps[0].id, TD.heroes[0].id);
+    G.gold = 1e6; G.km = 99;
+    const P = G.paths[0], at = f => posAt(P, P.len * f), side = (q, d) => ({ x: q.x + Math.cos(q.ang + Math.PI / 2) * d, y: q.y + Math.sin(q.ang + Math.PI / 2) * d });
+    [['kralovsky_lucistnik', 0.14, 52, [3, 0, 0]], ['mrazivy_mag', 0.2, -52, [0, 2, 0]], ['oblehaci_katapult', 0.27, 55, [0, 3, 0]], ['lesni_druid', 0.33, -55, [2, 0, 0]]].forEach(([id, f, d, up]) => {
+      const p = side(at(f), d);
+      if (placeProblem(id, p.x, p.y)) return;
+      placeTower(id, p.x, p.y);
+      const t = G.towers[G.towers.length - 1];
+      up.forEach((n, i) => { for (let k = 0; k < n; k++) buyUpgrade(t, i); });
+      t.ang = 0.4;
+    });
+    { const p = side(at(0.23), 62); if (!placeProblem(G.heroId, p.x, p.y)) placeHero(G.heroId, p.x, p.y); }
+    ['lucni_slizak', 'lesni_slizak', 'prilbosliz', 'stitonos_sliz', 'bublinkovy_sliz', 'zlaty_sliz', 'duhovy_sliz', 'zuivy_sliz'].forEach((id, i) => {
+      const e = spawnEnemy(id, 0, P.len * (0.1 + i * 0.03)); if (e) { const q = at(0.1 + i * 0.03); e.x = q.x; e.y = q.y; e.ang = q.ang; }
+    });
+    const xs = G.towers.map(t => t.x), ys = G.towers.map(t => t.y);
+    const cx = xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : TW / 3, cy = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : TH / 3;
+    const W = 520, H = 300, x0 = Math.max(0, Math.min(TW - W, cx - W / 2)), y0 = Math.max(0, Math.min(TH - H, cy - H / 2));
+    const big = document.createElement('canvas'); big.width = TW; big.height = TH;
+    for (const [k] of GFX) {
+      localStorage.setItem('td_gfx', k);
+      const g = big.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, TW, TH);
+      TR.render(g, { sel: null, ghost: null });
+      const c = document.createElement('canvas'); c.width = W / 2 * 1.5; c.height = H / 2 * 1.5;
+      c.getContext('2d').drawImage(big, x0, y0, W, H, 0, 0, c.width, c.height);
+      out[k] = c.toDataURL('image/jpeg', 0.85);
+    }
+  } catch (e) { console.warn('Ukázka grafiky:', e); }
+  finally {
+    try { if (saved == null) localStorage.removeItem('td_gfx'); else localStorage.setItem('td_gfx', saved); } catch (_) { /* nic */ }
+    G = keep; window.sfx = sfx;
+  }
+  return out;
 }
