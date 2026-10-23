@@ -725,7 +725,11 @@ const TR = (() => {
     g.restore();
   }
   function drawHero(g, h, time) {
-    const r = h.r;
+    const r = h.r, S = sup();
+    if (S?.hero && S.heroDrawers?.[h.id]) {   // Super grafika (js/td-super-heroes.js)
+      S.hero(g, h.id, h.x, h.y, r, h.ang || 0, performance.now(), h.level, { crit: h.critShots > 0, casting: G.time - (h.castAt ?? -9) < 0.6, icon: !!h.icon });
+      return;
+    }
     if (useTDS() && window.TDS?.heroDrawers?.[h.id]) {
       g.fillStyle = 'rgba(250,204,21,.18)'; g.beginPath(); g.arc(h.x, h.y, r + 6 + Math.sin(time * 2.5) * 1.5, 0, TAU); g.fill();
       TDS.hero(g, h.id, h.x, h.y, r, h.ang || 0, performance.now(), h.level, { crit: h.critShots > 0, casting: G.time - (h.castAt ?? -9) < 0.6 });
@@ -1020,7 +1024,7 @@ const TR = (() => {
   // Prohlížeč může při nedostatku grafické paměti zahodit obsah canvasů (i předkreslených).
   // Pak se všechny předkreslené obrázky smažou a vykreslí znovu.
   function clearCaches() {
-    bgCache.clear(); spriteCache.clear(); supCache.clear(); window.TDSS?.clearCacheMap?.(); window.TDSS?.clearCacheSlimes?.();
+    bgCache.clear(); spriteCache.clear(); supCache.clear(); window.TDSS?.clearCacheMap?.(); window.TDSS?.clearCacheSlimes?.(); window.TDSS?.clearCacheHeroes?.();
     if (window.TDS) { TDS.clearCacheA?.(); TDS.clearCacheD?.(); TDS.cache = {}; TDS._iconCache = {}; }
   }
   function cachesLost() {
