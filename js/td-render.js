@@ -27,7 +27,7 @@ const TR = (() => {
     g.drawImage(supCached(['b', t.type, up, size].join('|'), size, c => d.base(c, t.up)), x - size / 2, y - size / 2);
     g.save(); g.translate(x, y); g.rotate(ang);
     if (s.firing > 0) d.turret(g, t.up, s);   // zákluz a záblesk se kreslí živě, jinak z mezipaměti
-    else g.drawImage(supCached(['t', t.type, up, s.buffed ? 1 : 0, size].join('|'), size, c => d.turret(c, t.up, s)), -size / 2, -size / 2);
+    else g.drawImage(supCached(['t', t.type, up, s.buffed ? 1 : 0, s.cock == null ? '' : Math.round(s.cock * 6), s.beast ? 1 : 0, s.mode || '', size].join('|'), size, c => d.turret(c, t.up, s)), -size / 2, -size / 2);
     g.restore();
   }
   function supProj(g, kind, x, y, ang) {
@@ -486,7 +486,9 @@ const TR = (() => {
     const def = TDEF[t.type], r = t.r, tier = Math.max(...t.up);
     if (hasSup(t.type)) {   // Super grafika (js/td-super-*.js)
       const firing = t.firedAt != null && G ? Math.max(0, 1 - (G.time - t.firedAt) / 0.12) : 0;
-      supTower(g, t, t.x, t.y, t.ang || 0, { firing, buffed: !!(t.buff && t.buff.until > G?.time) });
+      const cock = t.type === 'oblehaci_katapult' ? Math.max(0, Math.min(1, 1 - Math.max(0, t.cd || 0) / (t.st?.interval || 1))) : null;
+      const ang = t.type === 'strazni_hlaska' || t.type === 'zlaty_dul' ? 0 : t.type === 'cepova_vez' ? (t.ang || 0) + performance.now() * ((t.up[1] >= 4 || t.up[2] >= 4) ? 0.005 : 0.002) : t.ang || 0;
+      supTower(g, t, t.x, t.y, ang, { firing: t.type === 'cepova_vez' ? 0 : firing, buffed: !!(t.buff && t.buff.until > G?.time), cock, beast: t.beastUntil > (G?.time || 0), mode: t.mode });
       if (tier >= 5) { g.strokeStyle = `rgba(250,204,21,${0.4 + Math.sin(time * 3) * 0.25})`; g.lineWidth = 3; g.beginPath(); g.arc(t.x, t.y, r + 6, 0, TAU); g.stroke(); }
     } else if (useTDS() && window.TDS?.drawers?.[t.type]) {   // nová grafika (js/td-sprites-b/c.js)
       const fired = t.firedAt != null ? Math.max(0, 1 - (G.time - t.firedAt) / 0.1) : 0;
