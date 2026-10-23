@@ -556,16 +556,82 @@ const XR = (() => {
     if (has(id)) { TDS[id + 'Extra'](g, tr.kind, tr.x, tr.y, 0, ts, { hp: tr.hp, fill: tr.cap ? 1 - tr.hp / tr.cap : 0 }); return; }
     const fade = Math.min(1, (tr.until - G.time) / 2);
     g.save(); g.globalAlpha = Math.max(0.3, fade); g.translate(tr.x, tr.y);
-    if (tr.kind === 'foam') { g.fillStyle = 'rgba(248,250,252,.8)'; for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; g.beginPath(); g.arc(Math.cos(a) * 9, Math.sin(a) * 6, 7, 0, TAU); g.fill(); } }
-    else if (tr.kind === 'cage') { g.fillStyle = '#78716c'; g.fillRect(-13, -13, 26, 26); g.strokeStyle = '#fde047'; g.lineWidth = 2; g.strokeRect(-13, -13, 26, 26); for (let i = -6; i <= 6; i += 6) { g.beginPath(); g.moveTo(i, -13); g.lineTo(i, 13); g.stroke(); } g.fillStyle = '#facc15'; g.fillRect(-13, 11, 26 * (tr.cap ? 1 - tr.hp / tr.cap : 0), 3); }
-    else {
-      const col = { spike: '#a8a29e', caltrop: '#78716c', jaw: '#57534e', mine: '#b91c1c', crystal: '#38bdf8' }[tr.kind];
-      g.fillStyle = col; g.strokeStyle = '#1c1917'; g.lineWidth = 1.2;
-      const n = tr.kind === 'mine' ? 0 : 4, s = tr.kind === 'jaw' ? 9 : 7;
-      if (tr.kind === 'mine') { g.beginPath(); g.arc(0, 0, 7, 0, TAU); g.fill(); g.stroke(); g.fillStyle = '#fde047'; g.beginPath(); g.arc(0, 0, 2.5, 0, TAU); g.fill(); }
-      for (let i = 0; i < n; i++) { const a = i / n * TAU + 0.4; g.beginPath(); g.moveTo(Math.cos(a) * s, Math.sin(a) * s); g.lineTo(Math.cos(a + 1.2) * 2.5, Math.sin(a + 1.2) * 2.5); g.lineTo(Math.cos(a - 1.2) * 2.5, Math.sin(a - 1.2) * 2.5); g.closePath(); g.fill(); g.stroke(); }
-    }
+    trapOwn(g, tr, ts);
     g.restore();
+  }
+  // Pasti v kreslené grafice (pohled shora)
+  function spikeTri(g, x, y, s, col) {
+    g.fillStyle = col; g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s * 0.7, y + s * 0.5); g.lineTo(x - s * 0.7, y + s * 0.5); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.moveTo(x, y - s * 0.8); g.lineTo(x - s * 0.35, y + s * 0.3); g.lineTo(x - s * 0.05, y + s * 0.3); g.closePath(); g.fill();
+  }
+  function trapOwn(g, tr, ts) {
+    g.lineJoin = 'round';
+    switch (tr.kind) {
+      case 'spike':   // prkno s hroty
+        g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(-10, -6, 22, 15);
+        g.fillStyle = '#92400e'; g.strokeStyle = '#451a03'; g.lineWidth = 1.2; g.fillRect(-11, -7, 22, 14); g.strokeRect(-11, -7, 22, 14);
+        g.strokeStyle = 'rgba(69,26,3,.5)'; g.beginPath(); g.moveTo(-11, 0); g.lineTo(11, 0); g.stroke();
+        g.strokeStyle = '#1c1917'; g.lineWidth = 0.8;
+        for (const [x, y] of [[-6, -2], [0, -2], [6, -2], [-3, 4], [3, 4]]) spikeTri(g, x, y, 3.6, '#d6d3d1');
+        break;
+      case 'caltrop':   // rozházené ježky
+        g.strokeStyle = '#0c0a09'; g.lineWidth = 0.8;
+        for (const [x, y, a] of [[-7, -3, 0.3], [5, -5, 1.1], [1, 5, 2.2], [9, 4, 0.7]]) {
+          g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = '#57534e';
+          for (let i = 0; i < 4; i++) { g.rotate(Math.PI / 2); g.beginPath(); g.moveTo(0, -4.5); g.lineTo(1.4, 0); g.lineTo(-1.4, 0); g.closePath(); g.fill(); g.stroke(); }
+          g.fillStyle = '#a8a29e'; g.beginPath(); g.arc(0, 0, 1.2, 0, TAU); g.fill(); g.restore();
+        }
+        break;
+      case 'jaw': {   // medvědí past: otevřené čelisti se zuby a řetěz
+        g.strokeStyle = '#44403c'; g.lineWidth = 1.5; g.setLineDash([2, 2]); g.beginPath(); g.moveTo(9, 6); g.quadraticCurveTo(14, 10, 16, 4); g.stroke(); g.setLineDash([]);
+        g.fillStyle = '#57534e'; g.strokeStyle = '#1c1917'; g.lineWidth = 1.2; g.beginPath(); g.arc(0, 0, 4.5, 0, TAU); g.fill(); g.stroke();
+        for (const sd of [-1, 1]) {
+          g.strokeStyle = '#78716c'; g.lineWidth = 2.6;
+          const a0 = sd > 0 ? 0.15 : Math.PI + 0.15, a1 = sd > 0 ? Math.PI - 0.15 : TAU - 0.15;
+          g.beginPath(); g.arc(0, sd * 2, 10, a0, a1); g.stroke();
+          g.fillStyle = '#e7e5e4';
+          for (let i = 1; i < 6; i++) {
+            const a = (sd > 0 ? 0 : Math.PI) + i * Math.PI / 6, cx = Math.cos(a), cy = Math.sin(a);
+            g.beginPath(); g.moveTo(cx * 9, sd * 2 + cy * 9); g.lineTo(cx * 6 - cy * 1.5, sd * 2 + cy * 6 + cx * 1.5); g.lineTo(cx * 6 + cy * 1.5, sd * 2 + cy * 6 - cx * 1.5); g.closePath(); g.fill();
+          }
+        }
+        break;
+      }
+      case 'mine': {   // zakopaná mina s blikající kontrolkou
+        g.fillStyle = '#78350f'; g.beginPath(); g.ellipse(0, 1, 11, 8, 0, 0, TAU); g.fill();
+        g.fillStyle = '#a16207'; for (const [x, y] of [[-8, -3], [7, -5], [9, 4], [-6, 6]]) { g.beginPath(); g.arc(x, y, 1.6, 0, TAU); g.fill(); }
+        g.fillStyle = '#3f3f46'; g.strokeStyle = '#18181b'; g.lineWidth = 1.2; g.beginPath(); g.arc(0, 0, 7, 0, TAU); g.fill(); g.stroke();
+        g.strokeStyle = '#71717a'; g.beginPath(); g.arc(0, 0, 4.5, 0, TAU); g.stroke();
+        g.fillStyle = Math.floor(ts / 300) % 2 ? '#ef4444' : '#7f1d1d'; g.beginPath(); g.arc(0, 0, 2.2, 0, TAU); g.fill();
+        break;
+      }
+      case 'crystal': {   // zářící krystalová past
+        g.fillStyle = 'rgba(56,189,248,' + (0.16 + Math.sin(ts / 200) * 0.06) + ')'; g.beginPath(); g.arc(0, 0, 13, 0, TAU); g.fill();
+        g.strokeStyle = '#0c4a6e'; g.lineWidth = 0.9;
+        for (const [x, y, h, a] of [[-5, 2, 9, -0.35], [0, 0, 12, 0], [5, 2, 8, 0.4]]) {
+          g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = '#7dd3fc';
+          g.beginPath(); g.moveTo(-2.6, 3); g.lineTo(-2.6, -h + 3); g.lineTo(0, -h); g.lineTo(2.6, -h + 3); g.lineTo(2.6, 3); g.closePath(); g.fill(); g.stroke();
+          g.fillStyle = 'rgba(255,255,255,.6)'; g.fillRect(-1.8, -h + 3, 1.2, h - 3); g.restore();
+        }
+        break;
+      }
+      case 'foam': {   // lepivá pěna z hadice
+        g.fillStyle = 'rgba(253,230,138,.35)'; g.beginPath(); g.ellipse(0, 0, 17, 12, 0, 0, TAU); g.fill();
+        g.fillStyle = '#f8fafc'; g.strokeStyle = 'rgba(148,163,184,.7)'; g.lineWidth = 1;
+        for (const [x, y, r] of [[-8, -2, 6], [0, -5, 7], [8, -1, 6], [-3, 5, 6], [6, 6, 5], [-11, 5, 4]]) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.stroke(); }
+        g.fillStyle = 'rgba(255,255,255,.95)'; for (const [x, y] of [[-9, -4], [-1, -8], [7, -3]]) { g.beginPath(); g.arc(x, y, 1.5, 0, TAU); g.fill(); }
+        break;
+      }
+      case 'cage': {   // klec shora: rám, mříže a plnění
+        g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(-12, -10, 28, 26);
+        g.fillStyle = 'rgba(41,37,36,.55)'; g.fillRect(-13, -13, 26, 26);
+        g.strokeStyle = '#a8a29e'; g.lineWidth = 2; for (let i = -6.5; i <= 6.5; i += 6.5) { g.beginPath(); g.moveTo(i, -13); g.lineTo(i, 13); g.moveTo(-13, i); g.lineTo(13, i); g.stroke(); }
+        g.strokeStyle = '#facc15'; g.lineWidth = 2.5; g.strokeRect(-13, -13, 26, 26);
+        g.fillStyle = '#facc15'; for (const [x, y] of [[-13, -13], [13, -13], [-13, 13], [13, 13]]) { g.beginPath(); g.arc(x, y, 2.4, 0, TAU); g.fill(); }
+        g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(-13, 16, 26, 4); g.fillStyle = '#facc15'; g.fillRect(-13, 16, 26 * (tr.cap ? 1 - tr.hp / tr.cap : 0), 4);
+        break;
+      }
+    }
   }
   function ground(g, ts, view) {
     for (const t of G.towers) if (t.type === 'lesni_druid' && t.fx.full_track_thorns_dps) {   // trny po celé cestě
@@ -584,32 +650,108 @@ const XR = (() => {
     for (const m of G.movers) {
       if (m.kind === 'tornado') {
         if (has('lesni_druid')) { TDS.lesni_druidExtra(g, 'tornado', m.x, m.y, 0, ts, {}); continue; }
-        g.save(); g.translate(m.x, m.y); g.strokeStyle = 'rgba(226,232,240,.8)'; g.lineWidth = 3;
-        for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(0, -i * 6, 14 - i * 3, ts / 120 + i, ts / 120 + i + 4.2); g.stroke(); }
-        g.restore();
+        moverOwn(g, m, ts);
       } else if (m.kind === 'ball') {
         if (has('lesni_druid')) { TDS.lesni_druidExtra(g, 'ball', m.x, m.y, 0, ts, { r: m.r }); continue; }
-        g.save(); g.fillStyle = 'rgba(96,165,250,.18)'; g.beginPath(); g.arc(m.x, m.y, m.r, 0, TAU); g.fill();
-        g.fillStyle = '#bfdbfe'; g.beginPath(); g.arc(m.x, m.y, 9 + Math.sin(ts / 60) * 2, 0, TAU); g.fill(); g.restore();
+        moverOwn(g, m, ts);
       } else if (m.kind === 'vine') {
         if (has('lesni_druid')) { TDS.lesni_druidExtra(g, 'vine', m.x, m.y, 0, ts, {}); continue; }
-        g.save(); g.strokeStyle = '#166534'; g.lineWidth = 3; g.beginPath(); g.arc(m.x, m.y, 13, 0, TAU); g.stroke();
-        g.beginPath(); g.moveTo(m.x - 12, m.y + 10); g.quadraticCurveTo(m.x, m.y - 14, m.x + 12, m.y + 10); g.stroke(); g.restore();
+        moverOwn(g, m, ts);
       } else if (m.kind === 'sticky') {
         if (has('stinovy_zved')) { TDS.stinovy_zvedExtra(g, 'sticky', m.x, m.y, 0, ts, { left: m.at - G.time }); continue; }
-        g.save(); g.fillStyle = (Math.floor(ts / 120) % 2) ? '#ef4444' : '#7f1d1d'; g.beginPath(); g.arc(m.x + 8, m.y - 8, 5, 0, TAU); g.fill(); g.restore();
+        moverOwn(g, m, ts);
       }
     }
   }
+  // Tornádo, kulový blesk, úponky a lepicí bomba v kreslené grafice
+  function moverOwn(g, m, ts) {
+    g.save(); g.translate(m.x, m.y);
+    switch (m.kind) {
+      case 'tornado': {
+        g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(0, 6, 14, 5, 0, 0, TAU); g.fill();
+        for (let i = 0; i < 5; i++) {
+          const y = 4 - i * 6, w = 6 + i * 3.2, sw = Math.sin(ts / 90 + i) * 2.5;
+          g.fillStyle = 'rgba(' + (226 - i * 8) + ',' + (232 - i * 6) + ',240,' + (0.75 - i * 0.08) + ')'; g.strokeStyle = 'rgba(100,116,139,.6)'; g.lineWidth = 1;
+          g.beginPath(); g.ellipse(sw, y, w, w * 0.32, 0, 0, TAU); g.fill(); g.stroke();
+        }
+        g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1.4; for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(0, -8, 8 + i * 4, ts / 80 + i * 2, ts / 80 + i * 2 + 1.4); g.stroke(); }
+        g.fillStyle = '#4ade80'; for (let i = 0; i < 3; i++) { const a = ts / 110 + i * 2.1; g.beginPath(); g.ellipse(Math.cos(a) * 13, -10 + Math.sin(a) * 4, 2.6, 1.3, a, 0, TAU); g.fill(); }
+        break;
+      }
+      case 'ball': {
+        g.strokeStyle = 'rgba(96,165,250,.45)'; g.lineWidth = 1.5; g.setLineDash([5, 6]); g.beginPath(); g.arc(0, 0, m.r, ts / 400, ts / 400 + TAU); g.stroke(); g.setLineDash([]);
+        g.fillStyle = 'rgba(147,197,253,.14)'; g.beginPath(); g.arc(0, 0, m.r, 0, TAU); g.fill();
+        const R = 9 + Math.sin(ts / 60) * 1.5;
+        g.fillStyle = 'rgba(191,219,254,.5)'; g.beginPath(); g.arc(0, 0, R + 5, 0, TAU); g.fill();
+        g.fillStyle = '#3b82f6'; g.beginPath(); g.arc(0, 0, R, 0, TAU); g.fill();
+        g.fillStyle = '#eff6ff'; g.beginPath(); g.arc(-2, -2, R * 0.45, 0, TAU); g.fill();
+        g.strokeStyle = '#fef08a'; g.lineWidth = 1.6;
+        for (let i = 0; i < 3; i++) { const a = ts / 70 * (i % 2 ? 1 : -1) + i * 2.1; g.beginPath(); g.moveTo(Math.cos(a) * R, Math.sin(a) * R); g.lineTo(Math.cos(a + 0.3) * (R + 6), Math.sin(a + 0.3) * (R + 6)); g.lineTo(Math.cos(a - 0.1) * (R + 10), Math.sin(a - 0.1) * (R + 10)); g.stroke(); }
+        break;
+      }
+      case 'vine': {   // úponky obtočené kolem slizáka
+        g.strokeStyle = '#15803d'; g.lineWidth = 2.6; g.lineCap = 'round';
+        for (let i = 0; i < 3; i++) { const a = i * 2.1 + Math.sin(ts / 300) * 0.2; g.beginPath(); g.moveTo(Math.cos(a) * 15, Math.sin(a) * 15 + 6); g.bezierCurveTo(Math.cos(a + 1) * 16, Math.sin(a + 1) * 12, Math.cos(a + 2) * 9, Math.sin(a + 2) * 9, Math.cos(a + 2.6) * 11, Math.sin(a + 2.6) * 11); g.stroke(); }
+        g.fillStyle = '#4ade80'; for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.5; g.beginPath(); g.ellipse(Math.cos(a) * 12, Math.sin(a) * 12, 3.4, 1.8, a + 0.8, 0, TAU); g.fill(); }
+        g.fillStyle = '#f472b6'; g.beginPath(); g.arc(-10, -9, 2, 0, TAU); g.fill();
+        break;
+      }
+      case 'sticky': {   // bomba přilepená na slizákovi, kroužek odpočtu
+        const left = Math.max(0, m.at - G.time), tot = m.src?.fx?.sticky_bomb_fuse || 2;
+        g.translate(8, -8);
+        g.strokeStyle = 'rgba(239,68,68,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, 8.5, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, left / tot)); g.stroke();
+        g.fillStyle = '#1f2937'; g.strokeStyle = '#030712'; g.lineWidth = 1; g.beginPath(); g.arc(0, 0, 5.5, 0, TAU); g.fill(); g.stroke();
+        g.fillStyle = '#a3e635'; g.fillRect(-5.5, -1, 11, 2);   // lepicí páska
+        g.fillStyle = (Math.floor(ts / (left < 0.7 ? 60 : 150)) % 2) ? '#ef4444' : '#7f1d1d'; g.beginPath(); g.arc(0, -2.8, 1.6, 0, TAU); g.fill();
+        break;
+      }
+    }
+    g.restore();
+  }
+  // Střílna trpaslíka: trojnožka a hlavice podle druhu
+  function sentryOwn(g, s, ts) {
+    const fire = s.firedAt ? Math.max(0, 1 - (G.time - s.firedAt) / 0.1) : 0;
+    g.save(); g.translate(s.x, s.y);
+    g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(2, 5, 11, 5, 0, 0, TAU); g.fill();
+    g.strokeStyle = '#44403c'; g.lineWidth = 2.2; g.lineCap = 'round';
+    for (let i = 0; i < 3; i++) { const a = i * TAU / 3 + Math.PI / 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * 11, Math.sin(a) * 11); g.stroke(); }
+    g.fillStyle = '#78716c'; g.strokeStyle = '#1c1917'; g.lineWidth = 1.2; g.beginPath(); g.arc(0, 0, 6.5, 0, TAU); g.fill(); g.stroke();
+    g.rotate(s.ang);
+    const col = { basic: '#a16207', crushing_mace: '#57534e', explosion_bomb: '#b91c1c', laser_beam: '#ea580c', frost_pulse: '#0ea5e9', plasma: '#a855f7' }[s.kind] || '#a16207';
+    switch (s.kind) {
+      case 'crushing_mace':
+        g.fillStyle = '#44403c'; g.fillRect(0, -1.5, 9, 3); g.fillStyle = '#a8a29e'; g.beginPath(); g.arc(11, 0, 4, 0, TAU); g.fill(); g.stroke();
+        g.fillStyle = '#e7e5e4'; for (let i = 0; i < 6; i++) { const a = i * TAU / 6; g.beginPath(); g.arc(11 + Math.cos(a) * 4.5, Math.sin(a) * 4.5, 1.2, 0, TAU); g.fill(); }
+        break;
+      case 'explosion_bomb':
+        g.fillStyle = '#292524'; g.fillRect(0, -4.5, 10, 9); g.strokeRect(0, -4.5, 10, 9); g.fillStyle = '#7f1d1d'; g.fillRect(8, -5, 3, 10);
+        break;
+      case 'laser_beam':
+        g.fillStyle = '#44403c'; g.fillRect(0, -2.5, 9, 5); g.fillStyle = '#fdba74'; g.beginPath(); g.arc(10, 0, 3.2, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(254,215,170,' + (0.4 + fire * 0.6) + ')'; g.beginPath(); g.arc(10, 0, 5.5, 0, TAU); g.fill();
+        break;
+      case 'frost_pulse':
+        g.fillStyle = '#bae6fd'; g.strokeStyle = '#0369a1'; g.beginPath(); g.ellipse(5, 0, 4, 8, 0, 0, TAU); g.fill(); g.stroke();
+        g.fillStyle = '#e0f2fe'; g.beginPath(); g.moveTo(5, -3); g.lineTo(10, 0); g.lineTo(5, 3); g.closePath(); g.fill();
+        break;
+      case 'plasma':
+        g.fillStyle = '#44403c'; g.fillRect(0, -2.5, 8, 5);
+        g.fillStyle = 'rgba(192,132,252,' + (0.5 + Math.sin(ts / 80) * 0.2) + ')'; g.beginPath(); g.arc(10, 0, 5, 0, TAU); g.fill(); g.fillStyle = '#67e8f9'; g.beginPath(); g.arc(10, 0, 2.4, 0, TAU); g.fill();
+        break;
+      default:
+        g.fillStyle = '#292524'; g.fillRect(0, -2, 12, 4); g.fillRect(0, -4, 4, 8);
+    }
+    if (fire > 0 && s.kind !== 'laser_beam' && s.kind !== 'frost_pulse') { g.fillStyle = 'rgba(253,224,71,' + fire + ')'; star(g, 15, 0, 4 + fire * 3); }
+    g.rotate(-s.ang);
+    g.fillStyle = col; g.beginPath(); g.arc(0, 0, 3.6, 0, TAU); g.fill();   // barevný kryt podle druhu
+    g.fillStyle = '#facc15'; g.beginPath(); g.arc(-1, -1, 1.2, 0, TAU); g.fill();
+    g.restore();
+  }
+  function star(g, x, y, r) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - Math.PI / 2, q = i % 2 ? r * 0.45 : r; g.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q); } g.closePath(); g.fill(); }
   function air(g, ts) {
     for (const s of G.sentries) {
       if (has('trpaslici_inzenyr')) { TDS.trpaslici_inzenyrExtra(g, 'sentry_' + s.kind, s.x, s.y, s.ang, ts, { firing: s.firedAt ? Math.max(0, 1 - (G.time - s.firedAt) / 0.1) : 0 }); continue; }
-      g.save(); g.translate(s.x, s.y);
-      g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(2, 5, 10, 5, 0, 0, TAU); g.fill();
-      g.fillStyle = { basic: '#a16207', crushing_mace: '#57534e', explosion_bomb: '#b91c1c', laser_beam: '#ea580c', frost_pulse: '#0ea5e9', plasma: '#a855f7' }[s.kind] || '#a16207';
-      g.beginPath(); g.arc(0, 0, 9, 0, TAU); g.fill(); g.strokeStyle = '#1c1917'; g.lineWidth = 1.5; g.stroke();
-      g.rotate(s.ang); g.fillStyle = '#292524'; g.fillRect(0, -2, 11, 4);
-      g.restore();
+      sentryOwn(g, s, ts);
     }
     for (const t of G.towers) if (t.gryf) {
       const gr = t.gryf;

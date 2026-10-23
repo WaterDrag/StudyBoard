@@ -616,7 +616,9 @@ const TR = (() => {
   function iconCanvas(size, r, draw) {
     const c = off(size, size), g = c.getContext('2d'), k = size / 2 / (r + 6);
     g.translate(size / 2 - 1.5 * k, size / 2 - 2 * k); g.scale(k, k);
+    const own = !G; if (own) G = { time: 0, hornAll: 0 };   // mimo hru (úvodní obrazovka) stačí prázdný stav
     try { draw(g); } catch (_) { /* nic */ }
+    if (own) G = null;
     return c;
   }
   function towerIcon(type, size) {
@@ -690,11 +692,75 @@ const TR = (() => {
   /* ── Střely ────────────────────────────────────────────────── */
   // Střely nových věží, dokud nemají vlastní texturu, vypadají jako podobné stávající
   const PROJ_ALIAS = { thorn: 'spike', shuriken: 'blade', dagger: 'boltTrue', nail: 'spike', plasma: 'bolt', gryfDart: 'dart', rocket: 'harpoonBolt', shell: 'cannon', mortarShell: 'cannon', flashBomb: 'cannon' };
+  // Střely nových věží v kreslené grafice (souřadnice natočené po směru letu, +x dopředu)
+  function newProj(g, p, time) {
+    switch (p.kind) {
+      case 'thorn':
+        g.fillStyle = '#166534'; g.strokeStyle = '#052e16'; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(8, 0); g.quadraticCurveTo(0, -1, -5, -3.5); g.lineTo(-4, 3); g.quadraticCurveTo(1, 1.5, 8, 0); g.fill(); g.stroke();
+        g.fillStyle = '#86efac'; g.beginPath(); g.moveTo(6, -0.3); g.lineTo(-3, -2); g.lineTo(-2.5, -0.6); g.closePath(); g.fill(); return true;
+      case 'shuriken':
+        g.rotate(time * 22); g.fillStyle = '#475569'; g.strokeStyle = '#0f172a'; g.lineWidth = 1;
+        g.beginPath(); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, q = i % 2 ? 2.4 : 8; g.lineTo(Math.cos(a) * q, Math.sin(a) * q); } g.closePath(); g.fill(); g.stroke();
+        g.strokeStyle = '#e2e8f0'; g.beginPath(); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; g.moveTo(Math.cos(a) * 2.5, Math.sin(a) * 2.5); g.lineTo(Math.cos(a) * 7, Math.sin(a) * 7); } g.stroke();
+        g.fillStyle = '#0f172a'; g.beginPath(); g.arc(0, 0, 1.4, 0, TAU); g.fill(); return true;
+      case 'dagger':
+        g.fillStyle = 'rgba(167,139,250,.3)'; g.beginPath(); g.ellipse(-3, 0, 11, 4.5, 0, 0, TAU); g.fill();   // stínový závoj
+        g.fillStyle = '#e2e8f0'; g.strokeStyle = '#475569'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(10, 0); g.lineTo(0, -2.4); g.lineTo(0, 2.4); g.closePath(); g.fill(); g.stroke();
+        g.fillStyle = '#a16207'; g.fillRect(-1.2, -4, 2.2, 8);
+        g.fillStyle = '#3f2a14'; g.fillRect(-6.5, -1.4, 5.4, 2.8); g.fillStyle = '#7c3aed'; g.beginPath(); g.arc(-7.4, 0, 1.8, 0, TAU); g.fill(); return true;
+      case 'nail':
+        g.fillStyle = '#9ca3af'; g.fillRect(-6, -1.1, 11, 2.2); g.beginPath(); g.moveTo(9, 0); g.lineTo(5, -1.1); g.lineTo(5, 1.1); g.fill();
+        g.fillStyle = '#4b5563'; g.fillRect(-7.5, -3, 2, 6); g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(-5, -1.1, 9, 0.7); return true;
+      case 'plasma': {
+        const pulse = 1 + Math.sin(time * 30) * 0.12;
+        g.fillStyle = 'rgba(168,85,247,.25)'; g.beginPath(); g.ellipse(-6, 0, 12, 5, 0, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(192,132,252,.55)'; g.beginPath(); g.arc(0, 0, 7 * pulse, 0, TAU); g.fill();
+        g.fillStyle = '#67e8f9'; g.beginPath(); g.arc(0, 0, 4 * pulse, 0, TAU); g.fill();
+        g.fillStyle = '#fff'; g.beginPath(); g.arc(0.8, -0.8, 1.8, 0, TAU); g.fill(); return true;
+      }
+      case 'gryfDart':   // zlaté pero
+        g.strokeStyle = '#78350f'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(-9, 0); g.lineTo(8, 0); g.stroke();
+        g.fillStyle = '#facc15'; g.strokeStyle = '#a16207'; g.lineWidth = 0.8;
+        g.beginPath(); g.moveTo(7, 0); g.quadraticCurveTo(0, -5, -9, -3); g.lineTo(-7, 0); g.lineTo(-9, 3); g.quadraticCurveTo(0, 5, 7, 0); g.fill(); g.stroke();
+        g.strokeStyle = 'rgba(161,98,7,.6)'; for (let i = -6; i < 4; i += 3) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i - 2, -2.6); g.moveTo(i, 0); g.lineTo(i - 2, 2.6); g.stroke(); }
+        return true;
+      case 'rocket': {
+        const fl = 5 + Math.sin(time * 40) * 2;
+        g.fillStyle = '#fb923c'; g.beginPath(); g.moveTo(-6, -2.2); g.lineTo(-6 - fl, 0); g.lineTo(-6, 2.2); g.fill();
+        g.fillStyle = '#fde047'; g.beginPath(); g.moveTo(-6, -1.2); g.lineTo(-6 - fl * 0.55, 0); g.lineTo(-6, 1.2); g.fill();
+        g.fillStyle = '#b91c1c'; g.beginPath(); g.moveTo(-6, -4.5); g.lineTo(-3, -2.5); g.lineTo(-3, 2.5); g.lineTo(-6, 4.5); g.closePath(); g.fill();
+        g.fillStyle = '#e5e7eb'; g.strokeStyle = '#374151'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(-6, -2.5); g.lineTo(4, -2.5); g.quadraticCurveTo(9, 0, 4, 2.5); g.lineTo(-6, 2.5); g.closePath(); g.fill(); g.stroke();
+        g.fillStyle = '#dc2626'; g.fillRect(-1, -2.5, 2, 5); return true;
+      }
+      case 'shell': case 'mortarShell': case 'flashBomb': {
+        const flash = p.kind === 'flashBomb', big = p.kind === 'mortarShell', R = big ? 7.5 : 6;
+        g.rotate(-p.ang + time * (big ? 4 : 8));
+        g.fillStyle = flash ? '#f8fafc' : '#1f2937'; g.strokeStyle = flash ? '#94a3b8' : '#030712'; g.lineWidth = 1.2;
+        g.beginPath(); g.arc(0, 0, R, 0, TAU); g.fill(); g.stroke();
+        if (big) { g.strokeStyle = '#78716c'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(-R, 0); g.lineTo(R, 0); g.stroke(); }
+        if (flash) { g.fillStyle = '#facc15'; star(g, 0, 0, R * 0.55); }
+        g.fillStyle = 'rgba(255,255,255,.45)'; g.beginPath(); g.arc(-R * 0.35, -R * 0.35, R * 0.28, 0, TAU); g.fill();
+        g.fillStyle = '#78716c'; g.fillRect(-1, -R - 3, 2, 3);   // zápalnice s jiskrou
+        g.fillStyle = Math.sin(time * 50) > 0 ? '#fde047' : '#f97316'; star(g, 0, -R - 4, 2.6);
+        return true;
+      }
+    }
+    return false;
+  }
   function drawProj(g, p, time) {
-    if (useTDS() && window.TDS?.projectileDrawers?.[p.kind]) { TDS.projectile(g, p.kind, p.x, p.y, p.ang, performance.now()); return; }
+    // granát moždíře letí obloukem: stín na zemi, střela nad ním
+    let lift = 0;
+    if (p.arc && p.dist > 0) {
+      const k = Math.min(1, p.trav / p.dist); lift = Math.sin(Math.PI * k) * Math.min(90, p.dist * 0.3);
+      g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(p.x, p.y + 3, 6 - lift / 30, 3 - lift / 60, 0, 0, TAU); g.fill();
+    }
+    const py = p.y - lift;
+    if (useTDS() && window.TDS?.projectileDrawers?.[p.kind]) { TDS.projectile(g, p.kind, p.x, py, p.ang, performance.now()); return; }
     const kind = PROJ_ALIAS[p.kind];
-    if (kind && useTDS() && window.TDS?.projectileDrawers?.[kind]) { TDS.projectile(g, kind, p.x, p.y, p.ang, performance.now()); return; }
-    g.save(); g.translate(p.x, p.y); g.rotate(p.ang);
+    if (kind && useTDS() && window.TDS?.projectileDrawers?.[kind]) { TDS.projectile(g, kind, p.x, py, p.ang, performance.now()); return; }
+    g.save(); g.translate(p.x, py); g.rotate(p.ang);
+    if (newProj(g, p, time)) { g.restore(); return; }
     switch (kind || p.kind) {
       case 'arrow': case 'arrowCrit': case 'ballista':
         g.strokeStyle = p.kind === 'arrowCrit' ? '#f472b6' : '#78350f'; g.lineWidth = p.kind === 'ballista' ? 3.5 : 2;

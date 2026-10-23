@@ -131,7 +131,7 @@ function renderSetup() {
   });
   maps.onclick = e => { const b = e.target.closest('[data-map]'); if (!b) return; pref.map = b.dataset.map; savePref(); renderSetup(); };
   $('tdHeroes').innerHTML = TD.heroes.map(h => `<button type="button" class="td-opt td-hero${pref.hero === h.id ? ' on' : ''}" data-hero="${h.id}">
-      <span class="td-hero-ico" style="--hc:${h.col}">${h.ico}</span><b>${esc(h.name)}</b><small>${esc(h.role)}</small>
+      <span class="td-hero-ico" style="--hc:${h.col}">${heroIco(h)}</span><b>${esc(h.name)}</b><small>${esc(h.role)}</small>
       <small class="td-hero-pass">📜 ${esc(h.passive.name)}: ${esc(h.passive.description)}</small><small class="td-hero-cost">${h.base.cost} zl</small></button>`).join('');
   $('tdHeroes').onclick = e => { const b = e.target.closest('[data-hero]'); if (!b) return; pref.hero = b.dataset.hero; savePref(); renderSetup(); };
   const D = { easy: ['Lehká', '200 životů, věže o 15 % levnější'], medium: ['Střední', '150 životů, běžné ceny'], hard: ['Těžká', '100 životů, věže o 8 % dražší'] };
@@ -488,7 +488,6 @@ let _towerIco = {};
 function _towerIcoReset() { _towerIco = {}; panelSig = ''; }
 function gfxIcon(key, ico, tex, drawTex, drawOwn) {
   const own = localStorage.getItem('td_gfx') === '0' || !tex;
-  if (own && !G) return ico;   // kresba z mapy potřebuje běžící hru (čas, efekty)
   key = (own ? 'k:' : 'd:') + key;
   _towerIco[key] = _towerIco[key] || (own ? drawOwn() : drawTex()).toDataURL();
   return `<img src="${_towerIco[key]}" alt="">`;
@@ -514,7 +513,7 @@ function nextWavePanel() {
   if (n > TD.waves.length + 50) return '';
   const w = waveDef(n);
   const groups = {};
-  w.def.groups.forEach(gr => { const k = gr.id + '|' + (gr.mods || []).join(','); groups[k] = (groups[k] || 0) + Math.round(gr.n * w.cnt); });
+  w.def.groups.forEach(gr => { const k = gr.id + '|' + (gr.mods || []).join(','); groups[k] = (groups[k] || 0) + Math.max(1, Math.round(gr.n * w.cnt * (G.cfg?.count || 1))); });
   const BADGE = { duchsliz: ['👻', 'průhledný — vidí ho jen některé věže'], dorustajici: ['🌱', 'dorůstá'], kamenny: ['🪨', 'kamenný — 2× životy'], zrychleny: ['💨', 'větrný spěch — rychlejší, zpomalení a omráčení kratší'], runovy_stit: ['🔵', 'runová bublina — pohltí první zásah'] };
   const TRAIT = { flying: '🫧', enrage_on_hit: '😡', swarm_split: '✳️', shield_aura: '🛡️', healer_pulse: '💚', burrower: '⛏️', projectile_magnet: '🧲', chilling_presence: '🧊', brood_spawner: '🐝', prismatic_shell: '💎' };
   const chips = Object.entries(groups).map(([k, cnt]) => {
