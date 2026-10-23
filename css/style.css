@@ -5979,3 +5979,38 @@ img.card-img { cursor: zoom-in; }
 }
 .td-stat[hidden], .td-btn[hidden], .td-lobby[hidden] { display: none; }
 .td-vs-rank .lb-name { text-align: left; }
+
+/* Barva textu a zvýraznění: tlačítko použije naposledy zvolenou barvu, šipka otevře výběr */
+.rt-color-split { display: inline-flex; align-items: center; border-radius: 7px; }
+.rt-color-split:hover { background: var(--bg-3); }
+.rt-color-apply { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 32px; padding: 0 4px 0 7px; border: 0; background: none; color: inherit; cursor: pointer; border-radius: 7px 0 0 7px; }
+.rt-color-apply:hover { background: var(--bg-4, var(--bg-3)); }
+.rt-color-wrap.rt-color-more { min-width: 18px; padding: 0 3px; border-radius: 0 7px 7px 0; color: var(--text-muted); }
+.rt-color-more svg { width: 12px; height: 12px; }
+.rt-color-split { position: relative; }
+.rt-color-more { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 32px; padding: 0; border: 0; background: none; color: var(--text-muted); cursor: pointer; border-radius: 0 7px 7px 0; }
+.rt-color-more:hover { background: var(--bg-4, var(--bg-3)); color: var(--text); }
+.rt-color-more svg { width: 12px; height: 12px; }
+.rt-color-native { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+/* Paleta barev (jako ve Wordu) */
+.rt-cmenu { position: fixed; z-index: 1200; width: 262px; padding: 10px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--border-strong, var(--border)); box-shadow: 0 16px 40px -12px rgba(0,0,0,.55); display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem; color: var(--text); }
+.rt-cmenu-hl { width: 172px; }
+.rt-cm-h { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 0.74rem; color: var(--text-muted); margin-top: 4px; }
+.rt-cm-grid { display: grid; grid-template-columns: repeat(10, 21px); gap: 3px; }
+.rt-cm-shades { gap: 0 3px; margin-top: -3px; }
+.rt-cm-hl { grid-template-columns: repeat(5, 26px); gap: 4px; }
+.rt-cm-hl .rt-sw { height: 26px; }
+.rt-sw { position: relative; width: 100%; height: 21px; padding: 0; border: 1px solid rgba(127,127,127,.35); border-radius: 3px; background: var(--c); cursor: pointer; }
+.rt-sw:hover { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 1; }
+.rt-sw.on { outline: 2px solid var(--text); outline-offset: 1px; }
+.rt-sw-act { position: absolute; top: -7px; right: -7px; width: 15px; height: 15px; border-radius: 50%; display: none; place-items: center; background: var(--bg-2); color: var(--text); border: 1px solid var(--border); font-size: 10px; line-height: 1; }
+.rt-sw:hover .rt-sw-act { display: grid; }
+@media (hover: none) { .rt-sw-act { display: grid; } }
+.rt-cm-auto, .rt-cm-more { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.rt-cm-auto:hover, .rt-cm-more:hover, .rt-cm-link:hover { background: var(--bg-3); }
+.rt-cm-auto span { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--border); flex-shrink: 0; }
+.rt-cm-nocol { background: linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%); }
+.rt-cm-link { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 500; font-size: 0.72rem; cursor: pointer; padding: 2px 4px; border-radius: 6px; }
+.rt-cm-empty { grid-column: 1 / -1; color: var(--text-faint, var(--text-muted)); font-size: 0.72rem; }
+.rt-cmenu-hl .rt-cm-grid:not(.rt-cm-hl) { grid-template-columns: repeat(5, 26px); gap: 4px; }
+.rt-cmenu-hl .rt-cm-grid:not(.rt-cm-hl) .rt-sw { height: 26px; }

@@ -194,14 +194,14 @@
             <button type="button" class="rt-btn" data-cmd="insertHorizontalRule" title="Vodorovná čára" aria-label="Vodorovná čára"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16"/></svg></button>
             <button type="button" class="rt-btn rt-code" title="Blok kódu (nebo napiš ``` a mezerník)" aria-label="Blok kódu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></svg></button>
             <div class="rt-sep"></div>
-            <label class="rt-color-wrap" title="Barva textu">
-              <span class="rt-color-a" id="addColorA">A</span>
-              <input type="color" id="addTextColor" value="#1a1a1a">
-            </label>
-            <label class="rt-color-wrap rt-hi-wrap" title="Zvýraznit text">
-              <span class="rt-color-a rt-hi-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-5 5v3h3l5-5"/><path d="m9 11 6-6 4 4-6 6z"/></svg></span>
-              <input type="color" class="rt-hilite" value="#fde047">
-            </label>
+            <span class="rt-color-split">
+              <button type="button" class="rt-color-apply" title="Barva textu (stejná jako minule)" aria-label="Obarvit text"><span class="rt-color-a" id="addColorA">A</span></button>
+              <button type="button" class="rt-color-more" data-kind="text" title="Další barvy textu" aria-label="Další barvy textu" aria-haspopup="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><input type="color" class="rt-color-native" id="addTextColor" value="#e53935" tabindex="-1" aria-hidden="true">
+            </span>
+            <span class="rt-color-split rt-hi-wrap">
+              <button type="button" class="rt-color-apply rt-hi-apply" title="Zvýraznit text (stejnou barvou jako minule)" aria-label="Zvýraznit text"><span class="rt-color-a rt-hi-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-5 5v3h3l5-5"/><path d="m9 11 6-6 4 4-6 6z"/></svg></span></button>
+              <button type="button" class="rt-color-more" data-kind="hl" title="Další barvy zvýraznění" aria-label="Další barvy zvýraznění" aria-haspopup="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><input type="color" class="rt-hilite rt-color-native" value="#fde047" tabindex="-1" aria-hidden="true">
+            </span>
             <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" aria-label="Vymazat formátování"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5h12v2"/><path d="M10 5 7 19"/><path d="m15 14 5 5M20 14l-5 5"/></svg></button>
             <div class="rt-sep"></div>
             <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky (Tab = zanořit)" aria-label="Odrážky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
@@ -293,14 +293,14 @@
             <button type="button" class="rt-btn" data-cmd="insertHorizontalRule" title="Vodorovná čára" aria-label="Vodorovná čára"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16"/></svg></button>
             <button type="button" class="rt-btn rt-code" title="Blok kódu (nebo napiš ``` a mezerník)" aria-label="Blok kódu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></svg></button>
             <div class="rt-sep"></div>
-            <label class="rt-color-wrap" title="Barva textu">
-              <span class="rt-color-a" id="editColorA">A</span>
-              <input type="color" id="editTextColor" value="#1a1a1a">
-            </label>
-            <label class="rt-color-wrap rt-hi-wrap" title="Zvýraznit text">
-              <span class="rt-color-a rt-hi-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-5 5v3h3l5-5"/><path d="m9 11 6-6 4 4-6 6z"/></svg></span>
-              <input type="color" class="rt-hilite" value="#fde047">
-            </label>
+            <span class="rt-color-split">
+              <button type="button" class="rt-color-apply" title="Barva textu (stejná jako minule)" aria-label="Obarvit text"><span class="rt-color-a" id="editColorA">A</span></button>
+              <button type="button" class="rt-color-more" data-kind="text" title="Další barvy textu" aria-label="Další barvy textu" aria-haspopup="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><input type="color" class="rt-color-native" id="editTextColor" value="#e53935" tabindex="-1" aria-hidden="true">
+            </span>
+            <span class="rt-color-split rt-hi-wrap">
+              <button type="button" class="rt-color-apply rt-hi-apply" title="Zvýraznit text (stejnou barvou jako minule)" aria-label="Zvýraznit text"><span class="rt-color-a rt-hi-a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-5 5v3h3l5-5"/><path d="m9 11 6-6 4 4-6 6z"/></svg></span></button>
+              <button type="button" class="rt-color-more" data-kind="hl" title="Další barvy zvýraznění" aria-label="Další barvy zvýraznění" aria-haspopup="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><input type="color" class="rt-hilite rt-color-native" value="#fde047" tabindex="-1" aria-hidden="true">
+            </span>
             <button type="button" class="rt-btn" data-cmd="removeFormat" title="Vymazat formátování" aria-label="Vymazat formátování"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5h12v2"/><path d="M10 5 7 19"/><path d="m15 14 5 5M20 14l-5 5"/></svg></button>
             <div class="rt-sep"></div>
             <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Odrážky (Tab = zanořit)" aria-label="Odrážky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>

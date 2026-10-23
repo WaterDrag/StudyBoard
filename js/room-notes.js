@@ -2453,15 +2453,121 @@ function setupHighlighter(editor, toolbar) {
     const sel = window.getSelection();
     saved = (sel && sel.rangeCount) ? sel.getRangeAt(0).cloneRange() : null;
   });
-  input.addEventListener('input', () => {
+  const apply = (c = input.value) => {
     editor.focus();
     if (saved) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(saved); }
     // hiliteColor is the standard name; some engines only know backColor.
-    if (!document.execCommand('hiliteColor', false, input.value)) {
-      document.execCommand('backColor', false, input.value);
+    if (!document.execCommand('hiliteColor', false, c)) {
+      document.execCommand('backColor', false, c);
     }
     const a = wrap?.querySelector('.rt-hi-a');
-    if (a) a.style.borderBottomColor = input.value;
+    if (a && c !== 'transparent') a.style.borderBottomColor = c;
+  };
+  input.addEventListener('input', () => apply());
+  input.addEventListener('change', () => rtRememberColor('hl', input.value));
+  // Barevný výběr nic neohlásí, když se vybere stejná barva — proto tlačítko,
+  // které zvýrazní naposledy zvolenou barvou (jako ve Wordu)
+  const btn = wrap?.querySelector('.rt-hi-apply');
+  btn?.addEventListener('mousedown', e => e.preventDefault());
+  btn?.addEventListener('click', () => apply());
+  const more = wrap?.querySelector('.rt-color-more');
+  more?.addEventListener('mousedown', e => e.preventDefault());
+  more?.addEventListener('click', () => openColorMenu(more, 'hl', input, c => {
+    if (c) { input.value = c; rtRememberColor('hl', c); }
+    apply(c || 'transparent');
+  }));
+  const a = wrap?.querySelector('.rt-hi-a');
+  if (a) a.style.borderBottomColor = input.value;
+}
+
+// ── Paleta barev textu a zvýraznění (jako ve Wordu) ─────────────
+// Barvy motivu s odstíny, standardní barvy, 5 posledních vlastních barev
+// (barvy z palety se nepočítají) a oblíbené. Poslední a oblíbené si pamatuje
+// prohlížeč (localStorage), zvlášť pro text a pro zvýraznění.
+const RT_THEME = ['#ffffff', '#000000', '#e7e6e6', '#1f3864', '#2e75b6', '#ed7d31', '#548235', '#00b0f0', '#7030a0', '#70ad47'];
+const RT_STD = ['#c00000', '#ff0000', '#ffc000', '#ffff00', '#92d050', '#00b050', '#00b0f0', '#0070c0', '#002060', '#7030a0'];
+const RT_HL = ['#ffff00', '#00ff00', '#00ffff', '#ff00ff', '#0000ff', '#ff0000', '#000080', '#008080', '#008000', '#800080', '#800000', '#808000', '#808080', '#c0c0c0', '#000000'];
+function rtMix(hex, k) {   // k > 0 zesvětlí k bílé, k < 0 ztmaví k černé
+  const n = parseInt(hex.slice(1), 16), ch = [n >> 16, (n >> 8) & 255, n & 255];
+  return '#' + ch.map(v => Math.round(k > 0 ? v + (255 - v) * k : v * (1 + k)).toString(16).padStart(2, '0')).join('');
+}
+// pod každou barvou motivu 5 odstínů: u bílé tmavší, u černé světlejší, jinak světlejší i tmavší
+const RT_SHADES = RT_THEME.map((c, i) => (i === 0 ? [-0.05, -0.15, -0.25, -0.35, -0.5] : i === 1 ? [0.5, 0.35, 0.25, 0.15, 0.05] : [0.8, 0.6, 0.4, -0.25, -0.5]).map(k => rtMix(c, k)));
+const RT_PALETTE = { text: new Set([...RT_THEME, ...RT_SHADES.flat(), ...RT_STD]), hl: new Set(RT_HL) };
+function rtColorStore(kind) { try { return JSON.parse(localStorage.getItem('rt_colors_' + kind) || '{}') || {}; } catch (_) { return {}; } }
+function rtColorSave(kind, d) { try { localStorage.setItem('rt_colors_' + kind, JSON.stringify(d)); } catch (_) { /* jen pohodlí */ } }
+function rtRememberColor(kind, c) {
+  c = String(c || '').toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(c) || RT_PALETTE[kind].has(c)) return;
+  const d = rtColorStore(kind);
+  d.recent = [c, ...(d.recent || []).filter(x => x !== c)].slice(0, 5);
+  rtColorSave(kind, d);
+}
+let rtMenu = null;
+function closeColorMenu() {
+  if (!rtMenu) return;
+  rtMenu.el.remove(); document.removeEventListener('mousedown', rtMenu.outside, true); document.removeEventListener('keydown', rtMenu.esc, true);
+  rtMenu = null;
+}
+// pick(barva) — null = Automatická / Bez barvy
+function openColorMenu(btn, kind, input, pick) {
+  if (rtMenu?.btn === btn) { closeColorMenu(); return; }
+  closeColorMenu();
+  const cur = String(input.value).toLowerCase();
+  const render = () => {
+    const d = rtColorStore(kind), fav = d.fav || [], recent = (d.recent || []).filter(c => !fav.includes(c));
+    const sw = (c, extra = '') => `<button type="button" class="rt-sw${c === cur ? ' on' : ''}" data-c="${c}" style="--c:${c}" title="${c}" aria-label="Barva ${c}">${extra}</button>`;
+    let h = kind === 'text'
+      ? `<button type="button" class="rt-cm-auto" data-none><span style="background:currentColor"></span>Automatická</button>
+         <div class="rt-cm-h">Barvy motivu</div><div class="rt-cm-grid">${RT_THEME.map(c => sw(c)).join('')}</div>
+         <div class="rt-cm-grid rt-cm-shades">${[0, 1, 2, 3, 4].map(r => RT_SHADES.map(col => sw(col[r])).join('')).join('')}</div>
+         <div class="rt-cm-h">Standardní barvy</div><div class="rt-cm-grid">${RT_STD.map(c => sw(c)).join('')}</div>`
+      : `<div class="rt-cm-grid rt-cm-hl">${RT_HL.map(c => sw(c)).join('')}</div>
+         <button type="button" class="rt-cm-auto" data-none><span class="rt-cm-nocol"></span>Bez barvy</button>`;
+    h += `<div class="rt-cm-h">Poslední</div><div class="rt-cm-grid">${recent.length ? recent.map(c => sw(c, `<span class="rt-sw-act" data-fav="${c}" title="Přidat do oblíbených">☆</span>`)).join('') : '<span class="rt-cm-empty">Zatím žádné — vyber si v Další barvy…</span>'}</div>
+      <div class="rt-cm-h">Oblíbené <button type="button" class="rt-cm-link" data-fav="${cur}" title="Uložit právě zvolenou barvu">☆ Přidat aktuální</button></div>
+      <div class="rt-cm-grid">${fav.length ? fav.map(c => sw(c, `<span class="rt-sw-act" data-rm="${c}" title="Odebrat z oblíbených">×</span>`)).join('') : '<span class="rt-cm-empty">Hvězdičkou u poslední barvy si ji uložíš.</span>'}</div>
+      <button type="button" class="rt-cm-more" data-custom>🎨 Další barvy…</button>`;
+    el.innerHTML = h;
+  };
+  const el = document.createElement('div');
+  el.className = 'rt-cmenu' + (kind === 'hl' ? ' rt-cmenu-hl' : '');
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', kind === 'text' ? 'Barva textu' : 'Barva zvýraznění');
+  render();
+  document.body.appendChild(el);
+  const r = btn.getBoundingClientRect(), w = el.offsetWidth, hgt = el.offsetHeight;
+  el.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left - 20)) + 'px';
+  el.style.top = (r.bottom + hgt + 8 > window.innerHeight && r.top - hgt - 6 > 0 ? r.top - hgt - 6 : r.bottom + 6) + 'px';
+  el.addEventListener('mousedown', e => e.preventDefault());   // výběr textu v editoru zůstane
+  el.addEventListener('click', e => {
+    const favB = e.target.closest('[data-fav]'), rmB = e.target.closest('[data-rm]');
+    if (favB || rmB) {
+      const d = rtColorStore(kind), c = (favB || rmB).dataset[favB ? 'fav' : 'rm'];
+      d.fav = favB ? [c, ...(d.fav || []).filter(x => x !== c)].slice(0, 10) : (d.fav || []).filter(x => x !== c);
+      rtColorSave(kind, d); render(); return;
+    }
+    if (e.target.closest('[data-custom]')) { closeColorMenu(); input.click(); return; }
+    if (e.target.closest('[data-none]')) { closeColorMenu(); pick(null); return; }
+    const s = e.target.closest('[data-c]');
+    if (s) { closeColorMenu(); pick(s.dataset.c); }
+  });
+  const outside = e => { if (!el.contains(e.target) && !btn.contains(e.target)) closeColorMenu(); };
+  const esc = e => { if (e.key === 'Escape') { e.stopPropagation(); closeColorMenu(); } };
+  document.addEventListener('mousedown', outside, true);
+  document.addEventListener('keydown', esc, true);
+  rtMenu = { el, btn, outside, esc };
+}
+// Automatická barva textu: obarví výběr pomocnou barvou a pak ji (i s původními barvami) odstraní
+function rtClearTextColor(editor) {
+  const MARK = '#010203';
+  document.execCommand('foreColor', false, MARK);
+  editor.querySelectorAll('font[color]').forEach(f => { if (f.getAttribute('color').toLowerCase() === MARK) f.replaceWith(...f.childNodes); });
+  editor.querySelectorAll('[style*="color"]').forEach(x => {
+    if (x.style.color !== 'rgb(1, 2, 3)') return;
+    x.style.color = '';
+    if (!x.getAttribute('style')) x.removeAttribute('style');
+    if (x.tagName === 'SPAN' && !x.attributes.length) x.replaceWith(...x.childNodes);
   });
 }
 
@@ -3167,13 +3273,26 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
 
   // Color: save range on mousedown, apply after picker closes
   if (colorInput) {
-    colorInput.parentElement.addEventListener('mousedown', saveRange);
-    colorInput.addEventListener('change', () => {
+    const applyColor = () => {
       restoreRange();
       document.execCommand('foreColor', false, colorInput.value);
       if (colorA) colorA.style.borderBottomColor = colorInput.value;
       editor.focus();
-    });
+    };
+    colorInput.parentElement.addEventListener('mousedown', saveRange);
+    colorInput.addEventListener('change', () => { applyColor(); rtRememberColor('text', colorInput.value); });
+    // „A“ obarví znovu naposledy zvolenou barvou (výběr barvy stejnou barvu neohlásí)
+    const applyBtn = colorA?.closest('.rt-color-apply');
+    applyBtn?.addEventListener('mousedown', e => { e.preventDefault(); saveRange(); });
+    applyBtn?.addEventListener('click', applyColor);
+    // ▾ otevře paletu: barvy motivu, standardní, poslední, oblíbené
+    const more = colorInput.parentElement.querySelector('.rt-color-more');
+    more?.addEventListener('mousedown', e => { e.preventDefault(); saveRange(); });
+    more?.addEventListener('click', () => openColorMenu(more, 'text', colorInput, c => {
+      if (!c) { restoreRange(); rtClearTextColor(editor); editor.focus(); return; }
+      colorInput.value = c; rtRememberColor('text', c); applyColor();
+    }));
+    if (colorA) colorA.style.borderBottomColor = colorInput.value;
   }
 
   setupEditorImages(editor);

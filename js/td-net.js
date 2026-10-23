@@ -262,7 +262,7 @@ function vsPublish(force) {
     NET.lastS = now;
     NET.mine.child('s').set({
       n: myName(), h: G.heroId, l: Math.max(0, Math.ceil(G.lives)), eco: Math.round(G.vs.eco), w: G.wave, g: Math.floor(G.gold), km: G.km,
-      ld: NET.myDelta, dead: !!G.over, tw: G.towers.length, fs: NET.fs || 0, sent: NET.sentGold, pops: G.stats.pops,
+      ld: NET.myDelta, dead: !!G.over && NET.place !== 1, won: NET.place === 1, tw: G.towers.length, fs: NET.fs || 0, sent: NET.sentGold, pops: G.stats.pops,
       ts: firebase.database.ServerValue.TIMESTAMP,
     }).catch(() => {});
   }
@@ -413,7 +413,8 @@ function vsEndRows() {
   const all = [ME.uid, ...NET.others];
   const rows = all.map(u => {
     const s = u === ME.uid ? { l: Math.ceil(G.lives), w: G.wave, sent: NET.sentGold, dead: !NET.place || NET.place > 1 } : NET.st[u] || {};
-    return { u, name: u === ME.uid ? myName() : vsName(u), alive: u === ME.uid ? NET.place === 1 : vsAlive(u), w: s.w || 0, sent: s.sent || 0, color: NET.d.players[u].color, team: NET.d.players[u].team };
+    // vítěz (i ten, kdo ještě hraje) je nahoře; vlastní výsledek podle místa, ne podle stavu ze sítě
+    return { u, name: u === ME.uid ? myName() : vsName(u), alive: u === ME.uid ? NET.place === 1 : !!s.won || vsAlive(u), w: s.w || 0, sent: s.sent || 0, color: NET.d.players[u].color, team: NET.d.players[u].team };
   }).sort((a, b) => (b.alive - a.alive) || b.w - a.w);
   return rows.map((r, i) => `<div class="lb-row${r.u === ME.uid ? ' me' : ''}"><span class="lb-medal">${r.alive ? '👑' : ['🥇', '🥈', '🥉'][i] || i + 1 + '.'}</span><span class="lb-av" style="background:${r.color}">${esc((r.name || '?')[0].toUpperCase())}</span>
     <span class="lb-name"><b>${esc(r.name)}</b><small>${NET.teams ? `tým ${r.team === 0 ? 'A' : 'B'} · ` : ''}vlna ${r.w} · poslal za ${fmt(r.sent)} zl</small></span><span class="lb-points">${r.alive ? (rows.filter(x => x.alive).length === 1 ? 'vítěz' : 've hře') : 'padl'}</span></div>`).join('');
