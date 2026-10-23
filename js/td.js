@@ -483,19 +483,18 @@ function shopPanel() {
   return h;
 }
 const _miniCache = new Map();
-// Ikona věže do obchodu: nová grafika (TDS.towerIcon), jinak emoji
+// Ikony věží a hrdinů do obchodu: Gemini textura (TDS.towerIcon), v kreslené grafice moje kresba z mapy (TR.towerIcon)
 let _towerIco = {};
 function _towerIcoReset() { _towerIco = {}; panelSig = ''; }
-function towerIco(t) {
-  if (!(window.TDS?.drawers?.[t.id] && TDS.towerIcon) || localStorage.getItem('td_gfx') === '0') return t.ico;
-  _towerIco[t.id] = _towerIco[t.id] || TDS.towerIcon(t.id, 80).toDataURL();
-  return `<img src="${_towerIco[t.id]}" alt="">`;
+function gfxIcon(key, ico, tex, drawTex, drawOwn) {
+  const own = localStorage.getItem('td_gfx') === '0' || !tex;
+  if (own && !G) return ico;   // kresba z mapy potřebuje běžící hru (čas, efekty)
+  key = (own ? 'k:' : 'd:') + key;
+  _towerIco[key] = _towerIco[key] || (own ? drawOwn() : drawTex()).toDataURL();
+  return `<img src="${_towerIco[key]}" alt="">`;
 }
-function heroIco(h) {
-  if (!(window.TDS?.heroDrawers?.[h.id] && TDS.heroIcon) || localStorage.getItem('td_gfx') === '0') return h.ico;
-  _towerIco['h' + h.id] = _towerIco['h' + h.id] || TDS.heroIcon(h.id, 80).toDataURL();
-  return `<img src="${_towerIco['h' + h.id]}" alt="">`;
-}
+function towerIco(t) { return gfxIcon(t.id, t.ico, window.TDS?.drawers?.[t.id] && TDS.towerIcon, () => TDS.towerIcon(t.id, 80), () => TR.towerIcon(t.id, 80)); }
+function heroIco(h) { return gfxIcon('h' + h.id, h.ico, window.TDS?.heroDrawers?.[h.id] && TDS.heroIcon, () => TDS.heroIcon(h.id, 80), () => TR.heroIcon(h.id, 80)); }
 function miniSlime(id, mods) {
   const nova = localStorage.getItem('td_gfx') !== '0', tex = EDEF[id]?.isNew ? window.TDS?.slimeDrawers?.[id] : window.TDS?.slimeIcon;
   const key = id + (mods || []).join() + (tex && nova ? (EDEF[id]?.isNew ? 'D' : 'N') : '');

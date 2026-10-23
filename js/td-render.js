@@ -612,6 +612,21 @@ const TR = (() => {
     if (t.hornUntil > G.time || G.hornAll > G.time) { g.strokeStyle = 'rgba(250,204,21,.6)'; g.lineWidth = 2; g.beginPath(); g.arc(t.x, t.y, r + 3, 0, TAU); g.stroke(); }
     if (t.phoenix && t.phoenix.x) drawPhoenix(g, t.phoenix, time);
   }
+  // Ikony do obchodu v kreslené grafice: stejná kresba jako na mapě (bez vylepšení), vystředěná na plátně
+  function iconCanvas(size, r, draw) {
+    const c = off(size, size), g = c.getContext('2d'), k = size / 2 / (r + 6);
+    g.translate(size / 2 - 1.5 * k, size / 2 - 2 * k); g.scale(k, k);
+    try { draw(g); } catch (_) { /* nic */ }
+    return c;
+  }
+  function towerIcon(type, size) {
+    const r = TDEF[type]?.base.radius_px || 20;
+    return iconCanvas(size, r, g => drawTower(g, { type, x: 0, y: 0, r, up: [0, 0, 0], ang: -0.6, fx: {}, st: {} }, 0, false));
+  }
+  function heroIcon(id, size) {
+    const r = HDEF[id]?.base.radius_px || 20;
+    return iconCanvas(size, r, g => drawHero(g, { hero: true, icon: true, id, type: id, x: 0, y: 0, r, level: 1, ang: -0.6, fx: {}, st: {} }, 0));
+  }
   // postavička shora: plášť, hlava s kápí, ruka se zbraní
   function figure(g, r, col, ang, trim, weapon, hat) {
     g.fillStyle = col; g.beginPath(); g.arc(0, 0, r * 0.72, 0, TAU); g.fill();
@@ -666,6 +681,7 @@ const TR = (() => {
     }, true);
     else figure(g, r, def.col, ang, '#99f6e4', () => { g.save(); g.rotate(ang); g.fillStyle = '#fef3c7'; g.fillRect(r * 0.4, -r * 0.35, r * 0.4, r * 0.7); g.fillStyle = '#92400e'; g.fillRect(r * 0.38, -r * 0.4, r * 0.08, r * 0.8); g.fillRect(r * 0.78, -r * 0.4, r * 0.08, r * 0.8); g.restore(); });
     g.restore();
+    if (h.icon) return;   // ikona do obchodu bez odznaku úrovně
     g.fillStyle = '#1e1b4b'; g.beginPath(); g.arc(h.x + r * 0.85, h.y - r * 0.85, 8, 0, TAU); g.fill();
     g.fillStyle = '#fde68a'; g.font = 'bold 10px Geist, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(h.level, h.x + r * 0.85, h.y - r * 0.85 + 0.5);
     g.textBaseline = 'alphabetic';
@@ -878,5 +894,5 @@ const TR = (() => {
     const bg = useTDS() ? TDS.background({ id: G.map.id, paths: G.map.paths, track_width_px: TRACK_HALF * 2, water_zones: G.map.water_zones || [], obstacles: G.map.obstacles || [] }) : bgCache.get(G.map.id);
     try { return !!bg?.getContext('2d').isContextLost?.(); } catch (_) { return false; }
   }
-  return { render, mapPreview, slimeSprite, clearCaches, cachesLost };
+  return { render, mapPreview, slimeSprite, clearCaches, cachesLost, towerIcon, heroIcon };
 })();
