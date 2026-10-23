@@ -10,6 +10,80 @@ let DECKS = [], getDecks = () => [], POOL = [], CARDQ = [];
 let pref = { map: TD.maps[0].id, hero: TD.heroes[0].id, diff: 'medium', mode: 'solo' };
 try { pref = { ...pref, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch (_) { /* nic */ }
 const view = { sel: null, ghost: null, placing: null, pointer: null, tab: 'def' };
+
+/* ── Vlastní obtížnosti: 5 slotů v prohlížeči ───────────────────── */
+const CUSTOM_KEY = 'td_custom';
+const CUST_OPTS = [   // [klíč, popisek, nabídka hodnot, výchozí, formát]
+  ['lives', '❤️ Životy hradu', [1, 5, 10, 25, 50, 75, 100, 150, 200, 300, 500, 750, 1000], 150, v => v],
+  ['gold', '🪙 Zlaťáky na začátku', [0, 100, 250, 400, 650, 1000, 1500, 2500, 5000, 10000, 25000], ECON.singleplayer.starting_gold, v => v],
+  ['income', '💰 Násobek příjmů', [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 5], 1, v => '×' + v],
+  ['cost', '🏗️ Ceny věží', [0.25, 0.5, 0.75, 0.85, 1, 1.25, 1.5, 2], 1, v => '×' + v],
+  ['count', '🟢 Počet slizáků', [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3], 1, v => '×' + v],
+  ['hp', '💪 Životy slizáků', [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 5, 10], 1, v => '×' + v],
+  ['speed', '💨 Rychlost slizáků', [0.5, 0.75, 1, 1.25, 1.5, 2], 1, v => '×' + v],
+  ['km', '💎 Krystaly ze svitků', [0.5, 1, 1.5, 2, 3, 5], 1, v => '×' + v],
+  ['waves', '🏁 Vítězství po vlně', [10, 15, 20, 25, 30, 40], 40, v => v],
+];
+function custDefaults(i) { const o = { name: 'Vlastní ' + (i + 1) }; for (const [k, , , d] of CUST_OPTS) o[k] = d; return o; }
+function custSlots() {
+  let a = [];
+  try { a = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]'); } catch (_) { /* nic */ }
+  return [0, 1, 2, 3, 4].map(i => a[i] ? { ...custDefaults(i), ...a[i] } : null);
+}
+function saveSlots(sl) { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(sl)); } catch (_) { toast('Prohlížeč nedovolil uložit nastavení.'); } }
+// Vybraná obtížnost jako cfg pro newGame (null = některá ze tří základních)
+function curCfg() { const m = /^c([1-5])$/.exec(pref.diff); return m ? custSlots()[m[1] - 1] : null; }
+function custSummary(c) {
+  const parts = [`${c.lives} ❤️`, `${c.gold} zl`];
+  for (const [k, label, , d, f] of CUST_OPTS.slice(2)) if (c[k] !== d) parts.push(`${label.split(' ')[0]} ${f(c[k])}`);
+  return parts.join(' · ');
+}
+function openCustom(i) {
+  const slots = custSlots(), had = !!slots[i], c = { ...(slots[i] || custDefaults(i)) };
+  let ov = $('tdCustom');
+  if (!ov) {
+    ov = document.createElement('div'); ov.className = 'td-modal'; ov.id = 'tdCustom';
+    ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('[data-cust-close]')) ov.hidden = true; });
+    document.body.appendChild(ov);
+  }
+  const row = ([k, label, vals, , f]) => { const idx = Math.max(0, vals.indexOf(c[k])); return `<label class="td-cust-row"><span>${label}</span>
+    <input type="range" min="0" max="${vals.length - 1}" step="1" value="${idx}" data-ck="${k}"><output data-co="${k}">${f(vals[idx])}</output></label>`; };
+  ov.innerHTML = `<div class="td-tree-box td-cust-box" role="dialog" aria-label="Vlastní obtížnost">
+    <div class="td-tree-head"><div><b>⚙️ Vlastní obtížnost · slot ${i + 1}</b><small>Nastavení se uloží v tomhle prohlížeči. Rekord se počítá zvlášť pro každý slot.</small></div>
+      <button type="button" class="icon-btn" data-cust-close aria-label="Zavřít">✕</button></div>
+    <label class="td-cust-name"><span>Název</span><input type="text" maxlength="24" id="tdCustName" value="${esc(c.name)}"></label>
+    <div class="td-cust-grid">${CUST_OPTS.map(row).join('')}</div>
+    <div class="td-cust-presets"><span>Začít z:</span>${[['easy', 'Lehká'], ['medium', 'Střední'], ['hard', 'Těžká']].map(([k, n]) => `<button type="button" class="btn btn-ghost btn-sm" data-cpre="${k}">${n}</button>`).join('')}</div>
+    <div class="mc-end-actions">
+      <button type="button" class="btn btn-primary" id="tdCustSave">Uložit a vybrat</button>
+      ${had ? '<button type="button" class="btn btn-ghost" id="tdCustDel">🗑️ Smazat slot</button>' : ''}
+      <button type="button" class="btn btn-secondary" data-cust-close>Zrušit</button>
+    </div></div>`;
+  const opt = k => CUST_OPTS.find(x => x[0] === k);
+  const show = k => { ov.querySelector(`[data-co="${k}"]`).textContent = opt(k)[4](c[k]); };
+  ov.querySelectorAll('[data-ck]').forEach(inp => inp.addEventListener('input', () => { const k = inp.dataset.ck; c[k] = opt(k)[2][+inp.value]; show(k); }));
+  ov.querySelectorAll('[data-cpre]').forEach(b => b.addEventListener('click', () => {   // základ podle Lehké / Střední / Těžké
+    const [lives, cost] = { easy: [200, 0.85], medium: [150, 1], hard: [100, 1.08] }[b.dataset.cpre];
+    Object.assign(c, custDefaults(i), { name: c.name, lives, cost });
+    ov.querySelectorAll('[data-ck]').forEach(inp => { const k = inp.dataset.ck, vals = opt(k)[2]; let j = vals.indexOf(c[k]);
+      if (j < 0) { j = vals.reduce((bi, v, vi) => Math.abs(v - c[k]) < Math.abs(vals[bi] - c[k]) ? vi : bi, 0); }
+      inp.value = j; show(k); });
+  }));
+  $('tdCustSave').onclick = () => {
+    c.name = $('tdCustName').value.trim().slice(0, 24) || custDefaults(i).name;
+    const sl = custSlots(); sl[i] = c; saveSlots(sl);
+    pref.diff = 'c' + (i + 1); savePref(); ov.hidden = true; renderSetup();
+  };
+  if (had) $('tdCustDel').onclick = () => {
+    if (!confirm(`Smazat „${c.name}“?`)) return;
+    const sl = custSlots(); sl[i] = null; saveSlots(sl);
+    try { const b = JSON.parse(localStorage.getItem(BEST_KEY) || '{}'); for (const k of Object.keys(b)) if (k.endsWith(':c' + (i + 1))) delete b[k]; localStorage.setItem(BEST_KEY, JSON.stringify(b)); } catch (_) { /* nic */ }
+    if (pref.diff === 'c' + (i + 1)) { pref.diff = 'medium'; savePref(); }
+    ov.hidden = true; renderSetup();
+  };
+  ov.hidden = false;
+  $('tdCustName').focus();
+}
 const JOIN_GID = new URLSearchParams(location.search).get('g');
 let speed = 1, paused = false, running = false, lastFrame = 0, acc = 0, cardOpen = null, panelSig = '', hudSig = '';
 const fmt = n => Math.floor(n).toLocaleString('cs-CZ');
@@ -63,7 +137,18 @@ function renderSetup() {
   const D = { easy: ['Lehká', '200 životů, věže o 15 % levnější'], medium: ['Střední', '150 životů, běžné ceny'], hard: ['Těžká', '100 životů, věže o 8 % dražší'] };
   $('tdDiffs').innerHTML = Object.entries(D).map(([k, [n, d]]) => { const b = bestOf(pref.map, k);
     return `<button type="button" class="td-opt${pref.diff === k ? ' on' : ''}" data-diff="${k}"><b>${n}</b><small>${d}</small>${b ? `<small class="td-best">🏆 vlna ${b}</small>` : ''}</button>`; }).join('');
-  $('tdDiffs').onclick = e => { const b = e.target.closest('[data-diff]'); if (!b) return; pref.diff = b.dataset.diff; savePref(); renderSetup(); };
+  const slots = custSlots();
+  if (/^c[1-5]$/.test(pref.diff) && !slots[pref.diff[1] - 1]) pref.diff = 'medium';
+  $('tdDiffs').innerHTML += `<div class="td-cust-h">⚙️ Vlastní obtížnosti</div>` + slots.map((c, i) => {
+    if (!c) return `<button type="button" class="td-opt td-cust-empty" data-cedit="${i}"><b>+ Volný slot ${i + 1}</b><small>Nastav si životy, peníze, slizáky…</small></button>`;
+    const k = 'c' + (i + 1), b = bestOf(pref.map, k);
+    return `<div class="td-cust-slot"><button type="button" class="td-opt${pref.diff === k ? ' on' : ''}" data-diff="${k}"><b>${esc(c.name)}</b><small>${esc(custSummary(c))}</small>${b ? `<small class="td-best">🏆 vlna ${b}</small>` : ''}</button>
+      <button type="button" class="td-cust-edit" data-cedit="${i}" title="Upravit" aria-label="Upravit ${esc(c.name)}">✏️</button></div>`;
+  }).join('');
+  $('tdDiffs').onclick = e => {
+    const ed = e.target.closest('[data-cedit]'); if (ed) { openCustom(+ed.dataset.cedit); return; }
+    const b = e.target.closest('[data-diff]'); if (!b) return; pref.diff = b.dataset.diff; savePref(); renderSetup();
+  };
 }
 function savePref() { try { localStorage.setItem(PREF_KEY, JSON.stringify(pref)); } catch (_) { /* nic */ } }
 
@@ -80,9 +165,9 @@ async function startGame() {
     return;
   }
   btn.disabled = false; delete btn.dataset.busy; btn.textContent = label;
-  newGame(pref.map, pref.hero, pref.diff);
+  newGame(pref.map, pref.hero, pref.diff, null, curCfg());
   G.onLose = () => setTimeout(() => endGame(false), 900);
-  G.onWin = () => { paused = true; $('tdWinDesc').textContent = `Ubránil jsi všech ${TD.waves.length} vln. Můžeš pokračovat ve volné hře — slizáci budou čím dál silnější.`; $('tdWin').hidden = false; window.sfx?.('win'); };
+  G.onWin = () => { paused = true; $('tdWinDesc').textContent = `Ubránil jsi všech ${winWave()} vln. Můžeš pokračovat ve volné hře — slizáci budou čím dál silnější.`; $('tdWin').hidden = false; window.sfx?.('win'); };
   G.onWaveEnd = w => { saveBest(); if (w === 1) toast('Mezi vlnami je 15 s pauza. Další vlna se spustí sama, nebo dřív tlačítkem ⏭ (bonus zlaťáky).'); };
   beginPlay();
   toast('Vyber věž vpravo a polož ji vedle cesty. Až budeš připravený, dej ▶ Start.');
@@ -279,7 +364,7 @@ function updateHud() {
   $('hudLives').textContent = Math.ceil(G.lives);
   $('hudGold').textContent = fmt(G.gold);
   $('hudKm').textContent = G.km;
-  $('hudWave').textContent = G.wave > TD.waves.length ? `${G.wave} (volná hra)` : `${G.wave} / ${TD.waves.length}`;
+  $('hudWave').textContent = G.wave > winWave() ? `${G.wave} (volná hra)` : `${G.wave} / ${winWave()}`;
   const left = cardQuota() - G.cardsThisWave, cd = Math.max(0, G.cardCdUntil - G.time);
   $('hudCardQ').textContent = cd > 0 ? Math.ceil(cd) + ' s' : `${left}/${cardQuota()}`;
   $('hudCard').disabled = left <= 0 || cd > 0 || !!cardOpen;
@@ -586,6 +671,7 @@ function answerCard(i) {
     if (h?.id === 'kronikar_oskar' && h.level >= 15 && G.cardsOk % 5 === 0) km++;
     let streakMsg = '';
     if (G.streak % F.streak_required_count === 0) { km += F.streak_bonus_knowledge_points; G.streakUntil = G.time + (h?.id === 'kronikar_oskar' ? 15 : F.streak_buff_duration_s); streakMsg = ' · 👑 Královské požehnání!'; }
+    km = Math.round(km * (G.cfg?.km || 1));
     addGold(gold); G.km += km;
     addHeroXp(F.hero_xp_per_correct_answer);
     breakSeals(1);
@@ -617,7 +703,7 @@ function openTree(type) {
     ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('[data-tree-close]')) ov.hidden = true; });
     document.body.appendChild(ov);
   }
-  const mul = G ? G.costMul : (DIFF[pref.diff]?.cost || 1), sel = view.sel && view.sel.type === type ? view.sel : null;
+  const mul = G ? G.costMul : (curCfg()?.cost || DIFF[pref.diff]?.cost || 1), sel = view.sel && view.sel.type === type ? view.sel : null;
   const b = def.base;
   const stats = [b.damage ? `Poškození ${b.damage}` : '', b.range_px ? `Dosah ${b.range_px >= 1900 ? 'celá mapa' : b.range_px + ' px'}` : '', b.attack_interval_s ? `Útok každých ${b.attack_interval_s} s` : '',
     b.pierce > 1 ? `Průraz ${b.pierce}` : '', b.damage_type && b.damage_type !== 'none' ? `Typ: ${DMG_LABEL[b.damage_type] || b.damage_type}` : '', b.can_see_camo ? 'Vidí 👻' : ''].filter(Boolean);

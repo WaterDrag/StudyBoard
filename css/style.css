@@ -6064,3 +6064,25 @@ img.card-img { cursor: zoom-in; }
 .td-pick-gfx { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 .td-gfx { gap: 6px; }
 .td-gfx-img { width: 100%; aspect-ratio: 26 / 15; object-fit: cover; border-radius: 10px; background: var(--bg-3); display: block; }
+
+/* Obrana království: vlastní obtížnosti (5 slotů) */
+.td-cust-h { grid-column: 1 / -1; margin-top: 6px; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
+.td-cust-slot { position: relative; display: flex; }
+.td-cust-slot > .td-opt { flex: 1; padding-right: 40px; }
+.td-cust-edit { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg-2); cursor: pointer; font-size: 0.85rem; display: grid; place-items: center; }
+.td-cust-edit:hover { border-color: var(--accent); }
+.td-cust-empty { border-style: dashed !important; opacity: .8; }
+.td-cust-empty:hover { opacity: 1; }
+.td-cust-box { width: min(620px, 100%); }
+.td-cust-box .td-tree-head .icon-btn { flex-shrink: 0; }
+.td-cust-name { display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; color: var(--text-muted); }
+.td-cust-name input { font: inherit; font-size: 0.95rem; color: var(--text); padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); }
+.td-cust-grid { display: flex; flex-direction: column; gap: 6px; }
+.td-cust-row { display: grid; grid-template-columns: minmax(150px, 1fr) 2fr 64px; align-items: center; gap: 10px; font-size: 0.88rem; }
+.td-cust-row input[type=range] { width: 100%; accent-color: var(--accent); }
+.td-cust-row output { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.td-cust-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.82rem; color: var(--text-muted); }
+@media (max-width: 520px) {
+  .td-cust-row { grid-template-columns: 1fr 56px; }
+  .td-cust-row > span { grid-column: 1 / -1; }
+}

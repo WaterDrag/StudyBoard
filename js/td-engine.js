@@ -275,6 +275,7 @@ function floatText(x, y, txt, col) { if (G.floats.length < 60) G.floats.push({ x
 /* ── Ekonomika ─────────────────────────────────────────────────── */
 function addGold(n, fromPop) {
   if (!(n > 0)) return;
+  n *= G.cfg?.income || 1;   // vlastní obtížnost: násobek příjmů
   G.gold += n; G.stats.earned += n; if (fromPop) G.stats.popGold += n;
 }
 function spend(n) { if (G.gold + 1e-6 < n) return false; G.gold -= n; return true; }
@@ -1134,11 +1135,12 @@ function startWave() {
     if (bonus > 0) { addGold(bonus); floatText(TW / 2, 40, '+' + bonus + ' zl za rychlý start', '#facc15'); }
   }
   G.wave++;
-  const w = waveDef(G.wave);
+  const w = waveDef(G.wave), C = G.cfg || {};
   G.waveActive = true; G.waveT = 0; G.schedule = []; G.schedIdx = 0;
+  const cnt = w.cnt * (C.count || 1), gap = C.count ? Math.max(0.5, Math.min(3, cnt)) : Math.min(2, w.cnt);   // víc slizáků = hustší rozestupy, vlna se moc neprodlouží
   w.def.groups.forEach((g, gi) => {
-    const n = Math.round(g.n * w.cnt);
-    for (let i = 0; i < n; i++) G.schedule.push({ at: g.at + i * g.every / Math.min(2, w.cnt), id: g.id, mods: g.mods, path: (i + gi) % G.paths.length, hpMul: w.hpMul, spd: w.spd });
+    const n = Math.max(1, Math.round(g.n * cnt));
+    for (let i = 0; i < n; i++) G.schedule.push({ at: g.at + i * g.every / gap, id: g.id, mods: g.mods, path: (i + gi) % G.paths.length, hpMul: w.hpMul * (C.hp || 1), spd: w.spd * (C.speed || 1) });
   });
   G.schedule.sort((a, b) => a.at - b.at);
   G.waveLen = Math.max(8, (G.schedule[G.schedule.length - 1]?.at || 0) + 6);
@@ -1146,7 +1148,8 @@ function startWave() {
   G.towers.forEach(t => { t.paid = 0; });
   window.sfx?.('start');
 }
-function livesCap() { return (DIFF[G.diff]?.lives || 150) + 200; }
+function livesCap() { return (G.cfg?.lives || DIFF[G.diff]?.lives || 150) + 200; }
+function winWave() { return G.cfg?.waves || TD.waves.length; }
 // Důl: vozíky × hodnota vozíku (× bonus hodnoty × násobek tržiště/banky)
 function mineIncome(t) {
   const st = t.st;
@@ -1178,7 +1181,7 @@ function endWave() {
   waveRewards(w);
   G.pauseUntil = G.time + ECON.singleplayer.inter_wave_pause_s;
   G.onWaveEnd?.(w);
-  if (w === TD.waves.length && !G.wonShown) { G.wonShown = true; G.onWin?.(); }
+  if (w === winWave() && !G.wonShown) { G.wonShown = true; G.onWin?.(); }
 }
 function waveRewards(w) {
   if (typeof xWaveEnd === 'function') xWaveEnd();
@@ -1381,9 +1384,10 @@ function step(dt) {
 /* ── Nová hra ──────────────────────────────────────────────────── */
 // Obtížnost jako v BTD: ceny a počet životů
 const DIFF = { easy: { name: 'Lehká', cost: 0.85, lives: 200 }, medium: { name: 'Střední', cost: 1, lives: 150 }, hard: { name: 'Těžká', cost: 1.08, lives: 100 } };
-function newGame(mapId, heroId, diff = 'medium', vs = null) {
-  if (vs) diff = 'medium';
-  const D = DIFF[diff] || DIFF.medium;
+// cfg = vlastní obtížnost { lives, gold, cost, income, count, hp, speed, km, waves } (jen sólo)
+function newGame(mapId, heroId, diff = 'medium', vs = null, cfg = null) {
+  if (vs) { diff = 'medium'; cfg = null; }
+  const D = cfg ? { lives: cfg.lives, cost: cfg.cost } : DIFF[diff] || DIFF.medium;
   const map = JSON.parse(JSON.stringify(TD.maps.find(m => m.id === mapId) || TD.maps[0]));
   G = {
     map, paths: map.paths.map(buildPath), time: 0, gold: ECON.singleplayer.starting_gold, lives: D.lives, diff, costMul: D.cost, km: ECON.singleplayer.starting_knowledge_points,
@@ -1392,8 +1396,9 @@ function newGame(mapId, heroId, diff = 'medium', vs = null) {
     traps: [], sentries: [], movers: [], sabotage: null,
     hero: null, heroId, revealUntil: 0, streakUntil: 0, blessUntil: 0, hornAll: 0, archerRush: 0,
     cardsThisWave: 0, cardQuotaBonus: 0, cardCdUntil: 0, streak: 0, cardsOk: 0, cardsBad: 0, debt: 0,
-    stats: { pops: 0, leaks: 0, popGold: 0, wavesDone: 0, earned: 0 }, glob: {}, auraDirty: true, over: false,
+    stats: { pops: 0, leaks: 0, popGold: 0, wavesDone: 0, earned: 0 }, glob: {}, auraDirty: true, over: false, cfg,
   };
+  if (cfg) G.gold = cfg.gold;
   if (vs) {
     G.gold = VS.starting_gold; G.lives = vs.lives || VS.starting_lives; G.autoNext = false;
     G.vs = { eco: VS.base_eco_income_gold, ecoAt: VS.eco_payout_interval_s, nextWaveAt: 3, inAt: 0, inPath: 0, curse: null, focusUntil: 0 };
