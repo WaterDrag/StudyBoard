@@ -863,6 +863,7 @@ const TR = (() => {
     'splat', 'bossdie', 'sealbreak', 'upgrade', 'levelup', 'place', 'sell', 'gold', 'goldSplash', 'trap', 'shrink', 'potion', 'regrow', 'flame', 'blade']);
   function drawFx(g, f, time) {
     const k = Math.min(1, (time - f.t0) / f.dur), a = 1 - k;
+    if (sup()?.fx?.(g, f, k, performance.now())) return;   // Super grafika (js/td-super-fx.js)
     if (useTDS() && window.TDS?.fx && TDS_FX.has(f.kind)) {
       const now = performance.now(), col = f.col === 'rainbow' ? '#f472b6' : f.col;
       if (f.kind === 'meteor') TDS.fx(g, 'meteor', f.x + 60, f.y, 9, k, now, { tx: f.x, ty: f.y });
