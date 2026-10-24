@@ -29,6 +29,7 @@ async function vsCreate() {
     hostUid: ME.uid, hostName: myName(), status: 'lobby', map: pref.map, teams: false,
     allowedUids: [ME.uid, ...friends], playerIds: [ME.uid],
     players: { [ME.uid]: { name: myName(), hero: pref.hero, color: TD_COLORS[0], team: 0 } },
+    cards: packCards(POOL),   // svitky ze stejných balíčků pro všechny hráče
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   });
   history.replaceState(null, '', '?g=' + ref.id);
@@ -123,6 +124,8 @@ function startVersus(d) {
     r.child('v').on('value', s => { NET.view[u] = s.val(); drawOppMini(u); });
     r.child('out').on('child_added', s => onVsEvent(u, s.val()));
   });
+  // svitky: všichni ze stejných balíčků (kartičky hostitele), každý v náhodném pořadí; starší hry bez nich → každý ze svých
+  if (d.cards?.length) { POOL = unpackCards(d.cards); POOL.all = POOL; CARDQ = shuffle(POOL); }
   newGame(d.map, me.hero, 'medium', { lives: teams ? VS_2V2.shared_team_lives : VS.starting_lives });
   NET.start = NET.lastSet = G.lives;
   G.onLose = () => vsFinish(false);

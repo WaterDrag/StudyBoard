@@ -106,6 +106,8 @@ auth.onAuthStateChanged(async user => {
     else if (LOBBY.status === 'play') { toast('Bitva už běží — rozehranou mapu po obnovení stránky nejde vrátit.'); history.replaceState(null, '', 'obrana.html'); GID = null; LOBBY = null; }
   }
   renderSetup();
+  // Do bitvy s otázkami od hostitele: balíčky se nevybírají, všichni mají stejné svitky
+  if (GID && LOBBY?.cards?.length) { $('tdDeckStep').hidden = true; $('tdStart').disabled = false; $('tdStart').onclick = startGame; return; }
   try { DECKS = await mcLoadDecks(); } catch (e) { $('tdDecks').innerHTML = '<div class="mc-muted">Balíčky se nepodařilo načíst.</div>'; return; }
   getDecks = mcDeckPicker({ list: 'tdDecks', all: 'tdAll', start: 'tdStart', hint: 'tdHint', key: SEL_KEY, decks: DECKS,
     hintFor: n => `${n} kartiček připraveno na svitky.` });
@@ -124,7 +126,7 @@ function renderSetup() {
   $('tdMapStep').hidden = joining;
   $('tdDiffStep').hidden = vs;
   $('tdJoinInfo').hidden = !joining;
-  if (joining) $('tdJoinInfo').innerHTML = `⚔️ <b>${esc(LOBBY.hostName)}</b> tě zve do bitvy na mapě <b>${esc(TD.maps.find(m => m.id === LOBBY.map)?.name || '')}</b>. Vyber si hrdinu a balíčky na svitky.`;
+  if (joining) $('tdJoinInfo').innerHTML = `⚔️ <b>${esc(LOBBY.hostName)}</b> tě zve do bitvy na mapě <b>${esc(TD.maps.find(m => m.id === LOBBY.map)?.name || '')}</b>. Vyber si hrdinu${LOBBY.cards?.length ? ` — svitky jsou ze stejných balíčků jako u hostitele (${LOBBY.cards.length} kartiček)` : ' a balíčky na svitky'}.`;
   if (!$('tdStart').dataset.busy) $('tdStart').textContent = joining ? 'Připojit se' : vs ? 'Založit bitvu' : 'Hrát';
   const maps = $('tdMaps');
   maps.innerHTML = TD.maps.map(m => `<button type="button" class="td-opt td-map${pref.map === m.id ? ' on' : ''}" data-map="${m.id}">
@@ -158,7 +160,8 @@ function savePref() { try { localStorage.setItem(PREF_KEY, JSON.stringify(pref))
 async function startGame() {
   const ds = getDecks();
   const btn = $('tdStart'), label = btn.textContent; btn.disabled = true; btn.dataset.busy = '1'; btn.textContent = 'Připravuji svitky…';
-  try { const all = await mcLoadCards(ds); POOL = all.filter(c => mcOptions(c, all)); POOL.all = all; } catch (_) { POOL = []; }
+  if (GID && LOBBY?.cards?.length) { POOL = unpackCards(LOBBY.cards); POOL.all = POOL; }
+  else try { const all = await mcLoadCards(ds); POOL = all.filter(c => mcOptions(c, all)); POOL.all = all; } catch (_) { POOL = []; }
   if (!POOL.length) { btn.disabled = false; delete btn.dataset.busy; btn.textContent = label; toast('Z vybraných balíčků nejde sestavit otázky s možnostmi — přidej balíček s víc kartičkami.'); return; }
   if (POOL.length < 8) toast(`Ve vybraných balíčcích je jen ${POOL.length} otázek — budou se často opakovat.`);
   CARDQ = shuffle(POOL);
@@ -642,6 +645,26 @@ function nextCard() {
   const c = CARDQ.shift();
   const o = mcOptions(c, POOL.all || POOL);
   return o ? { card: c, ...o } : nextCard();
+}
+// Kartičky do čekárny versus: hostitel je uloží do hry, ostatní hrají ze stejných balíčků (dokument má limit 1 MB)
+function packCards(pool) {
+  let budget = 700000;
+  const out = [];
+  for (const c of pool.slice(0, 400)) {
+    const x = { id: c.id, d: c.deckId || '', f: c.f, b: c.b, w: c.w || [], ok: [...c.ok] };
+    if (c.fl) x.fl = c.fl;
+    if (c.cl) x.cl = c.cl;
+    let n = JSON.stringify(x).length;
+    const fi = c.fi ? JSON.stringify(c.fi).length : 0;
+    if (fi && fi < 60000 && n + fi < budget) { x.fi = c.fi; n += fi; }   // velký obrázek by se nevešel → otázka bez něj
+    if (n > budget) break;
+    budget -= n; out.push(x);
+  }
+  return out;
+}
+function unpackCards(list) {
+  return list.map(x => ({ id: x.id, deckId: x.d, deckName: '', f: String(x.f), b: String(x.b), fl: x.fl || null, cl: x.cl || null,
+    fi: x.fi || null, w: (x.w || []).map(String), ok: new Set((x.ok && x.ok.length ? x.ok : [x.b]).map(String)) }));
 }
 function cardGold() {
   let gold = ECON.flashcards.reward_base_gold + ECON.flashcards.reward_per_wave_gold * Math.max(1, G.wave);
