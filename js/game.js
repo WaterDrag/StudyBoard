@@ -18,7 +18,7 @@ const MAPS=[
   {id:0,name:'🏭 Průmysl',bg:'#111108',floor:'#1d1d12',walls:[
     {x:1550,y:1550,w:200,h:400},{x:1550,y:2050,w:200,h:400},
     {x:2250,y:1600,w:380,h:180},{x:2250,y:2220,w:380,h:180},
-    {x:1800,y:1820,w:280,h:40},{x:2050,y:1720,w:40,h:280},
+    {x:1800,y:1805,w:280,h:40},{x:2050,y:1720,w:40,h:280},   // červený kontejner celý v jedné řadě mřížky (50 px)
     {x:2100,y:2100,w:200,h:40},{x:2100,y:2140,w:40,h:200},
     {x:1650,y:2420,w:160,h:160},{x:2200,y:1460,w:160,h:160},
   ],river:{x:1110,y:900,w:90,h:2200}},
@@ -45,6 +45,14 @@ const MAPS=[
     {x:1540,y:1960,w:150,h:16},{x:1540,y:2080,w:150,h:16},
     {x:2310,y:1960,w:150,h:16},{x:2310,y:2080,w:150,h:16},
   ],river:{x:1110,y:900,w:90,h:2200}},
+  {id:3,name:'🏜️ Lom',bg:'#0f0c08',floor:'#2a2216',walls:[
+    // Balvany a skalní hřbety (na mřížce 50 px), řeka teče vodorovně přes sever
+    {x:1500,y:1500,w:150,h:150},{x:1650,y:1550,w:100,h:100},{x:2300,y:1450,w:200,h:150},
+    {x:1450,y:2250,w:200,h:150},{x:2350,y:2300,w:150,h:200},
+    {x:1850,y:1650,w:300,h:50},{x:1650,y:1900,w:50,h:250},{x:2300,y:1900,w:50,h:200},{x:1900,y:2350,w:250,h:50},
+    {x:1200,y:1700,w:100,h:100},{x:2700,y:1800,w:150,h:100},{x:2000,y:2700,w:100,h:150},
+    {x:1800,y:1300,w:150,h:100},{x:2500,y:2650,w:100,h:100},{x:1150,y:2550,w:150,h:100},{x:2800,y:1350,w:100,h:150},
+  ],river:{x:900,y:1100,w:2200,h:90}},
 ];
 
 /* ── Kits ────────────────────────────────────────────────── */
@@ -119,6 +127,19 @@ const ZTYPES={
   brute:   {emoji:'🦍', hp:185, spd:0.58,r:21,coins:28, xp:48, dmg:3, sdmg:6, boss:false,ignP:true},
   exploder:{emoji:'💣', hp:36,  spd:1.45,r:15,coins:14, xp:24, dmg:24,sdmg:4, boss:false,ignP:false,explodes:true},
   boss:    {emoji:'👹', hp:950, spd:0.65,r:32,coins:120,xp:250,dmg:12,sdmg:8, boss:true, ignP:false},
+  // Plivač: drží odstup a plive kyselinu obloukem (i přes zdi) na hráče, stavby nebo základnu
+  spitter: {emoji:'🤮', hp:48,  spd:0.85,r:16,coins:16, xp:28, dmg:3, sdmg:1, boss:false,ignP:false,ranged:true},
+  // Štítonoš: zepředu (±60°) dostane jen 30 % poškození — obejít, nebo střílet z boku
+  shield:  {emoji:'🛡️', hp:150, spd:0.7, r:18,coins:22, xp:34, dmg:6, sdmg:2, boss:false,ignP:false,shield:true},
+  // Skokan: každých 5 s skočí na hráče nebo přeskočí stavbu, která mu stojí v cestě
+  leaper:  {emoji:'🦘', hp:60,  spd:1.2, r:15,coins:18, xp:28, dmg:7, sdmg:2, boss:false,ignP:false,leap:true},
+  // Dělič: po smrti se rozpadne na 3 Drobky
+  splitter:{emoji:'🧫', hp:95,  spd:0.9, r:19,coins:14, xp:24, dmg:5, sdmg:2, boss:false,ignP:false,splits:3},
+  mini:    {emoji:'🦠', hp:16,  spd:1.95,r:9, coins:3,  xp:5,  dmg:2, sdmg:1, boss:false,ignP:false},
+  // Křikloun: zombie v okruhu 200 px jsou o 30 % rychlejší
+  screamer:{emoji:'😱', hp:70,  spd:0.8, r:16,coins:22, xp:34, dmg:3, sdmg:1, boss:false,ignP:false,scream:true},
+  // Uzdravovač: každé 3 s doléčí zombie kolem sebe o 12 % životů
+  healer:  {emoji:'🧪', hp:80,  spd:0.75,r:16,coins:24, xp:36, dmg:3, sdmg:1, boss:false,ignP:false,heals:true},
 };
 
 /* ── Structure defs ──────────────────────────────────────────
@@ -563,6 +584,7 @@ let gs={
   zombies:new Map(),    // id→zombie
   bullets:[],
   structs:[],
+  spits:[],
   summons:[],           // wolves, traps, banners, acid pools, etc.
   floats:[],            // floating damage texts
   spawnedCount:0,waveTotal:0,
@@ -646,6 +668,8 @@ auth.onAuthStateChanged(user=>{
   window.addEventListener('resize',resizeCanvas);
   buildKitScreen();
   loadDeckPicker();
+  // Grafika: při prvním otevření se zeptá, jinak vezme volbu z účtu (i z jiného zařízení)
+  if(!user.isAnonymous&&window.SBGfx)SBGfx.ensure(user.uid,'zs',zsPreviews).then(()=>applyZSI());
 
   const params=new URLSearchParams(location.search);
   const lobbyId=params.get('lobby');
@@ -859,6 +883,8 @@ function initGame(){
   gs.baseHp=500; gs.baseMaxHp=500;
   gs.spawnedCount=0; gs.waveTotal=0;
   gs.wrongAnswers=0; gs.pendingLevelUp=false;
+  gs.spits=[];          // kapky kyseliny od Plivačů (host je vytváří, klienti je dostávají ve snapshotu)
+  gs.worm=null;        // písečný červ (mapa Lom)
   gs.infra=new Map();   // key "gx,gy" → infra piece
   gs.infraTask=null;    // active timed tending action
   // Co-op netcode state
@@ -1095,9 +1121,12 @@ function update(dt,ts){
     checkBaseHit(ts);
   } else {
     interpolateZombies(dt); // client: zombie positions come from host
+    clientZombieContact(ts); // a dotyk zombíka zraňuje i ostatní hráče (dřív jen hostitele)
   }
   if(gs.sessionId) updateRemotePlayers(dt); // smooth other players
   updatePlayer(dt,ts);
+  updateSpits();
+  updateWorm(dt);
   updateBullets(dt);
   updateStructures(ts);
   updateFloats(dt);
@@ -1755,6 +1784,13 @@ function dealDmg(zid,z,dmg,attacker){
     return;
   }
   if(z._cursed)dmg=Math.round(dmg*1.25);
+  if(def_(z).shield&&attacker){   // Štítonoš: zepředu jen 30 %
+    const ap=attacker.x!=null?attacker:gs.players[attacker.uid];
+    if(ap&&Math.abs(normalizeAngle(Math.atan2(ap.y-z.y,ap.x-z.x)-(z._face||0)))<1.05){
+      dmg=Math.max(1,Math.round(dmg*0.3));
+      if(performance.now()-(z._shTxt||0)>500){z._shTxt=performance.now();gs.floats.push({x:z.x,y:z.y-26,txt:'🛡',col:'#93c5fd',life:0.6,dy:-25});}
+    }
+  }
   z.hp-=dmg;
   if(z.hp<=0){
     killZombie(zid,z,attacker);
@@ -1763,6 +1799,13 @@ function dealDmg(zid,z,dmg,attacker){
 
 function killZombie(zid,z,attacker){
   gs.zombies.delete(zid);
+  if(def_(z).splits&&isAuthority()){   // Dělič se rozpadne na Drobky (nezvyšují počet vlny)
+    for(let i=0;i<def_(z).splits;i++){
+      spawnZombie('mini'); gs.spawnedCount--;
+      const m=[...gs.zombies.values()].pop(), a=i/def_(z).splits*Math.PI*2+Math.random();
+      m.x=z.x+Math.cos(a)*14; m.y=z.y+Math.sin(a)*14; m._sx=z._sx??z.x; m._sy=z._sy??z.y;
+    }
+  }
   gs.spawnedCount>0; // already counted on spawn
   if(attacker&&attacker.uid===me.uid){
     // Luk: bonus coin chance (each luk point adds 5% chance of double coins)
@@ -1893,6 +1936,14 @@ function pickZombieType(){
   const r=Math.random();
   const pool=[];
   if(w>=10)pool.push({t:'brute',   p:0.07});
+  if(w>=4) pool.push({t:'spitter', p:0.10});
+  if(w>=3) pool.push({t:'splitter',p:0.09});
+  if(w>=5) pool.push({t:'leaper',  p:0.09});
+  if(w>=6) pool.push({t:'shield',  p:0.08});
+  if(w>=8) pool.push({t:'screamer',p:0.06});
+  if(w>=9) pool.push({t:'healer',  p:0.06});
+  // pozdější vlny: speciálních je tolik, že by obyčejní zmizeli — nech jim aspoň 15 %
+  const sum=pool.reduce((a,e)=>a+e.p,0); if(sum>0.85)pool.forEach(e=>{e.p*=0.85/sum;});
   if(w>=7) pool.push({t:'exploder',p:0.10});
   if(w>=5) pool.push({t:'tank',    p:0.13});
   if(w>=3) pool.push({t:'speeder', p:0.17});
@@ -1934,6 +1985,7 @@ function spawnZombie(type){
 function updateZombies(dt,ts){
   const _frameWalls=getAllWalls();
   const zombiesToKill=[];
+  const _screamers=[...gs.zombies.values()].filter(q=>q.def.scream);
   gs.zombies.forEach((z,id)=>{
     // Poison/burn tick
     if(z.poison&&ts<z.poison.end){
@@ -1948,6 +2000,18 @@ function updateZombies(dt,ts){
     // Stun
     if(z.stunEnd&&ts<z.stunEnd)return;
     z._atk=null;   // bušení do stavby se rozhoduje každý snímek znovu
+    // Skokan ve vzduchu: letí po přímce (přes zdi), dokud nedopadne
+    if(z._leap){
+      const lp=(ts-z._leap.t0)/z._leap.dur;
+      if(lp>=1){z.x=z._leap.tx;z.y=z._leap.ty;z._leap=null;z._jp=0;z._sx=z.x;z._sy=z.y;}
+      else{z.x=z._leap.sx+(z._leap.tx-z._leap.sx)*lp;z.y=z._leap.sy+(z._leap.ty-z._leap.sy)*lp;z._jp=lp;return;}
+    }
+    // Uzdravovač: doléčí okolní zombie
+    if(def_(z).heals&&ts-(z._lastHeal||0)>3000){
+      z._lastHeal=ts; let n=0;
+      gs.zombies.forEach(q=>{ if(q!==z&&q.hp<q.maxHp&&Math.hypot(q.x-z.x,q.y-z.y)<170){q.hp=Math.min(q.maxHp,q.hp+q.maxHp*0.12);n++;} });
+      if(n)gs.floats.push({x:z.x,y:z.y-24,txt:'✚',col:'#4ade80',life:0.8,dy:-30});
+    }
     // Whatever pushed it there last frame (crowd, knockback), never start a
     // move from inside a wall.
     unstuckFromWalls(z,z.r,_frameWalls);
@@ -1971,6 +2035,18 @@ function updateZombies(dt,ts){
         if(s.hp<=0||!STRUCT_DEFS[s.type].blocks)continue;
         const d=Math.hypot((s.x+s.w/2)-z.x,(s.y+s.h/2)-z.y);
         if(d<nearDist){nearDist=d;tx=s.x+s.w/2;ty=s.y+s.h/2;}
+      }
+    }
+
+    // Uzdravovač se drží za zombíkem s nejvyšším max HP (na straně odvrácené od základny) — ten ho kryje
+    z._follow=false;
+    if(def.heals){
+      let lead=null;
+      gs.zombies.forEach(q=>{ if(q!==z&&!def_(q).heals&&!q._leap&&(!lead||q.maxHp>lead.maxHp))lead=q; });
+      if(lead){
+        const a=Math.atan2(CY-lead.y,CX-lead.x), off=lead.r+z.r+26;
+        tx=lead.x-Math.cos(a)*off; ty=lead.y-Math.sin(a)*off;
+        z._follow=Math.hypot(tx-z.x,ty-z.y)<12;
       }
     }
 
@@ -2005,8 +2081,18 @@ function updateZombies(dt,ts){
       z._flowNext=0; // not currently flow-following — resample fresh next time it is
       ang=Math.atan2(ty-z.y,tx-z.x);
     }
+    // Plivač: v dostřelu se zastaví a plive
+    if(def.ranged)spitterAct(z,ts);
+    z._face=ang;   // kam se dívá (štít Štítonoše)
+    // Skokan: skok na hráče, nebo přes stavbu v cestě
+    if(def.leap&&ts-(z._lastLeap||0)>5000&&leaperJump(z,ang,ts,_frameWalls))return;
+    // Křikloun poblíž zrychlí
+    z._scr=_screamers.some(q=>q!==z&&Math.hypot(q.x-z.x,q.y-z.y)<200)?1:0;
     // Speed modifiers from skills
     let spdMult=1;
+    if(z._hold)spdMult=0;
+    if(z._scr)spdMult*=1.3;
+    if(z._follow)spdMult=0;   // už stojí za svým tankem
     if(z.suppressed&&ts<z.suppressed)spdMult*=0.3; // temporary — does NOT permanently alter z.spd
     if(z.taunted&&ts<z.taunted.end)spdMult*=z.taunted.spd;
     if(z.poison&&ts<z.poison.end&&hasSkill('rog_b3'))spdMult*=0.8;
@@ -2135,7 +2221,27 @@ function updateZombies(dt,ts){
   });
   zombiesToKill.forEach(([zid,zz])=>{if(gs.zombies.has(zid))killZombie(zid,zz,me);});
   applyZombieSeparation(_frameWalls);
-  gs.zombies.forEach(z=>{if(!collidesWithAnyWall(z,z.r,_frameWalls)){z._sx=z.x;z._sy=z.y;}});
+  gs.zombies.forEach(z=>{if(!z._leap&&!collidesWithAnyWall(z,z.r,_frameWalls)){z._sx=z.x;z._sy=z.y;}});
+}
+
+const def_=z=>z.def||ZTYPES[z.type]||ZTYPES.normal;
+// Skokan: cíl = hráč do 280 px, jinak místo 130 px za stavbou, která mu stojí v cestě. Dopad jen na volné místo.
+function leaperJump(z,ang,ts,walls){
+  let tx=null,ty=null;
+  for(const p of [me,...Object.values(gs.players)]){
+    if(!p||!p.alive||(p.eff&&p.eff.stealth&&ts<p.eff.stealth.end))continue;
+    const d=Math.hypot(p.x-z.x,p.y-z.y);
+    if(d<280&&d>60){const a=Math.atan2(p.y-z.y,p.x-z.x);tx=p.x-Math.cos(a)*(z.r+PLAYER_R-2);ty=p.y-Math.sin(a)*(z.r+PLAYER_R-2);break;}
+  }
+  if(tx===null&&structAhead(z.x,z.y,z.r,ang,8)){tx=z.x+Math.cos(ang)*130;ty=z.y+Math.sin(ang)*130;}
+  if(tx===null)return false;
+  // najít volné místo dopadu (od cíle zpět k zombíkovi)
+  const a=Math.atan2(ty-z.y,tx-z.x), L=Math.hypot(tx-z.x,ty-z.y);
+  for(let d=L;d>40;d-=12){ const x=z.x+Math.cos(a)*d,y=z.y+Math.sin(a)*d;
+    if(!collidesWithAnyWall({x,y},z.r,walls)&&Math.hypot(x-CX,y-CY)>BASE_R+z.r){
+      z._leap={sx:z.x,sy:z.y,tx:x,ty:y,t0:ts,dur:420+d*1.2}; z._lastLeap=ts; return true; } }
+  z._lastLeap=ts-3000;   // nikam to nejde — zkusí to za 2 s znovu
+  return false;
 }
 
 // Stavba hráče (zeď/barikáda), do které zombík narazí, když jde směrem ang — nebo null (terén, nic)
@@ -2156,9 +2262,9 @@ function applyZombieSeparation(walls){
   const _walls=walls||getAllWalls();
   const arr=[...gs.zombies.values()];
   for(let i=0;i<arr.length;i++){
-    const a=arr[i];
+    const a=arr[i]; if(a._leap)continue;
     for(let j=i+1;j<arr.length;j++){
-      const b=arr[j];
+      const b=arr[j]; if(b._leap)continue;
       const dx=b.x-a.x,dy=b.y-a.y;
       const dist=Math.hypot(dx,dy);
       const minDist=(a.r+b.r)*0.85; // allow a little overlap — a loose crowd, not a rigid grid
@@ -2173,11 +2279,147 @@ function applyZombieSeparation(walls){
   }
   // The push-apart ignores walls, so the crowd used to shove the front row
   // INTO a wall, where trialSlide then froze them. Pop everyone back out.
-  for(const z of arr) unstuckFromWalls(z,z.r,_walls);
+  for(const z of arr) if(!z._leap)unstuckFromWalls(z,z.r,_walls);
 }
 
 function checkBaseHit(){
   if(gs.baseHp<=0){gameOver(false);}
+}
+
+/* ── Plivač a jeho kyselina ─────────────────────────────────
+   Hostitel rozhoduje, kdy a kam Plivač plivne (gs.spits, časy v Date.now() kvůli co-opu).
+   Kapka letí obloukem do místa, kde cíl stál → dá se uhnout. Dopad zraní hráče, stavby i základnu
+   a nechá na 3 s louži kyseliny. Každý hráč si zásah počítá sám (kapky má ze snapshotu). */
+const SPIT_RANGE=310, SPIT_HOLD=230, SPIT_CD=2600, SPIT_POOL_MS=3000;
+function spitterAct(z,ts){
+  let tgt=null,best=SPIT_RANGE;
+  for(const p of [me,...Object.values(gs.players)]){
+    if(!p||!p.alive||(p.eff&&p.eff.stealth&&ts<p.eff.stealth.end))continue;
+    const d=Math.hypot(p.x-z.x,p.y-z.y); if(d<best){best=d;tgt={x:p.x,y:p.y};}
+  }
+  if(!tgt){   // žádný hráč v dosahu: nejbližší stavba, pak základna
+    for(const st of gs.structs){ if(st.hp<=0)continue; const cx=st.x+st.w/2,cy=st.y+st.h/2,d=Math.hypot(cx-z.x,cy-z.y); if(d<best){best=d;tgt={x:cx,y:cy};} }
+    const db=Math.hypot(CX-z.x,CY-z.y)-BASE_R; if(!tgt&&db<SPIT_RANGE){best=db;tgt={x:CX,y:CY};}
+  }
+  z._hold=!!tgt&&best<SPIT_HOLD;
+  if(!tgt||ts-(z._lastSpit||0)<SPIT_CD)return;
+  z._lastSpit=ts;
+  const now=Date.now(), tx=tgt.x+(Math.random()-0.5)*20, ty=tgt.y+(Math.random()-0.5)*20;
+  gs.spits.push({i:eid(),sx:Math.round(z.x),sy:Math.round(z.y),tx:Math.round(tx),ty:Math.round(ty),at:now,land:now+650+Math.round(best*1.1),w:gs.wave});
+  window.sfx?.('click');
+}
+function updateSpits(){
+  if(!gs.spits.length)return;
+  const now=Date.now(), auth=isAuthority();
+  for(const sp of gs.spits){
+    if(!sp._hit&&now>=sp.land){
+      sp._hit=true;
+      if(me.alive&&Math.hypot(me.x-sp.tx,me.y-sp.ty)<PLAYER_R+22)takeDmg(Math.round(6+(sp.w||1)*0.4),me);
+      if(auth){
+        for(const st of gs.structs){ if(st.hp>0&&collidesWithAnyWall({x:sp.tx,y:sp.ty},26,[st])){st.hp=Math.max(0,st.hp-14);gs._structDirty=true;} }
+        if(Math.hypot(sp.tx-CX,sp.ty-CY)<BASE_R+20){gs.baseHp=Math.max(0,gs.baseHp-3);if(gs.baseHp<=0)gameOver(false);}
+      }
+      gs.floats.push({x:sp.tx,y:sp.ty-14,txt:'☣',col:'#a3e635',life:0.7,dy:-25});
+    }
+    // louže kyseliny pálí
+    if(sp._hit&&now<sp.land+SPIT_POOL_MS&&me.alive&&Math.hypot(me.x-sp.tx,me.y-sp.ty)<PLAYER_R+20&&now-(me._acidAt||0)>800){me._acidAt=now;takeDmg(2,me);}
+  }
+  if(auth)gs.spits=gs.spits.filter(sp=>now<sp.land+SPIT_POOL_MS);
+}
+function drawSpits(){
+  if(!gs.spits.length)return;
+  const now=Date.now();
+  for(const sp of gs.spits){
+    if(now>=sp.land){   // louže: plochá zelená skvrna s obrysem, mizí
+      const a=Math.max(0,1-(now-sp.land)/SPIT_POOL_MS);
+      if(gemZS()&&ZS.acidPool){ZS.acidPool(ctx,sp.tx,sp.ty,a,performance.now());continue;}
+      ctx.save(); ctx.globalAlpha=0.35+a*0.5;
+      ctx.fillStyle='#65a30d'; ctx.strokeStyle='#1a2e05'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.ellipse(sp.tx,sp.ty,22,15,(sp.tx%7)/7,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle='#bef264'; ctx.beginPath(); ctx.ellipse(sp.tx-6,sp.ty-4,6,3.5,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sp.tx+8,sp.ty+3,2.5,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+      continue;
+    }
+    const t=Math.max(0,(now-sp.at)/(sp.land-sp.at)), x=sp.sx+(sp.tx-sp.sx)*t, y=sp.sy+(sp.ty-sp.sy)*t, hgt=Math.sin(t*Math.PI)*70;
+    ctx.fillStyle='rgba(239,68,68,.35)'; ctx.beginPath(); ctx.arc(sp.tx,sp.ty,PLAYER_R+20,0,Math.PI*2); ctx.fill();   // kam dopadne
+    if(gemZS()&&ZS.spit){ZS.spit(ctx,x,y,hgt,performance.now());continue;}
+    ctx.fillStyle='rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x,y,6,3.5,0,0,Math.PI*2); ctx.fill();   // stín na zemi
+    ctx.fillStyle='#84cc16'; ctx.strokeStyle='#1a2e05'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(x,y-hgt,6.5,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#d9f99d'; ctx.beginPath(); ctx.arc(x-2,y-hgt-2,2,0,Math.PI*2); ctx.fill();
+  }
+}
+
+/* ── Písečný červ (jen mapa Lom) ──────────────────────────
+   Jako v Duně: jen vyleze ze země. U některého hráče se 1,5 s třese zem (kruh s prasklinami), pak
+   vyrazí nahoru a všechno v kruhu dostane: hráči, stavby i zombíci. Zaleze a za 15–25 s vyleze jinde.
+   U základny neútočí. Řídí ho hostitel (časy v Date.now()), každý hráč si zásah počítá sám. */
+const WORM={map:3,fromWave:2,r:85,warnMs:1500,strikeMs:900,diveMs:900,cdMin:15000,cdMax:25000,safeR:280,dmgP:35,dmgZ:140,dmgS:60};
+function updateWorm(dt){
+  if(gs.mapId!==WORM.map)return;
+  const now=Date.now(), w=gs.worm;
+  if(isAuthority()){
+    if(gs.phase!=='wave'||gs.wave<WORM.fromWave){ if(w&&w.ph!=='hide')gs.worm={...w,ph:'hide',u:now+8000}; else if(!w)gs.worm={i:eid(),ph:'hide',x:CX,y:CY-900,u:now+8000}; return; }
+    if(!w){gs.worm={i:eid(),ph:'hide',x:CX,y:CY-900,u:now+6000};return;}
+    const alive=[me,...Object.values(gs.players)].filter(pl=>pl&&pl.alive&&Math.hypot(pl.x-CX,pl.y-CY)>WORM.safeR);
+    if(w.ph==='hide'&&now>=w.u){
+      if(!alive.length){w.u=now+3000;return;}
+      // místo u náhodného hráče (kousek vedle, ať se dá utéct na jednu stranu)
+      const t=alive[Math.floor(Math.random()*alive.length)], a=Math.random()*Math.PI*2, off=Math.random()*45;
+      let x=t.x+Math.cos(a)*off, y=t.y+Math.sin(a)*off;
+      if(Math.hypot(x-CX,y-CY)<WORM.safeR){const b=Math.atan2(y-CY,x-CX);x=CX+Math.cos(b)*WORM.safeR;y=CY+Math.sin(b)*WORM.safeR;}
+      w.x=Math.max(BARRIER.x+40,Math.min(BARRIER.x+BARRIER.w-40,x)); w.y=Math.max(BARRIER.y+40,Math.min(BARRIER.y+BARRIER.h-40,y));
+      w.ph='warn'; w.u=now+WORM.warnMs; w.i=eid();
+    } else if(w.ph==='warn'&&now>=w.u){
+      w.ph='strike'; w.u=now+WORM.strikeMs;
+      gs.zombies.forEach((z,id)=>{if(Math.hypot(z.x-w.x,z.y-w.y)<WORM.r+z.r)dealDmg(id,z,WORM.dmgZ,null);});   // sežere i zombie
+      for(const st of gs.structs){if(st.hp>0&&Math.hypot(st.x+st.w/2-w.x,st.y+st.h/2-w.y)<WORM.r+Math.max(st.w,st.h)/2){st.hp=Math.max(0,st.hp-WORM.dmgS);gs._structDirty=true;}}
+      window.sfx?.('boom');
+    } else if(w.ph==='strike'&&now>=w.u){ w.ph='dive'; w.u=now+WORM.diveMs; }
+    else if(w.ph==='dive'&&now>=w.u){ w.ph='hide'; w.u=now+WORM.cdMin+Math.random()*(WORM.cdMax-WORM.cdMin); }
+  }
+  const c=gs.worm; if(!c)return;
+  if(c.ph==='warn'&&me.alive&&me._wormWarn!==c.i&&Math.hypot(me.x-c.x,me.y-c.y)<WORM.r+160){me._wormWarn=c.i;gToast('🪱 Země se třese — uteč z kruhu!','#f59e0b');}
+  if(c.ph==='strike'&&me.alive&&me._wormHit!==c.i&&Math.hypot(me.x-c.x,me.y-c.y)<WORM.r+PLAYER_R){
+    me._wormHit=c.i; takeDmg(WORM.dmgP,me);
+    const a=Math.atan2(me.y-c.y,me.x-c.x)||0; me.x+=Math.cos(a)*40; me.y+=Math.sin(a)*40; wallCollide(me,PLAYER_R);   // odhodí
+  }
+}
+// Grafika od Gemini (zombie-sprites-4.js): když je zapnutá jeho grafika a vypnuté moje .io textury
+const gemZS=()=>useZS()&&window.ZS&&ZS.texOn&&!ZS.texOn();
+function drawWorm(ts){
+  const w=gs.worm; if(gs.mapId!==WORM.map||!w)return;
+  const now=Date.now(), OUTL='#2a1d10';
+  if(gemZS()&&ZS.worm&&w.ph!=='hide'){
+    const dur=w.ph==='warn'?WORM.warnMs:w.ph==='strike'?WORM.strikeMs:WORM.diveMs;
+    ZS.worm(ctx,w.ph,w.x,w.y,WORM.r,Math.max(0,Math.min(1,1-(w.u-now)/dur)),ts); return;
+  }
+  if(w.ph==='warn'){
+    const p=1-(w.u-now)/WORM.warnMs, sh=Math.sin(ts*0.08)*2;
+    ctx.save(); ctx.translate(w.x+sh,w.y);
+    ctx.fillStyle=`rgba(40,26,12,${0.25+p*0.35})`; ctx.beginPath(); ctx.arc(0,0,WORM.r*(0.4+p*0.6),0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(239,68,68,.85)'; ctx.lineWidth=3; ctx.setLineDash([10,8]); ctx.beginPath(); ctx.arc(0,0,WORM.r,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle=OUTL; ctx.lineWidth=2;   // praskliny
+    for(let i=0;i<7;i++){const a=i/7*Math.PI*2+0.3; ctx.beginPath(); ctx.moveTo(Math.cos(a)*12,Math.sin(a)*12); ctx.lineTo(Math.cos(a+0.15)*WORM.r*0.5*p,Math.sin(a+0.15)*WORM.r*0.5*p); ctx.lineTo(Math.cos(a)*WORM.r*0.85*p,Math.sin(a)*WORM.r*0.85*p); ctx.stroke();}
+    ctx.restore();
+  } else if(w.ph==='strike'||w.ph==='dive'){
+    const t=w.ph==='strike'?1-(w.u-now)/WORM.strikeMs:1, k=w.ph==='strike'?Math.min(1,t*3):Math.max(0,(w.u-now)/WORM.diveMs), R=WORM.r*0.75*k;
+    if(R<2)return;
+    ctx.save(); ctx.translate(w.x,w.y);
+    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(6,8,R*1.08,0,Math.PI*2); ctx.fill();
+    const seg=14;   // článkovaný okraj těla
+    for(let i=0;i<seg;i++){const a=i/seg*Math.PI*2; ctx.fillStyle=i%2?'#b58b5a':'#c9a06b'; ctx.strokeStyle=OUTL; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(Math.cos(a)*R*0.86,Math.sin(a)*R*0.86,R*0.26,0,Math.PI*2); ctx.fill(); ctx.stroke();}
+    ctx.fillStyle='#d6b07a'; ctx.strokeStyle=OUTL; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(0,0,R*0.82,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#3b0f0f'; ctx.beginPath(); ctx.arc(0,0,R*0.6,0,Math.PI*2); ctx.fill();   // jícen
+    ctx.fillStyle='#1a0505'; ctx.beginPath(); ctx.arc(0,0,R*0.3,0,Math.PI*2); ctx.fill();
+    for(const [rr,n,sz] of [[0.6,16,0.13],[0.42,12,0.1]]){ for(let i=0;i<n;i++){const a=i/n*Math.PI*2+(rr<0.5?0.13:0)+ts*0.0006;   // dvě řady zubů
+      ctx.fillStyle='#f5f0e1'; ctx.strokeStyle=OUTL; ctx.lineWidth=1.4; ctx.beginPath();
+      ctx.moveTo(Math.cos(a-0.12)*R*rr,Math.sin(a-0.12)*R*rr); ctx.lineTo(Math.cos(a)*R*(rr-sz),Math.sin(a)*R*(rr-sz)); ctx.lineTo(Math.cos(a+0.12)*R*rr,Math.sin(a+0.12)*R*rr); ctx.closePath(); ctx.fill(); ctx.stroke();}}
+    if(w.ph==='strike'&&t<0.5){ for(let i=0;i<12;i++){const a=i/12*Math.PI*2, d=R*(1+t*1.6); ctx.fillStyle=`rgba(168,135,90,${0.8-t*1.4})`; ctx.beginPath(); ctx.arc(Math.cos(a)*d,Math.sin(a)*d,5+i%3*2,0,Math.PI*2); ctx.fill();} }   // písek letí do stran
+    ctx.restore();
+  }
 }
 
 /* ── Player damage ───────────────────────────────────────── */
@@ -3706,12 +3948,9 @@ function drawMinimap(){
 //  DRAW
 // ══════════════════════════════════════════════════════════
 // ── Nová grafika (js/zombie-sprites.js, procedurální textury) ─────────
-// Jde vypnout v okně 🔊 (localStorage zs_gfx = '0') — pak se kreslí postaru emoji.
+// Styl se volí při prvním otevření a v Nastavení na hlavní stránce (js/gfxpref.js → localStorage zs_gfx/zs_tex);
+// zs_gfx = '0' kreslí postaru emoji.
 function useZS(){ try{ return !!window.ZS && localStorage.getItem('zs_gfx')!=='0'; }catch(_){ return !!window.ZS; } }
-(window.SB_EXTRA_SETTINGS=window.SB_EXTRA_SETTINGS||[]).push({
-  label:'🎨 Nová grafika', get:()=>useZS(),
-  set:on=>{ try{ localStorage.setItem('zs_gfx',on?'1':'0'); }catch(_){} },
-});
 
 // ── Ikony rozhraní (js/zombie-icons.js) — stejný přepínač jako nová grafika ──
 // zi() vrátí <span data-zsi>, který applyZSI() umí kdykoliv přepnout mezi SVG a emoji.
@@ -3729,10 +3968,45 @@ function shopIcon(item){
   return item.id;
 }
 function kitLblHTML(kitId){ const k=KITS[kitId]; return k?zi('kit_'+kitId,k.emoji,16)+' '+k.name:''; }
-window.SB_EXTRA_SETTINGS.find(o=>o.label==='🎨 Nová grafika').set=on=>{
-  try{ localStorage.setItem('zs_gfx',on?'1':'0'); }catch(_){}
-  applyZSI();
-};
+// Ukázky stylů pro okno s volbou grafiky (js/gfxpref.js) — stejný výřez mapy Průmysl ve všech třech stylech
+function zsPreviews(){
+  const out={},keep={},K=['zs_gfx','zs_tex'];
+  if(!window.ZS||!window.SBGfx)return out;
+  try{K.forEach(k=>keep[k]=localStorage.getItem(k));}catch(_){return out;}
+  const X0=1690,Y0=1680,VW=420,VH=250,ts=performance.now();
+  const walls=MAPS[0].walls.filter(w=>w.x<X0+VW&&w.x+w.w>X0&&w.y<Y0+VH&&w.y+w.h>Y0);
+  const structs=[['wall',1730,1765,64,20],['barricade',2010,1895,64,18],['spikes',1890,1872,48,48]];
+  const zs=[['normal',1775,1720,0.3],['shield',1985,1745,2.6],['spitter',2055,1815,3],['tank',1735,1885,-0.4],['healer',1940,1712,2.4]];
+  const kit=KITS.militant,wid=WEAPONS[kit.weapon]?kit.weapon:'pistol',px=1880,py=1820,pa=-2.6;
+  try{
+    for(const st of ['io','gemini','emoji']){
+      SBGfx.GAMES.zs.apply(st);
+      const c=document.createElement('canvas');c.width=VW;c.height=VH;
+      const g=c.getContext('2d');g.translate(-X0,-Y0);g.textAlign='center';g.textBaseline='middle';
+      if(st!=='emoji'){
+        ZS.floor(g,0,X0,Y0,VW,VH);
+        walls.forEach(w=>ZS.mapWall(g,0,w.x,w.y,w.w,w.h));
+        structs.forEach(([t,x,y,w,h])=>ZS.structure(g,t,x,y,w,h,1,ts,0));
+        zs.forEach(([t,x,y,a])=>ZS.zombie(g,t,x,y,ZTYPES[t].r,a,ts,0));
+        if(ZS.playerBody&&ZS.weapon){ZS.playerBody(g,'militant',px,py,18,pa,ts,kit.col,true);ZS.weapon(g,wid,px,py,18,pa,ts,null,WEAPONS[wid].col);}
+        else ZS.player(g,'militant',px,py,18,pa,ts,kit.col,true);
+      } else {
+        g.fillStyle=MAPS[0].floor;g.fillRect(X0,Y0,VW,VH);
+        g.strokeStyle='rgba(255,255,255,.04)';g.lineWidth=1;
+        for(let x=Math.ceil(X0/64)*64;x<X0+VW;x+=64){g.beginPath();g.moveTo(x,Y0);g.lineTo(x,Y0+VH);g.stroke();}
+        for(let y=Math.ceil(Y0/64)*64;y<Y0+VH;y+=64){g.beginPath();g.moveTo(X0,y);g.lineTo(X0+VW,y);g.stroke();}
+        g.fillStyle='#3a3a3a';walls.forEach(w=>g.fillRect(w.x,w.y,w.w,w.h));
+        structs.forEach(([t,x,y,w,h])=>{g.fillStyle='#2a3a2a';g.fillRect(x,y,w,h);g.font=Math.min(w,h)*0.6+'px serif';g.fillText(STRUCT_DEFS[t].emoji,x+w/2,y+h/2);});
+        zs.forEach(([t,x,y])=>{g.font=ZTYPES[t].r*1.4+'px serif';g.fillText(ZTYPES[t].emoji,x,y);});
+        g.fillStyle=kit.col;g.beginPath();g.arc(px,py,18,0,Math.PI*2);g.fill();
+        g.font='22px serif';g.fillStyle='#fff';g.fillText(kit.emoji,px,py);
+      }
+      out[st]=c.toDataURL('image/jpeg',0.85);
+    }
+  }catch(e){console.warn('Ukázka grafiky:',e);}
+  finally{try{K.forEach(k=>keep[k]==null?localStorage.removeItem(k):localStorage.setItem(k,keep[k]));}catch(_){}}
+  return out;
+}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>applyZSI()); else applyZSI();
 
 function draw(ts){
@@ -3751,7 +4025,9 @@ function draw(ts){
   drawStructures();
   drawBase();
   drawMapWalls(map);
+  drawSpits();
   drawZombies(ts);
+  drawWorm(ts);
   drawFx();
   drawSummons();
   drawBullets();
@@ -3798,7 +4074,14 @@ function drawBarrier(){
 }
 
 function drawRiver(ts){
-  const r=MAPS[gs.mapId].river; if(!r)return;
+  const r0=MAPS[gs.mapId].river; if(!r0)return;
+  if(r0.w>r0.h){   // vodorovná řeka: otočit o −90° a nakreslit jako svislou
+    ctx.save(); ctx.translate(r0.x,r0.y+r0.h); ctx.rotate(-Math.PI/2);
+    drawRiverRect({x:0,y:0,w:r0.h,h:r0.w},ts); ctx.restore(); return;
+  }
+  drawRiverRect(r0,ts);
+}
+function drawRiverRect(r,ts){
   if(useZS()){ZS.river(ctx,r.x,r.y,r.w,r.h,ts);return;}
   const g=ctx.createLinearGradient(r.x,0,r.x+r.w,0);
   g.addColorStop(0,'#0b3a52');g.addColorStop(0.5,'#0e6d96');g.addColorStop(1,'#0b3a52');
@@ -3918,7 +4201,7 @@ function drawFarmZS(ts){
     } else if(p.type==='sprinkler'){
       ZS.infra(ctx,'sprinkler',cx,cy,IT,{powered:!!p._pow},ts);
     } else if(p.type==='fence'){
-      ZS.infra(ctx,'fence',cx,cy,IT,{powered:!!p._pow},ts);
+      ZS.infra(ctx,'fence',cx,cy,IT,{powered:!!p._pow,links:links(p,['fence'])},ts);   // dráty k sousedním plotům
     } else if(p.type==='plot'){
       ZS.infra(ctx,'plot',cx,cy,IT,{soil:p.state||'empty'},ts);
       if(p.state==='growing'){const c=CROPS[p.crop];const grown=Math.min(1,(p.growPhases+0.4)/(c?c.grow:2));ZS.crop(ctx,p.crop,cx,cy,Math.min(0.84,grown),ts);}
@@ -4097,6 +4380,13 @@ function drawZombies(ts){
       ctx.fillStyle='rgba(239,68,68,.15)';
       ctx.beginPath();ctx.arc(z.x,z.y,z.r*1.5,0,Math.PI*2);ctx.fill();
     }
+    if(def.scream||def.heals){   // aura: vlny křiku / zelené léčení
+      const pr=(ts*0.0012+(z.x%1))%1;
+      ctx.strokeStyle=def.scream?`rgba(250,204,21,${0.45*(1-pr)})`:`rgba(74,222,128,${0.45*(1-pr)})`; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(z.x,z.y,z.r+pr*(def.scream?110:80),0,Math.PI*2); ctx.stroke();
+    }
+    const jh=z._jp?Math.sin(z._jp*Math.PI)*46:0;
+    if(jh){ ctx.fillStyle='rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(z.x,z.y+z.r*.6,z.r*.7,z.r*.3,0,0,Math.PI*2); ctx.fill(); ctx.save(); ctx.translate(0,-jh); }
     if(useZS()){
       // směr podle pohybu (vyhlazený), bílé bliknutí 140 ms po zásahu
       const mdx=z.x-(z._lx??z.x),mdy=z.y-(z._ly??z.y);
@@ -4108,6 +4398,7 @@ function drawZombies(ts){
       ctx.font=z.r*1.4+'px serif';
       ctx.fillText(def.emoji,z.x,z.y);
     }
+    if(jh)ctx.restore();
     // HP bar
     const bw=z.r*2.2,bh=4;
     const pct=z.hp/z.maxHp;
@@ -4491,10 +4782,12 @@ function syncPlayerState(){
 function syncWorld(){
   const ref=liveRef('world'); if(!ref)return;
   const z=[];
-  gs.zombies.forEach(zo=>{z.push({i:zo.id,t:zo.type,x:Math.round(zo.x),y:Math.round(zo.y),h:Math.round(zo.hp),m:zo.maxHp});});
+  gs.zombies.forEach(zo=>{const o={i:zo.id,t:zo.type,x:Math.round(zo.x),y:Math.round(zo.y),h:Math.round(zo.hp),m:zo.maxHp};if(zo._jp)o.j=Math.round(zo._jp*100)/100;z.push(o);});
   // update() (not set) so the 'structs' child survives the 15 Hz dynamic write
   ref.update({z,baseHp:Math.round(gs.baseHp),wave:gs.wave,phase:gs.phase,bt:Math.max(0,Math.ceil(gs.buildTimer)),
-    waveTotal:gs.waveTotal,spawnedCount:gs.spawnedCount,r:gs._rewards||{},ts:Date.now()}).catch(()=>{});
+    waveTotal:gs.waveTotal,spawnedCount:gs.spawnedCount,r:gs._rewards||{},ts:Date.now(),
+    sp:gs.spits.map(({i,sx,sy,tx,ty,at,land,w})=>({i,sx,sy,tx,ty,at,land,w})),
+    wm:gs.worm?{i:gs.worm.i,ph:gs.worm.ph,x:Math.round(gs.worm.x),y:Math.round(gs.worm.y),u:gs.worm.u,a:+(gs.worm.a||0).toFixed(2)}:null}).catch(()=>{});
 }
 
 // Host broadcasts the authoritative structure list (HP/destruction + power flag)
@@ -4531,6 +4824,11 @@ function applyWorldSnapshot(d){
   if(d.waveTotal!=null)gs.waveTotal=d.waveTotal;
   if(d.spawnedCount!=null)gs.spawnedCount=d.spawnedCount;
   applyZombieSnapshot(d.z||[]);
+  if(d.wm!==undefined)gs.worm=d.wm;
+  if(d.sp!==undefined){   // kapky od hostitele; které už u mě dopadly, si pamatuju (zásah jen jednou)
+    const hit=new Set(gs.spits.filter(x=>x._hit).map(x=>x.i));
+    gs.spits=(d.sp||[]).map(x=>hit.has(x.i)?{...x,_hit:true}:x);
+  }
   if(d.structs!==undefined) applyStructsSnapshot(d.structs||[]);
   if(d.infra!==undefined) applyInfraSnapshot(d.infra||[]);
   // Apply kill rewards the host credited me (cumulative → delta)
@@ -4557,7 +4855,9 @@ function applyZombieSnapshot(arr){
     } else {
       z.tx=o.x; z.ty=o.y;
       z.hp=Math.min(z.hp,o.h); // keep local hits, but never above host's value
+      if(z._hostHp!=null&&o.h>z._hostHp)z.hp=Math.min(o.m||z.maxHp,z.hp+(o.h-z._hostHp));   // léčení od Uzdravovače (host přidal životy)
     }
+    z._hostHp=o.h; z._jp=o.j||0;
   });
   gs.zombies.forEach((z,id)=>{ if(!seen.has(id)) gs.zombies.delete(id); });
 }
@@ -4628,6 +4928,15 @@ function applyInfraSnapshot(arr){
     if(me._pendingDemo.length!==before)me._demoDirty=true;
   }
   gs.infra=next;
+}
+// Co-op klient: simulaci zombíků dělá hostitel a ten zraňuje jen sebe — dotyk si proto
+// počítá každý hráč sám s polohami ze snapshotu (stejně jako u hostitele: 1× za sekundu).
+function clientZombieContact(ts){
+  if(!me.alive)return;
+  gs.zombies.forEach(z=>{
+    const def=z.def||ZTYPES[z.type]; if(!def||def.ignP)return;
+    if(Math.hypot(z.x-me.x,z.y-me.y)<z.r+PLAYER_R&&ts-(z._hitMeAt||0)>1000){z._hitMeAt=ts;takeDmg(def.dmg,me);}
+  });
 }
 function interpolateZombies(dt){
   const k=Math.min(1,dt*12);

@@ -87,13 +87,6 @@ function openCustom(i) {
 const JOIN_GID = new URLSearchParams(location.search).get('g');
 let speed = 1, paused = false, running = false, lastFrame = 0, acc = 0, cardOpen = null, panelSig = '', hudSig = '';
 const fmt = n => Math.floor(n).toLocaleString('cs-CZ');
-(window.SB_EXTRA_SETTINGS = window.SB_EXTRA_SETTINGS || []).push({
-  label: '🎨 Nová grafika', get: () => gfxNow() !== '0',
-  set: on => {   // vypnutí = Kreslená; zapnutí vrátí poslední texturový styl (Super nebo Detailní)
-    try { const cur = gfxNow(); if (!on && cur !== '0') localStorage.setItem('td_gfx_tex', cur); localStorage.setItem('td_gfx', on ? (localStorage.getItem('td_gfx_tex') || '1') : '0'); } catch (_) { /* nic */ }
-    _towerIcoReset(); if (G) renderSide(true);
-  },
-});
 
 auth.onAuthStateChanged(async user => {
   if (!user) { location.href = 'index.html'; return; }
@@ -106,6 +99,8 @@ auth.onAuthStateChanged(async user => {
     else if (LOBBY.status === 'play') { toast('Bitva už běží — rozehranou mapu po obnovení stránky nejde vrátit.'); history.replaceState(null, '', 'obrana.html'); GID = null; LOBBY = null; }
   }
   renderSetup();
+  // Grafika: při prvním otevření se zeptá (s ukázkami), jinak vezme volbu z účtu
+  if (!user.isAnonymous && window.SBGfx) SBGfx.ensure(user.uid, 'td', gfxPreviews).then(() => { _towerIcoReset(); renderSetup(); });
   // Do bitvy s otázkami od hostitele: balíčky se nevybírají, všichni mají stejné svitky
   if (GID && LOBBY?.cards?.length) { $('tdDeckStep').hidden = true; $('tdStart').disabled = false; $('tdStart').onclick = startGame; return; }
   try { DECKS = await mcLoadDecks(); } catch (e) { $('tdDecks').innerHTML = '<div class="mc-muted">Balíčky se nepodařilo načíst.</div>'; return; }
@@ -122,7 +117,6 @@ function renderSetup() {
     .map(([k, n, d]) => `<button type="button" class="td-opt${pref.mode === k ? ' on' : ''}" data-mode="${k}"><b>${n}</b><small>${d}</small></button>`).join('');
   $('tdModes').onclick = e => { const b = e.target.closest('[data-mode]'); if (!b) return; pref.mode = b.dataset.mode; savePref(); renderSetup(); };
   $('tdModeStep').hidden = joining;
-  renderGfxPicker();
   $('tdMapStep').hidden = joining;
   $('tdDiffStep').hidden = vs;
   $('tdJoinInfo').hidden = !joining;
@@ -822,23 +816,10 @@ function scanTips() {
   }
 }
 
-/* ── Výběr grafiky na úvodní obrazovce: ukázka všech stylů, volba se pamatuje (localStorage td_gfx) ── */
+/* ── Grafika: volí se při prvním otevření a v Nastavení na hlavní stránce (js/gfxpref.js → localStorage td_gfx) ── */
 const GFX = [['2', 'Super', 'Nejpropracovanější styl: postavičky, vylepšení vidět na první pohled, živá mapa s mraky a motýly'],
   ['1', 'Detailní', 'Textury od Gemini: hodně detailů, stínů a odlesků'], ['0', 'Kreslená', 'Jednodušší ručně kreslený styl od Clauda, dobře čitelný i na telefonu']];
 function gfxNow() { try { const v = localStorage.getItem('td_gfx'); return v === '0' || v === '2' ? v : '1'; } catch (_) { return '1'; } }
-let _gfxShots = null;
-function renderGfxPicker() {
-  const el = $('tdGfx'); if (!el) return;
-  const cur = gfxNow();
-  if (!_gfxShots) _gfxShots = gfxPreviews();
-  el.innerHTML = GFX.map(([k, n, d, wip]) => `<button type="button" class="td-opt td-gfx${cur === k ? ' on' : ''}" data-gfx="${k}">
-    <img src="${_gfxShots[k] || ''}" alt="Ukázka: ${esc(n)}" class="td-gfx-img"><b>${n}${wip ? ' <span class="td-wip" title="Work in progress — rozpracované">WIP</span>' : ''}${cur === k ? ' ✓' : ''}</b><small>${d}</small></button>`).join('');
-  el.onclick = e => {
-    const b = e.target.closest('[data-gfx]'); if (!b) return;
-    try { localStorage.setItem('td_gfx', b.dataset.gfx); } catch (_) { /* jen pro tuhle návštěvu */ }
-    _towerIcoReset(); window.sfx?.('click'); renderSetup();
-  };
-}
 // Stejná malá scéna (cesta, věže, hrdina, slizáci) vykreslená v obou stylech
 function gfxPreviews() {
   const out = {};

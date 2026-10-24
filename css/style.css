@@ -263,6 +263,16 @@
 }
 .theme-opt:hover .theme-opt-swatch { border-color: var(--text-muted); }
 .theme-opt.selected { color: var(--text); }
+.gfx-picker { display: flex; flex-direction: column; gap: 10px; }
+.gfx-row-name { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 5px; }
+.gfx-seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.gfx-seg button {
+  flex: 1 1 0; min-width: 90px; padding: 7px 10px; border-radius: 9px; cursor: pointer;
+  background: var(--bg-input, rgba(255,255,255,.04)); border: 1.5px solid var(--border); color: var(--text-muted);
+  font: inherit; font-size: 0.8rem; transition: var(--transition);
+}
+.gfx-seg button:hover { border-color: var(--text-muted); color: var(--text); }
+.gfx-seg button.selected { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 1px var(--accent); }
 .theme-opt.selected .theme-opt-swatch {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent);

@@ -1634,8 +1634,26 @@ function setupSettings(user) {
     });
   });
 
+  // Grafika her (Zombie Survival, Obrana) — uloží se na účet, hra si ji při dalším otevření vezme (js/gfxpref.js)
+  const gfxPicker = document.getElementById('gfxPicker');
+  const renderGfx = vals => {
+    if (!gfxPicker || !window.SBGfx) return;
+    gfxPicker.innerHTML = Object.entries(SBGfx.GAMES).map(([game, G]) => {
+      const cur = (vals && vals[game]) || SBGfx.read(game);
+      return `<div><div class="gfx-row-name">${G.icon} ${G.name}</div><div class="gfx-seg">${G.opts.map(([k, n, d]) =>
+        `<button type="button" data-game="${game}" data-v="${k}" title="${d}" class="${k === cur ? 'selected' : ''}">${n}</button>`).join('')}</div></div>`;
+    }).join('');
+  };
+  gfxPicker?.addEventListener('click', e => {
+    const b = e.target.closest('[data-game]'); if (!b) return;
+    b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('selected', x === b));
+    SBGfx.save(user.uid, b.dataset.game, b.dataset.v);
+  });
+
   // Předvyplň aktuálně uloženými klíči
   btn.addEventListener('click', () => {
+    renderGfx(null);
+    window.SBGfx?.load(user.uid).then(g => { if (g) renderGfx(g); });
     renderAccountMethods();
     gInput.value = localStorage.getItem('sb_gemini_key') || '';
     qInput.value = localStorage.getItem('sb_groq_key') || '';

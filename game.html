@@ -15,6 +15,7 @@
   <script>document.write('<script src="js/version.js?t=' + Date.now() + '"><\/script>');</script>
   <script>document.write('<script src="js/icons.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/kocka.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/gfxpref.js?v='+APP_VERSION+'"><\/script>');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script>document.write('<link rel="stylesheet" href="css/style.css?v='+APP_VERSION+'">');</script>
@@ -639,7 +640,14 @@ canvas{display:block;cursor:crosshair;}
       <div class="help-row">🧟‍♂️ <b>Tank</b> — pomalý, hodně životů, bolí.</div>
       <div class="help-row">🦍 <b>Brute</b> — ignoruje hráče a bourá stavby.</div>
       <div class="help-row">💣 <b>Explodér</b> — po smrti vybuchne, drž si odstup.</div>
+      <div class="help-row">🤮 <b>Plivač</b> — od 4. vlny. Drží si odstup a plive kyselinu obloukem i přes zdi. Červený kruh ukazuje, kam dopadne — uhni. Louže pak ještě 3 s pálí.</div>
+      <div class="help-row">🧫 <b>Dělič</b> (od 3. vlny) — po smrti se rozpadne na 3 malé rychlé 🦠 Drobky.</div>
+      <div class="help-row">🦘 <b>Skokan</b> (od 5. vlny) — každých 5 s skočí na hráče nebo přeskočí zeď, která mu stojí v cestě.</div>
+      <div class="help-row">🛡️ <b>Štítonoš</b> (od 6. vlny) — zepředu dostane jen 30 % poškození. Obejdi ho, nebo střílej z boku.</div>
+      <div class="help-row">😱 <b>Křikloun</b> (od 8. vlny) — zombie kolem něj (žluté vlny) jsou o 30 % rychlejší. Zabij ho první.</div>
+      <div class="help-row">🧪 <b>Uzdravovač</b> (od 9. vlny) — drží se schovaný za zombíkem s nejvíc životy a každé 3 s doléčí zombie kolem sebe (zelené vlny). Obejdi tank, nebo ho trefuj přes plošinu.</div>
       <div class="help-row">👹 <b>Boss</b> — každá 5. vlna, za zabití +300 💰.</div>
+      <div class="help-row">🪱 <b>Písečný červ</b> (jen mapa 🏜️ Lom, od 2. vlny) — čas od času vyleze ze země u některého hráče. Když se země zatřese a objeví se kruh, uteč z něj: za 1,5 s červ vyrazí nahoru a zraní hráče, stavby i zombie. U základny neútočí — dá se na něj nalákat dav zombie.</div>
       <div class="help-p">Každou vlnou mají zombie víc životů a je jich víc.</div>
     </div>
 
@@ -741,6 +749,8 @@ canvas{display:block;cursor:crosshair;}
 <script>document.write('<script src="js/zombie-sprites.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/zombie-sprites-2.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/zombie-sprites-3.js?v='+APP_VERSION+'"><\/script>');</script>
+<script>document.write('<script src="js/zombie-sprites-4.js?v='+APP_VERSION+'"><\/script>');</script>
+<script>document.write('<script src="js/zombie-tex.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/zombie-icons.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/sound.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/sbdecks.js?v='+APP_VERSION+'"><\/script>');</script>
