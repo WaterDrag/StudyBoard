@@ -800,7 +800,7 @@ function scanTips() {
 }
 
 /* ── Výběr grafiky na úvodní obrazovce: ukázka všech stylů, volba se pamatuje (localStorage td_gfx) ── */
-const GFX = [['2', 'Super', 'Nejpropracovanější textury: postavičky, vylepšení vidět na první pohled. Rozpracované — zatím mapy, slizáci, hrdinové, efekty, střely a 9 věží, zbytek je z Gemini (Detailní)', true],
+const GFX = [['2', 'Super', 'Nejpropracovanější textury: postavičky, vylepšení vidět na první pohled. Rozpracované — zatím mapy, slizáci, hrdinové, efekty, střely a 13 věží, zbytek je z Gemini (Detailní)', true],
   ['1', 'Detailní', 'Textury od Gemini: hodně detailů, stínů a odlesků'], ['0', 'Kreslená', 'Jednodušší ručně kreslený styl od Clauda, dobře čitelný i na telefonu']];
 function gfxNow() { try { const v = localStorage.getItem('td_gfx'); return v === '0' || v === '2' ? v : '1'; } catch (_) { return '1'; } }
 let _gfxShots = null;
