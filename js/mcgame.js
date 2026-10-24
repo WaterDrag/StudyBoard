@@ -76,8 +76,12 @@ function mcOptions(card, pool, rnd = Math.random) {
   const like = c => (num(c.b) === num(card.b) ? 0 : 3) + Math.abs(Math.log((c.b.length + 4) / (card.b.length + 4))) + (c.deckId === card.deckId ? 0 : 0.6) + rnd() * 0.8;
   if (wrong.length < 3) pool.filter(c => c !== card && !!c.cl === !!card.cl).map(c => [like(c), c]).sort((a, b) => a[0] - b[0]).forEach(([, c]) => take(c.b));
   if (wrong.length < 3) return null;
-  const opts = shuffle([card.b, ...wrong], rnd);
-  return { opts, correct: opts.indexOf(card.b) };
+  // Správná je jen jedna z A–D: když má karta víc správných odpovědí (alsoCorrect), střídá se, která z nich to je.
+  // Ostatní správné se mezi špatné nedostanou (jsou v `used`).
+  const ok = [...card.ok].filter(v => String(v).trim());
+  const right = ok.length > 1 ? ok[Math.floor(rnd() * ok.length)] : card.b;
+  const opts = shuffle([right, ...wrong], rnd);
+  return { opts, correct: opts.indexOf(right) };
 }
 
 // Otázka / odpověď: kód jako blok kódu (codehl.js ho obarví), jinak text.
