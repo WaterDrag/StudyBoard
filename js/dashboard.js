@@ -1544,6 +1544,10 @@ function applyTheme(theme) {
 }
 
 function markSelectedTheme(theme) {
+  // kočičí téma je easter egg: v nabídce je, až když si ho někdo odemkne (hlasitost 9 a 9)
+  let cat = theme === 'kocka';
+  try { cat = cat || localStorage.getItem('sb_cat') === '1'; } catch (_) { /* nic */ }
+  document.querySelectorAll('#themePicker [data-theme="kocka"]').forEach(b => { b.hidden = !cat; });
   document.querySelectorAll('#themePicker .theme-opt').forEach(opt => {
     opt.classList.toggle('selected', (opt.dataset.theme || '') === (theme || ''));
   });

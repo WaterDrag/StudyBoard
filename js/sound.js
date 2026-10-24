@@ -95,6 +95,11 @@
     tower: t => { noise(sfxBus, { t, dur: 0.6, vol: 0.35, lp: 700 }); tone(sfxBus, { type: 'sine', f: 90, f2: 40, t, dur: 0.6, vol: 0.4 }); },
     win: t => { [72, 76, 79, 84].forEach((m, i) => tone(sfxBus, { type: 'triangle', f: hz(m), t: t + i * 0.11, dur: 0.35, vol: 0.2 })); [88, 91].forEach((m, i) => tone(sfxBus, { type: 'sine', f: hz(m), t: t + 0.5 + i * 0.09, dur: 0.6, vol: 0.12 })); },
     lose: t => [67, 63, 60].forEach((m, i) => tone(sfxBus, { type: 'triangle', f: hz(m), t: t + i * 0.16, dur: 0.4, vol: 0.18, lp: 2200 })),
+    meow: t => {   // zamňoukání: „mňa“ nahoru a „u“ dolů
+      tone(sfxBus, { type: 'sawtooth', f: 520, f2: 880, t, dur: 0.16, vol: 0.12, lp: 2200, q: 4 });
+      tone(sfxBus, { type: 'sawtooth', f: 880, f2: 430, t: t + 0.15, dur: 0.42, vol: 0.12, lp: 1600, q: 4 });
+      tone(sfxBus, { type: 'sine', f: 1040, f2: 860, t: t + 0.12, dur: 0.3, vol: 0.05 });
+    },
   };
   let lastFx = {};
   window.sfx = function (name, opts) {
@@ -186,9 +191,9 @@
     pop.className = 'snd-pop';
     pop.innerHTML = `<b>🔊 Zvuk</b>
       <label class="snd-row"><input type="checkbox" data-k="music" ${S.music ? 'checked' : ''}> Hudba</label>
-      <input type="range" min="0" max="1" step="0.05" value="${S.musicVol}" data-v="musicVol" aria-label="Hlasitost hudby">
+      <div class="snd-vol"><input type="range" min="0" max="100" step="1" value="${Math.round(S.musicVol * 100)}" data-v="musicVol" aria-label="Hlasitost hudby"><output>${Math.round(S.musicVol * 100)}</output></div>
       <label class="snd-row"><input type="checkbox" data-k="sfx" ${S.sfx ? 'checked' : ''}> Zvukové efekty</label>
-      <input type="range" min="0" max="1" step="0.05" value="${S.sfxVol}" data-v="sfxVol" aria-label="Hlasitost efektů">`
+      <div class="snd-vol"><input type="range" min="0" max="100" step="1" value="${Math.round(S.sfxVol * 100)}" data-v="sfxVol" aria-label="Hlasitost efektů"><output>${Math.round(S.sfxVol * 100)}</output></div>`
       + (window.SB_EXTRA_SETTINGS || []).map((o, i) => `<label class="snd-row"><input type="checkbox" data-x="${i}" ${o.get() ? 'checked' : ''}> ${o.label}</label>`).join('');
     document.body.appendChild(pop);
     const r = btn.getBoundingClientRect();
@@ -201,12 +206,30 @@
       const k = e.target.dataset.k, v = e.target.dataset.v, x = e.target.dataset.x;
       if (x !== undefined) { window.SB_EXTRA_SETTINGS?.[+x]?.set(e.target.checked); return; }
       if (k) { S[k] = e.target.checked; if (k === 'music') { if (S.music) musicStart(); else musicStop(); } }
-      if (v) { S[v] = +e.target.value; if (v === 'sfxVol') window.sfx('click'); }
+      if (v) { S[v] = +e.target.value / 100; e.target.nextElementSibling.textContent = e.target.value; if (v === 'sfxVol') window.sfx('click'); }
       save(); applyVol(); paint();
+      if (v && Math.round(S.musicVol * 100) === 9 && Math.round(S.sfxVol * 100) === 9) catEgg();   // hlasitost se pamatuje i po ztlumení
     });
     setTimeout(() => document.addEventListener('click', closePop, { once: true }), 0);
   }
   function closePop() { pop?.remove(); pop = null; }
+  // Easter egg: hudba i efekty na 9 (ze 100) → kočičí téma (kočky mají 9 životů)
+  function catEgg() {
+    let cur = '';
+    try { cur = localStorage.getItem('sb_theme') || ''; } catch (_) { /* nic */ }
+    if (cur === 'kocka') return;
+    try { localStorage.setItem('sb_cat', '1'); localStorage.setItem('sb_theme', 'kocka'); } catch (_) { /* nic */ }
+    document.documentElement.setAttribute('data-theme', 'kocka');
+    try {   // uložit i na účet, ať ho nástěnka nepřepíše tématem z účtu
+      const u = window.firebase?.auth?.().currentUser;
+      if (u) firebase.firestore().collection('users').doc(u.uid).update({ theme: 'kocka' }).catch(() => {});
+    } catch (_) { /* nic */ }
+    window.sfx('meow');
+    document.querySelectorAll('#themePicker [data-theme="kocka"]').forEach(b => { b.hidden = false; });
+    const msg = 'Mňau! Kočky mají 9 životů — odemkl sis kočičí téma. Přepnout zpátky můžeš v Nastavení → Téma.';
+    if (typeof window.toast === 'function') window.toast(msg);
+    else { const t = document.createElement('div'); t.className = 'cat-toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 5000); }
+  }
   window.soundOpenSettings = () => { if (!btn) mount(); openPop(); };
   window.soundState = () => ({ ctx: ctx?.state || 'none', mood: MOOD, music: !!timer, settings: { ...S } });   // pro ladění
 
