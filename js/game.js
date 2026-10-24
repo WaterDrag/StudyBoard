@@ -2426,7 +2426,7 @@ function showGameQuiz(){
   function markWrong(reasonHtml){
     wrap.querySelectorAll('button').forEach(b=>{
       b.disabled=true;
-      if(b.textContent===card.back)b.style.borderColor='#4ade80';
+      if(b.dataset.ans===card.back)b.style.borderColor='#4ade80';   // porovnat hodnotu, ne text (emoji v textu se mění na ikony)
     });
     gs.wrongAnswers++;
     const penalty=Math.min(70,gs.wrongAnswers*10);
@@ -2440,7 +2440,7 @@ function showGameQuiz(){
     const btn=document.createElement('button');
     btn.className='btn-s';
     btn.style.cssText='padding:9px 12px;font-size:.8rem;text-align:left;white-space:normal;line-height:1.3;';
-    btn.textContent=opt;
+    btn.textContent=opt; btn.dataset.ans=opt;
     btn.addEventListener('click',()=>{
       if(resolved)return;
       resolved=true;
