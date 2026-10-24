@@ -30,7 +30,8 @@
 
   const B = {
     // Denní výzva: svítání nad horami s mlhou, papírový stolní kalendář s kovovými kroužky
-    denni: () => { const k = nid('d');
+    denni: () => { const k = nid('d'), now = new Date(), day = now.getDate();   // kalendář ukazuje dnešní datum
+      const month = ['LEDEN', 'ÚNOR', 'BŘEZEN', 'DUBEN', 'KVĚTEN', 'ČERVEN', 'ČERVENEC', 'SRPEN', 'ZÁŘÍ', 'ŘÍJEN', 'LISTOPAD', 'PROSINEC'][now.getMonth()];
       return `<svg-content>${defs(k, lin('sky' + k, 0, 0, 0, 1, [[0, '#0f0c29'], [0.35, '#4c1d95'], [0.7, '#db2777'], [0.9, '#fb923c'], [1, '#fed7aa']]) + rad('sun' + k, 0.5, 0.5, 0.5, [[0, '#fffbeb'], [0.18, '#fde68a', 0.95], [0.45, '#fb923c', 0.35], [1, '#f97316', 0]]) + lin('mist' + k, 0, 0, 0, 1, [[0, '#fdba74', 0], [0.5, '#fbcfe8', 0.55], [1, '#fdba74', 0]]) + lin('pg' + k, 0, 0, 0, 1, [[0, '#fffdf7'], [1, '#ece5d8']]) + lin('hd' + k, 0, 0, 0, 1, [[0, '#ef4444'], [1, '#b91c1c']]) + lin('ring' + k, 0, 0, 1, 0, [[0, '#6b7280'], [0.45, '#f3f4f6'], [1, '#4b5563']]))}
         <rect width="400" height="120" fill="url(#sky${k})"/>${stars(60, 7, 400, 50)}
         <circle cx="300" cy="72" r="110" fill="url(#sun${k})"/><circle cx="300" cy="72" r="11" fill="#fffbeb" filter="url(#gl${k})"/>
@@ -43,9 +44,9 @@
           <path d="M4 82h80l-6 8H10z" fill="#1f2937" opacity=".6"/>
           <rect width="88" height="84" rx="5" fill="url(#pg${k})" filter="url(#paper${k})"/>
           <rect width="88" height="24" rx="5" fill="url(#hd${k})"/><rect y="19" width="88" height="5" fill="url(#hd${k})"/>
-          <text x="44" y="17" font-size="9" font-weight="600" text-anchor="middle" fill="#fee2e2" letter-spacing="2" font-family="Geist, system-ui, sans-serif">ŘÍJEN</text>
+          <text x="44" y="17" font-size="9" font-weight="600" text-anchor="middle" fill="#fee2e2" letter-spacing="${month.length > 6 ? 1 : 2}" font-family="Geist, system-ui, sans-serif">${month}</text>
           ${[22, 44, 66].map(x => `<rect x="${x - 2.5}" y="-6" width="5" height="12" rx="2.5" fill="url(#ring${k})"/>`).join('')}
-          <text x="44" y="68" font-size="38" font-weight="700" text-anchor="middle" fill="#1f2937" font-family="Georgia, 'Times New Roman', serif">24</text>
+          <text x="44" y="68" font-size="38" font-weight="700" text-anchor="middle" fill="#1f2937" font-family="Georgia, 'Times New Roman', serif">${day}</text>
           <path d="M88 66v18h-18z" fill="#d6cfc0"/><path d="M70 84l18-18" stroke="#bfb6a5" stroke-width=".8"/>
         </g>
         ${vignette(k, 0.45)}${grain(k)}</svg-content>`; },
@@ -219,7 +220,7 @@
           <rect x="318" y="50" width="10" height="14" rx="5" fill="#2a1a0c"/>
           ${tower(290, 64, 14, 36, 'rb', '#dc2626', true)}${tower(356, 64, 14, 40, 'rb', '#facc15', true)}${tower(323, 40, 12, 18, 'rr', '#3b82f6', false)}
         </g>
-        <rect x="240" y="40" width="160" height="40" fill="url(#haze${k})"/>
+        <ellipse cx="326" cy="58" rx="92" ry="22" fill="#fde7c6" opacity=".55" filter="url(#bl${k})"/>   <!-- opar nad hradem, měkký do všech stran -->
         <!-- louka a cesta v perspektivě -->
         <path d="M0 76C90 68 190 70 270 66S380 66 400 68V120H0z" fill="url(#grass${k})"/>
         <rect y="70" width="400" height="50" filter="url(#gr${k})" opacity=".55"/>

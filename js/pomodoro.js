@@ -134,7 +134,7 @@
       ? `Hotovo! Dej si ${P()[S.phase === 'long' ? 'long' : 'brk']} minut pauzu.`
       : 'Pauza skončila — zpátky k učení.';
     beep();
-    try { if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('🍅 Pomodoro', { body: msg }); } catch (_) { /* nic */ }
+    try { if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Pomodoro', { body: msg, icon: NOTO_TOMATO }); } catch (_) { /* nic */ }
     if (typeof toast === 'function') toast('🍅 ' + msg);
   }
 
@@ -190,6 +190,15 @@
       render();
     }, 1000);
   }
+  // Google emoji (Noto) do ikonky záložky — do názvu záložky se obrázek dát nedá
+  const NOTO_TOMATO = 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f345/512.png', NOTO_COFFEE = 'https://fonts.gstatic.com/s/e/notoemoji/latest/2615/512.png';
+  let iconOrig = null;
+  function tabIcon(src) {
+    const l = document.querySelector('link[rel="icon"]'); if (!l) return;
+    if (iconOrig == null) iconOrig = l.href;
+    const want = src || iconOrig;
+    if (l.href !== want) l.href = want;
+  }
   function render() {
     if (!btn) return;
     const active = S.running || S.left > 0;
@@ -198,8 +207,9 @@
     btn.classList.toggle('brk', S.phase !== 'work');
     btn.classList.toggle('paused', !S.running && active);
     btn.querySelector('.pomo-time').textContent = active ? t : '';
-    document.title = document.title.replace(/^[🍅☕] \d\d:\d\d · /u, '');
-    if (S.running) document.title = `${S.phase === 'work' ? '🍅' : '☕'} ${t} · ${document.title}`;
+    document.title = document.title.replace(/^(?:[🍅☕]|Práce|Pauza) \d\d:\d\d · /u, '');
+    if (S.running) document.title = `${S.phase === 'work' ? 'Práce' : 'Pauza'} ${t} · ${document.title}`;
+    tabIcon(S.running ? (S.phase === 'work' ? NOTO_TOMATO : NOTO_COFFEE) : null);
     // V místnosti na telefonu je horní lišta schovaná — běžící čas ukáže plovoucí štítek.
     const hidden = btn.offsetParent === null;
     if (active && hidden) {
