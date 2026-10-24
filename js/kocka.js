@@ -97,12 +97,17 @@
     const bar = document.querySelector('.dash-tabs'), vw = document.documentElement.clientWidth, W = el.offsetWidth, H = el.offsetHeight;
     const b = bar && getComputedStyle(bar).position === 'fixed' ? Math.round(bar.getBoundingClientRect().height) : 0, top = innerHeight - b - H;
     const boxes = [...document.querySelectorAll(AVOID)].map(n => n.getBoundingClientRect()).filter(r => r.width && r.bottom > top && r.top < innerHeight - b);
+    // otevřené okno (rozmazává pozadí): když se vedle něj vejde, sedí kočka nad ním, jinak zůstane pod ním
+    const modal = document.querySelector('.modal-overlay.open .modal')?.getBoundingClientRect();
+    if (modal) boxes.length = 0;   // minimapa, Pomodoro… jsou pod rozmazaným pozadím – vadí jen samo okno
+    if (modal && modal.bottom > top) boxes.push(modal);
     const m = vw < 640 ? 8 : 20, free = x => boxes.every(r => x + W <= r.left - 4 || x >= r.right + 4);
-    let x = vw - m - W;
-    for (let t = x; t >= m; t -= 8) if (free(t)) { x = t; break; }
-    const key = x + '/' + b;
+    let x = vw - m - W, found = false;
+    for (let t = x; t >= m; t -= 8) if (free(t)) { x = t; found = true; break; }
+    const over = !!modal && (found || modal.bottom <= top);
+    const key = x + '/' + b + '/' + over;
     if (key === placed) return;
-    placed = key; el.style.left = x + 'px'; el.style.right = 'auto'; el.style.bottom = b + 'px';
+    placed = key; el.style.left = x + 'px'; el.style.right = 'auto'; el.style.bottom = b + 'px'; el.style.zIndex = over ? 520 : '';
   }
   addEventListener('resize', place, { passive: true });
   function unmount() { if (!el) return; el.remove(); el = null; placed = ''; clearInterval(timer); }

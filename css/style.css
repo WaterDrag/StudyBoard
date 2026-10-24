@@ -23,7 +23,7 @@
   --radius-sm:    8px;
   --shadow:       0 16px 40px -16px rgba(0,0,0,0.75);
   --transition:   0.15s ease;
-  --font:         'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font:         'Geist', system-ui, -apple-system, 'Segoe UI', 'Noto Color Emoji', sans-serif;   /* emoji jako Google (písmo načte js/icons.js) */
   --font-mono:    'Geist Mono', 'SF Mono', Consolas, monospace;
   /* Note text column: editor and note view share it, so wrapping and
      freely placed pictures land in the same spot in both. */
