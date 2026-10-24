@@ -540,7 +540,7 @@ Object.assign(ABILITY, {
     o.ocUntil = G.time + (fx.ability_duration || 25); o.ocMul = fx.ability_attack_speed_mult || 1.65;
     if (fx.ability_permanent_stack_speed_pct) o.ocPerm = Math.min(pctv(fx.ability_permanent_stack_speed_pct) * (fx.ability_max_permanent_stacks || 10), (o.ocPerm || 0) + pctv(fx.ability_permanent_stack_speed_pct));
     addFx({ kind: 'zap', x: t.x, y: t.y, tx: o.x, ty: o.y, dur: 0.4, col: '#60a5fa' });
-    floatText(o.x, o.y - 26, '⚡ přetaktováno', '#93c5fd');
+    floatText(o.x, o.y - 26, 'Přetaktováno!', '#93c5fd');
   },
 });
 

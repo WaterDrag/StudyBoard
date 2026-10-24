@@ -343,7 +343,7 @@ function frameBody(now) {
     const target = vsCatchUp(240);
     vsTick();
     const ban = $('tdBanner');
-    if (target < 0) { ban.hidden = false; ban.innerHTML = `⚔️ Bitva začíná za <b>${Math.ceil(-target)}</b> s — stav první věže!`; }
+    if (target < 0) { ban.hidden = false; const h = TDI.html(`⚔️ Bitva začíná za <b>${Math.ceil(-target)}</b> s — stav první věže!`); if (ban._h !== h) { ban._h = h; ban.innerHTML = h; } }
   } else if (!paused && !G.over) {
     let k = speed;
     if (cardOpen && cardOpen.slowUntil > now) { k = ECON.flashcards.singleplayer_slow_motion_factor; G.slowmo = true; } else G.slowmo = false;
@@ -375,10 +375,10 @@ function updateHud() {
   if (NET) {
     $('hudEco').textContent = fmt(G.vs.eco);
     go.disabled = true;
-    go.textContent = G.time < 0.01 ? '⚔️ Za chvíli' : `🌊 Vlna ${G.wave + 1} za ${Math.max(0, Math.ceil(G.vs.nextWaveAt - G.time))} s`;
-  } else if (G.waveActive) { go.textContent = '🌊 Vlna běží'; go.disabled = true; }
-  else if (G.wave === 0) { go.textContent = '▶ Start'; go.disabled = false; }
-  else { go.textContent = `⏭ Další vlna (${Math.max(0, Math.ceil(G.pauseUntil - G.time))} s)`; go.disabled = false; }
+    TDI.set(go, G.time < 0.01 ? '⚔️ Za chvíli' : `🌊 Vlna ${G.wave + 1} za ${Math.max(0, Math.ceil(G.vs.nextWaveAt - G.time))} s`);   // TDI.set: emoji → kreslené ikony, jen při změně
+  } else if (G.waveActive) { TDI.set(go, '🌊 Vlna běží'); go.disabled = true; }
+  else if (G.wave === 0) { TDI.set(go, '▶ Start'); go.disabled = false; }
+  else { TDI.set(go, `⏭ Další vlna (${Math.max(0, Math.ceil(G.pauseUntil - G.time))} s)`); go.disabled = false; }
   // pečeť bosse
   const bosses = G.enemies.filter(e => e.seal && e.seal.s > 0);
   const ban = $('tdBanner');
@@ -386,10 +386,10 @@ function updateHud() {
   else ban.hidden = true;
   // schopnosti
   const abil = [];
-  if (G.hero) G.hero.abilities.forEach((a, i) => abil.push({ k: 'h' + i, name: a.name, ico: HDEF[G.hero.id].ico, until: a.until, cd: a.cd, use: () => useHeroAbility(i) }));
+  if (G.hero) G.hero.abilities.forEach((a, i) => abil.push({ k: 'h' + i, name: a.name, ico: heroIco(HDEF[G.hero.id]), until: a.until, cd: a.cd, use: () => useHeroAbility(i) }));
   const seen = new Map();
   G.towers.forEach(t => { if (!t.ability) return; const k = t.ability.key; const prev = seen.get(k); if (!prev || t.cdUntil < prev.cdUntil) seen.set(k, t); });
-  seen.forEach((t, k) => abil.push({ k, name: t.ability.name, ico: TDEF[t.type].ico, until: t.cdUntil, cd: (t.ability.cooldown_s || 30) * abilityCdMul(t), use: () => useTowerAbility(t) }));
+  seen.forEach((t, k) => abil.push({ k, name: t.ability.name, ico: towerIco(TDEF[t.type]), until: t.cdUntil, cd: (t.ability.cooldown_s || 30) * abilityCdMul(t), use: () => useTowerAbility(t) }));
   const sig = abil.map(a => a.k).join('|');
   const bar = $('tdAbil');
   if (sig !== hudSig) {

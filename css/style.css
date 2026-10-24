@@ -6087,3 +6087,8 @@ img.card-img { cursor: zoom-in; }
   .td-cust-row > span { grid-column: 1 / -1; }
 }
 .td-wip { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; letter-spacing: .04em; vertical-align: middle; color: #1c1917; background: #facc15; }
+
+/* Obrana království: kreslené ikony místo emoji (js/td-icons.js) */
+.tdi { display: inline-block; width: 1.2em; height: 1.2em; vertical-align: -0.24em; line-height: 0; flex-shrink: 0; }
+.tdi svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.td-ab span img { width: 30px; height: 30px; display: block; }
