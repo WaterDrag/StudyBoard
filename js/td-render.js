@@ -488,6 +488,7 @@ const TR = (() => {
       const firing = t.firedAt != null && G ? Math.max(0, 1 - (G.time - t.firedAt) / 0.12) : 0;
       const cock = t.type === 'oblehaci_katapult' ? Math.max(0, Math.min(1, 1 - Math.max(0, t.cd || 0) / (t.st?.interval || 1))) : null;
       const ang = t.type === 'strazni_hlaska' || t.type === 'zlaty_dul' ? 0 : t.type === 'cepova_vez' ? (t.ang || 0) + performance.now() * ((t.up[1] >= 4 || t.up[2] >= 4) ? 0.005 : 0.002) : t.ang || 0;
+      if (t.beastUntil > (G?.time || 0)) { g.fillStyle = `rgba(232,121,249,${0.28 + Math.sin(time * 12) * 0.14})`; g.beginPath(); g.arc(t.x, t.y, r * 1.35, 0, TAU); g.fill(); }   // lektvar běsnění
       supTower(g, t, t.x, t.y, ang, { firing: t.type === 'cepova_vez' ? 0 : firing, buffed: !!(t.buff && t.buff.until > G?.time), cock, beast: t.beastUntil > (G?.time || 0), mode: t.mode });
       if (tier >= 5) { g.strokeStyle = `rgba(250,204,21,${0.4 + Math.sin(time * 3) * 0.25})`; g.lineWidth = 3; g.beginPath(); g.arc(t.x, t.y, r + 6, 0, TAU); g.stroke(); }
     } else if (useTDS() && window.TDS?.drawers?.[t.type]) {   // nová grafika (js/td-sprites-b/c.js)
@@ -713,9 +714,9 @@ const TR = (() => {
     g.restore();
   }
   function drawPhoenix(g, ph, time) {
-    if (useTDS() && window.TDS?.phoenix) {   // směr letu = derivace kroužení z td-engine.js
-      const a = ph.ang || 0;
-      TDS.phoenix(g, ph.x, ph.y, performance.now(), Math.atan2(1.3 * Math.cos(a * 1.3) * 220, -Math.sin(a) * 320));
+    if (sup()?.phoenix || (useTDS() && window.TDS?.phoenix)) {   // směr letu = derivace kroužení z td-engine.js
+      const a = ph.ang || 0, P = sup()?.phoenix ? sup() : TDS;
+      P.phoenix(g, ph.x, ph.y, performance.now(), Math.atan2(1.3 * Math.cos(a * 1.3) * 220, -Math.sin(a) * 320));
       return;
     }
     g.save(); g.translate(ph.x, ph.y);
@@ -930,6 +931,7 @@ const TR = (() => {
 
   function drawZone(g, z, time) {
     const left = Math.min(1, (z.until - G.time) / 1);
+    if (sup()?.zone) { sup().zone(g, z.kind, z.x, z.y, z.r, performance.now(), Math.max(0.2, left)); return; }
     if (useTDS() && window.TDS?.zone) { TDS.zone(g, z.kind, z.x, z.y, z.r, performance.now(), Math.max(0.2, left)); return; }
     g.save(); g.globalAlpha = Math.max(0.2, left);
     if (z.kind === 'fire') { for (let i = 0; i < 6; i++) { const an = i / 6 * TAU + time, d = z.r * 0.55; g.fillStyle = i % 2 ? 'rgba(249,115,22,.75)' : 'rgba(253,224,71,.75)'; g.beginPath(); g.ellipse(z.x + Math.cos(an) * d, z.y + Math.sin(an) * d * 0.6, 6, 10 + Math.sin(time * 12 + i) * 3, 0, 0, TAU); g.fill(); } }
@@ -938,6 +940,7 @@ const TR = (() => {
     g.restore();
   }
   function drawAlly(g, a) {
+    if (sup()?.ally) { sup().ally(g, a.big, a.x, a.y, a.ang || 0, performance.now()); return; }
     if (useTDS() && window.TDS?.ally) { TDS.ally(g, a.big, a.x, a.y, a.ang || 0, performance.now()); return; }
     g.save(); g.translate(a.x, a.y);
     g.fillStyle = a.big ? '#e7e5e4' : '#f5f5f4';
