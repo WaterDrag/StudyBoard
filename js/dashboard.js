@@ -190,8 +190,9 @@ function loadGames(user) {
       db.collection('survival_lobbies').doc(b.dataset.cancel).delete().catch(e => toast('Nepodařilo se zrušit: ' + e.message))));
   }, () => { surv.innerHTML = '<div class="game-empty">Hry se nepodařilo načíst.</div>'; });
 
-  document.getElementById('newSurvivalBtn').addEventListener('click', async e => {
-    const btn = e.currentTarget; btn.disabled = true;
+  const survCard = document.getElementById('survivalCard');
+  survCard.addEventListener('gameplay', async () => {
+    if (survCard.dataset.busy) return; survCard.dataset.busy = '1';
     try {
       const name = user.displayName || user.email?.split('@')[0] || 'Hráč';
       const ref = await db.collection('survival_lobbies').add({
@@ -200,7 +201,7 @@ function loadGames(user) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       location.href = `game.html?lobby=${ref.id}`;
-    } catch (err) { toast('Chyba: ' + err.message); btn.disabled = false; }
+    } catch (err) { toast('Chyba: ' + err.message); delete survCard.dataset.busy; }
   });
 }
 // Denní výzva + rekord Milionáře na kartách v záložce Hry
@@ -228,7 +229,6 @@ async function loadDailyCard(user) {
     for (let i = t?.done ? 0 : 1; i < 400; i++) { if (!daily[new Date(Date.now() - i * 864e5).toLocaleDateString('en-CA')]?.done) break; streak++; }
     st.innerHTML = (t?.done ? `✅ Dnes splněno: <b>${t.s} b</b> (${t.c}/${t.of || 10})` : t?.q ? `⏳ Rozehráno ${t.n || 0}/10` : '🔔 Dnešní výzva na tebe čeká')
       + (streak ? ` · 🔥 ${streak}` : '');
-    document.getElementById('dailyBtn').textContent = t?.done ? 'Zobrazit výsledky' : t?.q ? 'Pokračovat' : 'Hrát dnešní výzvu';
     const b = document.getElementById('gamesCountBadge');
     if (b && !t?.done && !b.textContent) b.textContent = '1';
     // Přátelé se načítají souběžně — při otevření přes ?tab=games ještě nemusí být.
@@ -249,6 +249,17 @@ function setupGameFilters() {
   if (!bar || bar._wired) return;
   bar._wired = true;
   const cards = [...document.querySelectorAll('#tab-games .game-card')];
+  // Celá karta je tlačítko: klik kamkoli (mimo odkazy/tlačítka a seznam her přátel) otevře hru (data-href);
+  // Zombie Survival (bez data-href) zakládá hru sám v setupGamesTab
+  cards.forEach(c => {
+    const go = e => {
+      if (e.target.closest('a, button, input, select, textarea, label, .game-lobbies')) return;
+      if (!c.dataset.href) { c.dispatchEvent(new CustomEvent('gameplay')); return; }
+      if (e.ctrlKey || e.metaKey) window.open(c.dataset.href, '_blank'); else location.href = c.dataset.href;
+    };
+    c.addEventListener('click', go);
+    c.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === c) { e.preventDefault(); go(e); } });
+  });
   bar.querySelectorAll('[data-gmode]').forEach(b => {
     const m = b.dataset.gmode;
     b.querySelector('span').textContent = m === 'all' ? cards.length : cards.filter(c => c.dataset.modes.split(' ').includes(m)).length;
