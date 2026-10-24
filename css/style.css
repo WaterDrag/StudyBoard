@@ -4269,6 +4269,16 @@ ul.checklist li[data-done="1"] { color: var(--text-muted); text-decoration: line
 .files-open:hover { border-color: var(--accent); }
 .files-del { background: none; border: none; color: #fca5a5; cursor: pointer; font-size: 0.82rem; padding: 2px 4px; }
 .files-empty { color: var(--text-muted); font-size: 0.84rem; padding: 14px 2px; text-align: center; }
+/* Nahrané složky v souborech místnosti: rozbalovací strom (sbalený), stáhnout celou přes Disk */
+.files-dir > summary { list-style: none; cursor: pointer; }
+.files-dir > summary::-webkit-details-marker { display: none; }
+.files-dir > summary .files-name { font-weight: 700; }
+.files-dir > summary button.files-open { background: none; cursor: pointer; font: inherit; font-size: 0.78rem; }
+.files-children { padding-left: 14px; margin: 0 0 6px 10px; border-left: 1px dashed var(--border); }
+.files-children .files-row { background: var(--bg); }
+.allfiles-dl { margin-left: auto; font-size: 0.75rem; font-weight: 500; color: var(--accent); text-decoration: none; border: 1px solid var(--border); border-radius: 7px; padding: 2px 9px; white-space: nowrap; }
+.allfiles-dl:hover { border-color: var(--accent); }
+@media (max-width: 600px) { .files-dir > summary .files-meta { display: none; } }
 
 /* Nástěnka → záložka Soubory (všechny soubory ze všech mých místností) */
 .allfiles-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }

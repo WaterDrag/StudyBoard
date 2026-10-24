@@ -294,6 +294,14 @@ function dashFileSize(bytes) {
 }
 // Links come from other members' writes — only ever render real web links.
 function safeFileLink(url) { return /^https:\/\//i.test(String(url || '')) ? url : '#'; }
+// How many "things" a list holds: an uploaded folder counts as one, not as every file inside it.
+// (Folder entries with kind:'folder' only carry the Drive link for downloading the whole folder.)
+function dashItemCount(files) {
+  return new Set(files.filter(f => f.kind !== 'folder').map(f => {
+    const n = String(f.name || '');
+    return n.includes('/') ? 'd:' + n.split('/')[0] : 'f:' + f.id;
+  })).size;
+}
 
 function setupAllFiles() {
   ['allFilesSearch', 'allFilesRoom', 'allFilesMine'].forEach(id =>
@@ -303,7 +311,7 @@ function setupAllFiles() {
 function renderAllFiles() {
   const list = document.getElementById('allFilesList');
   if (!list) return;
-  const total = ALL_FILES_ROOMS.reduce((n, r) => n + r.files.length, 0);
+  const total = ALL_FILES_ROOMS.reduce((n, r) => n + dashItemCount(r.files), 0);
   const badge = document.getElementById('filesCountBadge');
   if (badge) badge.textContent = total || '';
 
@@ -311,8 +319,8 @@ function renderAllFiles() {
   const sel = document.getElementById('allFilesRoom');
   const chosen = sel.value;
   sel.innerHTML = '<option value="">Všechny místnosti</option>' + ALL_FILES_ROOMS
-    .filter(r => r.files.length)
-    .map(r => `<option value="${esc(r.id)}">${esc(r.name)} (${r.files.length})</option>`).join('');
+    .filter(r => dashItemCount(r.files))
+    .map(r => `<option value="${esc(r.id)}">${esc(r.name)} (${dashItemCount(r.files)})</option>`).join('');
   sel.value = ALL_FILES_ROOMS.some(r => r.id === chosen) ? chosen : '';
 
   const q = (document.getElementById('allFilesSearch').value || '').trim().toLowerCase();
@@ -320,7 +328,7 @@ function renderAllFiles() {
   const uid = auth.currentUser?.uid;
   const rooms = ALL_FILES_ROOMS
     .filter(r => !sel.value || r.id === sel.value)
-    .map(r => ({ ...r, files: r.files.filter(f =>
+    .map(r => ({ ...r, folders: r.files.filter(f => f.kind === 'folder'), files: r.files.filter(f => f.kind !== 'folder' &&
       (!mine || f.by === uid) && (!q || String(f.name || '').toLowerCase().includes(q))) }))
     .filter(r => r.files.length);
 
@@ -339,8 +347,8 @@ function renderAllFiles() {
     files.forEach(f => {
       const parts = String(f.name || 'soubor').split('/').filter(Boolean);
       const leaf = parts.pop() || 'soubor';
-      let node = root;
-      parts.forEach(p => { node = node.dirs[p] ||= { dirs: {}, files: [] }; });
+      let node = root, path = '';
+      parts.forEach(p => { path = path ? path + '/' + p : p; node = node.dirs[p] ||= { path, dirs: {}, files: [] }; });
       node.files.push({ ...f, leaf });
     });
     return root;
@@ -353,12 +361,16 @@ function renderAllFiles() {
       <span class="files-meta">${esc(f.byName || '')}${f.size ? ' · ' + esc(dashFileSize(f.size)) : ''}${f.at ? ' · ' + esc(new Date(f.at).toLocaleDateString('cs-CZ')) : ''}</span>
       <a class="files-open" href="${esc(safeFileLink(f.link))}" target="_blank" rel="noopener">otevřít ↗</a>
     </div>`;
-  const renderNode = (node, depth) =>
-    Object.keys(node.dirs).sort((a, b) => a.localeCompare(b, 'cs')).map(name => `
-      <details class="allfiles-dir" ${q || depth < 1 ? 'open' : ''}>
-        <summary><span class="allfiles-caret"></span>📁 ${esc(name)} <span class="allfiles-count">${count(node.dirs[name])}</span></summary>
-        <div class="allfiles-children">${renderNode(node.dirs[name], depth + 1)}</div>
-      </details>`).join('') +
+  const renderNode = (node, depth, folders) =>
+    Object.keys(node.dirs).sort((a, b) => a.localeCompare(b, 'cs')).map(name => {
+      const d = node.dirs[name], dl = folders.find(f => f.name === d.path);
+      return `
+      <details class="allfiles-dir" ${q ? 'open' : ''}>
+        <summary><span class="allfiles-caret"></span>📁 ${esc(name)} <span class="allfiles-count">${count(d)}</span>
+          ${dl ? `<a class="allfiles-dl" href="${esc(safeFileLink(dl.link))}" target="_blank" rel="noopener" title="Otevře složku na Google Disku, odkud se stáhne celá jako ZIP">stáhnout ⬇</a>` : ''}</summary>
+        <div class="allfiles-children">${renderNode(d, depth + 1, folders)}</div>
+      </details>`;
+    }).join('') +
     node.files.slice().sort((a, b) => a.leaf.localeCompare(b.leaf, 'cs')).map(fileRow).join('');
 
   list.innerHTML = rooms.map(r => `
@@ -367,10 +379,10 @@ function renderAllFiles() {
         <span class="allfiles-caret"></span>
         <span class="allfiles-dot"></span>
         <span class="allfiles-room-name">${esc(r.name)}</span>
-        <span class="allfiles-count">${r.files.length}</span>
+        <span class="allfiles-count">${dashItemCount(r.files)}</span>
         <a class="allfiles-goto" href="room.html?id=${encodeURIComponent(r.id)}">otevřít místnost →</a>
       </summary>
-      <div class="allfiles-children">${renderNode(tree(r.files), 0)}</div>
+      <div class="allfiles-children">${renderNode(tree(r.files), 0, r.folders)}</div>
     </details>`).join('');
 }
 
@@ -677,7 +689,7 @@ function renderContinue() {
   const pick = last || DASH_ROOMS.slice().sort((a, b) => (b.room.createdAt?.toMillis?.() || 0) - (a.room.createdAt?.toMillis?.() || 0))[0];
   const room = pick.room;
   const members = (room.memberIds || []).length;
-  const fileCount = Array.isArray(room.files) ? room.files.length : 0;
+  const fileCount = Array.isArray(room.files) ? dashItemCount(room.files) : 0;
   const meta = [`${members} ${plural(members, 'člen', 'členové', 'členů')}`];
   if (fileCount) meta.push(`${fileCount} ${plural(fileCount, 'soubor', 'soubory', 'souborů')}`);
   box.innerHTML = `

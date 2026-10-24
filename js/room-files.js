@@ -22,6 +22,27 @@ function roomFiles() {
   return Array.isArray(ROOM?.files) ? ROOM.files : [];
 }
 
+// Nahraná složka má v seznamu navíc položku `kind: 'folder'` s odkazem na
+// složku na Disku nasdílenou odkazem — přes ni jde stáhnout celá (Disk ji
+// zabalí do ZIPu). Do počtu ani výpisu souborů se nepočítá.
+const isFolderEntry = f => f?.kind === 'folder';
+const roomFileEntries = () => roomFiles().filter(f => !isFolderEntry(f));
+const underPath = (name, path) => String(name || '').startsWith(path + '/');
+function roomFolderEntry(path) {
+  const all = roomFiles().filter(f => isFolderEntry(f) && f.name === path);
+  return all.find(f => f.by === ME.uid) || all[0] || null;
+}
+
+// Složky, které vznikají při sestavení projektu nebo je dělá editor — spolužákům
+// k ničemu (a u projektu v C# jsou to desítky souborů), proto se nenahrávají.
+const SKIP_DIRS = /^(bin|obj|\.vs|\.vscode|\.idea|\.git|node_modules|__pycache__|\.gradle|build|dist|target)$/i;
+const skippedPath = path => String(path || '').split(/[\\/]/).slice(0, -1).some(p => SKIP_DIRS.test(p));
+
+const filesPlural = (n, one, few, many) => n === 1 ? one : (n >= 2 && n <= 4 ? few : many);
+
+// Rozbalené složky v seznamu (pamatují se přes překreslení)
+const OPEN_DIRS = new Set();
+
 function filesMsg(text, kind) {
   const el = document.getElementById('filesMsg');
   if (!el) return;
@@ -32,24 +53,100 @@ function filesMsg(text, kind) {
 function renderRoomFiles() {
   const el = document.getElementById('filesList');
   if (!el) return;
-  const list = roomFiles();
+  const list = roomFileEntries();
   const path = document.getElementById('filesPath');
   if (path) path.textContent = DRIVE_FOLDER_NAME + '/' + driveSafeName(ROOM?.name);
   if (!list.length) {
     el.innerHTML = '<div class="files-empty">Zatím tu nic není. Nahraj první soubor ↑</div>';
     return;
   }
-  el.innerHTML = list.slice().reverse().map(f => {
-    // Smazat smí ten, kdo nahrál, nebo vlastník místnosti.
-    const canDel = f.by === ME.uid || ROOM?.ownerId === ME.uid;
-    return `<div class="files-row" data-id="${esc(f.id)}">
-        <span class="files-ico">${fileIcon(f.name, f.mime)}</span>
-        <span class="files-name" title="${esc(f.name)}">${esc(f.name)}</span>
-        <span class="files-meta">${esc(f.byName || '')}${f.size ? ' · ' + esc(driveFileSize(f.size)) : ''}</span>
-        <a class="files-open" href="${esc(/^https:\/\//i.test(String(f.link || '')) ? f.link : '#')}" target="_blank" rel="noopener">otevřít ↗</a>
-        ${canDel ? `<button class="files-del" data-del="${esc(f.id)}" title="Odebrat ze seznamu">🗑️</button>` : ''}
-      </div>`;
-  }).join('');
+  // Smazat smí ten, kdo nahrál, nebo vlastník místnosti.
+  const canDel = f => f.by === ME.uid || ROOM?.ownerId === ME.uid;
+  // „Složka/Podsložka/soubor.pdf" → strom; složky napřed, pak soubory od nejnovějších
+  const root = { dirs: {}, files: [] };
+  list.forEach(f => {
+    const parts = String(f.name || 'soubor').split('/').filter(Boolean);
+    const leaf = parts.pop() || 'soubor';
+    let node = root, p = '';
+    parts.forEach(part => { p = p ? p + '/' + part : part; node = node.dirs[part] ||= { path: p, dirs: {}, files: [] }; });
+    node.files.push({ ...f, leaf });
+  });
+  const all = node => node.files.concat(...Object.values(node.dirs).map(all));
+  const fileRow = f => `<div class="files-row" data-id="${esc(f.id)}">
+      <span class="files-ico">${fileIcon(f.leaf, f.mime)}</span>
+      <span class="files-name" title="${esc(f.name)}">${esc(f.leaf)}</span>
+      <span class="files-meta">${esc(f.byName || '')}${f.size ? ' · ' + esc(driveFileSize(f.size)) : ''}</span>
+      <a class="files-open" href="${esc(/^https:\/\//i.test(String(f.link || '')) ? f.link : '#')}" target="_blank" rel="noopener">otevřít ↗</a>
+      ${canDel(f) ? `<button class="files-del" data-del="${esc(f.id)}" title="Odebrat ze seznamu">🗑️</button>` : ''}
+    </div>`;
+  const renderNode = node =>
+    Object.keys(node.dirs).sort((a, b) => a.localeCompare(b, 'cs')).map(name => {
+      const d = node.dirs[name], files = all(d);
+      const size = files.reduce((n, f) => n + (+f.size || 0), 0);
+      const by = [...new Set(files.map(f => f.byName).filter(Boolean))].join(', ');
+      return `<details class="files-dir" data-path="${esc(d.path)}" ${OPEN_DIRS.has(d.path) ? 'open' : ''}>
+        <summary class="files-row">
+          <span class="allfiles-caret"></span><span class="files-ico">📁</span>
+          <span class="files-name" title="${esc(d.path)}">${esc(name)}</span>
+          <span class="files-meta">${esc(by)} · ${files.length} ${filesPlural(files.length, 'soubor', 'soubory', 'souborů')}${size ? ' · ' + esc(driveFileSize(size)) : ''}</span>
+          <button class="files-open" data-dl="${esc(d.path)}" title="Otevře složku na Google Disku, odkud se stáhne celá jako ZIP">stáhnout ⬇</button>
+          ${files.every(canDel) ? `<button class="files-del" data-deldir="${esc(d.path)}" title="Odebrat celou složku ze seznamu">🗑️</button>` : ''}
+        </summary>
+        <div class="files-children">${renderNode(d)}</div>
+      </details>`;
+    }).join('') +
+    node.files.slice().sort((a, b) => (b.at || 0) - (a.at || 0)).map(fileRow).join('');
+  el.innerHTML = renderNode(root);
+}
+
+// Složka na Disku nahrávajícího, nasdílená odkazem (podsložky i soubory to zdědí).
+// Najít ji umí jen ten, kdo ji nahrál — `drive.file` vidí jen svoje soubory.
+async function shareRoomFolder(path) {
+  let folder = await driveSubfolder(ROOM?.name);
+  for (const part of roomFilePathParts(path)) folder = await driveSubfolder(part, folder);
+  await driveShareByLink(folder);
+  const entry = {
+    id: folder, kind: 'folder', name: path,
+    link: 'https://drive.google.com/drive/folders/' + folder,
+    by: ME.uid, byName: ME.displayName || ME.email || 'Anon', at: Date.now(),
+  };
+  await saveRoomFiles(list => [...list.filter(x => !(isFolderEntry(x) && x.name === path && x.by === ME.uid)), entry]);
+  return entry;
+}
+
+async function downloadRoomFolder(path) {
+  let entry = roomFolderEntry(path);
+  const files = roomFileEntries().filter(f => underPath(f.name, path));
+  if (!entry && !files.some(f => f.by === ME.uid)) {
+    const who = [...new Set(files.map(f => f.byName).filter(Boolean))].join(', ') || 'ten, kdo ji nahrál';
+    filesMsg(`Složku ke stažení musí jednou zpřístupnit ${who} — stačí, když tu u ní klikne na „stáhnout".`, 'err');
+    return;
+  }
+  // Okno otevřít hned (v reakci na klik), jinak by ho prohlížeč po čekání na Disk zablokoval
+  const win = window.open('about:blank', '_blank');
+  try {
+    if (!entry) { filesMsg('Zpřístupňuji složku na Disku…'); entry = await shareRoomFolder(path); }
+    if (win) { win.opener = null; win.location.href = entry.link; } else window.open(entry.link, '_blank', 'noopener');
+    filesMsg('Složka se otevřela na Google Disku — celou ji stáhneš tlačítkem Stáhnout (přijde jako ZIP).', 'ok');
+  } catch (e) {
+    win?.close();
+    filesMsg('Složku se nepodařilo zpřístupnit: ' + (e?.message || e), 'err');
+  }
+}
+
+async function removeRoomFolder(path) {
+  const files = roomFileEntries().filter(f => underPath(f.name, path));
+  if (!confirm('Odebrat složku „' + path + '" (' + files.length + ' ' + filesPlural(files.length, 'soubor', 'soubory', 'souborů') + ') ze seznamu?\n\n' +
+               'Z Google Disku se NESMAŽE — tam ji případně smaž sám.')) return;
+  const ids = new Set(files.map(f => f.id));
+  const mine = roomFiles().filter(f => f.by === ME.uid && (ids.has(f.id) || (isFolderEntry(f) && (f.name === path || underPath(f.name, path)))));
+  try {
+    await saveRoomFiles(list => list.filter(x => !ids.has(x.id) && !(isFolderEntry(x) && (x.name === path || underPath(x.name, path)))));
+    OPEN_DIRS.delete(path);
+    filesMsg('Odebráno.', 'ok');
+    // Sdílení odkazem zrušíme jen u vlastních souborů (cizí Disk ovlivnit nejde) — potichu na pozadí
+    for (const f of mine) { try { await driveUnshare(f.id); } catch (_) {} }
+  } catch (e) { filesMsg('Nepovedlo se: ' + (e?.message || e), 'err'); }
 }
 
 // Zápis seznamu. Čte se aktuální stav z Firestoru, ne z lokální kopie —
@@ -154,11 +251,17 @@ async function filesFromDrop(dataTransfer) {
 }
 
 async function uploadRoomFiles(fileList) {
-  const files = roomFileItems(fileList);
-  if (!files.length) return;
+  const picked = roomFileItems(fileList);
+  const files = picked.filter(item => !skippedPath(item.relativePath));
+  const skipped = picked.length - files.length;
+  if (!files.length) {
+    if (skipped) filesMsg('Ve složce jsou jen soubory ze sestavení (bin, obj…), ty se nenahrávají.', 'err');
+    return;
+  }
   if (!driveConfigured()) { filesMsg(driveSetupHint(), 'err'); return; }
   if (MY_ROLE === 'viewer') { filesMsg('Nahrávat můžou jen editoři.', 'err'); return; }
 
+  const tops = new Set();
   let done = 0;
   for (const item of files) {
     const { file, relativePath } = item;
@@ -181,12 +284,18 @@ async function uploadRoomFiles(fileList) {
         at: Date.now(),
       }]);
       done++;
+      if (displayName.includes('/')) tops.add(displayName.split('/')[0]);
     } catch (e) {
       filesMsg(file.name + ': ' + (e?.message || e), 'err');
       return;
     }
   }
-  filesMsg(done === 1 ? 'Nahráno ✓' : 'Nahráno ' + done + ' souborů ✓', 'ok');
+  // Nahraná složka se rovnou nasdílí odkazem, ať si ji ostatní můžou stáhnout celou
+  for (const top of tops) {
+    try { await shareRoomFolder(top); } catch (_) { /* stáhnout půjde i později — zkusí se znovu při kliknutí */ }
+  }
+  filesMsg((done === 1 ? 'Nahráno ✓' : 'Nahráno ' + done + ' souborů ✓') +
+    (skipped ? ' Přeskočeno ' + skipped + ' ze sestavení (bin, obj…).' : ''), 'ok');
 }
 
 async function removeRoomFile(id) {
@@ -247,8 +356,19 @@ function setupRoomFiles() {
     });
   }
 
-  document.getElementById('filesList')?.addEventListener('click', e => {
+  const listEl = document.getElementById('filesList');
+  listEl?.addEventListener('click', e => {
+    const dl = e.target.closest('[data-dl]'), dd = e.target.closest('[data-deldir]');
+    // tlačítka ve <summary> nemají složku rozbalit/sbalit
+    if (dl || dd) e.preventDefault();
+    if (dl) { downloadRoomFolder(dl.dataset.dl); return; }
+    if (dd) { removeRoomFolder(dd.dataset.deldir); return; }
     const id = e.target.closest('[data-del]')?.dataset.del;
     if (id) removeRoomFile(id);
   });
+  // toggle nebublá, ale zachytávací fáze ho na předkovi chytí
+  listEl?.addEventListener('toggle', e => {
+    const d = e.target.closest?.('.files-dir');
+    if (d) d.open ? OPEN_DIRS.add(d.dataset.path) : OPEN_DIRS.delete(d.dataset.path);
+  }, true);
 }
