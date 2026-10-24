@@ -340,7 +340,9 @@ function canAddCards() {
 
 async function loadDeck() {
   try {
-    const deckDoc = await db.collection('decks').doc(DECK_ID).get();
+    const builtin = typeof sbIsBuiltin === 'function' && sbIsBuiltin(DECK_ID);
+    const deckDoc = builtin ? { id: DECK_ID, exists: !!sbDeckData(DECK_ID), data: () => sbDeckData(DECK_ID) }
+      : await db.collection('decks').doc(DECK_ID).get();
     if (!deckDoc.exists) { toast('Balíček nenalezen.'); window.history.back(); return; }
 
     DECK = { id: deckDoc.id, ...deckDoc.data() };
@@ -349,7 +351,8 @@ async function loadDeck() {
     const isOwner = IS_DECK_OWNER;
 
     // Ověř přístup: owner nebo člen místnosti; zjisti i roli v místnosti
-    if (DECK.roomId) {
+    if (builtin) { /* vestavěný balíček pro všechny — jen ke čtení */ }
+    else if (DECK.roomId) {
       const roomDoc  = await db.collection('rooms').doc(DECK.roomId).get();
       const isMember = roomDoc.exists && (roomDoc.data().memberIds || []).includes(ME.uid);
       if (!isOwner && !isMember) {
@@ -421,10 +424,8 @@ async function loadDeck() {
       setupEditDeckModal();
     }
 
-    // Real-time karty
-    db.collection('decks').doc(DECK_ID).collection('cards')
-      .orderBy('createdAt', 'asc')
-      .onSnapshot(snap => {
+    // Real-time karty (vestavěný balíček: jednou ze souboru)
+    const onCards = snap => {
         // Karty uložené jednou dávkou (AI) mají stejný čas — pořadí drží „order“.
         ALL_CARDS = snap.docs.map(d => ({ id: d.id, ...d.data() }))
           .sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9));
@@ -446,7 +447,10 @@ async function loadDeck() {
         const tb = document.getElementById('typeBtn'), cb = document.getElementById('clozeBtn');
         if (tb) tb.style.display = ALL_CARDS.some(c => !isInfo(c)) ? '' : 'none';
         if (cb) cb.style.display = ALL_CARDS.some(c => isInfo(c) && clozeCandidates(c.back).length) ? '' : 'none';
-      });
+      };
+    if (builtin) sbDeckCards(DECK_ID).then(list => onCards({ docs: list.map(c => ({ id: c.id, data: () => c })) }))
+      .catch(e => toast(e.message));
+    else db.collection('decks').doc(DECK_ID).collection('cards').orderBy('createdAt', 'asc').onSnapshot(onCards);
 
   } catch (e) {
     toast('Chyba: ' + e.message);

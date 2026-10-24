@@ -1,0 +1,902 @@
+[
+[
+"Kolik dní má přestupný rok?",
+"366",
+[
+"365",
+"364",
+"360",
+"367"
+]
+],
+[
+"Kolik minut má jeden den?",
+"1440",
+[
+"1400",
+"1240",
+"2400",
+"3600"
+]
+],
+[
+"Kolik sekund má jedna hodina?",
+"3600",
+[
+"360",
+"6000",
+"1440",
+"600"
+]
+],
+[
+"Kolik hráčů má fotbalový tým na hřišti?",
+"11",
+[
+"10",
+"12",
+"9",
+"7"
+]
+],
+[
+"Kolik hráčů má na hřišti hokejový tým (včetně brankáře)?",
+"6",
+[
+"5",
+"7",
+"11",
+"4"
+]
+],
+[
+"Kolik hráčů je v basketbalovém týmu na hřišti?",
+"5",
+[
+"6",
+"7",
+"4",
+"11"
+]
+],
+[
+"Kolik políček má šachovnice?",
+"64",
+[
+"36",
+"81",
+"100",
+"49"
+]
+],
+[
+"Kolik karet má klasický balíček žolíkových karet (bez žolíků)?",
+"52",
+[
+"32",
+"54",
+"48",
+"36"
+]
+],
+[
+"Jak často se konají letní olympijské hry?",
+"každé 4 roky",
+[
+"každé 2 roky",
+"každý rok",
+"každých 5 let",
+"každé 3 roky"
+]
+],
+[
+"Pět olympijských kruhů symbolizuje",
+"pět kontinentů",
+[
+"pět sportů",
+"pět zakládajících států",
+"pět ctností",
+"pět měst"
+]
+],
+[
+"Nejrychlejší člověk na 100 m (světový rekord 9,58 s)",
+"Usain Bolt",
+[
+"Carl Lewis",
+"Tyson Gay",
+"Asafa Powell",
+"Justin Gatlin"
+]
+],
+[
+"Česká tenistka, vítězka Wimbledonu 2011 a 2014",
+"Petra Kvitová",
+[
+"Karolína Plíšková",
+"Barbora Krejčíková",
+"Markéta Vondroušová",
+"Lucie Šafářová"
+]
+],
+[
+"Česká tenistka, vítězka Wimbledonu 2023",
+"Markéta Vondroušová",
+[
+"Petra Kvitová",
+"Barbora Krejčíková",
+"Karolína Muchová",
+"Jana Novotná"
+]
+],
+[
+"Český běžec přezdívaný „Česká lokomotiva“",
+"Emil Zátopek",
+[
+"Jan Železný",
+"Roman Šebrle",
+"Věra Čáslavská",
+"Ivan Lendl"
+]
+],
+[
+"Český oštěpař, trojnásobný olympijský vítěz",
+"Jan Železný",
+[
+"Roman Šebrle",
+"Emil Zátopek",
+"Vítězslav Veselý",
+"Tomáš Dvořák"
+]
+],
+[
+"Česká gymnastka, sedminásobná olympijská vítězka",
+"Věra Čáslavská",
+[
+"Kateřina Neumannová",
+"Martina Sáblíková",
+"Barbora Špotáková",
+"Ester Ledecká"
+]
+],
+[
+"Sportovkyně, která na jedné olympiádě vyhrála v lyžování i snowboardu (2018)",
+"Ester Ledecká",
+[
+"Martina Sáblíková",
+"Eva Samková",
+"Gabriela Koukalová",
+"Kateřina Neumannová"
+]
+],
+[
+"V kterém roce vyhráli čeští hokejisté olympijské zlato v Naganu?",
+"1998",
+[
+"1996",
+"2002",
+"2006",
+"1994"
+]
+],
+[
+"Autor Mony Lisy",
+"Leonardo da Vinci",
+[
+"Michelangelo",
+"Raffael",
+"Rembrandt",
+"Botticelli"
+]
+],
+[
+"Autor Hvězdné noci",
+"Vincent van Gogh",
+[
+"Claude Monet",
+"Pablo Picasso",
+"Paul Cézanne",
+"Edvard Munch"
+]
+],
+[
+"Autor obrazu Výkřik",
+"Edvard Munch",
+[
+"Vincent van Gogh",
+"Gustav Klimt",
+"Salvador Dalí",
+"Egon Schiele"
+]
+],
+[
+"Autor fresky ve stropě Sixtinské kaple",
+"Michelangelo",
+[
+"Leonardo da Vinci",
+"Raffael",
+"Tizian",
+"Caravaggio"
+]
+],
+[
+"Malíř známý roztékajícími se hodinami",
+"Salvador Dalí",
+[
+"Pablo Picasso",
+"René Magritte",
+"Joan Miró",
+"Max Ernst"
+]
+],
+[
+"Spoluzakladatel kubismu, autor Guerniky",
+"Pablo Picasso",
+[
+"Salvador Dalí",
+"Henri Matisse",
+"Georges Braque",
+"Marc Chagall"
+]
+],
+[
+"Český secesní malíř, autor plakátů pro Sarah Bernhardtovou",
+"Alfons Mucha",
+[
+"Josef Lada",
+"František Kupka",
+"Mikoláš Aleš",
+"Josef Mánes"
+]
+],
+[
+"Autor Mé vlasti (Vltava)",
+"Bedřich Smetana",
+[
+"Antonín Dvořák",
+"Leoš Janáček",
+"Bohuslav Martinů",
+"Josef Suk"
+]
+],
+[
+"Autor Novosvětské symfonie",
+"Antonín Dvořák",
+[
+"Bedřich Smetana",
+"Leoš Janáček",
+"Zdeněk Fibich",
+"Josef Mysliveček"
+]
+],
+[
+"Autor opery Rusalka",
+"Antonín Dvořák",
+[
+"Bedřich Smetana",
+"Leoš Janáček",
+"Bohuslav Martinů",
+"Zdeněk Fibich"
+]
+],
+[
+"Autor opery Prodaná nevěsta",
+"Bedřich Smetana",
+[
+"Antonín Dvořák",
+"Leoš Janáček",
+"Josef Bohuslav Foerster",
+"Vítězslav Novák"
+]
+],
+[
+"Skladatel Malé noční hudby a Kouzelné flétny",
+"Wolfgang Amadeus Mozart",
+[
+"Ludwig van Beethoven",
+"Joseph Haydn",
+"Johann Sebastian Bach",
+"Franz Schubert"
+]
+],
+[
+"Ve kterém městě měl Mozartův Don Giovanni premiéru?",
+"v Praze",
+[
+"ve Vídni",
+"v Salcburku",
+"v Miláně",
+"v Mnichově"
+]
+],
+[
+"Skladatel, který napsal 9. symfonii s Ódou na radost, i když ohluchl",
+"Ludwig van Beethoven",
+[
+"Wolfgang Amadeus Mozart",
+"Johannes Brahms",
+"Richard Wagner",
+"Franz Liszt"
+]
+],
+[
+"Kolik strun má klasická kytara?",
+"6",
+[
+"4",
+"5",
+"7",
+"12"
+]
+],
+[
+"Kolik kláves má klasický klavír?",
+"88",
+[
+"76",
+"96",
+"64",
+"100"
+]
+],
+[
+"Kapela, ve které hráli John Lennon a Paul McCartney",
+"The Beatles",
+[
+"The Rolling Stones",
+"Queen",
+"The Who",
+"Pink Floyd"
+]
+],
+[
+"Zpěvák skupiny Queen",
+"Freddie Mercury",
+[
+"Mick Jagger",
+"Elton John",
+"David Bowie",
+"Bono"
+]
+],
+[
+"Režisér filmu Jurský park a E.T.",
+"Steven Spielberg",
+[
+"George Lucas",
+"James Cameron",
+"Christopher Nolan",
+"Ridley Scott"
+]
+],
+[
+"Český režisér, držitel Oscara za Přelet nad kukaččím hnízdem",
+"Miloš Forman",
+[
+"Jiří Menzel",
+"Jan Svěrák",
+"Věra Chytilová",
+"Karel Zeman"
+]
+],
+[
+"Český film oceněný Oscarem v roce 1997",
+"Kolja",
+[
+"Obecná škola",
+"Pelíšky",
+"Tmavomodrý svět",
+"Musíme si pomáhat"
+]
+],
+[
+"Pražský orloj se nachází na",
+"Staroměstské radnici",
+[
+"Pražském hradě",
+"Karlově mostě",
+"Václavském náměstí",
+"Vyšehradě"
+]
+],
+[
+"Nejdelší most v Praze přes Vltavu ze 14. století",
+"Karlův most",
+[
+"Most Legií",
+"Nuselský most",
+"Mánesův most",
+"Čechův most"
+]
+],
+[
+"Město v UNESCO se zámkem, kde je otáčivé hlediště a Maškarní sál",
+"Český Krumlov",
+[
+"Telč",
+"Lednice",
+"Kutná Hora",
+"Litomyšl"
+]
+],
+[
+"Kostnice s výzdobou z lidských kostí je v",
+"Sedlci u Kutné Hory",
+[
+"Českém Krumlově",
+"Telči",
+"Olomouci",
+"Kroměříži"
+]
+],
+[
+"Pivo z Plzně, poprvé uvařené v roce 1842",
+"Pilsner Urquell",
+[
+"Budweiser Budvar",
+"Kozel",
+"Staropramen",
+"Radegast"
+]
+],
+[
+"Pohádková postava Krtek – kdo ho vytvořil?",
+"Zdeněk Miler",
+[
+"Josef Lada",
+"Jiří Trnka",
+"Radek Pilař",
+"Václav Bedřich"
+]
+],
+[
+"Autor obrázků Švejka a ilustrátor českých Vánoc",
+"Josef Lada",
+[
+"Zdeněk Miler",
+"Jiří Trnka",
+"Adolf Born",
+"Ondřej Sekora"
+]
+],
+[
+"Kdo vytvořil Ferdu Mravence?",
+"Ondřej Sekora",
+[
+"Zdeněk Miler",
+"Josef Lada",
+"Jiří Trnka",
+"Václav Čtvrtek"
+]
+],
+[
+"Autor Rumcajse a Křemílka a Vochomůrky",
+"Václav Čtvrtek",
+[
+"Ondřej Sekora",
+"Josef Lada",
+"Jaroslav Foglar",
+"Zdeněk Svěrák"
+]
+],
+[
+"Vymyšlený český génius, kterého vymysleli Svěrák a Smoljak",
+"Jára Cimrman",
+[
+"Saturnin",
+"Josef Švejk",
+"Jan Tleskač",
+"Hurvínek"
+]
+],
+[
+"Kolik je na světě oceánů (běžně se uvádí)?",
+"5",
+[
+"4",
+"3",
+"6",
+"7"
+]
+],
+[
+"Nejrozšířenější náboženství na světě",
+"křesťanství",
+[
+"islám",
+"hinduismus",
+"buddhismus",
+"judaismus"
+]
+],
+[
+"Svatá kniha islámu",
+"Korán",
+[
+"Tóra",
+"Bible",
+"Védy",
+"Talmud"
+]
+],
+[
+"Nejrozšířenější rodný jazyk na světě",
+"čínština (mandarínská)",
+[
+"angličtina",
+"španělština",
+"hindština",
+"arabština"
+]
+],
+[
+"Kolik písmen má anglická abeceda?",
+"26",
+[
+"24",
+"28",
+"25",
+"32"
+]
+],
+[
+"Kolik barev má duha (tradičně)?",
+"7",
+[
+"5",
+"6",
+"8",
+"9"
+]
+],
+[
+"Smíchání modré a žluté barvy dá",
+"zelenou",
+[
+"fialovou",
+"oranžovou",
+"hnědou",
+"tyrkysovou"
+]
+],
+[
+"Základní barvy světla (RGB)",
+"červená, zelená, modrá",
+[
+"červená, žlutá, modrá",
+"azurová, purpurová, žlutá",
+"černá, bílá, šedá",
+"zelená, žlutá, oranžová"
+]
+],
+[
+"Kolik je planet ve Sluneční soustavě?",
+"8",
+[
+"9",
+"7",
+"10",
+"12"
+]
+],
+[
+"Která planeta je známá jako Rudá planeta?",
+"Mars",
+[
+"Venuše",
+"Jupiter",
+"Merkur",
+"Saturn"
+]
+],
+[
+"Která planeta má nejvýraznější prstence?",
+"Saturn",
+[
+"Jupiter",
+"Uran",
+"Neptun",
+"Mars"
+]
+],
+[
+"Nejbližší hvězda k Zemi",
+"Slunce",
+[
+"Proxima Centauri",
+"Sírius",
+"Polárka",
+"Betelgeuze"
+]
+],
+[
+"Jak se jmenuje naše galaxie?",
+"Mléčná dráha",
+[
+"Andromeda",
+"Velký Magellanův oblak",
+"Sombrero",
+"Trojúhelník"
+]
+],
+[
+"Kolik trvá oběh Země kolem Slunce?",
+"přibližně 365 dní",
+[
+"24 hodin",
+"30 dní",
+"12 dní",
+"100 dní"
+]
+],
+[
+"Jak dlouho se Země otočí kolem své osy?",
+"přibližně 24 hodin",
+[
+"365 dní",
+"12 hodin",
+"1 týden",
+"48 hodin"
+]
+],
+[
+"Proč máme roční období?",
+"kvůli sklonu zemské osy",
+[
+"kvůli vzdálenosti od Slunce",
+"kvůli Měsíci",
+"kvůli rotaci Země",
+"kvůli slunečním skvrnám"
+]
+],
+[
+"Kolik srdcí má chobotnice?",
+"3",
+[
+"1",
+"2",
+"4",
+"8"
+]
+],
+[
+"Které zvíře je symbolem WWF?",
+"panda velká",
+[
+"lední medvěd",
+"tygr",
+"slon",
+"koala"
+]
+],
+[
+"Národní zvíře Austrálie (na znaku)",
+"klokan (a emu)",
+[
+"koala",
+"ptakopysk",
+"dingo",
+"vombat"
+]
+],
+[
+"Ze kterého státu pochází pizza?",
+"z Itálie",
+[
+"z Řecka",
+"z USA",
+"ze Španělska",
+"z Francie"
+]
+],
+[
+"Ze kterého státu pochází sushi?",
+"z Japonska",
+[
+"z Číny",
+"z Koreje",
+"z Thajska",
+"z Vietnamu"
+]
+],
+[
+"Hlavní surovina guacamole",
+"avokádo",
+[
+"rajče",
+"okurka",
+"cuketa",
+"hrášek"
+]
+],
+[
+"Kolik je litrů v jednom galonu (USA, přibližně)?",
+"3,8",
+[
+"1",
+"2,5",
+"4,5",
+"10"
+]
+],
+[
+"Kolik centimetrů je jeden palec (inch)?",
+"2,54",
+[
+"1",
+"3,5",
+"5",
+"2,2"
+]
+],
+[
+"Tísňová linka záchranné služby v ČR",
+"155",
+[
+"150",
+"158",
+"112",
+"911"
+]
+],
+[
+"Tísňová linka hasičů v ČR",
+"150",
+[
+"155",
+"158",
+"112",
+"156"
+]
+],
+[
+"Tísňová linka policie ČR",
+"158",
+[
+"150",
+"155",
+"156",
+"911"
+]
+],
+[
+"Jednotné evropské číslo tísňového volání",
+"112",
+[
+"911",
+"155",
+"999",
+"100"
+]
+],
+[
+"Tísňová linka městské policie",
+"156",
+[
+"158",
+"150",
+"155",
+"112"
+]
+],
+[
+"Kterého vitamínu je hodně v citrusech?",
+"vitamín C",
+[
+"vitamín D",
+"vitamín B12",
+"vitamín K",
+"vitamín A"
+]
+],
+[
+"Kolik let je jedno století?",
+"100",
+[
+"10",
+"1000",
+"50",
+"25"
+]
+],
+[
+"Kolik let je jedno tisíciletí?",
+"1000",
+[
+"100",
+"10 000",
+"500",
+"10"
+]
+],
+[
+"Výročí 50 let svatby se nazývá",
+"zlatá svatba",
+[
+"stříbrná svatba",
+"diamantová svatba",
+"perlová svatba",
+"železná svatba"
+]
+],
+[
+"Výročí 25 let svatby se nazývá",
+"stříbrná svatba",
+[
+"zlatá svatba",
+"bronzová svatba",
+"dřevěná svatba",
+"perlová svatba"
+]
+],
+[
+"Co znamená zkratka „tzv.“?",
+"takzvaný",
+[
+"tak zvláštní",
+"tedy",
+"totiž",
+"to znamená"
+]
+],
+[
+"Co znamená latinské „carpe diem“?",
+"užívej dne",
+[
+"vše plyne",
+"kostky jsou vrženy",
+"přišel jsem, viděl jsem, zvítězil jsem",
+"ve víně je pravda"
+]
+],
+[
+"Kdo řekl „Veni, vidi, vici“?",
+"Julius Caesar",
+[
+"Napoleon",
+"Alexandr Veliký",
+"Augustus",
+"Cicero"
+]
+],
+[
+"Pražská památka, kde je pohřben sv. Václav",
+"katedrála sv. Víta",
+[
+"Týnský chrám",
+"bazilika sv. Jiří",
+"Vyšehradská kapitula",
+"kostel sv. Mikuláše"
+]
+],
+[
+"Nejvyšší budova světa (2024)",
+"Burdž Chalífa",
+[
+"Shanghai Tower",
+"Empire State Building",
+"One World Trade Center",
+"Petronas Towers"
+]
+],
+[
+"Ve kterém městě je Koloseum?",
+"v Římě",
+[
+"v Athénách",
+"v Paříži",
+"v Miláně",
+"v Istanbulu"
+]
+],
+[
+"Kde se nachází Tádž Mahal?",
+"v Indii",
+[
+"v Pákistánu",
+"v Íránu",
+"v Egyptě",
+"v Turecku"
+]
+]
+]

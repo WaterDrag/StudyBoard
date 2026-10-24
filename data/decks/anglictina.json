@@ -1,0 +1,898 @@
+[
+[
+"Přelož: kniha",
+"book",
+[
+"look",
+"cook",
+"bag",
+"boot"
+]
+],
+[
+"Přelož: pes",
+"dog",
+[
+"cat",
+"pig",
+"dig",
+"doll"
+]
+],
+[
+"Přelož: kočka",
+"cat",
+[
+"cap",
+"dog",
+"cut",
+"kit"
+]
+],
+[
+"Přelož: dům",
+"house",
+[
+"horse",
+"home town",
+"mouse",
+"hose"
+]
+],
+[
+"Přelož: okno",
+"window",
+[
+"widow",
+"door",
+"wall",
+"wind"
+]
+],
+[
+"Přelož: stůl",
+"table",
+[
+"chair",
+"tablet",
+"stool",
+"bench"
+]
+],
+[
+"Přelož: židle",
+"chair",
+[
+"share",
+"cheer",
+"table",
+"sofa"
+]
+],
+[
+"Přelož: jablko",
+"apple",
+[
+"pear",
+"plum",
+"ample",
+"peach"
+]
+],
+[
+"Přelož: voda",
+"water",
+[
+"waiter",
+"wine",
+"weather",
+"waste"
+]
+],
+[
+"Přelož: počasí",
+"weather",
+[
+"whether",
+"water",
+"season",
+"climate"
+]
+],
+[
+"Přelož: zítra",
+"tomorrow",
+[
+"yesterday",
+"today",
+"tonight",
+"later"
+]
+],
+[
+"Přelož: včera",
+"yesterday",
+[
+"tomorrow",
+"today",
+"last",
+"before"
+]
+],
+[
+"Přelož: týden",
+"week",
+[
+"weak",
+"weekend",
+"month",
+"day"
+]
+],
+[
+"Přelož: červený",
+"red",
+[
+"read",
+"rad",
+"blue",
+"green"
+]
+],
+[
+"Přelož: šťastný",
+"happy",
+[
+"sad",
+"hungry",
+"lucky",
+"angry"
+]
+],
+[
+"Přelož: hladový",
+"hungry",
+[
+"angry",
+"thirsty",
+"tired",
+"hurry"
+]
+],
+[
+"Přelož: unavený",
+"tired",
+[
+"tried",
+"bored",
+"sleepy",
+"tiered"
+]
+],
+[
+"Přelož: krásný",
+"beautiful",
+[
+"ugly",
+"bountiful",
+"awful",
+"useful"
+]
+],
+[
+"Přelož: levný",
+"cheap",
+[
+"expensive",
+"chip",
+"sheep",
+"cheat"
+]
+],
+[
+"Přelož: drahý (cenou)",
+"expensive",
+[
+"cheap",
+"extensive",
+"expansive"
+]
+],
+[
+"Přelož: zaměstnání (práce)",
+"job",
+[
+"jab",
+"jog",
+"hobby",
+"school"
+]
+],
+[
+"Přelož: nemocnice",
+"hospital",
+[
+"hostel",
+"hotel",
+"pharmacy",
+"hospitality"
+]
+],
+[
+"Přelož: nádraží",
+"station",
+[
+"stadium",
+"street",
+"statue",
+"airport"
+]
+],
+[
+"Přelož: letiště",
+"airport",
+[
+"airplane",
+"harbour",
+"station",
+"airline"
+]
+],
+[
+"Přelož: knihovna",
+"library",
+[
+"bookshop",
+"laboratory",
+"literature",
+"librarian"
+]
+],
+[
+"Přelož: kuchyně",
+"kitchen",
+[
+"chicken",
+"kitten",
+"cooker",
+"dining room"
+]
+],
+[
+"Přelož: kuře",
+"chicken",
+[
+"kitchen",
+"chick",
+"cook",
+"kitten"
+]
+],
+[
+"Přelož: sestra",
+"sister",
+[
+"brother",
+"cousin",
+"aunt",
+"niece"
+]
+],
+[
+"Přelož: strýc",
+"uncle",
+[
+"aunt",
+"nephew",
+"cousin",
+"grandfather"
+]
+],
+[
+"Přelož: rozumět",
+"understand",
+[
+"undertake",
+"stand up",
+"overstand",
+"understate"
+]
+],
+[
+"Přelož: zapomenout",
+"forget",
+[
+"forgive",
+"remember",
+"get"
+]
+],
+[
+"Přelož: pamatovat si",
+"remember",
+[
+"remind",
+"forget",
+"memory",
+"remain"
+]
+],
+[
+"Přelož: odpustit",
+"forgive",
+[
+"forget",
+"give up",
+"forbid",
+"forego"
+]
+],
+[
+"Přelož: půjčit si (od někoho)",
+"borrow",
+[
+"lend",
+"burrow",
+"rent out",
+"give"
+]
+],
+[
+"Přelož: půjčit (někomu)",
+"lend",
+[
+"borrow",
+"land",
+"rent"
+]
+],
+[
+"Přelož: vyhrát",
+"win",
+[
+"wind",
+"lose",
+"earn",
+"beat"
+]
+],
+[
+"Přelož: prohrát",
+"lose",
+[
+"loose",
+"win",
+"lost to",
+"miss"
+]
+],
+[
+"Minulý čas slovesa go",
+"went",
+[
+"goed",
+"gone",
+"goes",
+"wented"
+]
+],
+[
+"Minulý čas slovesa see",
+"saw",
+[
+"seed",
+"seen",
+"sawed",
+"seened"
+]
+],
+[
+"Minulý čas slovesa buy",
+"bought",
+[
+"buyed",
+"brought",
+"buy",
+"buied"
+]
+],
+[
+"Minulý čas slovesa bring",
+"brought",
+[
+"bringed",
+"bought",
+"brang",
+"brung"
+]
+],
+[
+"Minulý čas slovesa think",
+"thought",
+[
+"thinked",
+"taught",
+"thank",
+"thunk"
+]
+],
+[
+"Minulý čas slovesa teach",
+"taught",
+[
+"teached",
+"thought",
+"tought",
+"teacht"
+]
+],
+[
+"Minulý čas slovesa write",
+"wrote",
+[
+"writed",
+"written",
+"wrotten",
+"writ"
+]
+],
+[
+"Minulý čas slovesa eat",
+"ate",
+[
+"eated",
+"eaten",
+"eat",
+"aten"
+]
+],
+[
+"Minulý čas slovesa take",
+"took",
+[
+"taked",
+"taken",
+"tooked",
+"take"
+]
+],
+[
+"Minulý čas slovesa begin",
+"began",
+[
+"begun",
+"beginned",
+"begined",
+"begin"
+]
+],
+[
+"Příčestí minulé (3. tvar) slovesa go",
+"gone",
+[
+"went",
+"goed",
+"going",
+"goes"
+]
+],
+[
+"Příčestí minulé slovesa write",
+"written",
+[
+"wrote",
+"writed",
+"writen",
+"writing"
+]
+],
+[
+"Příčestí minulé slovesa be",
+"been",
+[
+"was",
+"being",
+"be",
+"were"
+]
+],
+[
+"Množné číslo slova child",
+"children",
+[
+"childs",
+"childrens",
+"childes",
+"child"
+]
+],
+[
+"Množné číslo slova man",
+"men",
+[
+"mans",
+"mens",
+"man",
+"mannes"
+]
+],
+[
+"Množné číslo slova mouse",
+"mice",
+[
+"mouses",
+"mices",
+"mouse",
+"meese"
+]
+],
+[
+"Množné číslo slova tooth",
+"teeth",
+[
+"tooths",
+"teeths",
+"toothes",
+"tooth"
+]
+],
+[
+"Množné číslo slova foot",
+"feet",
+[
+"foots",
+"feets",
+"footes",
+"foot"
+]
+],
+[
+"Množné číslo slova woman",
+"women",
+[
+"womans",
+"womens",
+"woman",
+"wimen"
+]
+],
+[
+"Doplň: She ___ to school every day.",
+"goes",
+[
+"go",
+"going",
+"is go",
+"gos"
+]
+],
+[
+"Doplň: I ___ TV right now.",
+"am watching",
+[
+"watch",
+"watches",
+"watching",
+"am watch"
+]
+],
+[
+"Doplň: They ___ in London since 2010.",
+"have lived",
+[
+"live",
+"lived",
+"are living",
+"has lived"
+]
+],
+[
+"Doplň: If it rains, I ___ at home.",
+"will stay",
+[
+"would stay",
+"stay will",
+"stayed",
+"am stay"
+]
+],
+[
+"Doplň: If I were rich, I ___ a boat.",
+"would buy",
+[
+"will buy",
+"buy",
+"bought",
+"would bought"
+]
+],
+[
+"Doplň: He is ___ than his brother.",
+"taller",
+[
+"more tall",
+"tallest",
+"more taller",
+"the tall"
+]
+],
+[
+"Doplň: This is the ___ day of my life.",
+"best",
+[
+"better",
+"good",
+"most good",
+"bestest"
+]
+],
+[
+"Doplň: I have ___ apple.",
+"an",
+[
+"a",
+"the a",
+"an a",
+"many"
+]
+],
+[
+"Doplň: There isn't ___ milk in the fridge.",
+"any",
+[
+"some",
+"no",
+"a",
+"many"
+]
+],
+[
+"Doplň: How ___ money do you have?",
+"much",
+[
+"many",
+"lot",
+"more",
+"few"
+]
+],
+[
+"Doplň: How ___ brothers do you have?",
+"many",
+[
+"much",
+"lot",
+"more",
+"little"
+]
+],
+[
+"Doplň: I'm interested ___ music.",
+"in",
+[
+"on",
+"at",
+"for",
+"with"
+]
+],
+[
+"Doplň: I was born ___ 2008.",
+"in",
+[
+"on",
+"at",
+"by",
+"since"
+]
+],
+[
+"Doplň: See you ___ Monday.",
+"on",
+[
+"in",
+"at",
+"by",
+"for"
+]
+],
+[
+"Doplň: The meeting is ___ 5 o'clock.",
+"at",
+[
+"in",
+"on",
+"by",
+"to"
+]
+],
+[
+"Doplň: You ___ smoke here. It's forbidden.",
+"mustn't",
+[
+"don't have to",
+"needn't",
+"must",
+"can"
+]
+],
+[
+"Doplň: The letter ___ written yesterday.",
+"was",
+[
+"is",
+"were",
+"has",
+"been"
+]
+],
+[
+"Doplň: She asked me where I ___.",
+"lived",
+[
+"live",
+"living",
+"am living",
+"lives"
+]
+],
+[
+"Doplň: I'm looking forward to ___ you.",
+"seeing",
+[
+"see",
+"saw",
+"seen",
+"to see"
+]
+],
+[
+"Doplň: He's the man ___ car was stolen.",
+"whose",
+[
+"who",
+"which",
+"that's",
+"whom"
+]
+],
+[
+"Opak slova big",
+"small",
+[
+"large",
+"huge",
+"tall",
+"wide"
+]
+],
+[
+"Opak slova old (o věcech)",
+"new",
+[
+"young",
+"ancient",
+"used",
+"aged"
+]
+],
+[
+"Opak slova early",
+"late",
+[
+"soon",
+"first",
+"later on",
+"fast"
+]
+],
+[
+"Synonymum slova big",
+"large",
+[
+"small",
+"tiny",
+"little",
+"short"
+]
+],
+[
+"Co znamená frázové sloveso give up?",
+"vzdát se",
+[
+"vydat se",
+"rozdávat",
+"vrátit",
+"zvednout se"
+]
+],
+[
+"Co znamená frázové sloveso look after?",
+"starat se o",
+[
+"hledat",
+"dívat se za",
+"podobat se",
+"prohlédnout"
+]
+],
+[
+"Co znamená frázové sloveso find out?",
+"zjistit",
+[
+"najít venku",
+"ztratit",
+"vymyslet",
+"odejít"
+]
+],
+[
+"Co znamená frázové sloveso turn on?",
+"zapnout",
+[
+"vypnout",
+"otočit se",
+"odmítnout",
+"ztlumit"
+]
+],
+[
+"Co znamená idiom It's raining cats and dogs?",
+"silně prší",
+[
+"prší jen trochu",
+"zvířata utíkají",
+"je hezky",
+"je zima"
+]
+],
+[
+"Co znamená „actually“?",
+"ve skutečnosti",
+[
+"aktuálně",
+"právě teď",
+"přesně",
+"nakonec"
+]
+],
+[
+"Co znamená „eventually“?",
+"nakonec",
+[
+"eventuálně",
+"případně",
+"možná",
+"občas"
+]
+],
+[
+"Co znamená „sensible“?",
+"rozumný",
+[
+"citlivý",
+"senzační",
+"smyslný",
+"rozumějící"
+]
+],
+[
+"Co znamená „sensitive“?",
+"citlivý",
+[
+"rozumný",
+"smysluplný",
+"senzační"
+]
+],
+[
+"Hlavní město Spojeného království",
+"London",
+[
+"Manchester",
+"Edinburgh",
+"Oxford",
+"Cardiff"
+]
+]
+]

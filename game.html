@@ -39,7 +39,10 @@ body{background:var(--bg0);color:var(--tx);font-family:'Geist',system-ui,'Noto C
 canvas{display:block;cursor:crosshair;}
 
 /* ── Screens ─────────────────────────── */
-.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;overflow-y:auto;padding:20px;}
+.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:flex-start;flex-direction:column;gap:14px;overflow-y:auto;padding:20px;}
+/* vycentrovat svisle jen když se obsah vejde — vyšší obsah jde odrolovat od začátku do konce */
+.screen>:first-child{margin-top:auto;}
+.screen>:last-child{margin-bottom:auto;}
 .screen.hidden{display:none!important;}
 /* flex-shrink:0 is the actual fix for panels rendering as a squished
    sliver-with-scrollbar (e.g. the deck picker showing only its header) —
@@ -206,6 +209,8 @@ canvas{display:block;cursor:crosshair;}
 .bb-btn{width:52px;height:52px;font-size:1.2rem;padding:4px;}
 .ab-btn:hover,.bb-btn:hover{border-color:var(--acc);background:var(--bg3);}
 .bb-btn.active{border-color:var(--gold);background:rgba(245,158,11,.07);}
+.bb-demo{border-color:rgba(239,68,68,.45);}
+.bb-demo.active{border-color:#ef4444;background:rgba(239,68,68,.12);}
 .ab-btn:hover .ab-tooltip{display:block;}
 .ab-tooltip{
   display:none;position:absolute;bottom:calc(100% + 9px);left:50%;transform:translateX(-50%);
@@ -232,7 +237,7 @@ canvas{display:block;cursor:crosshair;}
 
 /* ── Info bar ─────────────────────────── */
 #placInfo{
-  position:fixed;bottom:182px;left:50%;transform:translateX(-50%);
+  position:fixed;bottom:214px;left:50%;transform:translateX(-50%);
   background:rgba(4,4,18,.9);border:1px solid var(--brd2);border-radius:8px;
   padding:5px 16px;font-size:.76rem;pointer-events:none;z-index:20;display:none;
 }
@@ -254,6 +259,45 @@ canvas{display:block;cursor:crosshair;}
   max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis;
 }
 #passiveHint:empty{display:none;}
+
+/* ── Body dovedností k utracení (dole uprostřed) ── */
+#spHint{
+  position:fixed;bottom:178px;left:50%;transform:translateX(-50%);z-index:21;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:1px solid #a5b4fc;border-radius:999px;
+  padding:6px 16px;font:600 .78rem 'Geist',system-ui,sans-serif;cursor:pointer;white-space:nowrap;
+  box-shadow:0 0 0 0 rgba(165,180,252,.6);animation:spPulse 1.8s infinite;
+}
+#spHint[hidden]{display:none;}
+@keyframes spPulse{0%{box-shadow:0 0 0 0 rgba(165,180,252,.55);}70%{box-shadow:0 0 0 12px rgba(165,180,252,0);}100%{box-shadow:0 0 0 0 rgba(165,180,252,0);}}
+#helpBtn{
+  position:fixed;bottom:14px;left:14px;z-index:21;background:var(--glass);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--brd2);border-radius:999px;color:var(--tx);padding:6px 12px;font:600 .74rem 'Geist',system-ui,sans-serif;cursor:pointer;
+}
+#helpBtn b{font-size:.62rem;color:var(--muted);border:1px solid var(--brd2);border-radius:4px;padding:0 4px;margin-left:4px;}
+#helpBtn:hover{border-color:var(--acc);}
+/* ── Návod ── */
+.help-panel{width:820px;max-width:95vw;max-height:90vh;overflow-y:auto;}
+.help-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px;}
+.help-tab{background:var(--bg2);border:1px solid var(--brd);border-radius:999px;color:var(--tx);padding:5px 12px;font:600 .74rem 'Geist',system-ui,sans-serif;cursor:pointer;}
+.help-tab.on{border-color:var(--acc);background:rgba(99,102,241,.16);}
+.help-sec{display:none;}
+.help-sec.on{display:block;}
+.help-sec h3{margin:14px 0 6px;font-size:.86rem;font-weight:700;color:var(--acc2);}
+.help-ol{margin:0 0 6px 20px;font-size:.78rem;line-height:1.6;color:var(--tx);}
+.help-ol li{margin-bottom:3px;}
+/* ── Statistiky postavy ── */
+.st-row{display:grid;grid-template-columns:96px 34px 1fr;gap:4px 10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--brd);}
+.st-row:last-child{border-bottom:none;}
+.st-name{font-weight:700;font-size:.8rem;}
+.st-num{font-weight:800;font-size:.95rem;color:var(--acc2);text-align:right;}
+.st-bar{height:8px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;}
+.st-bar>i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#6366f1,#a78bfa);}
+.st-eff{grid-column:3;font-size:.72rem;color:var(--muted);}
+.st-eff b{color:var(--tx);}
+/* ── Obchod po kategoriích ── */
+.shop-cat{grid-column:1/-1;display:flex;align-items:baseline;gap:8px;margin:8px 0 0;padding-top:6px;border-top:1px solid var(--brd);font-weight:700;font-size:.8rem;}
+.shop-cat:first-child{margin-top:0;padding-top:0;border-top:none;}
+.shop-cat small{font-weight:400;font-size:.66rem;color:var(--muted);}
 
 /* ── Hotkeys hint ─────────────────────── */
 #hotkeysHint{
@@ -281,8 +325,8 @@ canvas{display:block;cursor:crosshair;}
 .ov-head h2{font-size:1.1rem;font-weight:700;}
 
 /* ── Shop ─────────────────────────────── */
-.shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-.si{background:var(--bg2);border:1px solid var(--brd);border-radius:10px;padding:12px 10px;cursor:pointer;text-align:center;transition:all .14s;}
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px;}
+.si{background:var(--bg2);border:1px solid var(--brd);border-radius:10px;padding:8px 6px;cursor:pointer;text-align:center;transition:all .14s;}
 .si:hover:not(.sd){border-color:var(--acc);background:var(--bg3);transform:translateY(-1px);}
 .si.sd{opacity:.32;cursor:not-allowed;}
 .si-e{font-size:1.5rem;}
@@ -343,6 +387,7 @@ canvas{display:block;cursor:crosshair;}
     <div style="font-size:2.4rem;margin-bottom:6px;">🧟</div>
     <h1 style="font-size:1.55rem;font-weight:800;letter-spacing:-.01em;">Zombie Survival</h1>
     <p style="color:var(--muted);font-size:.78rem;margin-top:4px;">Vyber mapu, kit a rozděl bonusové body</p>
+    <button type="button" class="btn-s" id="kitHelpBtn" style="margin-top:8px;padding:5px 14px;font-size:.76rem;">📖 Jak hrát (návod)</button>
   </div>
 
   <div style="display:flex;gap:10px;" id="mapPicker"></div>
@@ -458,14 +503,16 @@ canvas{display:block;cursor:crosshair;}
   <div id="buildBar"></div>
   <div id="abilityBar"></div>
   <div id="passiveHint"></div>
+  <button type="button" id="spHint" hidden></button>
+  <button type="button" id="helpBtn" title="Jak hrát">📖 Návod <b>H</b></button>
   <div id="placInfo"></div>
   <div id="gToasts"></div>
-  <div id="hotkeysHint"><b>B</b> Obchod · <b>T</b> Dovednosti · <b>G</b> Zahrada<br><b>6–9</b> Infrastruktura · <b>H</b> Nápověda<br><b>R</b> / kolečko otočit o 15° · <b>Esc</b> zrušit</div>
+  <div id="hotkeysHint"><b>B</b> Obchod · <b>T</b> Dovednosti · <b>G</b> Zahrada<br><b>6–9</b> Infrastruktura · <b>H</b> Nápověda<br><b>C</b> Statistiky · <b>X</b> Bourat · <b>R</b> / kolečko otočit o 15° · <b>Esc</b> zrušit</div>
 </div>
 
 <!-- ═══════════ OVERLAY: Shop ═══════════ -->
 <div class="ov hidden" id="shopOv">
-  <div class="panel" style="width:520px;">
+  <div class="panel" style="width:600px;max-width:95vw;max-height:90vh;overflow-y:auto;">
     <div class="ov-head">
       <h2>🏪 Obchod · <span class="zi" data-zsi="coins" data-emo="💰" data-sz="20">💰</span> <span id="shopCoins">0</span></h2>
       <button class="btn-s" id="shopClose" style="padding:3px 12px;">✕</button>
@@ -491,49 +538,130 @@ canvas{display:block;cursor:crosshair;}
 
 <!-- ═══════════ OVERLAY: Help / Legend ═══════════ -->
 <div class="ov hidden" id="helpOv">
-  <div class="panel" style="width:760px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+  <div class="panel help-panel">
     <div class="ov-head">
-      <h2>❓ Nápověda</h2>
+      <h2>📖 Jak hrát</h2>
       <button class="btn-s" id="helpClose" style="padding:3px 12px;">✕</button>
     </div>
-    <div class="help-grid">
-      <div class="help-col">
-        <h3>🎮 Ovládání</h3>
-        <div class="help-row"><span class="help-k">WASD / šipky</span> Pohyb</div>
-        <div class="help-row"><span class="help-k">Myš</span> Míření</div>
-        <div class="help-row"><span class="help-k">Levý klik</span> Útok / položit stavbu</div>
-        <div class="help-row"><span class="help-k">Q E R</span> Schopnosti kitu (R = ultimátka)</div>
-        <div class="help-row"><span class="help-k">B</span> Obchod</div>
-        <div class="help-row"><span class="help-k">T</span> Strom dovedností</div>
-        <div class="help-row"><span class="help-k">G</span> Zahrada (farma/voda)</div>
-        <div class="help-row"><span class="help-k">F</span> Odpálit C4</div>
-        <div class="help-row"><span class="help-k">H</span> Tato nápověda</div>
-        <div class="help-row"><span class="help-k">Esc</span> Zavřít / zrušit</div>
-        <h3 style="margin-top:14px;">🧱 Stavby (klávesy 1–5)</h3>
-        <div class="help-row"><span class="help-k">1</span> 🧱 Zeď — blokuje zombie</div>
-        <div class="help-row"><span class="help-k">2</span> 🪵 Barikáda — kryt, propouští střely</div>
-        <div class="help-row"><span class="help-k">3</span> 🗡️ Hroty — zraňují zombie</div>
-        <div class="help-row"><span class="help-k">4</span> 🔫 Věž — automaticky střílí (nutný proud)</div>
-        <div class="help-row"><span class="help-k">5</span> 🟫 Plošina — výšková výhoda</div>
-      </div>
-      <div class="help-col">
-        <h3>🚰 Infrastruktura (klávesy 6–9 + obchod)</h3>
-        <div class="help-row"><span class="help-k">6</span> 🚿 Kanál — vede vodu od řeky</div>
-        <div class="help-row"><span class="help-k">7</span> 🪣 Studna — zásoba vody (pití + zálivka)</div>
-        <div class="help-row"><span class="help-k">8</span> 💧 Čistička — udrží vodu čerstvou</div>
-        <div class="help-row"><span class="help-k">9</span> 🟫 Záhon — sázej, zalévej, sklízej</div>
-        <div class="help-row"><span class="help-k">obchod</span> ⚙️ Vodní kolo — proud (musí u řeky)</div>
-        <div class="help-row"><span class="help-k">obchod</span> 🔌 Kabel — vede proud ke spotřebiči</div>
-        <div class="help-row"><span class="help-k">obchod</span> 💦 Postřikovač — sám zalévá políčka</div>
-        <div class="help-row"><span class="help-k">obchod</span> ⚡ El. plot — pálí zombie (nutný proud)</div>
-        <h3 style="margin-top:14px;">🍖 Přežití &amp; mechaniky</h3>
-        <div class="help-p">🍖 <b>Hlad</b> a 💧 <b>žízeň</b> klesají — sklízej plodiny a pij ze studny v <b>zahradě [G]</b>.</div>
-        <div class="help-p">🌊 <b>Voda</b>: řeka → kanály → studna. Surová voda se <b>kazí</b> → 💧 čistička ji udrží čerstvou.</div>
-        <div class="help-p">⚡ <b>Elektřina</b>: ⚙️ vodní kolo u řeky → 🔌 kabely → věže / el. plot / postřikovač. Plot a postřikovač bez proudu nefungují; věž bez proudu jede slabší na baterii, s proudem střílí rychleji, dál a silněji. Stačí ji postavit hned vedle kabelu, do 320 px od základny je proud vždy.</div>
-        <div class="help-p">🧟 <b>Vlny</b>: mezi vlnami je příprava + kvíz z tvých balíčků (správně = bonus 💰).</div>
-        <div class="help-p">👥 <b>Co-op</b>: základna i zahrada jsou <b>sdílené</b>. Když hostitel odejde, řízení převezme jiný hráč.</div>
-      </div>
+    <div class="help-tabs" id="helpTabs">
+      <button class="help-tab on" data-h="zaklady">🎮 Základy</button>
+      <button class="help-tab" data-h="stavby">🧱 Obrana</button>
+      <button class="help-tab" data-h="voda">🌱 Voda a zahrada</button>
+      <button class="help-tab" data-h="proud">⚡ Elektřina</button>
+      <button class="help-tab" data-h="zombie">🧟 Zombie</button>
+      <button class="help-tab" data-h="postava">📈 Postava a kvízy</button>
     </div>
+
+    <div class="help-sec on" data-h="zaklady">
+      <p class="help-p"><b>Cíl:</b> ubraň <b>základnu</b> uprostřed mapy. Zombie chodí ve vlnách; mezi vlnami je <b>příprava</b> — nakupuj, stav a starej se o zahradu.</p>
+      <div class="help-grid">
+        <div class="help-col">
+          <h3>Ovládání</h3>
+          <div class="help-row"><span class="help-k">WASD / šipky</span> Pohyb</div>
+          <div class="help-row"><span class="help-k">Myš + levý klik</span> Míření a útok (podržením střílíš dál)</div>
+          <div class="help-row"><span class="help-k">Q E R</span> Schopnosti kitu (R = ultimátka)</div>
+          <div class="help-row"><span class="help-k">1–5</span> Stavby · <span class="help-k">6–9</span> Infrastruktura</div>
+          <div class="help-row"><span class="help-k">R / kolečko</span> Otočit stavbu při pokládání</div>
+          <div class="help-row"><span class="help-k">X</span> Bourat svoje stavby (klikni na ně)</div>
+          <div class="help-row"><span class="help-k">Pravý klik / Esc</span> Zrušit pokládání, zavřít okno</div>
+        </div>
+        <div class="help-col">
+          <h3>Okna</h3>
+          <div class="help-row"><span class="help-k">B</span> Obchod (zbraně, léčení, stavby, voda, proud)</div>
+          <div class="help-row"><span class="help-k">T</span> Strom dovedností</div>
+          <div class="help-row"><span class="help-k">C</span> Statistiky postavy</div>
+          <div class="help-row"><span class="help-k">G</span> Zahrada (stůj u záhonu nebo studny)</div>
+          <div class="help-row"><span class="help-k">F</span> Odpálit C4</div>
+          <div class="help-row"><span class="help-k">H</span> Tento návod</div>
+        </div>
+      </div>
+      <h3>Jak přežít</h3>
+      <div class="help-p">💰 Mince máš za zabité zombie, za každou přežitou vlnu a za správnou odpověď v kvízu.</div>
+      <div class="help-p">🍖 <b>Hlad</b> a 💧 <b>žízeň</b> pořád klesají (ve vlně rychleji). Na nule ztrácíš životy a zpomalíš se. Nouzově pomůže 🥪 svačina a 🧴 láhev z obchodu, dlouhodobě zahrada (záložka Voda a zahrada).</div>
+      <div class="help-p">💀 Když zemřeš, oživíš se za mince. Když spadne základna, hra končí.</div>
+      <div class="help-p">👥 <b>Co-op:</b> základna, stavby i zahrada jsou společné. Mince můžeš poslat spoluhráči v obchodě.</div>
+    </div>
+
+    <div class="help-sec" data-h="stavby">
+      <div class="help-row"><span class="help-k">1</span> 🧱 <b>Zeď</b> — zastaví zombie i střely.</div>
+      <div class="help-row"><span class="help-k">2</span> 🪵 <b>Barikáda</b> — zastaví zombie, ale střely propustí (střílíš zpoza ní).</div>
+      <div class="help-row"><span class="help-k">3</span> 🗡️ <b>Hroty</b> — zombie po nich chodí a zraňují se.</div>
+      <div class="help-row"><span class="help-k">4</span> 🔫 <b>Věž</b> — střílí sama. Bez proudu slabě na baterii, s proudem rychleji, dál a silněji.</div>
+      <div class="help-row"><span class="help-k">5</span> 🟫 <b>Plošina</b> — když na ní stojíš, střílíš <b>přes všechny zdi</b> a vidíš přes zdi a barikády.</div>
+      <h3>Jak se zombie chovají ke stavbám</h3>
+      <div class="help-p">🗺️ <b>Terén</b> (skály a zdi mapy) zombie obcházejí. <b>Tvoje stavby</b> obejdou jen tehdy, když vede krátká obchůzka. Když je základna obehnaná, jdou na nejslabší místo a <b>bourají</b>. Brute (🦍) jde po stavbách schválně.</div>
+      <div class="help-p">🔧 Inženýr opravuje klíčem a jeho stavby se pod 30 % životů samy spravují.</div>
+      <div class="help-p">🔨 <b>Bourání [X]</b>: klikni na svoji stavbu nebo políčko infrastruktury. Stavba, která má aspoň polovinu životů, se ti vrátí do inventáře, takže ji můžeš postavit jinde. Víc poškozená se rozpadne. Cizí stavby v co-opu bourat nejde.</div>
+    </div>
+
+    <div class="help-sec" data-h="voda">
+      <p class="help-p">Zahrada ti dává <b>jídlo</b> (plodiny) a <b>pití</b> (studna). Všechno se kupuje v obchodě [B] a pokládá na mřížku klávesami 6–9.</p>
+      <h3>💧 Voda krok za krokem</h3>
+      <ol class="help-ol">
+        <li>Polož 🚿 <b>kanál</b> tak, aby se dotýkal <b>řeky</b> (modrý pruh na mapě).</li>
+        <li>Pokládej další kanály <b>vedle sebe</b> (nahoru, dolů, doleva, doprava — ne šikmo) až tam, kam chceš vodu.</li>
+        <li>Na konec (nebo kamkoli vedle kanálu) dej 🪣 <b>studnu</b>. Napojená studna se sama plní. Nenapojená se doplní jen deštěm po každé vlně.</li>
+        <li>Voda z řeky je <b>surová</b> a postupně se kazí. Když do stejné sítě přidáš 💧 <b>čističku</b>, voda zůstane čerstvá.</li>
+        <li>U studny stiskni [G] → <b>Napít se</b> (doplní žízeň) nebo ji vyčisti.</li>
+      </ol>
+      <h3>🌱 Pěstování</h3>
+      <ol class="help-ol">
+        <li>Polož 🟫 <b>záhon</b> (klávesa 9), stoupni si k němu a stiskni [G] → zasaď semínko (stojí mince).</li>
+        <li>Záhon potřebuje <b>vláhu</b>: ručně [G] → <b>Zalít</b> (bere vodu z nejbližší studny do 190 px), nebo automaticky postřikovačem.</li>
+        <li>Rostlina povyroste <b>na konci každé vlny</b>, pokud má vláhu. Mrkev za 1 vlnu, pšenice a rajče za 2, dýně a meloun za 3. Když vláha dojde, rostlina uschne.</li>
+        <li>Zralou plodinu sklidíš přes [G] → doplní hlad.</li>
+      </ol>
+      <h3>💦 Automatické zavlažování (postřikovač)</h3>
+      <div class="help-p">Postřikovač zalévá záhony kolem sebe (asi 1,7 políčka), když platí obojí:</div>
+      <ul class="help-ol">
+        <li>stojí <b>hned vedle</b> napojeného kanálu, studny nebo čističky (voda z řeky),</li>
+        <li>má <b>proud</b> — je do 320 px od základny, nebo u něj vede kabel či el. plot napojený na vodní kolo (záložka Elektřina).</li>
+      </ul>
+      <div class="help-p">💡 Nejjednodušší rozložení: řeka → řada kanálů → postřikovač → kolem něj 2–4 záhony.</div>
+    </div>
+
+    <div class="help-sec" data-h="proud">
+      <h3>⚡ Elektřina krok za krokem</h3>
+      <ol class="help-ol">
+        <li>⚙️ <b>Vodní kolo</b> postav <b>u řeky</b> — vyrobí proud pro 6 spotřebičů.</li>
+        <li>Od kola veď 🔌 <b>kabely</b> políčko vedle políčka (ne šikmo).</li>
+        <li>⚡ <b>Elektrický plot</b> vede proud <b>stejně jako kabel</b>. Můžeš z plotů postavit celou řadu nebo ohradu a proud projde všemi. Každý plot spotřebuje 1 bod proudu.</li>
+        <li>Věž nebo postřikovač stačí postavit <b>vedle kabelu nebo plotu</b> (do 58 px).</li>
+      </ol>
+      <div class="help-p">🏠 <b>Základna je zdroj proudu.</b> Všechno do 320 px od ní má proud samo a síť kabelů nebo plotů, která do toho okruhu zasahuje, dostane od základny proud pro dalších 8 spotřebičů.</div>
+      <div class="help-p">⚡ Plot pod proudem každých 0,3 s zraní a zpomalí zombie v těsné blízkosti. Bez proudu nedělá nic.</div>
+    </div>
+
+    <div class="help-sec" data-h="zombie">
+      <div class="help-row">🧟 <b>Obyčejný</b> — jde na základnu, na hráče jen zblízka.</div>
+      <div class="help-row">🏃 <b>Rychlík</b> — rychlý a křehký, hráče si všimne dřív.</div>
+      <div class="help-row">🐕 <b>Pes</b> — nejrychlejší, jde po hráčích z dálky.</div>
+      <div class="help-row">🧟‍♂️ <b>Tank</b> — pomalý, hodně životů, bolí.</div>
+      <div class="help-row">🦍 <b>Brute</b> — ignoruje hráče a bourá stavby.</div>
+      <div class="help-row">💣 <b>Explodér</b> — po smrti vybuchne, drž si odstup.</div>
+      <div class="help-row">👹 <b>Boss</b> — každá 5. vlna, za zabití +300 💰.</div>
+      <div class="help-p">Každou vlnou mají zombie víc životů a je jich víc.</div>
+    </div>
+
+    <div class="help-sec" data-h="postava">
+      <h3>📈 Staty</h3>
+      <div class="help-p">Body rozdělíš na začátku a při každém level upu. Aktuální hodnoty a co ti dávají uvidíš ve hře klávesou <b>[C]</b>.</div>
+      <h3>🌳 Strom dovedností</h3>
+      <div class="help-p">Za levely dostáváš body dovedností (SP). Když nějaký máš, ukáže se dole uprostřed upozornění. Strom otevřeš klávesou [T]. Vyšší patra se odemykají na levelu 3, 6, 9 a 12.</div>
+      <h3>📚 Kvízy</h3>
+      <div class="help-p">Po každé vlně přijde otázka z tvých balíčků. Správně = bonus mince. Špatně nebo po vypršení času jsou zombie v <b>příští vlně</b> silnější a dostáváš méně mincí a XP. Postih platí <b>jen pro jednu vlnu</b>.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Statistiky postavy [C] ═══════════ -->
+<div class="ov hidden" id="statsOv">
+  <div class="panel" style="width:560px;max-width:95vw;">
+    <div class="ov-head">
+      <h2>📈 Statistiky postavy</h2>
+      <button class="btn-s" id="statsClose" style="padding:3px 12px;">✕</button>
+    </div>
+    <div id="statsBody"></div>
   </div>
 </div>
 
@@ -615,6 +743,7 @@ canvas{display:block;cursor:crosshair;}
 <script>document.write('<script src="js/zombie-sprites-3.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/zombie-icons.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/sound.js?v='+APP_VERSION+'"><\/script>');</script>
+<script>document.write('<script src="js/sbdecks.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>(function(){var s=document.createElement('script');s.src='js/game.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>
 </html>

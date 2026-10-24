@@ -1,0 +1,872 @@
+[
+[
+"Kolik pádů má čeština?",
+"7",
+[
+"6",
+"5",
+"8",
+"4"
+]
+],
+[
+"Na jakou otázku odpovídá 1. pád?",
+"kdo? co?",
+[
+"koho? čeho?",
+"komu? čemu?",
+"koho? co?",
+"o kom? o čem?"
+]
+],
+[
+"Na jakou otázku odpovídá 2. pád?",
+"koho? čeho?",
+[
+"kdo? co?",
+"komu? čemu?",
+"s kým? s čím?",
+"koho? co?"
+]
+],
+[
+"Na jakou otázku odpovídá 3. pád?",
+"komu? čemu?",
+[
+"koho? čeho?",
+"kým? čím?",
+"o kom? o čem?",
+"kdo? co?"
+]
+],
+[
+"Na jakou otázku odpovídá 4. pád?",
+"koho? co?",
+[
+"koho? čeho?",
+"komu? čemu?",
+"kdo? co?",
+"kým? čím?"
+]
+],
+[
+"Který pád je vokativ (oslovujeme, voláme)?",
+"5.",
+[
+"1.",
+"4.",
+"6.",
+"7."
+]
+],
+[
+"Na jakou otázku odpovídá 6. pád?",
+"o kom? o čem?",
+[
+"s kým? s čím?",
+"komu? čemu?",
+"koho? čeho?",
+"kým? čím?"
+]
+],
+[
+"Na jakou otázku odpovídá 7. pád?",
+"kým? čím?",
+[
+"o kom? o čem?",
+"koho? co?",
+"komu? čemu?",
+"kdo? co?"
+]
+],
+[
+"Kolik slovních druhů rozlišuje čeština?",
+"10",
+[
+"8",
+"9",
+"11",
+"12"
+]
+],
+[
+"Slovní druh slova „pes“",
+"podstatné jméno",
+[
+"přídavné jméno",
+"sloveso",
+"zájmeno",
+"příslovce"
+]
+],
+[
+"Slovní druh slova „rychle“",
+"příslovce",
+[
+"přídavné jméno",
+"sloveso",
+"předložka",
+"částice"
+]
+],
+[
+"Slovní druh slova „krásný“",
+"přídavné jméno",
+[
+"příslovce",
+"podstatné jméno",
+"číslovka",
+"zájmeno"
+]
+],
+[
+"Slovní druh slova „my“",
+"zájmeno",
+[
+"podstatné jméno",
+"částice",
+"spojka",
+"číslovka"
+]
+],
+[
+"Slovní druh slova „pět“",
+"číslovka",
+[
+"zájmeno",
+"příslovce",
+"přídavné jméno",
+"podstatné jméno"
+]
+],
+[
+"Slovní druh slova „běžet“",
+"sloveso",
+[
+"podstatné jméno",
+"příslovce",
+"předložka",
+"citoslovce"
+]
+],
+[
+"Slovní druh slova „na“ ve větě „Kniha je na stole.“",
+"předložka",
+[
+"spojka",
+"příslovce",
+"částice",
+"citoslovce"
+]
+],
+[
+"Slovní druh slova „a“",
+"spojka",
+[
+"předložka",
+"částice",
+"citoslovce",
+"zájmeno"
+]
+],
+[
+"Slovní druh slova „au“",
+"citoslovce",
+[
+"částice",
+"spojka",
+"příslovce",
+"předložka"
+]
+],
+[
+"Slovní druh slova „kéž“",
+"částice",
+[
+"spojka",
+"citoslovce",
+"příslovce",
+"zájmeno"
+]
+],
+[
+"Které slovní druhy jsou neohebné?",
+"příslovce, předložky, spojky, částice, citoslovce",
+[
+"podstatná jména a slovesa",
+"zájmena a číslovky",
+"přídavná jména a příslovce",
+"jen spojky"
+]
+],
+[
+"Kolik rodů mají podstatná jména?",
+"3 (mužský, ženský, střední)",
+[
+"2",
+"4",
+"5",
+"1"
+]
+],
+[
+"Vzor podstatných jmen mužského rodu životných (tvrdý)",
+"pán",
+[
+"hrad",
+"muž",
+"stroj",
+"předseda"
+]
+],
+[
+"Vzor podstatných jmen mužského rodu neživotných (tvrdý)",
+"hrad",
+[
+"pán",
+"stroj",
+"kost",
+"město"
+]
+],
+[
+"Podle jakého vzoru se skloňuje slovo „žena“?",
+"žena",
+[
+"růže",
+"píseň",
+"kost",
+"kuře"
+]
+],
+[
+"Podle jakého vzoru se skloňuje slovo „moře“?",
+"moře",
+[
+"město",
+"kuře",
+"stavení",
+"růže"
+]
+],
+[
+"Podle jakého vzoru se skloňuje slovo „kuře“?",
+"kuře",
+[
+"moře",
+"město",
+"stavení",
+"růže"
+]
+],
+[
+"Podle jakého vzoru se skloňuje slovo „předseda“?",
+"předseda",
+[
+"pán",
+"žena",
+"soudce",
+"muž"
+]
+],
+[
+"Podle jakého vzoru se skloňuje slovo „soudce“?",
+"soudce",
+[
+"muž",
+"předseda",
+"pán",
+"stroj"
+]
+],
+[
+"Vzory přídavných jmen",
+"mladý, jarní, otcův, matčin",
+[
+"pán, hrad, muž",
+"žena, růže, kost",
+"město, moře, kuře",
+"pěkný, jarní, mladý"
+]
+],
+[
+"Podle jakého vzoru se skloňuje „jarní“?",
+"jarní",
+[
+"mladý",
+"otcův",
+"matčin",
+"stavení"
+]
+],
+[
+"Jak se správně píše noční pták?",
+"výr",
+[
+"vír",
+"vyr",
+"výrr",
+"víra"
+]
+],
+[
+"Doplň: b_strý (rychlý)",
+"bystrý",
+[
+"bistrý",
+"bjstrý",
+"bistrí",
+"bystri"
+]
+],
+[
+"Doplň: m_šlenka",
+"myšlenka",
+[
+"mišlenka",
+"myšlinka",
+"mišlinka",
+"mišlénka"
+]
+],
+[
+"Doplň: pl_nout (o čase)",
+"plynout",
+[
+"plinout",
+"plinou",
+"plynou",
+"plínout"
+]
+],
+[
+"Doplň: s_rový (ze sýra)",
+"sýrový",
+[
+"sírový",
+"sýrovi",
+"sírovi",
+"syrovy"
+]
+],
+[
+"Doplň: v_soký",
+"vysoký",
+[
+"visoký",
+"vysokí",
+"vysokj",
+"vísoký"
+]
+],
+[
+"Doplň: Děti si hrál_ na zahradě.",
+"hrály",
+[
+"hráli",
+"hrálly",
+"hrálý",
+"hrálí"
+]
+],
+[
+"Doplň: Chlapci běhal_ po hřišti.",
+"běhali",
+[
+"běhaly",
+"běhalí",
+"běhal",
+"běhaly i běhali"
+]
+],
+[
+"Doplň: Ženy zpíval_.",
+"zpívaly",
+[
+"zpívali",
+"zpívalý",
+"zpíval",
+"zpívalli"
+]
+],
+[
+"Doplň: Kuřata pípal_.",
+"pípala",
+[
+"pípaly",
+"pípali",
+"pípal",
+"pípalo"
+]
+],
+[
+"Doplň: Psi štěkal_. (životná zvířata)",
+"štěkali",
+[
+"štěkaly",
+"štěkala",
+"štěkal",
+"štěkalý"
+]
+],
+[
+"Doplň: Stromy šuměl_.",
+"šuměly",
+[
+"šuměli",
+"šuměla",
+"šumělý",
+"šuměl"
+]
+],
+[
+"Které je správně: „s“ nebo „z“? __hora (shora dolů)",
+"shora",
+[
+"zhora",
+"s hora",
+"z hora",
+"shóra"
+]
+],
+[
+"Doplň s/z: _jezd lyžařů (jízda z kopce dolů)",
+"sjezd lyžařů",
+[
+"zjezd lyžařů",
+"s jezd lyžařů",
+"sjest lyžařů",
+"zjest lyžařů"
+]
+],
+[
+"Doplň: v_j_mka",
+"výjimka",
+[
+"vyjímka",
+"výjímka",
+"vijimka",
+"vyjimka"
+]
+],
+[
+"Které spojení je správně?",
+"vzít s sebou",
+[
+"vzít sebou",
+"vzít se sebou",
+"vzít zsebou",
+"vzít z sebou"
+]
+],
+[
+"Správný tvar (7. pád od „dvě ruce“): Držel to ___.",
+"dvěma rukama",
+[
+"dvěmi rukama",
+"dvouma rukama",
+"dvěmi rukami",
+"dvěmě rukama"
+]
+],
+[
+"Správný tvar: Přišli jsme, ___ pomohli.",
+"abychom",
+[
+"abysme",
+"abychme",
+"aby jsme",
+"abysem"
+]
+],
+[
+"Doplň (o chlapcích): My jsme b_l_ doma.",
+"byli",
+[
+"bili",
+"byly",
+"bily",
+"býli"
+]
+],
+[
+"Které je správně: „mě“ nebo „mně“? Dej to ___.",
+"mně",
+[
+"mě",
+"mne",
+"mňe",
+"mněe"
+]
+],
+[
+"Které je správně: „mě“ nebo „mně“? Vidí ___.",
+"mě",
+[
+"mně",
+"mňe",
+"mněe",
+"mňě"
+]
+],
+[
+"Vyjmenovaná slova po B začínají slovem",
+"být",
+[
+"bydlit",
+"obyvatel",
+"bylina",
+"býk"
+]
+],
+[
+"Které slovo je vyjmenované po L?",
+"lyže",
+[
+"lípa",
+"lidé",
+"limonáda",
+"lilie"
+]
+],
+[
+"Které slovo je vyjmenované po M?",
+"myš",
+[
+"mísa",
+"milý",
+"místo",
+"mír"
+]
+],
+[
+"Které slovo je vyjmenované po P?",
+"pýcha",
+[
+"písek",
+"pivo",
+"pila",
+"pírko"
+]
+],
+[
+"Které slovo je vyjmenované po S?",
+"sýkora",
+[
+"síto",
+"silný",
+"síra",
+"sirka"
+]
+],
+[
+"Které slovo je vyjmenované po V?",
+"vydra",
+[
+"vidle",
+"víno",
+"vítr",
+"vila"
+]
+],
+[
+"Které slovo je vyjmenované po Z?",
+"brzy",
+[
+"zima",
+"zítra",
+"zinek",
+"zisk"
+]
+],
+[
+"Základní větné členy",
+"podmět a přísudek",
+[
+"předmět a příslovečné určení",
+"přívlastek a doplněk",
+"podmět a předmět",
+"přísudek a přívlastek"
+]
+],
+[
+"Větný člen, který rozvíjí podstatné jméno (např. „zelený“ strom)",
+"přívlastek",
+[
+"předmět",
+"doplněk",
+"příslovečné určení",
+"podmět"
+]
+],
+[
+"Větný člen, na který se ptáme pádovou otázkou od slovesa (Čtu knihu – co čtu?)",
+"předmět",
+[
+"podmět",
+"přívlastek",
+"příslovečné určení",
+"doplněk"
+]
+],
+[
+"Jaký větný člen je „ráno“ ve větě „Ráno vstávám.“?",
+"příslovečné určení času",
+[
+"podmět",
+"předmět",
+"přívlastek",
+"příslovečné určení místa"
+]
+],
+[
+"Věta, která má jen jeden přísudek",
+"věta jednoduchá",
+[
+"souvětí",
+"věta hlavní i vedlejší",
+"věta dvojčlenná vždy",
+"větný ekvivalent"
+]
+],
+[
+"Spojení dvou a více vět",
+"souvětí",
+[
+"věta jednoduchá",
+"větný ekvivalent",
+"přímá řeč",
+"slovní spojení"
+]
+],
+[
+"Které spojky se v souvětí obvykle oddělují čárkou?",
+"ale, avšak, protože, že, který",
+[
+"a, i, ani, nebo",
+"jen a",
+"žádné",
+"pouze nebo"
+]
+],
+[
+"Před kterou spojkou se při běžném slučovacím poměru čárka NEpíše?",
+"a",
+[
+"ale",
+"protože",
+"že",
+"avšak"
+]
+],
+[
+"Kolik je v češtině mluvnických osob?",
+"3 (v čísle jednotném i množném)",
+[
+"2",
+"4",
+"6 různých osob",
+"5"
+]
+],
+[
+"Kolik časů mají česká slovesa?",
+"3 (minulý, přítomný, budoucí)",
+[
+"2",
+"4",
+"5",
+"6"
+]
+],
+[
+"Způsoby sloves v češtině",
+"oznamovací, rozkazovací, podmiňovací",
+[
+"oznamovací a tázací",
+"činný a trpný",
+"dokonavý a nedokonavý",
+"přítomný a minulý"
+]
+],
+[
+"Vid sloves",
+"dokonavý a nedokonavý",
+[
+"činný a trpný",
+"oznamovací a rozkazovací",
+"přítomný a budoucí",
+"osobní a neosobní"
+]
+],
+[
+"Sloveso „napsat“ je vidu",
+"dokonavého",
+[
+"nedokonavého",
+"trpného",
+"podmiňovacího",
+"obouvidového"
+]
+],
+[
+"Rod slovesný: „Dům byl postaven.“ je",
+"trpný",
+[
+"činný",
+"zvratný",
+"rozkazovací",
+"nedokonavý"
+]
+],
+[
+"Slova stejného nebo podobného významu",
+"synonyma",
+[
+"antonyma",
+"homonyma",
+"archaismy",
+"neologismy"
+]
+],
+[
+"Slova opačného významu",
+"antonyma",
+[
+"synonyma",
+"homonyma",
+"citoslovce",
+"eufemismy"
+]
+],
+[
+"Slova stejně znějící, ale s jiným významem (např. kolej)",
+"homonyma",
+[
+"synonyma",
+"antonyma",
+"zdrobněliny",
+"hyperonyma"
+]
+],
+[
+"Nově vzniklé slovo v jazyce",
+"neologismus",
+[
+"archaismus",
+"historismus",
+"vulgarismus",
+"dialektismus"
+]
+],
+[
+"Zastaralé slovo, které má dnes jiný výraz (např. „lučavka“ místo kyselina)",
+"archaismus",
+[
+"neologismus",
+"historismus",
+"slang",
+"barbarismus"
+]
+],
+[
+"Zjemňující výraz (např. „zesnul“ místo zemřel)",
+"eufemismus",
+[
+"vulgarismus",
+"dysfemismus",
+"personifikace",
+"hyperbola"
+]
+],
+[
+"Kmenová část slova nesoucí základní význam",
+"kořen",
+[
+"předpona",
+"přípona",
+"koncovka",
+"kmen předpony"
+]
+],
+[
+"Která část slova je ve slově „pře-pis-ova-t“ předpona?",
+"pře",
+[
+"pis",
+"ova",
+"t",
+"přepis"
+]
+],
+[
+"Jak se nazývá spisovná podoba češtiny?",
+"spisovná čeština",
+[
+"obecná čeština",
+"nářečí",
+"slang",
+"argot"
+]
+],
+[
+"Do které skupiny jazyků patří čeština?",
+"západoslovanské",
+[
+"východoslovanské",
+"jihoslovanské",
+"germánské",
+"románské"
+]
+],
+[
+"Kdo je autorem první české mluvnice psané česky (Gramatika česká 1533)?",
+"Beneš Optát a spol.",
+[
+"Josef Dobrovský",
+"Jan Hus",
+"Josef Jungmann",
+"Jan Amos Komenský"
+]
+],
+[
+"Kdo zavedl do češtiny diakritická znaménka (háčky, čárky)?",
+"Jan Hus (připisováno)",
+[
+"Josef Dobrovský",
+"Karel IV.",
+"Jan Amos Komenský",
+"Josef Jungmann"
+]
+],
+[
+"Autor velkého Slovníku česko-německého (národní obrození)",
+"Josef Jungmann",
+[
+"Josef Dobrovský",
+"František Palacký",
+"Karel Havlíček Borovský",
+"Pavel Josef Šafařík"
+]
+],
+[
+"Píše se „Česká republika“ s velkým „r“ nebo malým?",
+"s malým r – Česká republika",
+[
+"s velkým R – Česká Republika",
+"obojí je správně",
+"celé velkými písmeny",
+"bez velkých písmen"
+]
+],
+[
+"Jak se píše název našeho hlavního města s předložkou?",
+"v Praze",
+[
+"v praze",
+"V praze",
+"ve Praze",
+"v Prahu"
+]
+]
+]

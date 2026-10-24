@@ -6135,3 +6135,9 @@ img.card-img { cursor: zoom-in; }
 .snd-vol output { min-width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-muted); }
 .cat-toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); max-width: min(420px, 92vw); padding: 10px 14px; border-radius: 12px; background: var(--bg-3); color: var(--text); border: 1px solid var(--accent); z-index: 300; box-shadow: var(--shadow); font-size: .9rem; }
 .theme-opt[hidden] { display: none; }
+
+/* Nástěnka → Flash Cards: vestavěné balíčky pro všechny */
+.decks-sb-head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 18px 0 2px; padding-top: 14px; border-top: 1px solid var(--border); }
+.decks-sb-head h3 { margin: 0; font-size: 1rem; }
+.decks-sb-head span { font-size: .82rem; color: var(--text-muted); }
+.decks-sb-empty { grid-column: 1 / -1; margin: 0; font-size: .86rem; color: var(--text-muted); }

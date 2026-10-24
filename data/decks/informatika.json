@@ -1,0 +1,892 @@
+[
+[
+"Kolik bitů má jeden bajt?",
+"8",
+[
+"4",
+"16",
+"10",
+"2"
+]
+],
+[
+"Kolik bajtů je 1 KiB?",
+"1024",
+[
+"1000",
+"512",
+"2048",
+"100"
+]
+],
+[
+"Jaká je největší hodnota jednoho bajtu (bez znaménka)?",
+"255",
+[
+"256",
+"127",
+"1023",
+"100"
+]
+],
+[
+"Číslo 10 ve dvojkové soustavě",
+"1010",
+[
+"1100",
+"1001",
+"10",
+"0110"
+]
+],
+[
+"Číslo 255 v šestnáctkové soustavě",
+"FF",
+[
+"EE",
+"F0",
+"100",
+"1F"
+]
+],
+[
+"Dvojková soustava používá číslice",
+"0 a 1",
+[
+"0–7",
+"0–9",
+"1 a 2",
+"0–F"
+]
+],
+[
+"Zkratka pro procesor",
+"CPU",
+[
+"GPU",
+"RAM",
+"SSD",
+"PSU"
+]
+],
+[
+"Zkratka pro grafický procesor",
+"GPU",
+[
+"CPU",
+"APU",
+"HDD",
+"BIOS"
+]
+],
+[
+"Operační paměť, která se po vypnutí vymaže",
+"RAM",
+[
+"ROM",
+"SSD",
+"HDD",
+"flash disk"
+]
+],
+[
+"Paměť určená jen pro čtení",
+"ROM",
+[
+"RAM",
+"cache",
+"SSD",
+"DRAM"
+]
+],
+[
+"Rychlá vyrovnávací paměť procesoru",
+"cache",
+[
+"RAM",
+"swap",
+"ROM",
+"registr DNS"
+]
+],
+[
+"Disk bez pohyblivých částí",
+"SSD",
+[
+"HDD",
+"disketa",
+"CD-ROM",
+"páskový disk"
+]
+],
+[
+"Základní deska se anglicky jmenuje",
+"motherboard",
+[
+"chipset",
+"keyboard",
+"dashboard",
+"circuit"
+]
+],
+[
+"Firmware, který se spustí jako první při zapnutí PC",
+"BIOS / UEFI",
+[
+"Windows",
+"bootloader GRUB",
+"ovladač grafiky",
+"antivir"
+]
+],
+[
+"Zařízení, které propojuje počítače v místní síti a posílá data na správný port",
+"switch",
+[
+"hub",
+"modem",
+"repeater",
+"firewall"
+]
+],
+[
+"Zařízení, které propojuje různé sítě (např. domácí síť s internetem)",
+"router",
+[
+"switch",
+"hub",
+"repeater",
+"access point"
+]
+],
+[
+"Zkratka místní počítačové sítě",
+"LAN",
+[
+"WAN",
+"MAN",
+"PAN",
+"VPN"
+]
+],
+[
+"Rozlehlá síť (např. internet)",
+"WAN",
+[
+"LAN",
+"PAN",
+"WLAN",
+"SAN"
+]
+],
+[
+"Kolik vrstev má model OSI?",
+"7",
+[
+"4",
+"5",
+"6",
+"8"
+]
+],
+[
+"Kolik vrstev má model TCP/IP?",
+"4",
+[
+"7",
+"5",
+"3",
+"6"
+]
+],
+[
+"Protokol pro přenos webových stránek",
+"HTTP",
+[
+"FTP",
+"SMTP",
+"SSH",
+"DNS"
+]
+],
+[
+"Zabezpečená verze HTTP",
+"HTTPS",
+[
+"SHTTP",
+"HTTP2",
+"SFTP",
+"SSL-WEB"
+]
+],
+[
+"Protokol pro odesílání e-mailů",
+"SMTP",
+[
+"POP3",
+"IMAP",
+"HTTP",
+"FTP"
+]
+],
+[
+"Služba, která převádí doménová jména na IP adresy",
+"DNS",
+[
+"DHCP",
+"NAT",
+"ARP",
+"FTP"
+]
+],
+[
+"Služba, která automaticky přiděluje IP adresy",
+"DHCP",
+[
+"DNS",
+"NAT",
+"SMTP",
+"ICMP"
+]
+],
+[
+"Protokol pro vzdálené zabezpečené přihlášení k serveru",
+"SSH",
+[
+"Telnet",
+"FTP",
+"HTTP",
+"SNMP"
+]
+],
+[
+"Protokol bez navázání spojení",
+"UDP",
+[
+"TCP",
+"HTTP",
+"FTP",
+"SSH"
+]
+],
+[
+"Protokol se spolehlivým doručením a navázáním spojení",
+"TCP",
+[
+"UDP",
+"IP",
+"ICMP",
+"ARP"
+]
+],
+[
+"Výchozí port HTTP",
+"80",
+[
+"443",
+"21",
+"22",
+"25"
+]
+],
+[
+"Výchozí port HTTPS",
+"443",
+[
+"80",
+"8080",
+"22",
+"21"
+]
+],
+[
+"Výchozí port SSH",
+"22",
+[
+"21",
+"23",
+"80",
+"443"
+]
+],
+[
+"Kolik bitů má adresa IPv4?",
+"32",
+[
+"64",
+"128",
+"16",
+"48"
+]
+],
+[
+"Kolik bitů má adresa IPv6?",
+"128",
+[
+"64",
+"32",
+"256",
+"96"
+]
+],
+[
+"Adresa vlastního počítače (localhost) v IPv4",
+"127.0.0.1",
+[
+"192.168.0.1",
+"0.0.0.0",
+"255.255.255.255",
+"10.0.0.1"
+]
+],
+[
+"Fyzická adresa síťové karty",
+"MAC adresa",
+[
+"IP adresa",
+"URL",
+"DNS záznam",
+"port"
+]
+],
+[
+"Kolik bitů má MAC adresa?",
+"48",
+[
+"32",
+"64",
+"128",
+"16"
+]
+],
+[
+"Program, který kontroluje síťový provoz a blokuje nežádoucí přístup",
+"firewall",
+[
+"antivir",
+"proxy cache",
+"router",
+"malware"
+]
+],
+[
+"Škodlivý program, který zašifruje data a chce výkupné",
+"ransomware",
+[
+"spyware",
+"adware",
+"trojský kůň",
+"červ"
+]
+],
+[
+"Škodlivý program maskovaný jako užitečná aplikace",
+"trojský kůň",
+[
+"červ",
+"ransomware",
+"rootkit",
+"spam"
+]
+],
+[
+"Ověření pomocí hesla a ještě kódu z telefonu",
+"dvoufázové ověření (2FA)",
+[
+"šifrování",
+"phishing",
+"captcha",
+"VPN"
+]
+],
+[
+"Šifrovaný tunel přes veřejnou síť",
+"VPN",
+[
+"DNS",
+"LAN",
+"proxy",
+"NAT"
+]
+],
+[
+"Operační systém od Microsoftu",
+"Windows",
+[
+"macOS",
+"Linux",
+"Android",
+"iOS"
+]
+],
+[
+"Jádro operačního systému, které napsal Linus Torvalds",
+"Linux",
+[
+"Unix",
+"Windows NT",
+"FreeBSD",
+"Minix"
+]
+],
+[
+"Mobilní operační systém od Googlu",
+"Android",
+[
+"iOS",
+"HarmonyOS",
+"Symbian",
+"Windows Phone"
+]
+],
+[
+"Zakladatel Microsoftu (spolu s Paulem Allenem)",
+"Bill Gates",
+[
+"Steve Jobs",
+"Mark Zuckerberg",
+"Elon Musk",
+"Larry Page"
+]
+],
+[
+"Spoluzakladatel Applu",
+"Steve Jobs",
+[
+"Bill Gates",
+"Jeff Bezos",
+"Larry Ellison",
+"Tim Cook"
+]
+],
+[
+"Matematik považovaný za otce informatiky a umělé inteligence",
+"Alan Turing",
+[
+"John von Neumann",
+"Charles Babbage",
+"Ada Lovelace",
+"Claude Shannon"
+]
+],
+[
+"Kdo je považován za první programátorku?",
+"Ada Lovelace",
+[
+"Grace Hopper",
+"Margaret Hamilton",
+"Marie Curie",
+"Hedy Lamarr"
+]
+],
+[
+"Kdo vytvořil World Wide Web?",
+"Tim Berners-Lee",
+[
+"Vint Cerf",
+"Bill Gates",
+"Linus Torvalds",
+"Steve Wozniak"
+]
+],
+[
+"Programovací jazyk, ve kterém se píše chování webových stránek v prohlížeči",
+"JavaScript",
+[
+"Java",
+"C++",
+"Python",
+"SQL"
+]
+],
+[
+"Značkovací jazyk pro strukturu webových stránek",
+"HTML",
+[
+"CSS",
+"JavaScript",
+"PHP",
+"JSON"
+]
+],
+[
+"Jazyk pro vzhled (styly) webových stránek",
+"CSS",
+[
+"HTML",
+"XML",
+"SQL",
+"PHP"
+]
+],
+[
+"Jazyk pro dotazy do relačních databází",
+"SQL",
+[
+"HTML",
+"C#",
+"XML",
+"Python"
+]
+],
+[
+"SQL příkaz pro výběr dat",
+"SELECT",
+[
+"INSERT",
+"UPDATE",
+"DELETE",
+"CREATE"
+]
+],
+[
+"SQL příkaz pro vložení nového řádku",
+"INSERT",
+[
+"SELECT",
+"UPDATE",
+"ADD",
+"PUT"
+]
+],
+[
+"Programovací jazyk pojmenovaný podle skupiny Monty Python",
+"Python",
+[
+"Ruby",
+"Java",
+"Perl",
+"Go"
+]
+],
+[
+"Jazyk od Microsoftu pro .NET",
+"C#",
+[
+"Java",
+"Swift",
+"Kotlin",
+"Go"
+]
+],
+[
+"Jazyk pro aplikace na iPhone (od Applu)",
+"Swift",
+[
+"Kotlin",
+"C#",
+"Dart",
+"Rust"
+]
+],
+[
+"Datový typ pro celé číslo",
+"int",
+[
+"float",
+"string",
+"bool",
+"char"
+]
+],
+[
+"Datový typ pro hodnotu pravda/nepravda",
+"bool (boolean)",
+[
+"int",
+"string",
+"double",
+"char"
+]
+],
+[
+"Datový typ pro text",
+"string",
+[
+"char",
+"int",
+"bool",
+"float"
+]
+],
+[
+"Výsledek výrazu 7 % 3 (zbytek po dělení)",
+"1",
+[
+"2",
+"0",
+"3",
+"2,33"
+]
+],
+[
+"Výsledek výrazu 7 / 2 v celočíselném dělení",
+"3",
+[
+"3,5",
+"4",
+"2",
+"1"
+]
+],
+[
+"Výsledek logického výrazu true AND false",
+"false",
+[
+"true",
+"null",
+"1",
+"chyba"
+]
+],
+[
+"Výsledek logického výrazu true OR false",
+"true",
+[
+"false",
+"null",
+"0",
+"chyba"
+]
+],
+[
+"Cyklus, který se opakuje, dokud platí podmínka",
+"while",
+[
+"if",
+"switch",
+"return",
+"case"
+]
+],
+[
+"Příkaz pro podmíněné větvení",
+"if",
+[
+"for",
+"while",
+"break",
+"class"
+]
+],
+[
+"Funkce, která volá sama sebe",
+"rekurzivní funkce",
+[
+"iterativní funkce",
+"lambda",
+"konstruktor",
+"callback"
+]
+],
+[
+"Datová struktura LIFO (poslední dovnitř, první ven)",
+"zásobník (stack)",
+[
+"fronta (queue)",
+"pole",
+"strom",
+"halda"
+]
+],
+[
+"Datová struktura FIFO (první dovnitř, první ven)",
+"fronta (queue)",
+[
+"zásobník (stack)",
+"strom",
+"graf",
+"slovník"
+]
+],
+[
+"Index prvního prvku pole ve většině jazyků",
+"0",
+[
+"1",
+"−1",
+"záleží na velikosti",
+"10"
+]
+],
+[
+"Časová složitost binárního vyhledávání",
+"O(log n)",
+[
+"O(n)",
+"O(n²)",
+"O(1)",
+"O(n log n)"
+]
+],
+[
+"Časová složitost bublinkového řazení (nejhorší případ)",
+"O(n²)",
+[
+"O(n)",
+"O(log n)",
+"O(n log n)",
+"O(1)"
+]
+],
+[
+"Princip OOP: skrytí vnitřních dat objektu",
+"zapouzdření",
+[
+"dědičnost",
+"polymorfismus",
+"kompilace",
+"rekurze"
+]
+],
+[
+"Princip OOP: třída přebírá vlastnosti jiné třídy",
+"dědičnost",
+[
+"zapouzdření",
+"polymorfismus",
+"instance",
+"kompozice"
+]
+],
+[
+"Konkrétní objekt vytvořený podle třídy",
+"instance",
+[
+"metoda",
+"rozhraní",
+"atribut",
+"konstruktor"
+]
+],
+[
+"Speciální metoda, která se zavolá při vytvoření objektu",
+"konstruktor",
+[
+"destruktor",
+"getter",
+"setter",
+"main"
+]
+],
+[
+"Program, který převede celý zdrojový kód do strojového kódu",
+"kompilátor",
+[
+"interpret",
+"debugger",
+"editor",
+"linker"
+]
+],
+[
+"Hledání a odstraňování chyb v programu",
+"debugování (ladění)",
+[
+"kompilace",
+"refaktoring",
+"deploy",
+"verzování"
+]
+],
+[
+"Systém pro správu verzí kódu",
+"Git",
+[
+"Docker",
+"npm",
+"Jira",
+"Excel"
+]
+],
+[
+"Formát pro výměnu dat ve tvaru {\"klic\": \"hodnota\"}",
+"JSON",
+[
+"CSV",
+"HTML",
+"PDF",
+"XML"
+]
+],
+[
+"Tabulkový formát dat oddělených čárkami",
+"CSV",
+[
+"JSON",
+"XML",
+"PNG",
+"DOCX"
+]
+],
+[
+"Bezeztrátový obrazový formát s průhledností",
+"PNG",
+[
+"JPEG",
+"MP3",
+"GIF",
+"MP4"
+]
+],
+[
+"Ztrátový formát pro fotografie",
+"JPEG",
+[
+"PNG",
+"SVG",
+"BMP",
+"TIFF"
+]
+],
+[
+"Vektorový obrazový formát",
+"SVG",
+[
+"JPEG",
+"PNG",
+"GIF",
+"BMP"
+]
+],
+[
+"Kolik barev lze zapsat 24bitovou barvou (RGB)?",
+"asi 16,7 milionu",
+[
+"256",
+"65 536",
+"1 milion",
+"4 miliardy"
+]
+],
+[
+"Co znamená zkratka AI?",
+"umělá inteligence",
+[
+"automatická instalace",
+"aplikační rozhraní",
+"analogový interface",
+"adresa internetu"
+]
+],
+[
+"Zkratka pro rozhraní, přes které spolu komunikují programy",
+"API",
+[
+"GUI",
+"URL",
+"CPU",
+"IDE"
+]
+],
+[
+"Vývojové prostředí pro psaní kódu se zkratkou",
+"IDE",
+[
+"API",
+"SDK",
+"GUI",
+"CLI"
+]
+]
+]

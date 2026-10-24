@@ -176,6 +176,8 @@ const EMERGENCY_SHOP=[
 ];
 // Základna sama napájí věže, ploty a postřikovače v tomhle okruhu.
 const BASE_POWER_RADIUS=320;
+// Kolik spotřebičů utáhne síť kabelů/plotů napojená na základnu (jako jedno vodní kolo + rezerva)
+const BASE_GRID_POWER=8;
 
 /* ── Per-kit shops ───────────────────────────────────────── */
 const KIT_SHOP={
@@ -663,6 +665,14 @@ auth.onAuthStateChanged(user=>{
   document.getElementById('shopClose').onclick=()=>closeOv('shopOv');
   document.getElementById('gardenClose').onclick=()=>closeOv('gardenOv');
   document.getElementById('helpClose').onclick=()=>closeOv('helpOv');
+  document.getElementById('statsClose').onclick=()=>closeOv('statsOv');
+  document.getElementById('helpBtn').onclick=toggleHelp;
+  document.getElementById('kitHelpBtn').onclick=toggleHelp;
+  document.getElementById('spHint').onclick=toggleSkillTree;
+  document.getElementById('helpTabs').onclick=e=>{
+    const t=e.target.closest('[data-h]'); if(!t)return;
+    document.querySelectorAll('#helpOv [data-h]').forEach(el=>el.classList.toggle('on',el.dataset.h===t.dataset.h));
+  };
   document.getElementById('stClose').onclick=()=>closeOv('skillTreeOv');
   document.getElementById('respawnBtn').onclick=doRespawn;
   document.getElementById('luConfirm').onclick=confirmLevelUp;
@@ -902,6 +912,13 @@ function buildBuildBar(){
     btn.onclick=()=>togglePlacing(type);
     bar.appendChild(btn);
   });
+  // Bourání vlastních staveb a infrastruktury
+  const demo=document.createElement('div');
+  demo.className='bb-btn bb-demo'; demo.dataset.type='demolish';
+  demo.innerHTML=`${zi('demolish','🔨',30)}<span class="bb-key">X</span>`;
+  demo.title='Bourat — klikni na svoji stavbu (klávesa X)';
+  demo.onclick=()=>togglePlacing('demolish');
+  bar.appendChild(demo);
 }
 function updateInvDisplay(){
   [...Object.keys(STRUCT_DEFS),...Object.keys(INFRA_DEFS)].forEach(type=>{
@@ -940,9 +957,13 @@ function togglePlacing(type){
     placing.type=type;
     placing.rot=0;
     document.querySelectorAll('.bb-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));
+    document.getElementById('placInfo').style.display='block';
+    if(type==='demolish'){
+      document.getElementById('placInfo').innerHTML='🔨 Bourání: klikni na svoji stavbu · aspoň napůl celá se vrátí do inventáře · Esc / pravý klik = konec';
+      return;
+    }
     const d=STRUCT_DEFS[type]||INFRA_DEFS[type];
     const hint=INFRA_DEFS[type]?'klik = položit (mřížka) · Esc = zrušit':'R / kolečko = otoč o 15° (Shift+R zpět) · klik = položit · Esc = zrušit';
-    document.getElementById('placInfo').style.display='block';
     document.getElementById('placInfo').innerHTML=`Kladeš: ${zi(type,d.emoji,16)} ${d.name} · ${hint}`;
   }
 }
@@ -953,7 +974,7 @@ function togglePlacing(type){
 function setupInput(){
   // kolečko myši při pokládání stavby = otáčení
   window.addEventListener('wheel',e=>{
-    if(gs.screen!=='game'||!placing.active||INFRA_DEFS[placing.type])return;
+    if(gs.screen!=='game'||!placing.active||INFRA_DEFS[placing.type]||placing.type==='demolish')return;
     e.preventDefault();
     rotatePlacing(e.deltaY>0?1:-1);
   },{passive:false});
@@ -965,15 +986,18 @@ function setupInput(){
     if(e.code==='KeyF'){detonateC4();}
     if(e.code==='KeyG'){toggleGarden();}
     if(e.code==='KeyH'){toggleHelp();}
+    if(e.code==='KeyC'){toggleStats();}
+    if(e.code==='KeyX'){togglePlacing('demolish');}
     if(e.code==='Escape'){
       if(placing.active){placing.active=false;document.getElementById('placInfo').style.display='none';document.querySelectorAll('.bb-btn').forEach(b=>b.classList.remove('active'));}
       else if(!document.getElementById('helpOv').classList.contains('hidden'))closeOv('helpOv');
+      else if(!document.getElementById('statsOv').classList.contains('hidden'))closeOv('statsOv');
       else if(!document.getElementById('quizOv').classList.contains('hidden'))closeOv('quizOv');
       else if(!document.getElementById('skillTreeOv').classList.contains('hidden'))closeOv('skillTreeOv');
       else if(!document.getElementById('gardenOv').classList.contains('hidden'))closeOv('gardenOv');
       else closeOv('shopOv');
     }
-    if(e.code==='KeyR'&&placing.active){
+    if(e.code==='KeyR'&&placing.active&&placing.type!=='demolish'){
       rotatePlacing(e.shiftKey?-1:1);
     }
     // Build shortcuts: 1-5 structures, 6-9 infrastructure
@@ -1283,7 +1307,16 @@ function unstuckFromWalls(entity,r,walls){
         ex+=(ex-nx)/dist*push;
         ey+=(ey-ny)/dist*push;
       } else {
-        const dLeft=ex-w.x, dRight=w.x+w.w-ex, dTop=ey-w.y, dBottom=w.y+w.h-ey;
+        let dLeft=ex-w.x, dRight=w.x+w.w-ex, dTop=ey-w.y, dBottom=w.y+w.h-ey;
+        // Ven tou stranou, odkud přišel (poslední volná pozice) — ne nejbližší hranou,
+        // která u tenké zdi může být ta druhá (zombík by „prošel" zdí dovnitř základny).
+        if(entity._sx!==undefined){
+          let [lx,ly]=rotd?toLocal(w,entity._sx,entity._sy):[entity._sx,entity._sy];
+          if(lx<w.x)dRight=dTop=dBottom=Infinity;
+          else if(lx>w.x+w.w)dLeft=dTop=dBottom=Infinity;
+          else if(ly<w.y)dLeft=dRight=dBottom=Infinity;
+          else if(ly>w.y+w.h)dLeft=dRight=dTop=Infinity;
+        }
         const m=Math.min(dLeft,dRight,dTop,dBottom);
         if(m===dLeft)ex=w.x-r-0.8;
         else if(m===dRight)ex=w.x+w.w+r+0.8;
@@ -1313,6 +1346,7 @@ function getBulletWalls(){
 }
 function getFovWalls(){
   const map=MAPS[gs.mapId];
+  if(me.onPlatform)return map.walls;   // z plošiny vidíš přes zdi a barikády (a střílíš přes ně)
   return [...map.walls,...gs.structs.filter(s=>s.hp>0&&STRUCT_DEFS[s.type].blocks)];
 }
 
@@ -1336,6 +1370,8 @@ function getFovWalls(){
    an unreachable pocket already falls back cleanly to straight-line +
    reactive steering + the hard stuck-watchdog, same as before this existed. */
 const FLOW_CELL=40, FLOW_PROBE_R=22, FLOW_MARGIN=300, FLOW_REBUILD_MS=800, FLOW_VARIANTS=3;
+// Cena průchodu buňkou se stavbou hráče (v buňkách cesty): obchůzka do ~12 buněk je lepší než bourání
+const FLOW_STRUCT_COST=12;
 const FLOW_DIRS=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
 // Pole cest a jeho gradient jsou ČTYŘSMĚROVÉ: v simulaci davu (60 zombíků,
 // 3 mapy, víc seedů) dorazili se 4 směry všichni a rychleji; s diagonálami
@@ -1349,12 +1385,15 @@ let _flowGrids=null,_flowNextBuild=0;
 function buildFlowGrids(){
   const ox=BARRIER.x-FLOW_MARGIN, oy=BARRIER.y-FLOW_MARGIN;
   const cols=Math.ceil((BARRIER.w+FLOW_MARGIN*2)/FLOW_CELL), rows=Math.ceil((BARRIER.h+FLOW_MARGIN*2)/FLOW_CELL);
-  const walls=getAllWalls();
+  // Terén (zdi mapy) je neprůchozí; stavby hráčů jsou průchozí, ale „drahé" — když vede
+  // kratší obchůzka, zombíci ji vezmou, a když je základna obehnaná, jdou na nejslabší místo a prorazí ho.
+  const walls=MAPS[gs.mapId].walls, structWalls=gs.structs.filter(s=>s.hp>0&&STRUCT_DEFS[s.type].blocks);
   const n=cols*rows;
-  const baseBlocked=new Uint8Array(n);
+  const baseBlocked=new Uint8Array(n), soft=new Uint8Array(n);
   for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
     const cx=ox+gx*FLOW_CELL+FLOW_CELL/2, cy=oy+gy*FLOW_CELL+FLOW_CELL/2;
     if(collidesWithAnyWall({x:cx,y:cy},FLOW_PROBE_R,walls))baseBlocked[gy*cols+gx]=1;
+    else if(structWalls.length&&collidesWithAnyWall({x:cx,y:cy},FLOW_PROBE_R,structWalls))soft[gy*cols+gx]=1;
   }
   const gcx=Math.max(0,Math.min(cols-1,Math.floor((CX-ox)/FLOW_CELL)));
   const gcy=Math.max(0,Math.min(rows-1,Math.floor((CY-oy)/FLOW_CELL)));
@@ -1408,7 +1447,7 @@ function buildFlowGrids(){
           const nidx=ny*cols+nx;
           if(blocked[nidx])continue;
           if(dx&&dy&&(blocked[gy*cols+nx]||blocked[ny*cols+gx]))continue;
-          const nd=d+cost;
+          const nd=d+cost+(soft[nidx]?FLOW_STRUCT_COST:0);
           if(nd<dist[nidx]){dist[nidx]=nd;flowHeapPush(heap,nd,nidx);}
         }
       }
@@ -1484,6 +1523,7 @@ function flowEscapeCell(x,y,r,walls){
     if(!(nd<bestD))continue;
     const cx=g.ox+nx*FLOW_CELL+FLOW_CELL/2, cy=g.oy+ny*FLOW_CELL+FLOW_CELL/2;
     if(collidesWithAnyWall({x:cx,y:cy},r,walls))continue;
+    if(meleeBlocked(x,y,cx,cy,walls))continue;   // přes zeď se neskáče
     bestD=nd;best=[cx,cy];
   }
   return best;
@@ -1631,7 +1671,7 @@ function meleeHit(x,y,ang,range,arc,dmg,owner){
     const dist=Math.hypot(z.x-x,z.y-y);
     // Reach counts to the zombie's near edge, not its center (consistent with
     // every other hit check in this file — bullets/base/structs add z.r too).
-    if(diff<arc/2&&dist<range+z.r&&!meleeBlocked(x,y,z.x,z.y,walls)){
+    if((diff<arc/2||dist<z.r+PLAYER_R+8)&&dist<range+z.r&&!meleeBlocked(x,y,z.x,z.y,walls)){
       // Warrior passive: Bojový rytmus — every 5th melee hit = ×2 dmg
       let finalDmg=dmg;
       if(isMe&&owner.kit==='warrior'){
@@ -1669,6 +1709,7 @@ function meleeAOE(p,range,arc,mult){
 function updateBullets(dt){
   const speed=60;
   gs.bullets=gs.bullets.filter(b=>{
+    const bx0=b.x,by0=b.y;
     b.x+=b.dx*b.spd*speed*dt;
     b.y+=b.dy*b.spd*speed*dt;
     b.dist+=b.spd*speed*dt;
@@ -1682,7 +1723,7 @@ function updateBullets(dt){
     }
     // Zombie collision
     for(const [id,z] of gs.zombies){
-      if(Math.hypot(b.x-z.x,b.y-z.y)<z.r+b.r){
+      if(segPointDist(bx0,by0,b.x,b.y,z.x,z.y)<z.r+b.r){
         const owner=b.owner===me.uid?me:gs.players[b.owner];
         if(b.type==='fireball'||b.type==='grenade') z._killedBySpell=true;
         dealDmg(id,z,b.dmg,owner);
@@ -1694,6 +1735,13 @@ function updateBullets(dt){
     }
     return true;
   });
+}
+
+// Vzdálenost bodu (px,py) od úsečky (x1,y1)–(x2,y2)
+function segPointDist(x1,y1,x2,y2,px,py){
+  const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy;
+  const t=l2?Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/l2)):0;
+  return Math.hypot(x1+dx*t-px,y1+dy*t-py);
 }
 
 /* ── Damage ──────────────────────────────────────────────── */
@@ -1815,6 +1863,7 @@ function endWave(){
     Object.keys(gs.players||{}).forEach(uid=>{const r=gs._rewards[uid]||(gs._rewards[uid]={c:0,x:0});r.c+=waveReward;});
   }
   setTimeout(()=>gToast(`💰 +${waveReward} za vlnu · ❤️ +25 % · 🏠 +40`,'#fbbf24'),400);
+  gs.wrongAnswers=0;   // postih za špatné odpovědi platil jen pro tuhle vlnu
   setTimeout(()=>showGameQuiz(),600);
   if(gs.bossCount>0){
     gToast('👹 Boss zabity! +300💰','#fbbf24');
@@ -1898,6 +1947,7 @@ function updateZombies(dt,ts){
     }
     // Stun
     if(z.stunEnd&&ts<z.stunEnd)return;
+    z._atk=null;   // bušení do stavby se rozhoduje každý snímek znovu
     // Whatever pushed it there last frame (crowd, knockback), never start a
     // move from inside a wall.
     unstuckFromWalls(z,z.r,_frameWalls);
@@ -1972,7 +2022,12 @@ function updateZombies(dt,ts){
       const useNudge=z.nudgeEnd&&ts<z.nudgeEnd;
       const moveAng=useNudge?ang+z.nudgeOff:ang;
       let [nx,ny]=trialSlide(ox,oy,z.r,Math.cos(moveAng)*speed,Math.sin(moveAng)*speed,_frameWalls);
-      if(Math.hypot(nx-ox,ny-oy)<moveThresh){
+      const blockedBy=structAhead(ox,oy,z.r,ang,speed);   // cesta vede skrz stavbu → bourat, ne klouzat podél
+      if(blockedBy){
+        // Před ním je stavba hráče (ne terén): nehledá jinou cestu, rozbije ji
+        nx=ox; ny=oy; z._atk=blockedBy.id; z.nudgeEnd=0;
+        z._pTs=ts; z._pX=ox; z._pY=oy;   // stojí schválně — hlídač zaseknutí ho nemá přehazovat
+      } else if(Math.hypot(nx-ox,ny-oy)<moveThresh){
         // Blocked: probe a full ring of directions and commit to whichever one
         // actually moves the farthest — this "hugs" the obstacle's edge instead
         // of bouncing between two directions that both re-enter the same wall,
@@ -2018,6 +2073,15 @@ function updateZombies(dt,ts){
       }
     }
 
+    // Hráče jen dohoní a dotkne se ho — nevleze mu do středu (pak by nešel trefit ani mečem, ani puškou)
+    for(const p of [me,...Object.values(gs.players)]){
+      if(!p||!p.alive)continue;
+      const ddx=z.x-p.x,ddy=z.y-p.y,dd=Math.hypot(ddx,ddy),minD=z.r+PLAYER_R-3;
+      if(dd>=minD)continue;
+      const a2=dd>0.01?Math.atan2(ddy,ddx):Math.random()*Math.PI*2;
+      const qx=p.x+Math.cos(a2)*minD,qy=p.y+Math.sin(a2)*minD;
+      if(!collidesWithAnyWall({x:qx,y:qy},z.r,_frameWalls)){z.x=qx;z.y=qy;}
+    }
     // Keep within extended bounds
     z.x=Math.max(BARRIER.x-200,Math.min(BARRIER.x+BARRIER.w+200,z.x));
     z.y=Math.max(BARRIER.y-200,Math.min(BARRIER.y+BARRIER.h+200,z.y));
@@ -2051,11 +2115,13 @@ function updateZombies(dt,ts){
       if(s.hp<=0)continue;
       const sd=STRUCT_DEFS[s.type];
       const d=Math.hypot(z.x-(s.x+s.w/2),z.y-(s.y+s.h/2));
-      if(d<z.r+Math.max(s.w,s.h)/2+5){
+      if(z._atk===s.id||d<z.r+Math.max(s.w,s.h)/2+5){
         const k=s.id;
         if(!z.lastHitStruct[k]||ts-z.lastHitStruct[k]>900){
           z.lastHitStruct[k]=ts;
-          s.hp=Math.max(0,s.hp-def.sdmg*(1+(gs.wave*0.03)));
+          s.hp=Math.max(0,s.hp-def.sdmg*(1+(gs.wave*0.03))*(z._atk===s.id?1.6:1));   // cílené bušení je silnější
+          if(s.hp<=0&&z._atk===s.id){z._atk=null;_flowNextBuild=0;}   // proraženo → přepočítat cesty
+          gs._structDirty=true;
           // Eng B3: one-time rebuild
           if(s.hp<=0&&hasSkill('eng_b3')&&!s.rebuilt){
             s.rebuilt=true;
@@ -2069,6 +2135,17 @@ function updateZombies(dt,ts){
   });
   zombiesToKill.forEach(([zid,zz])=>{if(gs.zombies.has(zid))killZombie(zid,zz,me);});
   applyZombieSeparation(_frameWalls);
+  gs.zombies.forEach(z=>{if(!collidesWithAnyWall(z,z.r,_frameWalls)){z._sx=z.x;z._sy=z.y;}});
+}
+
+// Stavba hráče (zeď/barikáda), do které zombík narazí, když jde směrem ang — nebo null (terén, nic)
+function structAhead(x,y,r,ang,speed){
+  const px=x+Math.cos(ang)*Math.max(3,speed), py=y+Math.sin(ang)*Math.max(3,speed);
+  for(const s of gs.structs){
+    if(s.hp<=0||!STRUCT_DEFS[s.type].blocks)continue;
+    if(collidesWithAnyWall({x:px,y:py},r,[s]))return s;
+  }
+  return null;
 }
 
 // Zombies never collided with each other, so once they all follow the same
@@ -2090,7 +2167,8 @@ function applyZombieSeparation(walls){
       if(dist>0.01){ ang=Math.atan2(dy,dx); push=(minDist-dist)/2; }
       else { ang=((a.id.charCodeAt(0)||0)+(b.id.charCodeAt(0)||0))%628/100; push=1; } // exact overlap: deterministic nudge
       const px=Math.cos(ang)*push,py=Math.sin(ang)*push;
-      a.x-=px; a.y-=py; b.x+=px; b.y+=py;
+      if(!collidesWithAnyWall({x:a.x-px,y:a.y-py},a.r,_walls)){a.x-=px; a.y-=py;}
+      if(!collidesWithAnyWall({x:b.x+px,y:b.y+py},b.r,_walls)){b.x+=px; b.y+=py;}
     }
   }
   // The push-apart ignores walls, so the crowd used to shove the front row
@@ -2321,6 +2399,8 @@ async function loadDeckPicker(){
       });
     });
   }catch(e){console.warn('[deckPicker] rooms:',e);}
+  // + vestavěné balíčky pro všechny (sbdecks.js)
+  if(typeof sbDeckList==='function')sbDeckList().forEach(d=>{if(!byId.has(d.id))byId.set(d.id,{...d,_roomName:SB_LABEL});});
   ALL_DECKS=[...byId.values()].sort((a,b)=>{
     if(!!a._mine!==!!b._mine)return a._mine?-1:1;            // own decks first
     return (b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0);
@@ -2355,6 +2435,7 @@ async function loadSelectedDecks(){
   const out=[];
   for(const id of ids){
     try{
+      if(typeof sbIsBuiltin==='function'&&sbIsBuiltin(id)){(await sbDeckCards(id)).forEach(c=>out.push({...c,id:id+'_'+c.id}));continue;}
       const snap=await db.collection('decks').doc(id).collection('cards').get();
       snap.docs.forEach(d=>out.push({...d.data(),id:id+'_'+d.id}));
     }catch(e){console.warn('[deck load]',id,e);}
@@ -2398,9 +2479,7 @@ function showGameQuiz(){
     document.getElementById('quizOvQ').insertAdjacentElement('beforebegin',statusEl);
   }
   if(gs.wrongAnswers>0){
-    const penalty=Math.min(70,gs.wrongAnswers*10);
-    const hpBoost=Math.round(gs.wrongAnswers*15);
-    statusEl.innerHTML=`<span style="color:#f87171">⚠️ ${gs.wrongAnswers}× špatná odpověď — zombie mají +${hpBoost}% HP · odměny −${penalty}%</span>`;
+    statusEl.innerHTML=`<span style="color:#f87171">⚠️ Příští vlna: ${quizPenaltyText()}</span>`;
   } else {
     statusEl.textContent='';
   }
@@ -2429,9 +2508,7 @@ function showGameQuiz(){
       if(b.dataset.ans===card.back)b.style.borderColor='#4ade80';   // porovnat hodnotu, ne text (emoji v textu se mění na ikony)
     });
     gs.wrongAnswers++;
-    const penalty=Math.min(70,gs.wrongAnswers*10);
-    const hpBoost=Math.round(gs.wrongAnswers*15);
-    msgEl.innerHTML=`${reasonHtml} Správná: <strong>${card.back}</strong><br><span style="color:#f87171;font-size:.75rem;">Příští vlna: zombie +${hpBoost}% HP · odměny −${penalty}%</span>`;
+    msgEl.innerHTML=`${reasonHtml} Správná: <strong>${card.back}</strong><br><span style="color:#f87171;font-size:.75rem;">Jen příští vlna: ${quizPenaltyText()}</span>`;
     msgEl.style.color='#f87171';
     finish();
   }
@@ -2478,6 +2555,12 @@ function showGameQuiz(){
   openOv('quizOv');
 }
 
+// Postih za špatné odpovědi (stejná čísla jako ve spawnZombie a killZombie); platí jen pro nejbližší vlnu
+function quizPenaltyText(){
+  const n=gs.wrongAnswers;
+  return `zombie +${Math.round(Math.min(0.6,n*0.08)*100)} % životů, +${Math.round(Math.min(0.45,n*0.02)*100)} % rychlosti · mince a XP −${Math.round((1-Math.max(0.30,1-n*0.10))*100)} %`;
+}
+
 function _afterQuiz(){
   if(gs.pendingLevelUp)_openLevelUpOv();
 }
@@ -2500,7 +2583,25 @@ function buildShop(){
   const items=KIT_SHOP[me.kit]||KIT_SHOP.warrior;
   // Infrastructure items (place them in the world afterwards) — food/water comes from the garden.
   const infraItems=Object.entries(INFRA_DEFS).map(([id,d])=>({id,emoji:d.emoji,name:d.name,cost:d.cost,type:'infra'}));
-  [...items,...EMERGENCY_SHOP,...infraItems].forEach(item=>{
+  // Kategorie (pořadí v obchodě) — dřív bylo všechno v jedné hromadě
+  const CATS=[
+    ['weapon','⚔️ Zbraně',''],
+    ['heal','❤️ Léčení, jídlo a pití',''],
+    ['stat','📈 Vylepšení postavy',''],
+    ['struct','🧱 Obrana','stavby 1–5'],
+    ['water','🌱 Voda a zahrada','řeka → kanály → studna / postřikovač → záhony'],
+    ['power','⚡ Elektřina','vodní kolo → kabely / ploty → věže, ploty, postřikovače'],
+  ];
+  const catOf=it=>it.type==='weapon'?'weapon':it.type==='use'?'heal':it.type==='stat'?'stat':it.type==='struct'?'struct'
+    :['wheel','wire','fence'].includes(it.id)?'power':'water';
+  const all=[...items,...EMERGENCY_SHOP,...infraItems];
+  CATS.forEach(([cat,title,hint])=>{
+    const list=all.filter(it=>catOf(it)===cat);
+    if(!list.length)return;
+    const h=document.createElement('div');
+    h.className='shop-cat'; h.innerHTML=`${title}${hint?` <small>${hint}</small>`:''}`;
+    grid.appendChild(h);
+    list.forEach(item=>{
     const cost=Math.max(1,Math.round(item.cost*(1-disc)));
     const el=document.createElement('div');
     el.className='si'+(me.coins<cost?' sd':'')+(item.type==='infra'?' si-infra':'');
@@ -2508,6 +2609,7 @@ function buildShop(){
     el.innerHTML=`<div class="si-e">${zi(shopIcon(item),item.emoji,30)}</div><div class="si-n">${item.name}</div><div class="si-c">${cost}${zi('coins','💰',14)}</div>${owned}`;
     el.onclick=()=>{if(me.coins<cost)return;buyItem(item,cost);buildShop();};
     grid.appendChild(el);
+    });
   });
   // Send coins (multiplayer)
   const row=document.getElementById('sendCoinsRow');
@@ -2551,6 +2653,7 @@ function buyItem(item,cost){
 function placeStructure(){
   if(!placing.active)return;
   const type=placing.type;
+  if(type==='demolish'){demolishAt(mouse.wx,mouse.wy);return;}
   if(INFRA_DEFS[type]){placeInfra();return;}
   if((me.inv[type]||0)<=0){gToast('Nemáš žádné '+STRUCT_DEFS[type].name,'#ef4444');return;}
   const def=STRUCT_DEFS[type];
@@ -2575,6 +2678,51 @@ function placeStructure(){
   } else {
     gs._structDirty=true;
   }
+}
+
+/* ── Bourání (klávesa X) ─────────────────────────────────── */
+// Co je pod kurzorem: stavba (zeď, barikáda, věž…) má přednost před políčkem infrastruktury
+function demolishTarget(wx,wy){
+  for(let i=gs.structs.length-1;i>=0;i--){
+    const st=gs.structs[i];
+    if(st.hp>0&&collidesWithAnyWall({x:wx,y:wy},6,[st]))return {kind:'s',obj:st};
+  }
+  const[gx,gy]=gridOf(wx,wy), pc=infraAt(gx,gy);
+  return pc?{kind:'i',obj:pc}:null;
+}
+function demolishAt(wx,wy){
+  const t=demolishTarget(wx,wy);
+  if(!t){gToast('Tady není nic k zboření','#f59e0b');return;}
+  const o=t.obj, def=STRUCT_DEFS[o.type]||INFRA_DEFS[o.type]||{name:'Stavba',emoji:'🔨'};
+  if(o.owner&&o.owner!==me.uid){gToast('Bourat můžeš jen svoje stavby','#f59e0b');return;}
+  // aspoň napůl celá se vrátí do inventáře (jinak by se bouráním a stavěním dala zadarmo opravovat)
+  const back=t.kind==='i'||o.hp>=o.maxHp*0.5;
+  if(t.kind==='s'){
+    gs.structs=gs.structs.filter(x=>x!==o); gs._structDirty=true; _flowNextBuild=0;
+    if(me._pendingBuild)me._pendingBuild=me._pendingBuild.filter(b=>b.id!==o.id);
+  } else {
+    gs.infra.delete(o.key); gs._builtInfraKeys?.delete(o.key);
+    if(me._pendingInfra)me._pendingInfra=me._pendingInfra.filter(b=>b.key!==o.key);
+  }
+  if(back){me.inv[o.type]=(me.inv[o.type]||0)+1;updateInvDisplay();}
+  if(!isAuthority()){   // co-op: hostiteli pošleme, co jsem zbořil (jako u stavění)
+    (me._pendingDemo||(me._pendingDemo=[])).push({k:t.kind,id:t.kind==='s'?o.id:o.key});
+    me._demoDirty=me._buildDirty=me._infraDirty=true;
+  }
+  window.sfx?.('click');
+  gToast(`🔨 ${def.name} zbořeno${back?' — vráceno do inventáře':' (byla moc poškozená, rozpadla se)'}`,'#f97316');
+}
+// Hostitel: zbořit, co poslal hráč uid (jen jeho vlastní věci)
+function hostApplyDemo(uid,list){
+  list.forEach(d=>{
+    if(d.k==='s'){
+      const st=gs.structs.find(x=>x.id===d.id);
+      if(st&&st.owner===uid){gs.structs=gs.structs.filter(x=>x!==st);gs._structDirty=true;_flowNextBuild=0;}
+    } else {
+      const pc=gs.infra.get(d.id);
+      if(pc&&pc.owner===uid){gs.infra.delete(d.id);gs._builtInfraKeys.delete(d.id);}
+    }
+  });
 }
 
 /* ── Structures update (turrets) ─────────────────────────── */
@@ -2908,9 +3056,10 @@ function recomputeInfraNetworks(){
     comp.forEach(p=>{p._fed=fed;p._fresh=fresh;});
   });
 
-  // POWER: conductors = wheel / wire
+  // POWER: conductors = wheel / wire / fence — el. plot vede proud dál jako kabel
+  // (řetěz plotů napojený na kolo nebo na základnu je celý pod proudem)
   const pc=new Map();
-  pieces.forEach(p=>{if(p.type==='wheel'||p.type==='wire')pc.set(p.key,p);});
+  pieces.forEach(p=>{if(p.type==='wheel'||p.type==='wire'||p.type==='fence')pc.set(p.key,p);});
   const seenP=new Set(),comps=[];
   pc.forEach(start=>{
     if(seenP.has(start.key))return;
@@ -2918,15 +3067,20 @@ function recomputeInfraNetworks(){
     while(q.length){const p=q.pop();comp.push(p);
       for(const[dx,dy]of N4){const nk=gKey(p.gx+dx,p.gy+dy);const np=pc.get(nk);if(np&&!seenP.has(nk)){seenP.add(nk);q.push(np);}}}
     let gen=0;comp.forEach(p=>{if(p.type==='wheel'&&tileTouchesRiver(p.gx,p.gy))gen+=INFRA_DEFS.wheel.gen;});
-    if(gen>0)comp.forEach(p=>{p._pow=true;}); // wires/wheels energized
-    comps.push({comp,budget:gen});
+    // síť, která zasahuje do okruhu základny, bere proud i ze základny
+    if(comp.some(p=>{const[px,py]=gCenter(p.gx,p.gy);return Math.hypot(px-CX,py-CY)<=BASE_POWER_RADIUS;}))gen+=BASE_GRID_POWER;
+    // ploty v síti odebírají proud z rozpočtu sítě (každý 1)
+    let budget=gen;
+    comp.forEach(p=>{if(p.type==='fence'&&budget>=INFRA_DEFS.fence.powerUse){budget-=INFRA_DEFS.fence.powerUse;p._pow=true;}});
+    if(gen>0)comp.forEach(p=>{if(p.type!=='fence')p._pow=true;}); // wires/wheels energized
+    comps.push({comp,budget});
   });
   // energized tiles belong to components with budget>0
   const energ=[];
   comps.forEach((c,ci)=>{if(c.budget>0)c.comp.forEach(p=>{const[ex,ey]=gCenter(p.gx,p.gy);energ.push({ex,ey,ci});});});
   // devices: fence + sprinkler infra, plus turret structs
   const devs=[];
-  pieces.forEach(p=>{if(p.type==='fence'||p.type==='sprinkler'){const[cx,cy]=gCenter(p.gx,p.gy);devs.push({obj:p,cx,cy,use:INFRA_DEFS[p.type].powerUse});}});
+  pieces.forEach(p=>{if((p.type==='fence'&&!p._pow)||p.type==='sprinkler'){const[cx,cy]=gCenter(p.gx,p.gy);devs.push({obj:p,cx,cy,use:INFRA_DEFS[p.type].powerUse});}});
   gs.structs.forEach(s=>{if(s.hp>0&&STRUCT_DEFS[s.type]&&STRUCT_DEFS[s.type].turret){devs.push({obj:s,cx:s.x+s.w/2,cy:s.y+s.h/2,use:1});}});
   devs.forEach(d=>{let best=-1,bd=POWER_REACH;for(const e of energ){const dist=Math.hypot(d.cx-e.ex,d.cy-e.ey);if(dist<bd){bd=dist;best=e.ci;}}d.ci=best;});
   devs.forEach(d=>{if(d.ci<0)return;const c=comps[d.ci];if(c.budget>=d.use){c.budget-=d.use;d.obj._pow=true;}});
@@ -3011,6 +3165,39 @@ function toggleGarden(){
   }
   buildGarden();
   openOv('gardenOv');
+}
+
+// ── Statistiky postavy [C]: hodnota statu, pruh do maxima a co konkrétně dává (čísla místo procent)
+const STAT_BAR_MAX=20;
+function toggleStats(){
+  if(gs.screen!=='game')return;
+  const ov=document.getElementById('statsOv');
+  if(!ov.classList.contains('hidden')){closeOv('statsOv');return;}
+  buildStatsOv(); openOv('statsOv');
+}
+function buildStatsOv(){
+  const st=me.stats, w=WEAPONS[me.weapon]||WEAPONS.pistol, f=v=>String(Math.round(v*100)/100).replace('.',',');
+  const magic=!w.melee&&me.kit==='mage';   // stejné pravidlo jako getBulletDmg: mágovy střely škálují s Inteligencí
+  const dmg=w.dmg*(magic?1+st.int*0.08:1+st.str*0.05);
+  const spd=(140+st.agi*8)*(me.kit==='tank'?0.72:1);
+  const disc=Math.min(0.9,st.cha*0.03+(hasSkill('eng_a1')?0.20:0));
+  const rows=[
+    ['str','Síla',magic?`Fyzické poškození: <b>×${f(1+st.str*0.05)}</b>`:`Poškození zbraně (${w.name}): <b>${Math.round(dmg)}</b> místo ${w.dmg}`],
+    ['int','Inteligence',magic?`Poškození zbraně (${w.name}): <b>${Math.round(dmg)}</b> místo ${w.dmg}`:`Síla kouzel a magie: <b>×${f(1+st.int*0.08)}</b>`],
+    ['agi','Obratnost',`Rychlost pohybu: <b>${Math.round(spd)}</b> px/s`],
+    ['vit','Vitalita',`Maximum životů: <b>${me.maxHp}</b>`],
+    ['cha','Charisma',`Ceny v obchodě: <b>100 💰 → ${Math.max(1,Math.round(100*(1-disc)))} 💰</b>`],
+    ['luk','Štěstí',`Kritický zásah: <b>${Math.round((0.05+0.02*st.luk)*100)} z 100</b> ran`],
+    ['dex','Zručnost',`Cooldowny schopností: <b>×${f(1-Math.min(0.6,st.dex*0.03))}</b>`],
+    ['res','Odolnost',`Přijaté poškození: <b>×${f(1-Math.min(0.75,st.res*0.02))}</b>`],
+    ['per','Vnímání',w.melee?`Dosah zbraně: <b>${Math.round(w.range)}</b> px`:`Dostřel: <b>${Math.round(w.range*(1+st.per*0.05))}</b> px místo ${w.range}`],
+  ];
+  document.getElementById('statsBody').innerHTML=rows.map(([k,name,eff])=>{
+    const v=st[k]||0;
+    return `<div class="st-row"><span class="st-name">${name}</span><span class="st-num">${v}</span>
+      <div class="st-bar" title="${v} z ${STAT_BAR_MAX}"><i style="width:${Math.min(100,v/STAT_BAR_MAX*100)}%"></i></div>
+      <span class="st-eff">${eff}</span></div>`;
+  }).join('')+`<p style="font-size:.7rem;color:var(--muted);margin-top:10px;">Pruh ukazuje hodnotu do ${STAT_BAR_MAX} bodů. Body přibývají s levelem a v obchodě.</p>`;
 }
 
 function toggleHelp(){
@@ -3418,6 +3605,13 @@ function updateHUD(){
   document.getElementById('coinsVal').textContent=me.coins;
   document.getElementById('levelVal').textContent=me.level;
   document.getElementById('spVal').textContent=me.sp;
+  const sph=document.getElementById('spHint');
+  if(sph){
+    const show=me.sp>0&&document.getElementById('skillTreeOv').classList.contains('hidden');
+    if(sph.hidden===show)sph.hidden=!show;
+    const t=`🌳 ${me.sp} ${me.sp===1?'bod':me.sp<5?'body':'bodů'} do stromu dovedností — otevři [T]`;
+    if(show&&sph.textContent!==t)sph.textContent=t;
+  }
   // Hunger / Thirst
   const hPct=me.hunger/100*100;
   const tPct=me.thirst/100*100;
@@ -4039,6 +4233,23 @@ function turretWouldBePowered(x,y){
 }
 function drawPlacingPreview(){
   if(!placing.active)return;
+  if(placing.type==='demolish'){
+    const t=demolishTarget(mouse.wx,mouse.wy);
+    ctx.save();
+    ctx.strokeStyle='rgba(239,68,68,.95)';ctx.fillStyle='rgba(239,68,68,.22)';ctx.lineWidth=2.5;ctx.setLineDash([5,4]);
+    if(t&&t.kind==='s'){
+      const o=t.obj,a=rAng(o);
+      ctx.translate(o.x+o.w/2,o.y+o.h/2); if(a)ctx.rotate(a);
+      ctx.fillRect(-o.w/2-3,-o.h/2-3,o.w+6,o.h+6);ctx.strokeRect(-o.w/2-3,-o.h/2-3,o.w+6,o.h+6);
+    } else if(t){
+      ctx.fillRect(t.obj.gx*IT+2,t.obj.gy*IT+2,IT-4,IT-4);ctx.strokeRect(t.obj.gx*IT+2,t.obj.gy*IT+2,IT-4,IT-4);
+    }
+    ctx.restore();
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='22px serif';
+    ctx.fillText('🔨',mouse.wx+16,mouse.wy-16);
+    ctx.textAlign='left';ctx.textBaseline='alphabetic';
+    return;
+  }
   // Infrastructure: grid-snapped preview
   if(INFRA_DEFS[placing.type]){
     const def=INFRA_DEFS[placing.type];
@@ -4258,6 +4469,11 @@ function syncPlayerState(){
     me._buildDirty=false;
     liveRef('players/'+me.uid+'/build').set(me._pendingBuild||[]).catch(()=>{});
   }
+  // Forward what I demolished (declarative pending set; trimmed once the host's snapshot confirms it)
+  if(me._demoDirty){
+    me._demoDirty=false;
+    liveRef('players/'+me.uid+'/demo').set(me._pendingDemo||[]).catch(()=>{});
+  }
   // Forward my placed infrastructure (declarative pending set)
   if(me._infraDirty){
     me._infraDirty=false;
@@ -4349,8 +4565,10 @@ function applyZombieSnapshot(arr){
 function applyStructsSnapshot(arr){
   const byId=new Map(); gs.structs.forEach(s=>byId.set(s.id,s));
   const next=[], snapIds=new Set();
+  const demo=new Set((me._pendingDemo||[]).filter(d=>d.k==='s').map(d=>d.id));
   arr.forEach(o=>{
     snapIds.add(o.i);
+    if(demo.has(o.i))return;   // zbořil jsem to, hostitel to ještě nepotvrdil
     let s=byId.get(o.i);
     if(s){ s.x=o.x;s.y=o.y;s.w=o.w;s.h=o.h;s.rot=o.r;s.hp=o.hp;s.maxHp=o.m;s.owner=o.o;s.type=o.t;s.def=STRUCT_DEFS[o.t];s._pow=!!o.pw; }
     else { s={id:o.i,type:o.t,def:STRUCT_DEFS[o.t],x:o.x,y:o.y,w:o.w,h:o.h,rot:o.r,hp:o.hp,maxHp:o.m,owner:o.o,lastShot:0,zombieHits:{},_pow:!!o.pw}; }
@@ -4367,14 +4585,21 @@ function applyStructsSnapshot(arr){
     });
     if(me._pendingBuild.length!==before) me._buildDirty=true; // resend trimmed set
   }
+  if(demo.size){   // potvrzeno = ve snapshotu už není → přestat posílat
+    const before=me._pendingDemo.length;
+    me._pendingDemo=me._pendingDemo.filter(d=>d.k!=='s'||snapIds.has(d.id));
+    if(me._pendingDemo.length!==before)me._demoDirty=true;
+  }
   gs.structs=next;
 }
 // Client: rebuild gs.infra from host's authoritative grid (+ my unconfirmed placements)
 function applyInfraSnapshot(arr){
   const old=gs.infra||new Map();
   const next=new Map(), snapKeys=new Set();
+  const demo=new Set((me._pendingDemo||[]).filter(d=>d.k==='i').map(d=>d.id));
   arr.forEach(o=>{
     snapKeys.add(o.k);
+    if(demo.has(o.k))return;   // zbořil jsem to, hostitel to ještě nepotvrdil
     const prev=old.get(o.k)||{};
     const p={key:o.k,gx:o.gx,gy:o.gy,type:o.t,owner:o.o,
       _fed:!!o.fed,_fresh:!!o.fr,_pow:!!o.pw,_ripple:prev._ripple||0,_lastZap:prev._lastZap||0};
@@ -4396,6 +4621,11 @@ function applyInfraSnapshot(arr){
       return true;
     });
     if(me._pendingInfra.length!==before) me._infraDirty=true;
+  }
+  if(demo.size){
+    const before=me._pendingDemo.length;
+    me._pendingDemo=me._pendingDemo.filter(d=>d.k!=='i'||snapKeys.has(d.id));
+    if(me._pendingDemo.length!==before)me._demoDirty=true;
   }
   gs.infra=next;
 }
@@ -4497,9 +4727,17 @@ function renderLobbyPlayers(players){
       <span style="color:${p.ready?'#4ade80':'#666'};font-size:.78rem;">${p.ready?'✓ Připraven':'Čeká…'}</span>`;
     container.appendChild(row);
   });
-  const count=Object.keys(players).length;
-  const ready=Object.values(players).filter(p=>p.ready).length;
-  document.getElementById('lobbyStatus').textContent=`${ready}/${count} hráčů připraveno`;
+  const others=Object.values(players).filter(p=>p.uid!==gs.hostUid);
+  const waiting=others.filter(p=>!p.ready).length;
+  const sb=document.getElementById('lobbyStartBtn');
+  if(gs.isHost){
+    // hostitel se nepotvrzuje — spustit může, až budou připravení všichni ostatní
+    document.getElementById('lobbyReadyBtn').style.display='none';
+    sb.className='btn-p'; sb.disabled=waiting>0;
+    sb.title=waiting?'Počkej, až všichni kliknou na Připraven':'';
+  }
+  document.getElementById('lobbyStatus').textContent=!others.length?'Zatím jsi tu sám — můžeš hrát i bez ostatních.'
+    :waiting?`Čeká se na ${waiting} ${waiting===1?'hráče':'hráčů'}…`:'Všichni jsou připravení ✓';
 }
 
 async function setReady(){
@@ -4513,6 +4751,7 @@ async function setReady(){
 
 async function hostStartGame(){
   if(!gs.sessionId||!gs.isHost)return;
+  if(document.getElementById('lobbyStartBtn').disabled){gToast('Počkej, až budou všichni připravení','#f59e0b');return;}
   await db.collection('survival_lobbies').doc(gs.sessionId)
     .update({status:'playing',mapId:kitSel.mapId,startedAt:Date.now()}).catch(()=>{});
 }
@@ -4562,6 +4801,8 @@ function subscribePlayerStates(){
           gs.infra.set(b.key,piece);
         });
       }
+      // Host demolishes what a client tore down (after builds, so a stale build list can't resurrect it)
+      if(Array.isArray(node.demo))hostApplyDemo(uid,node.demo);
       // Host applies a client's tend requests (plant/water/harvest/clean/drink/clear)
       if(node.treq&&node.treq.b>(gs._treqSeen[uid]||0)){
         gs._treqSeen[uid]=node.treq.b;

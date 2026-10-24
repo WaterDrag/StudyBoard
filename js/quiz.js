@@ -42,13 +42,16 @@ auth.onAuthStateChanged(user => {
 // ── Load deck & cards ─────────────────────────────────────────
 async function loadDeck() {
   try {
-    const deckDoc = await db.collection('decks').doc(DECK_ID).get();
+    const builtin = typeof sbIsBuiltin === 'function' && sbIsBuiltin(DECK_ID);
+    const deckDoc = builtin ? { exists: !!sbDeckData(DECK_ID), data: () => sbDeckData(DECK_ID) }
+      : await db.collection('decks').doc(DECK_ID).get();
     if (!deckDoc.exists) { toast('Balíček nenalezen.'); window.history.back(); return; }
 
     const deck    = deckDoc.data();
     const isOwner = deck.ownerUid === ME.uid;
 
-    if (!isOwner && deck.roomId) {
+    if (builtin) { /* vestavěný balíček pro všechny */ }
+    else if (!isOwner && deck.roomId) {
       const roomDoc = await db.collection('rooms').doc(deck.roomId).get();
       if (!roomDoc.exists || !(roomDoc.data().memberIds || []).includes(ME.uid)) {
         toast('Nemáš přístup.'); window.location.href = 'dashboard.html'; return;
@@ -62,9 +65,12 @@ async function loadDeck() {
     document.getElementById('backBtn').href       = backHref;
     document.getElementById('quizBackLink').href  = backHref;
 
-    const cardsSnap = await db.collection('decks').doc(DECK_ID)
-      .collection('cards').orderBy('createdAt', 'asc').get();
-    ALL_CARDS = cardsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (builtin) ALL_CARDS = (await sbDeckCards(DECK_ID)).map(c => ({ ...c }));
+    else {
+      const cardsSnap = await db.collection('decks').doc(DECK_ID)
+        .collection('cards').orderBy('createdAt', 'asc').get();
+      ALL_CARDS = cardsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
     // Výkladové karty nic nezkouší — do kvízu jdou, jen když balíček nic jiného nemá.
     const testable = ALL_CARDS.filter(c => c.kind !== 'info');
     if (KIND && ALL_CARDS.some(c => c.kind === KIND)) ALL_CARDS = ALL_CARDS.filter(c => c.kind === KIND);

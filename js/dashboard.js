@@ -739,6 +739,7 @@ async function renderReview() {
   const allDue = Object.entries(dueByDeck()).sort((a, b) => b[1] - a[1]);
   await Promise.all(allDue.slice(0, 12).map(async ([id]) => {
     if (DECK_NAME_CACHE[id]) return;
+    if (typeof sbIsBuiltin === 'function' && sbIsBuiltin(id)) { const d = sbDeckData(id); DECK_NAME_CACHE[id] = d ? { name: d.name, color: d.color } : { gone: true }; return; }
     try {
       const snap = await db.collection('decks').doc(id).get();
       DECK_NAME_CACHE[id] = snap.exists ? { name: snap.data().name, color: snap.data().color } : { gone: true };
@@ -985,7 +986,8 @@ async function loadDecks(user) {
       (b.data().createdAt?.toMillis?.() || 0) - (a.data().createdAt?.toMillis?.() || 0)
     );
 
-    if (!sorted.length) {
+    const builtin = typeof sbDeckDocs === 'function' ? sbDeckDocs() : [];
+    if (!sorted.length && !builtin.length) {
       grid.innerHTML = `
         <div class="empty-state" style="grid-column:1/-1;">
           <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
@@ -1006,6 +1008,14 @@ async function loadDecks(user) {
       DASH_DECKS.push({ id: doc.id, deck, roomName: room?.name || null, ownerName });
       grid.appendChild(buildDeckCard(doc.id, deck, room?.name || null, ownerName, user.uid));
     });
+    if (!sorted.length) grid.insertAdjacentHTML('beforeend', '<p class="decks-sb-empty">Zatím nemáš vlastní balíčky — vytvoř si je, nebo se uč z těch pro všechny ↓</p>');
+    if (builtin.length) {
+      grid.insertAdjacentHTML('beforeend', `<div class="decks-sb-head"><h3>📚 Pro všechny</h3><span>Hotové balíčky z různých předmětů — dají se učit i hrát ve všech hrách.</span></div>`);
+      builtin.forEach(doc => {
+        DASH_DECKS.push({ id: doc.id, deck: doc.data(), roomName: SB_LABEL, ownerName: null });
+        grid.appendChild(buildDeckCard(doc.id, doc.data(), SB_LABEL, null, user.uid));
+      });
+    }
     renderFavDecks();
   } catch (e) {
     if (e.code !== 'permission-denied') {

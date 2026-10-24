@@ -36,14 +36,17 @@ async function mcLoadDecks() {
   const roomDecks = await Promise.all(rooms.docs.map(r => db.collection('decks').where('roomId', '==', r.id).get()
     .then(s => s.docs.map(d => ({ id: d.id, ...d.data(), roomName: r.data().name }))).catch(() => [])));
   roomDecks.flat().forEach(d => all.set(d.id, d));
-  return [...all.values()].filter(d => (d.cardCount || 0) > 0 && d.kind !== 'info')
+  const mine = [...all.values()].filter(d => (d.cardCount || 0) > 0 && d.kind !== 'info')
     .sort((a, b) => String(a.name).localeCompare(String(b.name), 'cs'));
+  return mine.concat(typeof sbDeckList === 'function' ? sbDeckList() : []);   // + vestavěné balíčky pro všechny
 }
 
 // Karty vybraných balíčků. Výkladové karty se nezkouší (nemají otázku).
 async function mcLoadCards(decks, perDeck = 300) {
-  const lists = await Promise.all(decks.map(d => db.collection('decks').doc(d.id).collection('cards').get()
-    .then(s => s.docs.slice(0, perDeck).map(c => ({ ...c.data(), id: c.id, deckId: d.id, deckName: d.name }))).catch(() => [])));
+  const lists = await Promise.all(decks.map(d => (typeof sbIsBuiltin === 'function' && sbIsBuiltin(d.id)
+    ? sbDeckCards(d.id).then(list => list.slice(0, perDeck).map(c => ({ ...c, deckId: d.id, deckName: d.name })))
+    : db.collection('decks').doc(d.id).collection('cards').get()
+      .then(s => s.docs.slice(0, perDeck).map(c => ({ ...c.data(), id: c.id, deckId: d.id, deckName: d.name })))).catch(() => [])));
   return lists.flat().filter(c => c.front && c.back && c.kind !== 'info').map(c => ({
     id: c.id, deckId: c.deckId, deckName: c.deckName,
     f: String(c.front), b: String(c.back), fl: c.frontLang || null, cl: c.codeLang || null, fi: c.frontImg || null,

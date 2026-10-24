@@ -342,7 +342,8 @@ async function renderMyDecks() {
       personal.docs.forEach(d => all.set(d.id, { id: d.id, ...d.data() }));
       const roomDecks = await Promise.all(rooms.docs.map(r => db.collection('decks').where('roomId', '==', r.id).get().then(s => s.docs.map(d => ({ id: d.id, ...d.data(), roomName: r.data().name })))));
       roomDecks.flat().forEach(d => all.set(d.id, d));
-      MY_DECKS = [...all.values()].sort((a, b) => String(a.name).localeCompare(String(b.name), 'cs'));
+      MY_DECKS = [...all.values()].sort((a, b) => String(a.name).localeCompare(String(b.name), 'cs'))
+        .concat(typeof sbDeckList === 'function' ? sbDeckList() : []);   // + vestavěné balíčky pro všechny
     } catch (e) { el.innerHTML = `<div class="dob-muted">Balíčky se nepodařilo načíst.</div>`; return; }
   }
   const inPool = new Set((GAME.decks || []).map(d => d.id));
@@ -358,8 +359,9 @@ async function addDeck(deck, btn) {
   if (!deck) return;
   btn.disabled = true;
   try {
-    const snap = await db.collection('decks').doc(deck.id).collection('cards').get();
-    const cards = snap.docs.map(d => d.data()).filter(c => c.front && c.back).slice(0, POOL_MAX_CARDS).map(c => ({
+    const raw = typeof sbIsBuiltin === 'function' && sbIsBuiltin(deck.id) ? await sbDeckCards(deck.id)
+      : (await db.collection('decks').doc(deck.id).collection('cards').get()).docs.map(d => d.data());
+    const cards = raw.filter(c => c.front && c.back).slice(0, POOL_MAX_CARDS).map(c => ({
       f: String(c.front).slice(0, 1500), b: String(c.back).slice(0, 600),
       w: (c.distractors || []).filter(Boolean).slice(0, 5).map(x => String(x).slice(0, 300)),
       ...(c.frontLang ? { fl: c.frontLang } : {}), ...(c.codeLang ? { cl: c.codeLang } : {}),
