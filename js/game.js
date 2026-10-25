@@ -882,7 +882,7 @@ function initGame(){
   gs.wave=0; gs.phase='build'; gs.buildTimer=BUILD_DUR;
   gs.baseHp=500; gs.baseMaxHp=500;
   gs.spawnedCount=0; gs.waveTotal=0;
-  gs.wrongAnswers=0; gs.pendingLevelUp=false;
+  gs.wrongAnswers=0; gs._repWrong=0; gs.pendingLevelUp=false;
   gs.spits=[];          // kapky kyseliny od Plivačů (host je vytváří, klienti je dostávají ve snapshotu)
   gs.worm=null;        // písečný červ (mapa Lom)
   gs.infra=new Map();   // key "gx,gy" → infra piece
@@ -1815,7 +1815,7 @@ function killZombie(zid,z,attacker){
     // Luk: bonus coin chance (each luk point adds 5% chance of double coins)
     const coinBonus=(hasSkill('rog_c4_jackpot_active')||me.eff.jackpot&&performance.now()<me.eff.jackpot.end)?5:1;
     const lukBonus=Math.random()<(me.stats.luk||0)*0.05?2:1;
-    const wrongPenalty=Math.max(0.30,1-gs.wrongAnswers*0.10);
+    const wrongPenalty=Math.max(0.30,1-teamWrong()*0.10);   // chyby jsou společné celému týmu
     me.coins+=Math.round(z.def.coins*coinBonus*lukBonus*wrongPenalty);
     me.xp+=Math.round(z.def.xp*wrongPenalty);
     me.totalKills++;
@@ -1838,7 +1838,7 @@ function killZombie(zid,z,attacker){
     if(me.kit==='mage'&&z._killedBySpell&&me.abilCds['fireball']){me.abilCds['fireball']-=1000;}
   } else if(gs.isHost&&attacker&&attacker.uid&&attacker.uid!==me.uid){
     // Host credits a co-op player for a kill they dealt (paid out via world snapshot)
-    const wrongPenalty=Math.max(0.30,1-gs.wrongAnswers*0.10);
+    const wrongPenalty=Math.max(0.30,1-teamWrong()*0.10);   // chyby jsou společné celému týmu
     if(!gs._rewards)gs._rewards={};
     const r=gs._rewards[attacker.uid]||(gs._rewards[attacker.uid]={c:0,x:0});
     r.c+=Math.round(z.def.coins*wrongPenalty);
@@ -1857,10 +1857,12 @@ function startWave(){
   gs.phase='wave';
   gs.spawnedCount=0;
   const baseCount=6+Math.round(gs.wave*2.6);
-  gs.waveTotal=Math.round(baseCount*gs.difficulty);
+  // špatné odpovědi celého týmu přidají i zombie: +6 % za každou chybu (max +50 %)
+  const normal=Math.round(baseCount*gs.difficulty);
+  gs.waveTotal=Math.round(normal*(1+waveExtraPct(teamWrong())));
   document.getElementById('phaseLabel').textContent='Vlna '+gs.wave;
   document.getElementById('phaseLabel').style.color='#ef4444';
-  gToast(`🧟 Vlna ${gs.wave}!`,'#ef4444');
+  gToast(`🧟 Vlna ${gs.wave}!${gs.waveTotal>normal?` +${gs.waveTotal-normal} zombie za špatné odpovědi`:''}`,'#ef4444');
   document.getElementById('waveNum').textContent=gs.wave;
 
   if(hasSkill('eng_b2')){me.inv.wall=(me.inv.wall||0)+3;me.inv.barricade=(me.inv.barricade||0)+2;updateInvDisplay();gToast('📦 Munice z vzduchu! +3 zdi +2 barikády','#06b6d4');}
@@ -1910,7 +1912,8 @@ function endWave(){
     Object.keys(gs.players||{}).forEach(uid=>{const r=gs._rewards[uid]||(gs._rewards[uid]={c:0,x:0});r.c+=waveReward;});
   }
   setTimeout(()=>gToast(`💰 +${waveReward} za vlnu · ❤️ +25 % · 🏠 +40`,'#fbbf24'),400);
-  gs.wrongAnswers=0;   // postih za špatné odpovědi platil jen pro tuhle vlnu
+  gs.wrongAnswers=gs._repWrong||0;   // postih za špatné odpovědi platil jen pro tuhle vlnu (chyby při opravě během ní platí pro tu příští)
+  gs._repWrong=0;
   setTimeout(()=>showGameQuiz(),600);
   if(gs.bossCount>0){
     gToast('👹 Boss zabity! +300💰','#fbbf24');
@@ -1969,8 +1972,9 @@ function spawnZombie(type){
   else if(side===2){x=b.x+Math.random()*b.w;y=b.y+b.h+SPAWN_M;}
   else{x=b.x-SPAWN_M;y=b.y+Math.random()*b.h;}
 
-  const hpMult=(1+(gs.wave-1)*0.09)*(1+Math.min(0.6,gs.wrongAnswers*0.08));
-  const spdMult=1+Math.min(0.45,(gs.wave-1)*0.02+gs.wrongAnswers*0.02);
+  const wa=teamWrong();   // v co-opu chyby všech hráčů
+  const hpMult=(1+(gs.wave-1)*0.09)*(1+Math.min(0.6,wa*0.08));
+  const spdMult=1+Math.min(0.45,(gs.wave-1)*0.02+wa*0.02);
   const id=eid();
   gs.zombies.set(id,{
     id,type,def,x,y,r:def.r,
@@ -2698,9 +2702,10 @@ async function loadSelectedDecks(){
   const out=[];
   for(const id of ids){
     try{
-      if(typeof sbIsBuiltin==='function'&&sbIsBuiltin(id)){(await sbDeckCards(id)).forEach(c=>out.push({...c,id:id+'_'+c.id}));continue;}
+      // _deck = balíček (oprava staveb bere otázky z jednoho balíčku)
+      if(typeof sbIsBuiltin==='function'&&sbIsBuiltin(id)){(await sbDeckCards(id)).forEach(c=>out.push({...c,id:id+'_'+c.id,_deck:id}));continue;}
       const snap=await db.collection('decks').doc(id).collection('cards').get();
-      snap.docs.forEach(d=>out.push({...d.data(),id:id+'_'+d.id}));
+      snap.docs.forEach(d=>out.push({...d.data(),id:id+'_'+d.id,_deck:id}));
     }catch(e){console.warn('[deck load]',id,e);}
   }
   DECK_CARDS=out;
@@ -2741,7 +2746,7 @@ function showGameQuiz(){
     statusEl.style.cssText='font-size:.72rem;margin-bottom:8px;min-height:16px;';
     document.getElementById('quizOvQ').insertAdjacentElement('beforebegin',statusEl);
   }
-  if(gs.wrongAnswers>0){
+  if(teamWrong()>0){
     statusEl.innerHTML=`<span style="color:#f87171">⚠️ Příští vlna: ${quizPenaltyText()}</span>`;
   } else {
     statusEl.textContent='';
@@ -2819,9 +2824,18 @@ function showGameQuiz(){
 }
 
 // Postih za špatné odpovědi (stejná čísla jako ve spawnZombie a killZombie); platí jen pro nejbližší vlnu
+// Postih za špatné odpovědi na vlnu je SPOLEČNÝ: chyby celého týmu (každý hráč posílá svoje „wa“ ve stavu
+// hráče, hostitel je sečte) zesílí zombie a všem stejně uberou mince a XP za zabití.
+function teamWrong(){
+  if(!gs.sessionId)return gs.wrongAnswers;
+  if(isAuthority()){let n=gs.wrongAnswers||0;Object.values(gs.players||{}).forEach(p=>{if(p.uid!==me.uid)n+=Math.max(0,+p.wa||0);});return n;}
+  return Math.max(gs._teamWrong||0,gs.wrongAnswers);   // klient: součet od hostitele (dorazí s malým zpožděním)
+}
+const waveExtraPct=n=>Math.min(0.5,n*0.06);
 function quizPenaltyText(){
-  const n=gs.wrongAnswers;
-  return `zombie +${Math.round(Math.min(0.6,n*0.08)*100)} % životů, +${Math.round(Math.min(0.45,n*0.02)*100)} % rychlosti · mince a XP −${Math.round((1-Math.max(0.30,1-n*0.10))*100)} %`;
+  const t=teamWrong(),team=gs.sessionId&&t>gs.wrongAnswers;
+  return `o ${Math.round(waveExtraPct(t)*100)} % víc zombie, +${Math.round(Math.min(0.6,t*0.08)*100)} % životů, +${Math.round(Math.min(0.45,t*0.02)*100)} % rychlosti · mince a XP −${Math.round((1-Math.max(0.30,1-t*0.10))*100)} %`
+    +(team?` (chyby celého týmu: ${t})`:'');
 }
 
 function _afterQuiz(){
@@ -2976,12 +2990,14 @@ function demolishAt(wx,wy){
   gToast(`🔨 ${def.name} zbořeno${back?' — vráceno do inventáře':' (byla moc poškozená, rozpadla se)'}`,'#f97316');
 }
 // ── Oprava staveb odpovědí (jako zabedňování v CoD Zombies) ──────────
-// U poškozené stavby (pod 85 % životů) se ukáže 🔧 — klávesa V nebo tlačítko. Otázka z balíčků běží,
-// zatímco hra jede dál (zombie neřeknou „počkám“): správně = stavba zase celá, špatně / čas vypršel =
-// na tuhle stavbu 8 s nejde opravovat. Opravit můžeš i stavbu spoluhráče. V co-opu jde oprava hostiteli
-// jako seznam {id, n} (n roste) — hostitel použije jen nové, takže stará oprava se nikdy nezopakuje.
+// U poškozené stavby (pod 85 % životů) se ukáže 🔧 — klávesa V nebo tlačítko. Otázky jsou z jednoho
+// náhodného vybraného balíčku a jejich počet záleží na tom, jak ten balíček umíš (krabičky učení):
+// umíš ho (≥ 70 % naučeno) = 3 otázky, napůl = 2, neumíš = 1. Každá správná odpověď opraví svůj díl,
+// špatná opravu ukončí, stavbu 8 s nejde opravovat a přidá postih na příští vlnu jako kvíz mezi vlnami.
+// Hra mezitím běží dál. Opravit můžeš i stavbu spoluhráče. V co-opu jde oprava hostiteli jako
+// seznam {id, n, f} (n roste, f = na kolik je stavba opravená) — hostitel použije jen nové.
 const REPAIR={range:70,below:0.85,cdWrong:8000,time:12};
-let _repTarget=null,_repOpen=null;
+let _repTarget=null,_repOpen=null,_repLearn=null;
 const _repUsed=new Set();
 function repairTarget(){
   if(!me.alive||DECK_CARDS.length<2||gs.screen!=='game')return null;
@@ -3001,53 +3017,80 @@ function updateRepairPrompt(){
   if(b.hidden===show)b.hidden=!show;
   if(show){const def=STRUCT_DEFS[_repTarget.type]; const t=`🔧 Opravit ${def?.name?.toLowerCase()||'stavbu'} (${Math.round(_repTarget.hp/_repTarget.maxHp*100)} %) · V`; if(b.textContent!==t)b.textContent=t;}
 }
-function startRepair(){
+// Jak moc balíček umím: podíl kartiček v krabičce 4–5 (z users/{uid}.learn, načte se jednou)
+function repDeckMastery(deckId){
+  const cards=Object.values(_repLearn?.[deckId]?.cards||{}), n=ALL_DECKS.find(d=>d.id===deckId)?.cardCount||cards.length||1;
+  return Math.min(1,cards.filter(c=>(c.box||0)>=4).length/n);
+}
+const repNeed=m=>m>=0.7?3:m>=0.35?2:1;
+async function startRepair(){
   const st=_repTarget||repairTarget(); if(!st||_repOpen)return;
-  let avail=DECK_CARDS.filter(c=>!_repUsed.has(c.id)&&c.front&&c.back);
-  if(!avail.length){_repUsed.clear();avail=DECK_CARDS.filter(c=>c.front&&c.back);}
-  if(!avail.length)return;
-  const card=avail[Math.floor(Math.random()*avail.length)];
+  if(!_repLearn&&window.SBDeckFilter)_repLearn=await SBDeckFilter.loadLearn(me.uid).catch(()=>({}));
+  if(_repOpen||st.hp<=0)return;
+  const decks=[...new Set(DECK_CARDS.filter(c=>c.front&&c.back).map(c=>c._deck))];
+  if(!decks.length)return;
+  const deck=decks[Math.floor(Math.random()*decks.length)], m=repDeckMastery(deck), need=repNeed(m);
+  _repOpen={st,deck,need,m,got:0,hp0:st.hp,done:false,timer:null};
+  window.sfx?.('click');
+  repairAsk();
+}
+function repairAsk(){
+  const r=_repOpen;
+  let avail=DECK_CARDS.filter(c=>c._deck===r.deck&&!_repUsed.has(c.id)&&c.front&&c.back);
+  if(!avail.length){DECK_CARDS.filter(c=>c._deck===r.deck).forEach(c=>_repUsed.delete(c.id));avail=DECK_CARDS.filter(c=>c._deck===r.deck&&c.front&&c.back);}
+  const card=r.card=avail[Math.floor(Math.random()*avail.length)];
   _repUsed.add(card.id);
-  const opts=shuffle([card.back,...getGameDistractors(card)]);
+  r.opts=shuffle([card.back,...getGameDistractors(card)]); r.answered=false;
+  const deckName=ALL_DECKS.find(d=>d.id===r.deck)?.name||'balíček';
   const p=document.getElementById('repairPanel');
   const esc_=s=>String(s).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
-  p.innerHTML=`<div class="rp-head"><span>🔧 Oprava — odpověz správně</span><b id="rpTime">${REPAIR.time}s</b></div>
-    <div class="rp-q">${esc_(card.front)}</div><div class="rp-a">${opts.map((o,k)=>`<button type="button" class="btn-s" data-k="${k}"><i>${k+1}</i> ${esc_(o)}</button>`).join('')}</div>`;
+  const dots=Array.from({length:r.need},(_,i)=>`<i class="${i<r.got?'on':''}"></i>`).join('');
+  p.innerHTML=`<div class="rp-head"><span>🔧 ${esc_(deckName)} · umíš ${Math.round(r.m*100)} % → ${r.need} ${r.need===1?'otázka':'otázky'} <span class="rp-dots">${dots}</span></span><b id="rpTime">${REPAIR.time}s</b></div>
+    <div class="rp-q">${esc_(card.front)}</div><div class="rp-a">${r.opts.map((o,k)=>`<button type="button" class="btn-s" data-k="${k}"><i>${k+1}</i> ${esc_(o)}</button>`).join('')}</div>
+    <div class="rp-warn">⚠️ Špatná odpověď = silnější příští vlna</div>`;
   p.hidden=false;
   const t0=performance.now();
-  _repOpen={st,card,opts,done:false,timer:setInterval(()=>{
+  clearInterval(r.timer);
+  r.timer=setInterval(()=>{
     const left=Math.max(0,REPAIR.time-(performance.now()-t0)/1000);
     const el=document.getElementById('rpTime'); if(el){el.textContent=Math.ceil(left)+'s';el.style.color=left<4?'#f87171':'';}
     if(!left)resolveRepair(-1);
-  },200)};
+  },200);
   p.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>resolveRepair(+b.dataset.k));
-  window.sfx?.('click');
+}
+function repairSync(st){
+  if(isAuthority())return;   // co-op: hostiteli pošleme, na kolik je stavba opravená (posledních pár s rostoucím n)
+  me._repN=(me._repN||0)+1;
+  me._repq=[...(me._repq||[]),{id:st.id,n:me._repN,f:Math.round(st.hp/st.maxHp*1000)/1000}].slice(-6);
+  me._repDirty=true;
 }
 function resolveRepair(k){
-  const r=_repOpen; if(!r||r.done)return;
-  r.done=true; clearInterval(r.timer);
+  const r=_repOpen; if(!r||r.done||r.answered)return;
+  r.answered=true; clearInterval(r.timer);
   const ok=k>=0&&r.opts[k]===r.card.back, st=r.st, p=document.getElementById('repairPanel');
   p.querySelectorAll('[data-k]').forEach(b=>{b.disabled=true;if(r.opts[+b.dataset.k]===r.card.back)b.classList.add('ok');else if(+b.dataset.k===k)b.classList.add('bad');});
+  const name=STRUCT_DEFS[st.type]?.name||'Stavba';
   if(ok&&st.hp>0){
-    st.hp=st.maxHp;
-    if(!isAuthority()){   // co-op: hostiteli pošleme, co jsem opravil (posledních pár oprav s rostoucím n)
-      me._repN=(me._repN||0)+1;
-      me._repq=[...(me._repq||[]),{id:st.id,n:me._repN}].slice(-6);
-      me._repDirty=true;
-    }
-    window.sfx?.('coin');
-    gToast(`🔧 ${STRUCT_DEFS[st.type]?.name||'Stavba'} opravena`,'#4ade80');
+    r.got++;
+    st.hp=r.got>=r.need?st.maxHp:Math.max(st.hp,Math.round(r.hp0+(st.maxHp-r.hp0)*r.got/r.need));   // každá správná = svůj díl
+    repairSync(st);
+    window.sfx?.(r.got>=r.need?'coin':'ok');
+    if(r.got<r.need){setTimeout(()=>{if(_repOpen===r&&st.hp>0)repairAsk();},650);return;}
+    gToast(`🔧 ${name} opravena`,'#4ade80');
   } else {
     st._repCd=performance.now()+REPAIR.cdWrong;
+    // postih jako u kvízu mezi vlnami — vždy na PŘÍŠTÍ vlnu (během vlny se odloží, ať nezesílí tu běžící)
+    if(gs.phase==='wave')gs._repWrong=(gs._repWrong||0)+1; else gs.wrongAnswers++;
     window.sfx?.('bad');
-    gToast(`${k<0?'⏰ Čas vypršel':'❌ Špatně'} — správně: ${r.card.back}. Opravit znovu jde za ${REPAIR.cdWrong/1000} s.`,'#f87171');
+    gToast(`${k<0?'⏰ Čas vypršel':'❌ Špatně'} — správně: ${r.card.back}. ${r.got?`${name} opravena jen napůl cesty. `:''}Příští vlna bude silnější.`,'#f87171');
   }
-  setTimeout(()=>{p.hidden=true;_repOpen=null;},ok?700:1600);
+  r.done=true;
+  setTimeout(()=>{p.hidden=true;if(_repOpen===r)_repOpen=null;},ok?700:1800);
 }
-// Hostitel: opravy, které poslal hráč uid (jen nové podle n)
+// Hostitel: opravy, které poslal hráč uid (jen nové podle n; f = na kolik je stavba opravená)
 function hostApplyRepair(uid,list){
   const seen=gs._repSeen[uid]||0;
-  list.forEach(r=>{ if(r.n<=seen)return; const st=gs.structs.find(x=>x.id===r.id); if(st&&st.hp>0)st.hp=st.maxHp; });
+  list.forEach(r=>{ if(r.n<=seen)return; const st=gs.structs.find(x=>x.id===r.id); if(st&&st.hp>0)st.hp=Math.max(st.hp,Math.round((r.f??1)*st.maxHp)); });
   gs._repSeen[uid]=Math.max(seen,...list.map(r=>r.n||0));
 }
 
@@ -4838,7 +4881,8 @@ function syncPlayerState(){
   const sref=liveRef('players/'+me.uid+'/s'); if(!sref)return;
   const payload={x:Math.round(me.x),y:Math.round(me.y),angle:+(me.angle||0).toFixed(2),
     hp:Math.round(me.hp),maxHp:me.maxHp,coins:me.coins,xp:me.xp,level:me.level,
-    alive:me.alive,kit:me.kit,name:me.name,ts:Date.now(),wp:me.weapon,an:Math.round(me._atkAt||0)};
+    alive:me.alive,kit:me.kit,name:me.name,ts:Date.now(),wp:me.weapon,an:Math.round(me._atkAt||0),
+    wa:gs.wrongAnswers||0};   // moje chyby pro příští vlnu — hostitel je přičte k síle zombie
   // Forward queued hits to the host (clients only)
   if(!isAuthority()&&me._pendingHits&&me._pendingHits.length){
     me._hitBatch++;
@@ -4886,7 +4930,7 @@ function syncWorld(){
   gs.zombies.forEach(zo=>{const o={i:zo.id,t:zo.type,x:Math.round(zo.x),y:Math.round(zo.y),h:Math.round(zo.hp),m:zo.maxHp};if(zo._jp)o.j=Math.round(zo._jp*100)/100;z.push(o);});
   // update() (not set) so the 'structs' child survives the 15 Hz dynamic write
   ref.update({z,baseHp:Math.round(gs.baseHp),wave:gs.wave,phase:gs.phase,bt:Math.max(0,Math.ceil(gs.buildTimer)),
-    waveTotal:gs.waveTotal,spawnedCount:gs.spawnedCount,r:gs._rewards||{},ts:Date.now(),
+    waveTotal:gs.waveTotal,spawnedCount:gs.spawnedCount,r:gs._rewards||{},ts:Date.now(),wa:teamWrong(),
     sp:gs.spits.map(({i,sx,sy,tx,ty,at,land,w})=>({i,sx,sy,tx,ty,at,land,w})),
     wm:gs.worm?{i:gs.worm.i,ph:gs.worm.ph,x:Math.round(gs.worm.x),y:Math.round(gs.worm.y),u:gs.worm.u,a:+(gs.worm.a||0).toFixed(2)}:null}).catch(()=>{});
 }
@@ -4918,7 +4962,11 @@ function syncStructures(){} // legacy no-op
 // Apply host's world snapshot on a client
 function applyWorldSnapshot(d){
   if(!d||gs.isHost)return;
-  if(gs.phase==='wave'&&d.phase==='build') setTimeout(()=>showGameQuiz(),600); // per-client quiz on wave end
+  if(gs.phase==='wave'&&d.phase==='build'){   // konec vlny: postih platil jen pro ni (chyby při opravě během ní jdou do té příští)
+    gs.wrongAnswers=gs._repWrong||0; gs._repWrong=0;
+    setTimeout(()=>showGameQuiz(),600); // per-client quiz on wave end
+  }
+  if(d.wa!=null)gs._teamWrong=d.wa;
   gs.phase=d.phase; gs.wave=d.wave;
   if(d.bt!=null)gs.buildTimer=d.bt;
   if(d.baseHp!=null)gs.baseHp=d.baseHp;

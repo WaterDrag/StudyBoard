@@ -236,6 +236,10 @@ canvas{display:block;cursor:crosshair;}
 .rp-a .btn-s i{font-style:normal;color:var(--muted);margin-right:4px;}
 .rp-a .btn-s.ok{border-color:#4ade80;}
 .rp-a .btn-s.bad{border-color:#f87171;}
+.rp-dots{display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle;}
+.rp-dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.15);display:inline-block;}
+.rp-dots i.on{background:#4ade80;}
+.rp-warn{margin-top:6px;font-size:.66rem;color:#fca5a5;}
 #buildBar{
   position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
   display:flex;gap:6px;z-index:20;pointer-events:auto;
@@ -642,7 +646,7 @@ canvas{display:block;cursor:crosshair;}
       <div class="help-p">🗺️ <b>Terén</b> (skály a zdi mapy) zombie obcházejí. <b>Tvoje stavby</b> obejdou jen tehdy, když vede krátká obchůzka. Když je základna obehnaná, jdou na nejslabší místo a <b>bourají</b>. Brute (🦍) jde po stavbách schválně.</div>
       <div class="help-p">🔧 Inženýr opravuje klíčem a jeho stavby se pod 30 % životů samy spravují.</div>
       <div class="help-p">🔨 <b>Bourání [X]</b>: klikni na svoji stavbu nebo políčko infrastruktury. Stavba, která má aspoň polovinu životů, se ti vrátí do inventáře, takže ji můžeš postavit jinde. Víc poškozená se rozpadne. Cizí stavby v co-opu bourat nejde.</div>
-      <div class="help-p">🔧 <b>Oprava [V]</b>: přijď k poškozené stavbě (pod 85 % životů) a zmáčkni V nebo zelené tlačítko. Odpověz na otázku z balíčků (klávesy 1–4) — správně a stavba je zase celá, špatně a 8 s ji opravit nejde. Hra mezitím běží dál! Opravit můžeš i stavby spoluhráčů.</div>
+      <div class="help-p">🔧 <b>Oprava [V]</b>: přijď k poškozené stavbě (pod 85 % životů) a zmáčkni V nebo zelené tlačítko. Otázky jsou z jednoho tvého balíčku: když ho umíš (70 % a víc naučeno), chce oprava 3 otázky, napůl 2, když ho neumíš, stačí 1. Každá správná odpověď opraví svůj díl (klávesy 1–4). Špatná opravu ukončí, stavbu 8 s nejde opravit a <b>příští vlna bude silnější</b> jako u kvízu mezi vlnami. Hra mezitím běží dál! Opravit můžeš i stavby spoluhráčů.</div>
     </div>
 
     <div class="help-sec" data-h="voda">
