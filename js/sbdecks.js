@@ -48,3 +48,29 @@ function sbDeckCards(id) {
   }
   return SB_CACHE.get(id);
 }
+
+// ── Výběr balíčků ve hrách: dvě sbalovací kategorie, každá s vlastním „Vybrat vše“.
+// Sbalení se pamatuje (localStorage sb_deckgrp, sdílené všemi hrami). Používá mcgame.js i Zombie Survival (game.js).
+const MC_GRP = [['own', '🗂️ Moje karty'], ['sb', '📚 Všeobecné karty']];
+function mcGrpFolded() { try { return JSON.parse(localStorage.getItem('sb_deckgrp') || '{}'); } catch (_) { return {}; } }
+function mcGrpFold(g, v) { const f = mcGrpFolded(); f[g] = v; try { localStorage.setItem('sb_deckgrp', JSON.stringify(f)); } catch (_) { /* nic */ } }
+// Obal skupiny (sdílí ho i Zombie Survival): items = hotové HTML položek, n = počet balíčků
+function mcGrpHTML(g, title, items, n, allLabel = 'Vybrat vše') {
+  return `<div class="mc-dgrp${mcGrpFolded()[g] ? ' folded' : ''}" data-grp="${g}"><div class="mc-dgrp-h">
+    <button type="button" class="mc-dgrp-t" data-fold aria-expanded="${!mcGrpFolded()[g]}"><span class="mc-dgrp-arr" aria-hidden="true"></span><b>${title}</b><span class="mc-dgrp-n" data-grpn>${n}</span></button>
+    <button type="button" class="btn btn-ghost btn-sm" data-grpall>${allLabel}</button></div><div class="mc-dgrp-list">${items}</div></div>`;
+}
+function mcWireGroups(el, onAll) {
+  el.querySelectorAll('.mc-dgrp').forEach(grp => {
+    grp.querySelector('[data-fold]').onclick = e => { const f = grp.classList.toggle('folded'); e.currentTarget.setAttribute('aria-expanded', !f); mcGrpFold(grp.dataset.grp, f); };
+    grp.querySelector('[data-grpall]').onclick = () => onAll(grp.dataset.grp);
+  });
+}
+
+// ── Balíčky v čekárně: uloží se do dokumentu hry (pole decks), aby ostatní hráči viděli, z čeho se hraje
+function sbLobbyDecks(ds) { return (ds || []).filter(Boolean).slice(0, 40).map(d => ({ n: String(d.name || 'Balíček').slice(0, 80), c: d.cardCount || 0 })); }
+function sbLobbyDecksHTML(list, label = '🃏 Balíčky') {
+  if (!list || !list.length) return '';
+  const e = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  return `<div class="sb-ldecks"><span class="sb-ldecks-l">${label}</span>${list.map(d => `<span class="sb-ldeck">${e(d.n)}<small>${d.c}</small></span>`).join('')}</div>`;
+}

@@ -106,9 +106,17 @@ canvas{display:block;cursor:crosshair;}
 .deck-chip.selected .deck-chip-dot{box-shadow:0 0 0 2px var(--dc,#6366f1);}
 .deck-chip-name{display:flex;flex-direction:column;line-height:1.2;}
 .deck-chip-room{font-size:.6rem;color:var(--muted);font-weight:500;margin-top:1px;}
-.deck-sub{flex-basis:100%;width:100%;display:flex;align-items:center;gap:10px;margin-top:6px;padding-top:9px;border-top:1px solid var(--brd);font-size:.8rem;}
-.deck-sub-all{margin-left:auto;background:none;border:1px solid var(--brd);color:var(--muted);border-radius:8px;padding:3px 10px;font-size:.74rem;cursor:pointer;}
-.deck-sub-all:hover{color:var(--tx);border-color:var(--acc2);}
+.deck-picker .mc-dgrp{flex-basis:100%;width:100%;border:1px solid var(--brd);border-radius:12px;background:rgba(255,255,255,.015);}
+.deck-picker .mc-dgrp-h{display:flex;align-items:center;gap:8px;padding:5px 8px 5px 4px;}
+.deck-picker .mc-dgrp-t{flex:1;display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--tx);font:inherit;font-size:.84rem;cursor:pointer;padding:4px 6px;text-align:left;}
+.deck-picker .mc-dgrp-arr{width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-2px) rotate(45deg);transition:transform .15s;flex-shrink:0;margin:0 3px;}
+.deck-picker .mc-dgrp.folded .mc-dgrp-arr{transform:rotate(-45deg);}
+.deck-picker .mc-dgrp-n{font-size:.68rem;color:var(--muted);background:var(--bg0);border-radius:5px;padding:1px 6px;}
+.deck-picker [data-grpall]{background:none;border:1px solid var(--brd);color:var(--muted);border-radius:8px;padding:3px 10px;font-size:.74rem;cursor:pointer;}
+.deck-picker [data-grpall]:hover{color:var(--tx);border-color:var(--acc2);}
+.deck-picker .mc-dgrp-list{display:flex;flex-wrap:wrap;gap:10px;padding:0 10px 10px;}
+.deck-picker .mc-dgrp.folded .mc-dgrp-list{display:none;}
+.deck-picker{flex-direction:column;flex-wrap:nowrap;}
 .deck-chip-n{font-size:.68rem;color:var(--muted);background:var(--bg0);border-radius:5px;padding:1px 6px;}
 
 /* ── Help overlay ────────────────────── */
@@ -357,6 +365,12 @@ canvas{display:block;cursor:crosshair;}
 
 /* ── Lobby ────────────────────────────── */
 .lobby-row{display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--brd);border-radius:8px;padding:8px 14px;margin-bottom:6px;}
+.lobby-row-main{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.lobby-row .sb-ldecks{display:flex;flex-wrap:wrap;gap:4px;align-items:center;justify-content:flex-start;}
+.lobby-row .sb-ldecks-l{font-size:.72rem;}
+.lobby-row .sb-ldeck{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:999px;border:1px solid var(--brd);background:var(--bg0);font-size:.7rem;color:var(--tx);}
+.lobby-row .sb-ldeck small{color:var(--muted);font-size:.64rem;}
+.lobby-nodecks{font-size:.7rem;color:var(--muted);}
 
 /* ── Buttons ──────────────────────────── */
 .btn-p{background:var(--acc);color:#fff;border:none;border-radius:9px;padding:10px 24px;font-size:.88rem;font-weight:600;cursor:pointer;transition:opacity .14s,transform .1s;}

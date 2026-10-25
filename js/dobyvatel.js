@@ -347,10 +347,19 @@ async function renderMyDecks() {
     } catch (e) { el.innerHTML = `<div class="dob-muted">Balíčky se nepodařilo načíst.</div>`; return; }
   }
   const inPool = new Set((GAME.decks || []).map(d => d.id));
-  el.innerHTML = MY_DECKS.length ? MY_DECKS.map(d => `<button type="button" class="dob-mydeck${inPool.has(d.id) ? ' on' : ''}" data-add="${d.id}" ${inPool.has(d.id) ? 'disabled' : ''}>
-      <span>${esc(d.name)}</span><small>${d.cardCount || 0}${d.roomName ? ' · ' + esc(d.roomName) : ''}</small></button>`).join('')
-    : '<div class="dob-muted">Nemáš žádné balíčky.</div>';
+  const btn = d => `<button type="button" class="dob-mydeck${inPool.has(d.id) ? ' on' : ''}" data-add="${d.id}" ${inPool.has(d.id) ? 'disabled' : ''}>
+      <span>${esc(d.name)}</span><small>${d.cardCount || 0}${d.roomName ? ' · ' + esc(d.roomName) : ''}</small></button>`;
+  // dvě sbalovací kategorie jako ve všech hrách (js/sbdecks.js): Moje karty a Všeobecné karty, každá s „Přidat vše“
+  const isSb = d => typeof sbIsBuiltin === 'function' && sbIsBuiltin(d.id);
+  const by = { own: MY_DECKS.filter(d => !isSb(d)), sb: MY_DECKS.filter(isSb) };
+  el.innerHTML = MY_DECKS.length ? MC_GRP.filter(([g]) => by[g].length).map(([g, t]) => {
+    const c = by[g].filter(d => inPool.has(d.id)).length;
+    return mcGrpHTML(g, t, by[g].map(btn).join(''), c ? `${c}/${by[g].length}` : by[g].length, 'Přidat vše');
+  }).join('') : '<div class="dob-muted">Nemáš žádné balíčky.</div>';
   el.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => addDeck(MY_DECKS.find(d => d.id === b.dataset.add), b)));
+  mcWireGroups(el, async g => {   // přidá postupně všechny ještě nepřidané balíčky skupiny
+    for (const b of el.querySelectorAll(`[data-grp="${g}"] [data-add]:not(:disabled)`)) await addDeck(MY_DECKS.find(d => d.id === b.dataset.add), b);
+  });
 }
 
 // Kartičky se do hry ZKOPÍRUJÍ (conquest/{id}/pool) — hostitel by k cizímu

@@ -30,6 +30,7 @@ async function vsCreate() {
     allowedUids: [ME.uid, ...friends], playerIds: [ME.uid],
     players: { [ME.uid]: { name: myName(), hero: pref.hero, color: TD_COLORS[0], team: 0 } },
     cards: packCards(POOL),   // svitky ze stejných balíčků pro všechny hráče
+    decks: sbLobbyDecks(getDecks?.()),   // názvy balíčků, ať je vidí i ostatní v čekárně
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   });
   history.replaceState(null, '', '?g=' + ref.id);
@@ -73,6 +74,7 @@ function renderLobby() {
   $('tdLobby').hidden = false;
   const map = TD.maps.find(m => m.id === d.map);
   $('tdLobbyInfo').textContent = `${d.hostName} zakládá bitvu na mapě ${map?.name || ''}. Přátelé ji uvidí v záložce Hry, nebo jim pošli odkaz. Hrají 2–4 hráči.`;
+  $('tdLobbyDecks').innerHTML = sbLobbyDecksHTML(d.decks, '📜 Svitky z balíčků');
   const teams = d.teams && d.playerIds.length === 4;
   $('tdLobbyPlayers').innerHTML = d.playerIds.map(uid => {
     const p = d.players[uid] || {}, h = HDEF[p.hero];

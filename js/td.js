@@ -120,7 +120,7 @@ function renderSetup() {
   $('tdMapStep').hidden = joining;
   $('tdDiffStep').hidden = vs;
   $('tdJoinInfo').hidden = !joining;
-  if (joining) $('tdJoinInfo').innerHTML = `⚔️ <b>${esc(LOBBY.hostName)}</b> tě zve do bitvy na mapě <b>${esc(TD.maps.find(m => m.id === LOBBY.map)?.name || '')}</b>. Vyber si hrdinu${LOBBY.cards?.length ? ` — svitky jsou ze stejných balíčků jako u hostitele (${LOBBY.cards.length} kartiček)` : ' a balíčky na svitky'}.`;
+  if (joining) $('tdJoinInfo').innerHTML = `⚔️ <b>${esc(LOBBY.hostName)}</b> tě zve do bitvy na mapě <b>${esc(TD.maps.find(m => m.id === LOBBY.map)?.name || '')}</b>. Vyber si hrdinu${LOBBY.cards?.length ? ` — svitky jsou ze stejných balíčků jako u hostitele (${LOBBY.cards.length} kartiček)` : ' a balíčky na svitky'}.` + sbLobbyDecksHTML(LOBBY.decks, '📜 Balíčky hostitele');
   if (!$('tdStart').dataset.busy) $('tdStart').textContent = joining ? 'Připojit se' : vs ? 'Založit bitvu' : 'Hrát';
   const maps = $('tdMaps');
   maps.innerHTML = TD.maps.map(m => `<button type="button" class="td-opt td-map${pref.map === m.id ? ' on' : ''}" data-map="${m.id}">

@@ -59,7 +59,7 @@ async function start() {
     if (ME.isAnonymous) { toast('Hra s přáteli jen pro přihlášené.'); return; }
     const friends = await mcFriends().catch(() => []);
     const ref = await db.collection('pexeso').add({
-      hostUid: ME.uid, hostName: MY_NAME, status: 'lobby', tiles, pairs: tiles.length / 2,
+      hostUid: ME.uid, hostName: MY_NAME, status: 'lobby', tiles, pairs: tiles.length / 2, decks: sbLobbyDecks(pickDecks()),
       allowedUids: [ME.uid, ...friends], playerIds: [ME.uid],
       players: { [ME.uid]: { name: MY_NAME, score: 0, color: PX_COLORS[0] } },
       open: [], matched: {}, moves: 0, order: [], turn: null, turnAt: 0,
@@ -108,6 +108,7 @@ function renderLobby() {
   show('pxLobby');
   const host = P.hostUid === ME.uid;
   $('pxLobbyInfo').textContent = `${P.hostName} zakládá pexeso: ${P.pairs} dvojic. Přátelé ho uvidí v záložce Hry, nebo jim pošli odkaz.`;
+  $('pxLobbyDecks').innerHTML = sbLobbyDecksHTML(P.decks);
   $('pxLobbyPlayers').innerHTML = P.playerIds.map(uid => { const p = P.players[uid] || {}; return `<span class="px-chip" style="--c:${p.color}">${esc(p.name || 'Hráč')}${uid === P.hostUid ? ' 👑' : ''}</span>`; }).join('');
   $('pxGo').hidden = !host;
   $('pxGo').disabled = P.playerIds.length < 2;

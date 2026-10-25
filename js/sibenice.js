@@ -55,7 +55,7 @@ async function startGame() {
       if (ME.isAnonymous) { toast('Závod jen pro přihlášené.'); return; }
       const friends = await mcFriends().catch(() => []);
       const ref = await db.collection('sibenice').add({
-        hostUid: ME.uid, hostName: MY_NAME, status: 'lobby',
+        hostUid: ME.uid, hostName: MY_NAME, status: 'lobby', decks: sbLobbyDecks(ds),
         allowedUids: [ME.uid, ...friends], playerIds: [ME.uid],
         words: words.map(w => ({ word: w.word, clue: w.clue.slice(0, 400), lbl: w.lbl })),
         players: { [ME.uid]: { name: MY_NAME, color: HG_COLORS[0], i: 0, score: 0, solved: 0, done: false, at: {} } },
@@ -218,6 +218,7 @@ function renderRaceLobby() {
   hgShow('hgLobby');
   const host = RACE.hostUid === ME.uid;
   $('hgLobbyInfo').textContent = `${RACE.hostName} zakládá závod: ${RACE.words.length} slov. Všichni dostanou stejná slova — kdo uhodne slovo první, má +${HG_FIRST} b. Přátelé závod uvidí v záložce Hry, nebo jim pošli odkaz.`;
+  $('hgLobbyDecks').innerHTML = sbLobbyDecksHTML(RACE.decks);
   $('hgLobbyPlayers').innerHTML = RACE.playerIds.map(uid => { const p = RACE.players[uid] || {}; return `<span class="px-chip" style="--c:${p.color}">${esc(p.name || 'Hráč')}${uid === RACE.hostUid ? ' 👑' : ''}</span>`; }).join('');
   $('hgGo').hidden = !host;
   $('hgGo').disabled = RACE.playerIds.length < 2;

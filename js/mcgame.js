@@ -125,20 +125,27 @@ async function mcFriends() {
 
 // Výběr balíčků na úvodní obrazovce hry (zaškrtávátka, „Vybrat vše“,
 // zapamatovaný výběr). opts: { list, all, start, hint, key, decks, hintFor(n, ds) }
-// Seznam balíčků: nejdřív vlastní/z místností, pod nimi oddělené vestavěné „Pro všechny“ s vlastním „Vybrat vše“
+// Výběr balíčků ve dvou sbalovacích kategoriích: Moje karty (vlastní + z místností) a Všeobecné karty (vestavěné).
 const mcIsSb = d => typeof sbIsBuiltin === 'function' && sbIsBuiltin(d.id);
+// MC_GRP, mcGrpHTML, mcWireGroups … jsou v js/sbdecks.js (sdílí je i Zombie Survival, který mcgame.js nenačítá)
 function mcDeckListHTML(decks, sel) {
-  const row = d => `<label class="mc-deck"><input type="checkbox" value="${d.id}"${sel.has(d.id) ? ' checked' : ''}${mcIsSb(d) ? ' data-sb="1"' : ''}>
+  const row = d => `<label class="mc-deck"><input type="checkbox" value="${d.id}"${sel.has(d.id) ? ' checked' : ''}>
     <span><b>${esc(d.name)}</b><small>${d.cardCount || 0} karet${d.roomName && !mcIsSb(d) ? ' · ' + esc(d.roomName) : ''}</small></span></label>`;
-  const own = decks.filter(d => !mcIsSb(d)), sb = decks.filter(mcIsSb);
-  return own.map(row).join('') + (sb.length ? `<div class="mc-decks-sub"><b>📚 Pro všechny</b><span>hotové balíčky z různých předmětů</span>
-    <button type="button" class="btn btn-ghost btn-sm" data-sball>Vybrat vše</button></div>` + sb.map(row).join('') : '');
+  const by = { own: decks.filter(d => !mcIsSb(d)), sb: decks.filter(mcIsSb) };
+  return MC_GRP.filter(([g]) => by[g].length).map(([g, t]) => mcGrpHTML(g, t, by[g].map(row).join(''), by[g].length)).join('');
 }
-// „Vybrat vše“ nahoře přepíná vlastní balíčky (když žádné nejsou, tak všechny), tlačítko u „Pro všechny“ jen ty vestavěné
+// Počty „vybráno/celkem“ v hlavičkách skupin
+function mcGrpCounts(el) {
+  el.querySelectorAll('.mc-dgrp').forEach(grp => { const bx = grp.querySelectorAll('input'), c = grp.querySelectorAll('input:checked').length; grp.querySelector('[data-grpn]').textContent = c ? `${c}/${bx.length}` : bx.length; });
+}
+// „Vybrat vše“ nahoře přepíná všechny balíčky, tlačítka ve skupinách jen svou skupinu
 function mcWireDeckAll(el, allBtn, update) {
-  const toggle = boxes => { const all = boxes.every(b => b.checked); boxes.forEach(b => { b.checked = !all; }); update(); };
-  allBtn.onclick = () => { const own = [...el.querySelectorAll('input:not([data-sb])')]; toggle(own.length ? own : [...el.querySelectorAll('input')]); };
-  el.querySelector('[data-sball]')?.addEventListener('click', () => toggle([...el.querySelectorAll('input[data-sb]')]));
+  const upd = () => { mcGrpCounts(el); update(); };
+  const toggle = boxes => { const all = boxes.every(b => b.checked); boxes.forEach(b => { b.checked = !all; }); upd(); };
+  if (allBtn) allBtn.onclick = () => toggle([...el.querySelectorAll('input')]);
+  mcWireGroups(el, g => toggle([...el.querySelectorAll(`[data-grp="${g}"] input`)]));
+  el.addEventListener('change', () => mcGrpCounts(el));
+  mcGrpCounts(el);
 }
 function mcDeckPicker(o) {
   const el = $(o.list);

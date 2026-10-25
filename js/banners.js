@@ -103,14 +103,14 @@
         ${cards}
         ${vignette(k, 0.65)}${grain(k)}</svg-content>`; },
 
-    // Osmisměrka: kostičky z kosti na plsti, slovo zvýrazněné fixou, lupa zvětšuje písmena
+    // Osmisměrka: kostičky z kosti na plsti, slovo zvýrazněné fixou (čáry vedou středy kostiček: x = 53 + 30·sloupec, y = 23 + 25·řádek), lupa zvětšuje písmena
     osmismerka: () => { const k = nid('o'), L = 'KRVYPOČASÍMENTOLKÓDZÁPISHRAD';
       const tiles = (dx, dy, sc) => { let g = ''; for (let r = 0; r < 4; r++) for (let c = 0; c < 9; c++) { const x = 40 + c * 30, y = 12 + r * 25, ch = L[(r * 9 + c * 5) % L.length]; g += `<g transform="translate(${x} ${y})"><rect width="26" height="22" rx="3.5" fill="url(#tile${k})" filter="url(#shs${k})"/><path d="M2 1.4h22" stroke="#fff" stroke-opacity=".8" stroke-width=".8"/><text x="13" y="16" font-size="13" font-weight="700" text-anchor="middle" fill="#3f3a33" font-family="Georgia, 'Times New Roman', serif">${ch}</text></g>`; } return `<g transform="translate(${dx} ${dy}) scale(${sc})">${g}</g>`; };
       return `<svg-content>${defs(k, lin('felt' + k, 0, 0, 1, 1, [[0, '#2f8a55'], [1, '#14532d']]) + lin('tile' + k, 0, 0, 0, 1, [[0, '#fbf7ee'], [1, '#e7dcc6']]) + lin('rim' + k, 0, 0, 1, 1, [[0, '#4b5563'], [0.4, '#e5e7eb'], [1, '#1f2937']]) + rad('lens' + k, 0.35, 0.3, 0.8, [[0, '#ffffff', 0.25], [1, '#bae6fd', 0.05]]) + `<clipPath id="lc${k}"><circle cx="336" cy="52" r="25"/></clipPath>` + `<filter id="felt${k}" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="2"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="table" tableValues="0 .18"/></feComponentTransfer></filter>`)}
         <rect width="400" height="120" fill="url(#felt${k})"/><rect width="400" height="120" filter="url(#felt${k})" opacity=".6" style="mix-blend-mode:overlay"/>
         ${tiles(0, 0, 1)}
-        <path d="M70 38H184" stroke="#facc15" stroke-width="20" stroke-linecap="round" opacity=".38" style="mix-blend-mode:multiply"/>
-        <path d="M160 16 248 92" stroke="#38bdf8" stroke-width="20" stroke-linecap="round" opacity=".3" style="mix-blend-mode:multiply"/>
+        <path d="M53 48H173" stroke="#facc15" stroke-width="20" stroke-linecap="round" opacity=".38" style="mix-blend-mode:multiply"/>
+        <path d="M173 23 263 98" stroke="#38bdf8" stroke-width="20" stroke-linecap="round" opacity=".3" style="mix-blend-mode:multiply"/>
         <g filter="url(#sh${k})"><path d="M352 70l26 30" stroke="#3f2a14" stroke-width="10" stroke-linecap="round"/><path d="M352 70l26 30" stroke="#7a4a22" stroke-width="6" stroke-linecap="round"/><circle cx="336" cy="52" r="28" fill="url(#rim${k})"/></g>
         <g clip-path="url(#lc${k})"><rect x="300" y="20" width="80" height="70" fill="url(#felt${k})"/>${tiles(-336 * 0.45, -52 * 0.45, 1.45)}<circle cx="336" cy="52" r="25" fill="url(#lens${k})"/></g>
         <path d="M318 40a24 24 0 0 1 22-12" fill="none" stroke="#fff" stroke-width="3" opacity=".7" stroke-linecap="round"/>

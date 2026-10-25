@@ -2665,12 +2665,15 @@ function renderDeckPicker(){
     return `<button class="deck-chip${sel?' selected':''}" style="--dc:${d.color||'#6366f1'}" onclick="toggleDeck('${d.id}')">
       <span class="deck-chip-dot"></span><span class="deck-chip-name">${name}${sub}</span><span class="deck-chip-n">${d.cardCount??'?'}</span></button>`;
   };
-  // vlastní a z místností nahoře, vestavěné „Pro všechny“ oddělené pod nimi s vlastním „Vybrat vše“
-  const own=ALL_DECKS.filter(d=>!isSb(d)),sb=ALL_DECKS.filter(isSb);
-  el.innerHTML=own.map(chip).join('')+(sb.length?`<div class="deck-sub"><b>📚 ${SB_LABEL}</b><button type="button" class="deck-sub-all" onclick="toggleSbDecks()">Vybrat vše</button></div>`+sb.map(chip).join(''):'');
+  // dvě sbalovací kategorie (js/mcgame.js): Moje karty (vlastní + z místností) a Všeobecné karty (vestavěné)
+  const by={own:ALL_DECKS.filter(d=>!isSb(d)),sb:ALL_DECKS.filter(isSb)};
+  el.innerHTML=MC_GRP.filter(([k])=>by[k].length).map(([k,t])=>{
+    const c=by[k].filter(d=>kitSel.deckIds.includes(d.id)).length;
+    return mcGrpHTML(k,t,by[k].map(chip).join(''),c?`${c}/${by[k].length}`:by[k].length);
+  }).join('');
+  mcWireGroups(el,k=>toggleGrpDecks(by[k].map(d=>d.id)));
 }
-function toggleSbDecks(){
-  const ids=ALL_DECKS.filter(d=>typeof sbIsBuiltin==='function'&&sbIsBuiltin(d.id)).map(d=>d.id);
+function toggleGrpDecks(ids){
   const all=ids.every(id=>kitSel.deckIds.includes(id));
   kitSel.deckIds=kitSel.deckIds.filter(id=>!ids.includes(id));
   if(!all)kitSel.deckIds.push(...ids);
@@ -5008,7 +5011,7 @@ async function joinLobby(lobbyId){
 
     // Add self to lobby
     await ref.update({
-      [`players.${me.uid}`]:{uid:me.uid,name:me.name,kit:kitSel.kit,ready:false}
+      [`players.${me.uid}`]:{uid:me.uid,name:me.name,kit:kitSel.kit,ready:false,decks:zsLobbyDecks()}
     });
 
     // Set map from lobby (host sets it)
@@ -5038,13 +5041,16 @@ async function joinLobby(lobbyId){
   }
 }
 
+// Moje vybrané balíčky do čekárny (v co-opu má kvíz mezi vlnami každý ze svých)
+function zsLobbyDecks(){ return sbLobbyDecks(kitSel.deckIds.map(id=>ALL_DECKS.find(d=>d.id===id))); }
 function renderLobbyPlayers(players){
   const container=document.getElementById('lobbyPlayers');
   container.innerHTML='';
   Object.values(players).forEach(p=>{
     const row=document.createElement('div');
     row.className='lobby-row';
-    row.innerHTML=`<span>${KITS[p.kit]?.emoji||'?'} ${p.name||'Hráč'}</span>
+    const nm=String(p.name||'Hráč').replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+    row.innerHTML=`<span class="lobby-row-main"><span>${KITS[p.kit]?.emoji||'?'} ${nm}</span>${p.decks?.length?sbLobbyDecksHTML(p.decks,'🃏'):'<span class="lobby-nodecks">bez balíčků — bez kvízu</span>'}</span>
       <span style="color:${p.ready?'#4ade80':'#666'};font-size:.78rem;">${p.ready?'✓ Připraven':'Čeká…'}</span>`;
     container.appendChild(row);
   });
