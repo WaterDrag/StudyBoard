@@ -2,13 +2,15 @@
 // Polovina tvrzení má správnou odpověď (nebo jinou správnou z „také správně“),
 // polovina podstrčenou — nejdřív špatné odpovědi z kvízu u té karty, jinak
 // podobná odpověď jiné karty. Série 3 správných = násobič o stupeň výš (max ×4).
-const TF_TIME = 60e3, TF_BEST = 'tf_best';
+const TF_TIME = 60e3, TF_BEST = 'tf_best', TF_INF = 'tf_inf';   // TF_INF = statistika nekonečného režimu (mcInfRecord)
 let DECKS = [], pickDecks = () => [], T = null;
 
 auth.onAuthStateChanged(async user => {
   if (!user) { location.href = 'index.html'; return; }
   ME = user;
   showBest();
+  mcModePick('tf');
+  $('tfQuit').onclick = () => { if (T && !T.over && !T.busy) endGame(); };
   try { DECKS = await mcLoadDecks(); } catch (_) { $('tfDecks').innerHTML = '<div class="mc-muted">Balíčky se nepodařilo načíst.</div>'; return; }
   pickDecks = mcDeckPicker({ list: 'tfDecks', all: 'tfAll', start: 'tfStart', hint: 'tfHint', key: 'tf_decks', decks: DECKS });
   $('tfStart').onclick = startGame;
@@ -16,7 +18,8 @@ auth.onAuthStateChanged(async user => {
 function showBest() {
   let best = 0;
   try { best = +localStorage.getItem(TF_BEST) || 0; } catch (_) { /* nic */ }
-  $('tfBest').innerHTML = best ? `🏆 Tvůj rekord: <b>${best.toLocaleString('cs-CZ')} b</b>` : '';
+  const inf = mcInfStats(TF_INF);
+  $('tfBest').innerHTML = [best ? `🏆 Tvůj rekord: <b>${best.toLocaleString('cs-CZ')} b</b>` : '', inf.games ? `♾️ Nekonečný: nejvíc <b>${inf.best.toLocaleString('cs-CZ')} b</b>` : ''].filter(Boolean).join(' · ');
 }
 
 async function startGame() {
@@ -26,8 +29,9 @@ async function startGame() {
   try {
     const pool = await mcLoadCards(ds);
     if (pool.length < 4) { toast('Na hru je potřeba aspoň pár kartiček.'); return; }
-    T = { pool, deck: shuffle(pool), next: 0, endAt: Date.now() + TF_TIME, score: 0, ok: 0, n: 0, streak: 0, bestStreak: 0, mult: 1, misses: [], busy: false, over: false };
+    T = { inf: mcModeInf('tf'), t0: Date.now(), pool, deck: shuffle(pool), next: 0, endAt: Date.now() + TF_TIME, score: 0, ok: 0, n: 0, streak: 0, bestStreak: 0, mult: 1, misses: [], busy: false, over: false };
     $('tfSetup').hidden = true; $('tfEnd').hidden = true; $('tfGame').hidden = false;
+    $('tfQuit').hidden = !T.inf; $('tfBar').parentElement.classList.toggle('inf', T.inf);
     nextStatement();
     clearInterval(T.timer);
     T.timer = setInterval(tick, 100);
@@ -98,6 +102,7 @@ function hud() {
 }
 function tick() {
   if (!T || T.over) return;
+  if (T.inf) { $('tfTime').textContent = '♾️ ' + mcClock(Date.now() - T.t0); return; }   // nekonečný režim: jen stopky
   const left = Math.max(0, T.endAt - (T.busy ? T.pausedAt : Date.now()));   // při chybě čas stojí
   $('tfTime').textContent = Math.ceil(left / 1000) + ' s';
   const bar = $('tfBar');
@@ -142,14 +147,22 @@ function endGame() {
   T.over = true;
   window.sfx?.('win');
   clearInterval(T.timer);
-  let best = 0;
-  try { best = +localStorage.getItem(TF_BEST) || 0; if (T.score > best) localStorage.setItem(TF_BEST, String(T.score)); } catch (_) { /* nic */ }
-  recordPlayPoints(T.ok);
   $('tfGame').hidden = true; $('tfEnd').hidden = false;
-  $('tfEndIco').textContent = T.score > best ? '🎉' : '⏱️';
   const acc = T.n ? Math.round(T.ok / T.n * 100) : 0;
-  $('tfResult').innerHTML = `<b>${T.score.toLocaleString('cs-CZ')} b</b><span>${T.ok} z ${T.n} správně (${acc} %) · nejdelší série ${T.bestStreak}</span>`
-    + (T.score > best ? '<span class="sp-record">🎉 Nový rekord!</span>' : '') + `<span>+${T.ok} b do žebříčku týdne</span>`;
+  if (T.inf) {   // nekonečný režim: jen vlastní statistika, žádný rekord ani žebříček
+    const st = mcInfRecord(TF_INF, T.score);
+    $('tfEndIco').textContent = st.isBest ? '🎉' : '♾️';
+    $('tfResult').innerHTML = `<b>${T.score.toLocaleString('cs-CZ')} b</b><span>${T.ok} z ${T.n} správně (${acc} %) za ${mcClock(Date.now() - T.t0)} · nejdelší série ${T.bestStreak}</span>`
+      + (st.isBest ? '<span class="sp-record">🎉 Nejvíc v nekonečném režimu!</span>' : '')
+      + `<span>♾️ Statistika nekonečného režimu: ${st.games}× hráno, celkem ${st.total.toLocaleString('cs-CZ')} b, nejvíc ${st.best.toLocaleString('cs-CZ')} b</span>`;
+  } else {
+    let best = 0;
+    try { best = +localStorage.getItem(TF_BEST) || 0; if (T.score > best) localStorage.setItem(TF_BEST, String(T.score)); } catch (_) { /* nic */ }
+    recordPlayPoints(T.ok);
+    $('tfEndIco').textContent = T.score > best ? '🎉' : '⏱️';
+    $('tfResult').innerHTML = `<b>${T.score.toLocaleString('cs-CZ')} b</b><span>${T.ok} z ${T.n} správně (${acc} %) · nejdelší série ${T.bestStreak}</span>`
+      + (T.score > best ? '<span class="sp-record">🎉 Nový rekord!</span>' : '') + `<span>+${T.ok} b do žebříčku týdne</span>`;
+  }
   const seen = new Set();
   const miss = T.misses.filter(m => { const k = m.card.deckId + m.card.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8);
   $('tfReview').innerHTML = miss.length ? '<div class="day-rank-h">Tady ses spletl(a)</div>' + miss.map(m => `<div class="sp-rev"><b>${esc(m.card.f)}</b><span>✓ ${esc(m.card.b)}${m.truth ? '' : ` <s>${esc(m.shown)}</s>`}</span></div>`).join('') : '';

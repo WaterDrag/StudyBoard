@@ -32,8 +32,12 @@
     <section id="spSetup" class="mc-setup">
       <div class="game-banner" data-banner="spojovacka"></div>
       <h1>Spojovačka na čas</h1>
-      <p class="mc-sub">Spoj každý pojem s jeho odpovědí. Máš 60 sekund, za vyčištěnou plochu +5 s. Rychlé správné spojení za sebou zvyšuje násobič až na ×5, chyba ho shodí a vezme 3 sekundy.</p>
+      <p class="mc-sub">Spoj každý pojem s jeho odpovědí. Na čas máš 60 sekund a za vyčištěnou plochu +5 s, v nekonečném režimu čas neběží. Rychlé správné spojení za sebou zvyšuje násobič až na ×5, chyba ho shodí a vezme 3 sekundy.</p>
       <div class="mil-best" id="spBest"></div>
+      <div class="px-modes" role="radiogroup" aria-label="Režim">
+        <label class="px-mode"><input type="radio" name="spMode" value="timed" checked><b>⏱️ Na čas</b><small>60 s + bonusy za plochu, rekord a body do žebříčku týdne</small></label>
+        <label class="px-mode"><input type="radio" name="spMode" value="inf"><b>♾️ Nekonečný</b><small>bez časovače, končíš sám — body jen do vlastní statistiky</small></label>
+      </div>
       <div class="mc-decks-h"><b>Z jakých balíčků?</b><button type="button" class="btn btn-ghost btn-sm" id="spAll">Vybrat vše</button></div>
       <div class="mc-decks" id="spDecks"><div class="mc-muted">Načítám balíčky…</div></div>
       <button type="button" class="btn btn-primary mc-start" id="spStart" disabled>Hrát</button>
@@ -45,6 +49,7 @@
         <span class="sp-time" id="spTime">60</span>
         <span class="sp-combo" id="spCombo"></span>
         <span class="sp-score" id="spScore">0</span>
+        <button type="button" class="btn btn-ghost btn-sm sp-quit" id="spQuit" hidden>Ukončit</button>
       </div>
       <div class="day-timer"><i id="spBar"></i></div>
       <div class="sp-board" id="spBoard">

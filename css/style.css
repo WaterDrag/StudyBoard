@@ -5709,6 +5709,8 @@ body.pres-open { overflow: hidden; }
 /* ═══ Pexeso ═══ */
 .px-game { display: flex; flex-direction: column; gap: 12px; max-width: 760px; margin: 0 auto; }
 .px-game[hidden] { display: none; }
+.sp-quit { padding: 4px 10px; font-size: 0.78rem; }
+.day-timer.inf { visibility: hidden; }
 .px-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 420px; }
 .px-mode { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-2); cursor: pointer; }
 .px-mode input { position: absolute; opacity: 0; pointer-events: none; }

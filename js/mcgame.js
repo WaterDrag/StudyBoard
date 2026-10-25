@@ -167,6 +167,24 @@ function mcDeckPicker(o) {
   return () => { const ds = chosen(); try { localStorage.setItem(o.key, JSON.stringify(ds.map(d => d.id))); } catch (_) { /* nic */ } return ds; };
 }
 
+// ── Nekonečný režim (Spojovačka, Pravda/lež): bez časovače, body se nepočítají do žebříčku
+// ani do rekordu na čas — jen do vlastní statistiky { best, total, games } v localStorage.
+const mcModeKey = p => p + '_mode';
+function mcModePick(p) {   // zapamatovaný režim → zaškrtnout, změny ukládat
+  let v = 'timed'; try { v = localStorage.getItem(mcModeKey(p)) || 'timed'; } catch (_) { /* nic */ }
+  const r = document.querySelector(`input[name="${p}Mode"][value="${v}"]`); if (r) r.checked = true;
+  document.querySelectorAll(`input[name="${p}Mode"]`).forEach(i => i.addEventListener('change', () => { try { localStorage.setItem(mcModeKey(p), i.value); } catch (_) { /* nic */ } }));
+}
+const mcModeInf = p => document.querySelector(`input[name="${p}Mode"]:checked`)?.value === 'inf';
+function mcInfStats(key) { try { return { best: 0, total: 0, games: 0, ...JSON.parse(localStorage.getItem(key) || '{}') }; } catch (_) { return { best: 0, total: 0, games: 0 }; } }
+function mcInfRecord(key, score) {
+  const s = mcInfStats(key), prevBest = s.best;
+  s.games++; s.total += score; s.best = Math.max(s.best, score);
+  try { localStorage.setItem(key, JSON.stringify(s)); } catch (_) { /* nic */ }
+  return { ...s, isBest: score > prevBest };
+}
+const mcClock = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
 // ── Krátké pojmy (šibenice, osmisměrka, křížovka) ─────────────────
 const baseCh = ch => ch.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 const isLetterCh = ch => /\p{L}/u.test(ch);
