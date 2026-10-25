@@ -695,6 +695,44 @@ function drawMinimapNow() {
   updateBackToContent();
 }
 
+// ── Pohled při otevření místnosti ──────────────────────────────
+// Pohled se nastaví až po prvním načtení poznámek (dřív hned na začátek souřadnic — když byl obsah jinde,
+// člověk skončil v prázdnu). Obnoví se poslední pohled v téhle místnosti, pokud je v něm něco vidět,
+// jinak se ukáže začátek obsahu (levý horní roh) v měřítku 1:1. Pohled se ukládá v uložených
+// souřadnicích (bez BOARD_PAD), takže sedí i po rozšíření plochy.
+const BOARD_VIEW_KEY = () => 'board_view_' + ROOM_ID;
+let _boardViewReady = false, _boardViewSaveT = 0;
+function viewShowsContent() {
+  const b = contentBounds(), wrap = document.getElementById('boardWrap'), z = BOARD_ZOOM;
+  if (!b) return true;
+  const vx0 = wrap.scrollLeft / z, vy0 = wrap.scrollTop / z, vx1 = vx0 + wrap.clientWidth / z, vy1 = vy0 + wrap.clientHeight / z;
+  return !(b.maxX < vx0 || b.minX > vx1 || b.maxY < vy0 || b.minY > vy1);
+}
+function initialBoardView() {
+  if (_boardViewReady) return;
+  _boardViewReady = true;
+  if (new URLSearchParams(window.location.search).get('note')) return;   // odkaz na poznámku si pohled nastaví sám
+  const wrap = document.getElementById('boardWrap'), b = contentBounds();
+  let v = null; try { v = JSON.parse(localStorage.getItem(BOARD_VIEW_KEY()) || 'null'); } catch (_) { v = null; }
+  if (v && v.z > 0) {
+    setBoardZoom(v.z);
+    travelScroll(wrap, (v.x + BOARD_PAD_X) * BOARD_ZOOM, (v.y + BOARD_PAD_Y) * BOARD_ZOOM);
+    if (viewShowsContent()) { updateMinimap(); updateBackToContent(); return; }
+  }
+  if (!b) return;
+  if (BOARD_ZOOM !== 1) setBoardZoom(1);
+  travelScroll(wrap, (b.minX - 60) * BOARD_ZOOM, (b.minY - 60) * BOARD_ZOOM);
+  updateMinimap(); updateBackToContent();
+}
+function saveBoardView() {
+  if (!_boardViewReady || VIEW_MODE !== 'board') return;
+  clearTimeout(_boardViewSaveT);
+  _boardViewSaveT = setTimeout(() => {
+    const wrap = document.getElementById('boardWrap'), z = BOARD_ZOOM;
+    try { localStorage.setItem(BOARD_VIEW_KEY(), JSON.stringify({ x: Math.round(wrap.scrollLeft / z - BOARD_PAD_X), y: Math.round(wrap.scrollTop / z - BOARD_PAD_Y), z: +z.toFixed(3) })); } catch (_) { /* nic */ }
+  }, 500);
+}
+
 // "Zpět na plochu": appears in the middle of the screen only once nothing
 // of the content is in view.
 function updateBackToContent() {
@@ -750,6 +788,7 @@ function setupInfiniteBoard() {
   const wrap = document.getElementById('boardWrap');
   const later = () => { clearTimeout(_growT); _growT = setTimeout(growBoard, 120); };
   wrap.addEventListener('scroll', later, { passive: true });
+  wrap.addEventListener('scroll', saveBoardView, { passive: true });   // zapamatovat pohled pro příští otevření
   window.addEventListener('resize', later);
   document.addEventListener('mousedown', () => { _pointerDown = true; }, true);
   document.addEventListener('mouseup', () => { _pointerDown = false; later(); }, true);

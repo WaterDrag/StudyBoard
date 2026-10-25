@@ -18,6 +18,7 @@ function setupNotes() {
       applyCommentBadges();     // re-decorate re-rendered cards
       updateMinimap();
       if (EDIT_SESSION) renderEditBanner();
+      if (!_boardViewReady) setTimeout(initialBoardView, 0);   // první načtení: pohled na obsah (room-board.js)
     });
 }
 
