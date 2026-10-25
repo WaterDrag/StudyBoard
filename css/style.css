@@ -1227,8 +1227,7 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
      further as notes move outward. */
   width: 6200px;
   height: 5000px;
-  background-image: radial-gradient(ellipse 1400px 900px at 50% 38%, var(--board-glow), transparent 70%);
-  background-size: 100% 100%;
+  /* žádná záře uprostřed: plocha se při posouvání zvětšuje a záře by s ní skákala po místnosti */
 }
 
 /* ===== NOTES LIST VIEW ===== */
