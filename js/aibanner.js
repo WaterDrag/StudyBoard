@@ -1,6 +1,7 @@
 // ═══ aibanner.js — banner karty místnosti nakreslený přes externí AI (SVG), uložený v rooms/{id}.cardSvg
 // Uživatel si zkopíruje prompt (prompt()), vloží ho do libovolné AI (Gemini, ChatGPT…) a vrácený SVG kód
-// 400×120 vloží zpátky. Ten se tu pročistí
+// vloží zpátky: dva obrázky ve stejném stylu — široký 400×120 (karta) a čtvercový 300×300 (velký box
+// „Naposledy otevřené“, rooms/{id}.cardSvgSq). Každý se tu pročistí
 // (jen kreslicí prvky, žádné skripty, události ani odkazy ven) a zmenší pod MAX znaků. Zobrazuje se
 // jako data: URL v CSS pozadí — v obrázku prohlížeč skripty nespouští ani nic nestahuje, takže i
 // kdyby čištění něco propustilo, nic se nestane.
@@ -42,22 +43,34 @@
     return out;
   }
 
+  // Z vloženého textu vytáhne všechna SVG; široké (poměr ≥ 1,6) je pro kartu, ostatní čtvercové
+  function parseBoth(src) {
+    const blocks = String(src || '').match(/<svg[\s\S]*?<\/svg>/gi) || [];
+    if (!blocks.length) throw new Error('no-svg');
+    const ratio = svg => { const v = (svg.match(/viewBox="([^"]+)"/) || [])[1]?.trim().split(/[\s,]+/).map(Number); return v && v[3] ? v[2] / v[3] : 400 / 120; };
+    const out = blocks.slice(0, 4).map(b => sanitize(b)).map(svg => ({ svg, wide: ratio(svg) >= 1.6 }));
+    const wide = out.find(o => o.wide) || out[0], square = out.find(o => o !== wide && !o.wide);
+    return { wide: wide.svg, square: square ? square.svg : '' };
+  }
+
   const toUrl = svg => svg ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) : '';
 
-  // Stejný styl jako banery her: ilustrace scény, žádný text, vhodná na široký pruh
+  // Stejný styl jako banery her: ilustrace scény, žádný text; jedna scéna ve dvou formátech
   function prompt({ name, desc, idea, color }) {
-    return `You are an illustrator. Draw a wide decorative banner as a single SVG for a study room card in a learning app.
+    return `You are an illustrator. Draw a decorative banner for a study room in a learning app, as TWO SVG files of the same scene in the same style:
+1) a WIDE one, viewBox="0 0 400 120", shown on the small room card;
+2) a SQUARE one, viewBox="0 0 300 300", shown in a big "last opened" panel — recompose the scene for the square (main subject centred, nothing important cut off), don't just stretch it.
 Room name: "${name}"${desc ? `\nRoom description: "${desc}"` : ''}${idea ? `\nWhat the user wants in the picture: "${idea}"` : ''}
 Main accent colour: ${color || '#6366f1'}.
 
 Requirements:
-- Output ONLY the SVG code, starting with <svg and ending with </svg>. No markdown, no explanation.
-- viewBox="0 0 400 120", fill the whole area with a background (gradient or scene), no transparent areas.
+- Output ONLY the two SVG codes one after another (wide first), each starting with <svg and ending with </svg>. No markdown, no explanation.
+- Fill the whole area of each with a background (gradient or scene), no transparent areas.
 - A rich, polished illustrated scene or still life that fits the topic (objects, symbols, light, depth), in the style of a modern game or app banner: gradients, soft shadows, highlights, a slight vignette.
-- The left bottom corner (x < 60, y > 80) should stay calm (a small dot is drawn there).
+- In the wide one, the left bottom corner (x < 60, y > 80) should stay calm (a small dot is drawn there).
 - NO text, letters or numbers anywhere. No <script>, no <foreignObject>, no <image>, no external links or fonts.
-- Keep it under 25 KB: reuse gradients via <defs>, avoid huge path data.`;
+- Keep each under 25 KB: reuse gradients via <defs>, avoid huge path data.`;
   }
 
-  window.SBAiBanner = { sanitize, toUrl, prompt, MAX };
+  window.SBAiBanner = { sanitize, parseBoth, toUrl, prompt, MAX };
 })();

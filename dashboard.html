@@ -476,8 +476,8 @@
           <li>Napiš, co má být na obrázku (nepovinné), a zkopíruj prompt.
             <div class="aib-row"><input id="editRoomAiIdea" type="text" class="input" maxlength="200" placeholder="např. mikroskop a buňky, noční město…">
             <button type="button" class="btn btn-secondary" id="editRoomAiCopy">📋 Zkopírovat prompt</button></div></li>
-          <li>Vlož ho do libovolné AI (Gemini, ChatGPT, Claude…) a nech ji nakreslit SVG.</li>
-          <li>Celý kód, který AI vrátí (začíná <code>&lt;svg</code>), vlož sem:
+          <li>Vlož ho do libovolné AI (Gemini, ChatGPT, Claude…). Nakreslí dva obrázky SVG: široký na kartu a čtvercový do velkého boxu „Naposledy otevřené“.</li>
+          <li>Celou odpověď AI s oběma kódy (každý začíná <code>&lt;svg</code>) vlož sem:
             <textarea id="editRoomAiSvg" class="input aib-code" placeholder="&lt;svg viewBox=&quot;0 0 400 120&quot; …&gt;…&lt;/svg&gt;" spellcheck="false"></textarea>
             <div class="aib-row"><button type="button" class="btn btn-secondary" id="editRoomAiUse">Použít banner</button><span class="aib-status" id="editRoomAiStatus"></span></div></li>
         </ol>

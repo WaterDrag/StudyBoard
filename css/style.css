@@ -615,9 +615,10 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .continue-card:hover { border-color: color-mix(in srgb, var(--card-color) 60%, var(--border)); }
 .continue-art {
   flex: 0 0 42%; min-height: 168px;
-  background: var(--card-art, radial-gradient(ellipse 80% 110% at 75% 35%, color-mix(in srgb, var(--card-color) 55%, transparent), transparent 70%),
+  --card-art-sq: var(--card-art-sq-v);   /* čtvercový AI banner (jen tady, ne na úzkém displeji) */
+  background: var(--card-art-sq, var(--card-art, radial-gradient(ellipse 80% 110% at 75% 35%, color-mix(in srgb, var(--card-color) 55%, transparent), transparent 70%),
                              radial-gradient(ellipse 70% 90% at 15% 100%, color-mix(in srgb, var(--card-color) 30%, transparent), transparent 70%),
-                             var(--bg-3));
+                             var(--bg-3)));
   background-size: cover; background-position: center;
 }
 .continue-body { flex: 1; min-width: 0; padding: 22px 24px; display: flex; flex-direction: column; gap: 8px; }
@@ -2073,7 +2074,7 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   .dash-hero .dashboard-actions { width: 100%; }
   .dash-hero .dashboard-actions .btn { flex: 1; }
   .continue-card { flex-direction: column; flex-basis: 100%; }
-  .continue-art { flex: none; min-height: 112px; }
+  .continue-art { flex: none; min-height: 112px; --card-art-sq: var(--card-art); }   /* široký box → široký banner */
   .continue-body { padding: 16px 18px; }
   .room-card-art { height: 72px; }
 }
