@@ -3476,7 +3476,9 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
 
 // Open the "add note" modal (shared by the toolbar + the board right-click
 // menu; the caller sets PENDING_ADD_POS beforehand if it wants a pinned spot).
+let ADD_SAVED_ID = null;   // nová poznámka už uložená přes Ctrl+S → další uložení ji jen přepíše
 function openAddNote() {
+  ADD_SAVED_ID = null;
   document.getElementById('noteEditor').innerHTML = '';
   document.getElementById('noteTitleInput').value = '';
   openModal('addModal');
@@ -3512,15 +3514,27 @@ function setupAdd() {
 
   setupRichToolbar('noteEditor', 'addToolbar', 'addTextColor', 'addColorA');
 
-  document.getElementById('addSubmit').addEventListener('click', async () => {
+  document.getElementById('addSubmit').addEventListener('click', () => saveAddNote(false));
+  // keepOpen = Ctrl+S: uložit a psát dál
+  saveAddNote = async keepOpen => {
     const content = cleanEditorHtml(editor.innerHTML);
     const title   = document.getElementById('noteTitleInput').value.trim();
     if (editorIsEmpty(editor)) { toast('Poznámka nesmí být prázdná.'); return; }
 
     const btn = document.getElementById('addSubmit');
+    if (btn.disabled) return;
     btn.disabled = true;
 
     try {
+      if (ADD_SAVED_ID) {   // už vytvořená přes Ctrl+S — jen přepsat
+        await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(ADD_SAVED_ID).update({
+          content, contentType: 'html', title: title || null, color, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        if (keepOpen) toast('Uloženo ✓');
+        else { ADD_SAVED_ID = null; closeModal('addModal'); editor.innerHTML = ''; }
+        btn.disabled = false;
+        return;
+      }
       const wrap = document.getElementById('boardWrap');
       // A right-click "Přidat poznámku zde" pins an exact spot; otherwise the
       // note lands somewhere in the current viewport. scrollLeft/Top are in
@@ -3534,7 +3548,7 @@ function setupAdd() {
         y = Math.round(toStoreY(wrap.scrollTop  + 60 + Math.random() * 160));
       }
 
-      await db.collection('rooms').doc(ROOM_ID).collection('notes').add({
+      const ref = await db.collection('rooms').doc(ROOM_ID).collection('notes').add({
         content,
         contentType: 'html',
         title: title || null,
@@ -3546,14 +3560,25 @@ function setupAdd() {
         updatedAt:  firebase.firestore.FieldValue.serverTimestamp(),
       });
 
-      closeModal('addModal');
-      editor.innerHTML = '';
+      if (keepOpen) { ADD_SAVED_ID = ref.id; toast('Uloženo ✓ — poznámka je na nástěnce, můžeš psát dál.'); }
+      else { closeModal('addModal'); editor.innerHTML = ''; }
     } catch (e) {
       toast('Chyba: ' + e.message);
     }
     btn.disabled = false;
-  });
+  };
 }
+let saveAddNote = async () => {}, saveEditNote = async () => {};
+
+// Ctrl+S (⌘S) v místnosti: uloží otevřenou poznámku a okno nechá otevřené — nikdy neukládá stránku
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 's') return;
+  e.preventDefault();
+  const top = [...document.querySelectorAll('.modal-overlay.open')].sort((a, b) => (+b.style.zIndex || 0) - (+a.style.zIndex || 0))[0];
+  if (top?.id === 'editModal') saveEditNote(true);
+  else if (top?.id === 'addModal') saveAddNote(true);
+  else toast('Ctrl+S uloží poznámku, když ji máš otevřenou k úpravě.');
+}, true);
 
 // ── Edit note ─────────────────────────────────────────────────
 function setupEdit() {
@@ -3580,7 +3605,9 @@ function setupEdit() {
 
   setupRichToolbar('noteEditorEdit', 'editToolbar', 'editTextColor', 'editColorA');
 
-  document.getElementById('editSubmit').addEventListener('click', async () => {
+  document.getElementById('editSubmit').addEventListener('click', () => saveEditNote(false));
+  // keepOpen = Ctrl+S: uložit a upravovat dál
+  saveEditNote = async keepOpen => {
     if (!EDIT_ID) return;
     const editor  = document.getElementById('noteEditorEdit');
     const content = cleanEditorHtml(editor.innerHTML);
@@ -3590,6 +3617,7 @@ function setupEdit() {
     if (editorIsEmpty(editor)) { toast('Poznámka nesmí být prázdná.'); return; }
 
     const btn = document.getElementById('editSubmit');
+    if (btn.disabled) return;
     btn.disabled = true;
 
     try {
@@ -3620,11 +3648,13 @@ function setupEdit() {
           }
         }
       }
+      let savedTitle = title;
       if (EDIT_PAGE_ID) {
         // Editing one chapter of a guide — the note's own content is left alone.
         const note = NOTES_MAP.get(EDIT_ID);
         const pages = pagesOf(note).map(p =>
           p.id === EDIT_PAGE_ID ? { ...p, title: title || p.title, content } : p);
+        savedTitle = pages.find(p => p.id === EDIT_PAGE_ID)?.title || '';
         await savePages(EDIT_ID, pages, { updatedBy: { uid: ME.uid, name: myEditName() } });
         if (GUIDE && GUIDE.noteId === EDIT_ID) { NOTES_MAP.get(EDIT_ID).pages = pages; renderGuide(); }
       } else {
@@ -3637,12 +3667,16 @@ function setupEdit() {
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
       }
-      closeModal('editModal');
+      if (keepOpen) {
+        // další uložení porovnává s tím, co jsem právě uložil já — moje vlastní uložení není konflikt
+        if (EDIT_SESSION && EDIT_SESSION.id === EDIT_ID) EDIT_SESSION.base = { content, title: savedTitle };
+        toast('Uloženo ✓');
+      } else closeModal('editModal');
     } catch (e) {
       toast('Chyba: ' + e.message);
     }
     btn.disabled = false;
-  });
+  };
 }
 
 function openEdit(id, note) {
