@@ -470,6 +470,18 @@
           <button type="button" class="btn btn-ghost" id="editRoomArtReroll" style="padding:3px 10px;font-size:0.75rem;">🎲 Další</button></label>
         <div id="editRoomArt" class="card-art-grid"></div>
       </div>
+      <div class="form-group">
+        <label class="label">✨ Vlastní banner přes AI</label>
+        <ol class="aib-steps">
+          <li>Napiš, co má být na obrázku (nepovinné), a zkopíruj prompt.
+            <div class="aib-row"><input id="editRoomAiIdea" type="text" class="input" maxlength="200" placeholder="např. mikroskop a buňky, noční město…">
+            <button type="button" class="btn btn-secondary" id="editRoomAiCopy">📋 Zkopírovat prompt</button></div></li>
+          <li>Vlož ho do libovolné AI (Gemini, ChatGPT, Claude…) a nech ji nakreslit SVG.</li>
+          <li>Celý kód, který AI vrátí (začíná <code>&lt;svg</code>), vlož sem:
+            <textarea id="editRoomAiSvg" class="input aib-code" placeholder="&lt;svg viewBox=&quot;0 0 400 120&quot; …&gt;…&lt;/svg&gt;" spellcheck="false"></textarea>
+            <div class="aib-row"><button type="button" class="btn btn-secondary" id="editRoomAiUse">Použít banner</button><span class="aib-status" id="editRoomAiStatus"></span></div></li>
+        </ol>
+      </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close="editRoomModal">Zrušit</button>
         <button id="editRoomSubmit" class="btn btn-primary">Uložit</button>
@@ -614,6 +626,7 @@
   <script>document.write('<script src="js/garden.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/pomodoro.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/bggen.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/aibanner.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/sbdecks.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>(function(){var s=document.createElement('script');s.src='js/dashboard.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>

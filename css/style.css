@@ -748,6 +748,12 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 @media (hover: none) { .card-edit-btn, .card-fav-btn { opacity: 1; } }
 
 /* Picker "Obrázek karty" v okně Upravit kartu místnosti */
+.aib-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 0.84rem; color: var(--text-muted); }
+.aib-steps li::marker { color: var(--accent); font-weight: 700; }
+.aib-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.aib-row .input { flex: 1; min-width: 180px; }
+.aib-code { width: 100%; min-height: 70px; margin-top: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 0.74rem; resize: vertical; }
+.aib-status { font-size: 0.8rem; }
 .card-art-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-height: 340px; overflow-y: auto; }
 .card-art-head { grid-column: 1 / -1; font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 6px; }
 .card-art-opt {

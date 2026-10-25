@@ -716,11 +716,7 @@ function renderContinue() {
       </div>
     </a>
     <div class="review-panel" id="reviewPanel"></div>`;
-  if (BgGen.isRecipe(room.cardArt)) {
-    BgGen.toUrl(room.cardArt, 'karta').then(url => {
-      if (url) box.querySelector('.continue-art')?.style.setProperty('--card-art', `url("${url}")`);
-    });
-  }
+  roomArtUrl(room).then(url => { if (url) box.querySelector('.continue-art')?.style.setProperty('--card-art', `url("${url}")`); });
   renderReview();
 }
 
@@ -777,11 +773,10 @@ function buildRoomCard(id, room, role) {
   a.href = `room.html?id=${id}`;
   a.className = 'room-card';
   a.style.setProperty('--card-color', room.color || '#6366f1');
-  const art = BgGen.isRecipe(room.cardArt) ? room.cardArt : '';
-  if (art) {
-    // Only the recipe is stored on the room; the picture is drawn here.
+  if (BgGen.isRecipe(room.cardArt) || (room.cardArt === 'ai' && room.cardSvg)) {
+    // Only the recipe (or the AI banner's SVG) is stored on the room; the picture is drawn here.
     a.classList.add('has-art');
-    BgGen.toUrl(art, 'karta').then(url => { if (url) a.style.setProperty('--card-art', `url("${url}")`); });
+    roomArtUrl(room).then(url => { if (url) a.style.setProperty('--card-art', `url("${url}")`); });
   }
   const members = (room.memberIds || []).length;
   const meta = members > 1 ? `${members} ${plural(members, 'člen', 'členové', 'členů')}` : fmtDate(room.createdAt);
@@ -808,15 +803,38 @@ function buildRoomCard(id, room, role) {
 }
 
 // ── Obrázek karty místnosti ─────────────────────────────────────
-// room.cardArt holds a generator recipe (js/bggen.js), never the image.
+// room.cardArt holds a generator recipe (js/bggen.js), never the image —
+// or 'ai': a banner drawn by an external AI, its sanitized SVG in room.cardSvg (js/aibanner.js).
 let EDIT_ROOM_ART = '';
 let EDIT_ROOM_ART_VARIANTS = [];
+let EDIT_ROOM_SVG = '', EDIT_ROOM_DATA = null;
+function roomArtUrl(room, scale = 1) {
+  if (room.cardArt === 'ai' && room.cardSvg && window.SBAiBanner) return Promise.resolve(SBAiBanner.toUrl(room.cardSvg));
+  return BgGen.isRecipe(room.cardArt) ? BgGen.toUrl(room.cardArt, 'karta', scale) : Promise.resolve('');
+}
 
 function setupEditRoom() {
   setupColorInput('editRoomColorInput', 'editRoomColorSwatch', 'editRoomColorHex');
   document.getElementById('editRoomArtReroll').addEventListener('click', () => {
     EDIT_ROOM_ART_VARIANTS = Array.from({ length: 6 }, () => BgGen.random());
     renderEditRoomArt();
+  });
+  // Vlastní banner přes externí AI: zkopírovat prompt → vložit vrácené SVG
+  const aiStatus = (t, ok) => { const el = document.getElementById('editRoomAiStatus'); el.textContent = t; el.style.color = ok ? '#4ade80' : ok === false ? '#f87171' : 'var(--text-muted)'; };
+  document.getElementById('editRoomAiCopy').addEventListener('click', async () => {
+    const r = EDIT_ROOM_DATA || {};
+    const text = SBAiBanner.prompt({ name: r.name || 'Místnost', desc: r.description || '', idea: document.getElementById('editRoomAiIdea').value.trim(), color: document.getElementById('editRoomColorInput').value });
+    try { await navigator.clipboard.writeText(text); aiStatus('Prompt zkopírován — vlož ho do AI.', true); }
+    catch (_) { const ta = document.getElementById('editRoomAiSvg'); ta.value = text; ta.select(); aiStatus('Kopírování nejde — prompt je v poli níž, zkopíruj ho ručně (Ctrl+C) a pole pak vymaž.'); }
+  });
+  document.getElementById('editRoomAiUse').addEventListener('click', () => {
+    const msgs = { 'no-svg': 'V textu chybí kód <svg>…</svg>.', 'bad-svg': 'SVG je poškozené — zkopíruj celý kód znovu.', 'too-big': `Obrázek je moc velký (víc než ${Math.round(SBAiBanner.MAX / 1000)} kB) — požádej AI o jednodušší.`, 'too-simple': 'Obrázek je skoro prázdný — zkus to v AI znovu.' };
+    try {
+      EDIT_ROOM_SVG = SBAiBanner.sanitize(document.getElementById('editRoomAiSvg').value);
+      EDIT_ROOM_ART = 'ai';
+      renderEditRoomArt();
+      aiStatus('Banner je připravený — ulož kartu.', true);
+    } catch (e) { aiStatus(msgs[e.message] || 'Kód se nepodařilo načíst.', false); }
   });
   document.getElementById('editRoomSubmit').addEventListener('click', async () => {
     const id    = document.getElementById('editRoomSubmit').dataset.roomId;
@@ -825,6 +843,7 @@ function setupEditRoom() {
       await db.collection('rooms').doc(id).update({
         color,
         cardArt: EDIT_ROOM_ART || firebase.firestore.FieldValue.delete(),
+        cardSvg: EDIT_ROOM_ART === 'ai' && EDIT_ROOM_SVG ? EDIT_ROOM_SVG : firebase.firestore.FieldValue.delete(),
       });
       closeModal('editRoomModal');
       toast('Karta uložena!');
@@ -833,6 +852,7 @@ function setupEditRoom() {
 }
 
 function cardArtTile(recipe, label) {
+  if (recipe === 'ai') label = '✨ Banner od AI';
   const p = BgGen.parse(recipe);
   const name = label || (p ? `${p.style.name.replace(/ \(.*\)| –.*/, '')} · ${p.palette.name}` : '');
   const fav = recipe && BgFav.has('karta', recipe);
@@ -840,7 +860,7 @@ function cardArtTile(recipe, label) {
     <div class="card-art-opt${recipe === EDIT_ROOM_ART ? ' selected' : ''}" data-art="${esc(recipe)}" role="button" tabindex="0">
       <span class="card-art-img"></span>
       <span class="card-art-name">${esc(name)}</span>
-      ${recipe ? `<button type="button" class="room-bg-fav${fav ? ' on' : ''}" title="Oblíbené">${fav ? '♥' : '♡'}</button>` : ''}
+      ${recipe && recipe !== 'ai' ? `<button type="button" class="room-bg-fav${fav ? ' on' : ''}" title="Oblíbené">${fav ? '♥' : '♡'}</button>` : ''}
     </div>`;
 }
 
@@ -849,6 +869,7 @@ function renderEditRoomArt() {
   const favs = (BgFav.items || []).filter(it => it.k === 'karta').map(it => it.r);
   const head = t => `<div class="card-art-head">${t}</div>`;
   box.innerHTML =
+    (EDIT_ROOM_SVG ? head('Od AI') + cardArtTile('ai') : '') +
     head('Vygenerované') + cardArtTile('', 'Bez obrázku') + EDIT_ROOM_ART_VARIANTS.map(r => cardArtTile(r)).join('') +
     (EDIT_ROOM_ART && !EDIT_ROOM_ART_VARIANTS.includes(EDIT_ROOM_ART) && !favs.includes(EDIT_ROOM_ART)
       ? head('Aktuální') + cardArtTile(EDIT_ROOM_ART) : '') +
@@ -858,7 +879,8 @@ function renderEditRoomArt() {
   box.querySelectorAll('.card-art-opt').forEach(opt => {
     const recipe = opt.dataset.art;
     const img = opt.querySelector('.card-art-img');
-    if (recipe) BgGen.toUrl(recipe, 'karta', 0.3).then(url => { if (url) img.style.backgroundImage = `url("${url}")`; });
+    if (recipe === 'ai') img.style.backgroundImage = `url("${SBAiBanner.toUrl(EDIT_ROOM_SVG)}")`;
+    else if (recipe) BgGen.toUrl(recipe, 'karta', 0.3).then(url => { if (url) img.style.backgroundImage = `url("${url}")`; });
     opt.addEventListener('click', () => {
       EDIT_ROOM_ART = recipe;
       box.querySelectorAll('.card-art-opt').forEach(o => o.classList.toggle('selected', o.dataset.art === recipe));
@@ -878,7 +900,11 @@ async function openEditRoomModal(id, room) {
   document.getElementById('editRoomColorInput').value = color;
   document.getElementById('editRoomColorSwatch').style.background = color;
   document.getElementById('editRoomColorHex').textContent = color;
-  EDIT_ROOM_ART = BgGen.isRecipe(room.cardArt) ? room.cardArt : '';
+  EDIT_ROOM_DATA = room;
+  EDIT_ROOM_SVG = room.cardArt === 'ai' && room.cardSvg ? room.cardSvg : '';
+  EDIT_ROOM_ART = BgGen.isRecipe(room.cardArt) || EDIT_ROOM_SVG ? room.cardArt : '';
+  document.getElementById('editRoomAiSvg').value = '';
+  document.getElementById('editRoomAiStatus').textContent = '';
   if (!EDIT_ROOM_ART_VARIANTS.length) EDIT_ROOM_ART_VARIANTS = Array.from({ length: 6 }, () => BgGen.random());
   await BgFav.load();
   renderEditRoomArt();
