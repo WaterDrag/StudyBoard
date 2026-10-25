@@ -99,6 +99,10 @@
     <!-- TAB: Místnosti -->
     <div class="tab-panel active" id="tab-rooms">
       <!-- Nepřečtené komentáře a zmínky napříč místnostmi -->
+      <div id="roomInvWrap" class="rinv-wrap" hidden>
+        <h3 style="font-size:0.95rem;font-weight:700;margin-bottom:10px;">📨 Pozvánky do místností</h3>
+        <div id="roomInvList" class="rinv-list"></div>
+      </div>
       <div id="inboxWrap" style="display:none;margin-bottom:20px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <h3 style="font-size:0.95rem;font-weight:700;">🔔 Nové pro tebe <span id="inboxCount" class="inbox-count"></span></h3>
@@ -474,11 +478,11 @@
         <label class="label">✨ Vlastní banner přes AI</label>
         <ol class="aib-steps">
           <li>Napiš, co má být na obrázku (nepovinné), a zkopíruj prompt.
-            <div class="aib-row"><input id="editRoomAiIdea" type="text" class="input" maxlength="200" placeholder="např. mikroskop a buňky, noční město…">
+            <div class="aib-row"><input id="editRoomAiIdea" type="text" class="input" maxlength="200" autocomplete="off" placeholder="např. mikroskop a buňky, noční město…">
             <button type="button" class="btn btn-secondary" id="editRoomAiCopy">📋 Zkopírovat prompt</button></div></li>
           <li>Vlož ho do libovolné AI (Gemini, ChatGPT, Claude…). Nakreslí dva obrázky SVG: široký na kartu a čtvercový do velkého boxu „Naposledy otevřené“.</li>
           <li>Celou odpověď AI s oběma kódy (každý začíná <code>&lt;svg</code>) vlož sem:
-            <textarea id="editRoomAiSvg" class="input aib-code" placeholder="&lt;svg viewBox=&quot;0 0 400 120&quot; …&gt;…&lt;/svg&gt;" spellcheck="false"></textarea>
+            <textarea id="editRoomAiSvg" class="input aib-code" autocomplete="off" placeholder="&lt;svg viewBox=&quot;0 0 400 120&quot; …&gt;…&lt;/svg&gt;" spellcheck="false"></textarea>
             <div class="aib-row"><button type="button" class="btn btn-secondary" id="editRoomAiUse">Použít banner</button><span class="aib-status" id="editRoomAiStatus"></span></div></li>
         </ol>
       </div>

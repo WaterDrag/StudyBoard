@@ -56,6 +56,7 @@ async function init(user) {
   loadRooms(user);
   loadDecks(user);
   loadFriends(user);
+  watchRoomInvites(user);
   setupCreate(user);
   setupJoin(user);
   setupNewDeck(user);
@@ -63,6 +64,33 @@ async function init(user) {
   setupEditRoom();
   setupEditDeck();
   setupModalClose();
+}
+
+// ── Pozvánky do místností od přátel (roomInvites, posílají se z okna Sdílet v místnosti) ──
+// Přijetí otevře místnost přes jednorázový odkaz (tcode) — připojení řeší room-init.js stejně jako u odkazu.
+function watchRoomInvites(user) {
+  if (user.isAnonymous) return;
+  const wrap = document.getElementById('roomInvWrap'), list = document.getElementById('roomInvList');
+  if (!wrap) return;
+  db.collection('roomInvites').where('toUid', '==', user.uid).where('status', '==', 'pending').onSnapshot(snap => {
+    const now = Date.now();
+    const invs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => !r.exp || r.exp > now)
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+    wrap.hidden = !invs.length;
+    list.innerHTML = invs.map(r => `<div class="rinv" style="--rc:${esc(/^#[0-9a-f]{3,8}$/i.test(r.roomColor || '') ? r.roomColor : '#6366f1')}">
+        <span class="rinv-text"><b>${esc(r.fromName || 'Přítel')}</b> tě zve do místnosti <b>${esc(r.roomName || 'Místnost')}</b>
+          <small>jako ${r.role === 'editor' ? 'editor (můžeš upravovat)' : 'prohlížeč'}${r.exp ? ' · platí do ' + new Date(r.exp).toLocaleDateString('cs-CZ') : ''}</small></span>
+        <span class="rinv-acts"><button type="button" class="btn btn-primary" data-rinv-ok="${esc(r.id)}">Připojit se</button>
+          <button type="button" class="btn btn-ghost" data-rinv-no="${esc(r.id)}">Odmítnout</button></span></div>`).join('');
+    list.querySelectorAll('[data-rinv-ok]').forEach(b => b.addEventListener('click', async () => {
+      const r = invs.find(x => x.id === b.dataset.rinvOk); if (!r) return;
+      b.disabled = true;
+      await db.collection('roomInvites').doc(r.id).update({ status: 'accepted' }).catch(() => {});
+      location.href = `room.html?id=${encodeURIComponent(r.roomId)}&tcode=${encodeURIComponent(r.tcode)}`;
+    }));
+    list.querySelectorAll('[data-rinv-no]').forEach(b => b.addEventListener('click', () =>
+      db.collection('roomInvites').doc(b.dataset.rinvNo).update({ status: 'declined' }).then(() => toast('Pozvánka odmítnuta.')).catch(e => toast('Chyba: ' + e.message))));
+  }, () => { wrap.hidden = true; });
 }
 
 // ── Tabs ────────────────────────────────────────────────────────
@@ -909,6 +937,7 @@ async function openEditRoomModal(id, room) {
   EDIT_ROOM_SVG_SQ = EDIT_ROOM_SVG && room.cardSvgSq ? room.cardSvgSq : '';
   EDIT_ROOM_ART = BgGen.isRecipe(room.cardArt) || EDIT_ROOM_SVG ? room.cardArt : '';
   document.getElementById('editRoomAiSvg').value = '';
+  document.getElementById('editRoomAiIdea').value = '';
   document.getElementById('editRoomAiStatus').textContent = '';
   if (!EDIT_ROOM_ART_VARIANTS.length) EDIT_ROOM_ART_VARIANTS = Array.from({ length: 6 }, () => BgGen.random());
   await BgFav.load();

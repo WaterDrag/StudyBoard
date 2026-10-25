@@ -234,6 +234,29 @@ service cloud.firestore {
     // sender, and only the RECIPIENT can flip it to 'accepted' — the sender
     // can never self-accept, which would otherwise forge a friendship and
     // unlock editor invites.
+    // Pozvánky do místnosti přímo v aplikaci: člen místnosti pozve PŘÍTELE, pozvaný ji uvidí
+    // na hlavní stránce. Samotný vstup jde dál přes jednorázový tempInvite v místnosti (tcode),
+    // takže role i pravidlo „editor jen pro přítele vlastníka“ se řeší jako u odkazu.
+    // Id = roomId_fromUid_toUid (jedna pozvánka od každého pozvatele).
+    match /roomInvites/{invId} {
+      function inv() { return request.resource.data; }
+      allow read: if isAuth() && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow create, update: if isAuth() && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+        && inv().fromUid == request.auth.uid
+        && (resource == null || resource.data.fromUid == request.auth.uid)
+        && invId == inv().roomId + '_' + inv().fromUid + '_' + inv().toUid
+        && inv().status == 'pending'
+        && inv().role in ['viewer', 'editor']
+        && isMember(inv().roomId)
+        && exists(/databases/$(database)/documents/friendRequests/$(friendPair(request.auth.uid, inv().toUid)))
+        && get(/databases/$(database)/documents/friendRequests/$(friendPair(request.auth.uid, inv().toUid))).data.status == 'accepted';
+      // pozvaný jen přijme / odmítne
+      allow update: if isAuth() && resource.data.toUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['accepted', 'declined'];
+      allow delete: if isAuth() && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+    }
+
     match /friendRequests/{reqId} {
       allow read: if isAuth() && (
         request.auth.uid == resource.data.fromUid ||

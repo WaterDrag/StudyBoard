@@ -45,6 +45,7 @@ function setupShare() {
   document.getElementById('shareBtn').addEventListener('click', () => {
     document.getElementById('inviteCode').textContent = ROOM.inviteCode || '------';
     renderTempInvites();
+    renderFriendInvites();
     if (MY_ROLE === 'owner') loadAgentInvites();
     openModal('shareModal');
   });
@@ -93,6 +94,61 @@ function setupShare() {
     const t = linkText.textContent;
     if (t && t !== '–') navigator.clipboard.writeText(t).then(() => toast('Odkaz zkopírován!'));
   });
+}
+
+// ── Pozvat přátele přímo v aplikaci ───────────────────────────
+// Pozvánka = dokument roomInvites/{roomId_from_to}, který přítel uvidí na hlavní stránce,
+// + jednorázový tempInvite v místnosti (platí 14 dní). Přijetím se otevře room.html?tcode=…,
+// takže připojení, role i pravidlo „editor jen pro přítele vlastníka“ jdou stejnou cestou jako odkaz.
+const FRIEND_INVITE_MS = 14 * 86400000;
+async function renderFriendInvites() {
+  const box = document.getElementById('friendInviteBox'), list = document.getElementById('friendInviteList');
+  if (!box || ME.isAnonymous) return;
+  box.hidden = false;
+  list.innerHTML = '<div class="fi-empty">Načítám přátele…</div>';
+  try {
+    const fs = await loadFriendState(true);
+    if (!fs.accepted.size) { list.innerHTML = '<div class="fi-empty">Zatím nemáš žádné přátele — přidáš je na hlavní stránce v záložce Přátelé.</div>'; return; }
+    const uids = [...fs.accepted].filter(u => !(ROOM.memberIds || []).includes(u));
+    if (!uids.length) { list.innerHTML = '<div class="fi-empty">Všichni tvoji přátelé už v místnosti jsou. 🎉</div>'; return; }
+    const [profiles, sent] = await Promise.all([
+      Promise.all(uids.map(u => db.collection('users').doc(u).get().then(s => ({ uid: u, ...(s.data() || {}) })).catch(() => ({ uid: u })))),
+      db.collection('roomInvites').where('fromUid', '==', ME.uid).where('roomId', '==', ROOM_ID).get().catch(() => null),
+    ]);
+    const pending = new Set((sent?.docs || []).map(d => d.data()).filter(r => r.status === 'pending' && r.exp > Date.now()).map(r => r.toUid));
+    profiles.sort((a, b) => String(a.displayName || '').localeCompare(String(b.displayName || ''), 'cs'));
+    const owner = MY_ROLE === 'owner';
+    list.innerHTML = profiles.map(p => `<div class="fi-row">
+        <span class="fi-ava">${/^https:\/\//.test(p.photoURL || '') ? `<img src="${esc(p.photoURL).replace(/"/g, '&quot;')}" alt="" referrerpolicy="no-referrer">` : esc(String(p.displayName || '?')[0].toUpperCase())}</span>
+        <span class="fi-name">${esc(p.displayName || 'Přítel')}</span>
+        ${owner ? `<select class="input fi-role" aria-label="Oprávnění"><option value="viewer">Prohlížeč</option><option value="editor">Editor</option></select>` : ''}
+        <button type="button" class="btn ${pending.has(p.uid) ? 'btn-ghost' : 'btn-secondary'} fi-btn" data-invite="${esc(p.uid)}">${pending.has(p.uid) ? '✓ Pozváno' : 'Pozvat'}</button>
+      </div>`).join('');
+    list.querySelectorAll('[data-invite]').forEach(b => b.addEventListener('click', () => {
+      const row = b.closest('.fi-row');
+      inviteFriend(b.dataset.invite, row.querySelector('.fi-role')?.value || 'viewer', profiles.find(p => p.uid === b.dataset.invite), b);
+    }));
+  } catch (e) { list.innerHTML = `<div class="fi-empty">Přátele se nepodařilo načíst: ${esc(e.message)}</div>`; }
+}
+async function inviteFriend(uid, role, profile, btn) {
+  if (MY_ROLE !== 'owner') role = 'viewer';
+  btn.disabled = true;
+  const code = Array.from({ length: 10 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
+  const exp = Date.now() + FRIEND_INVITE_MS;
+  const entry = { role, exp, by: ME.uid, once: true, to: uid };
+  try {
+    await db.collection('rooms').doc(ROOM_ID).update({ [`tempInvites.${code}`]: entry });
+    ROOM.tempInvites = { ...(ROOM.tempInvites || {}), [code]: entry };
+    await db.collection('roomInvites').doc(`${ROOM_ID}_${ME.uid}_${uid}`).set({
+      roomId: ROOM_ID, roomName: ROOM.name || 'Místnost', roomColor: ROOM.color || '#6366f1',
+      fromUid: ME.uid, fromName: ME.displayName || ME.email || 'Přítel', toUid: uid,
+      role, tcode: code, exp, status: 'pending', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    btn.textContent = '✓ Pozváno'; btn.classList.replace('btn-secondary', 'btn-ghost');
+    renderTempInvites();
+    toast(`Pozvánka odeslána: ${profile?.displayName || 'přítel'} ✓`);
+  } catch (e) { toast('Pozvánku se nepodařilo poslat: ' + e.message); }
+  finally { btn.disabled = false; }
 }
 
 function tempInviteUrl(code) {
