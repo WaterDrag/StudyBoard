@@ -30,7 +30,7 @@ function renderDecks() {
   const sel = savedSel();
   el.innerHTML = mcDeckListHTML(DECKS, sel);
   el.addEventListener('change', updateStart);
-  mcWireDeckAll(el, $('milAll'), updateStart);
+  mcWireDeckAll(el, $('milAll'), updateStart, DECKS);
   $('milStart').onclick = startGame;
   updateStart();
 }

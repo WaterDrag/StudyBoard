@@ -347,8 +347,8 @@ async function renderMyDecks() {
     } catch (e) { el.innerHTML = `<div class="dob-muted">Balíčky se nepodařilo načíst.</div>`; return; }
   }
   const inPool = new Set((GAME.decks || []).map(d => d.id));
-  const btn = d => `<button type="button" class="dob-mydeck${inPool.has(d.id) ? ' on' : ''}" data-add="${d.id}" ${inPool.has(d.id) ? 'disabled' : ''}>
-      <span>${esc(d.name)}</span><small>${d.cardCount || 0}${d.roomName ? ' · ' + esc(d.roomName) : ''}</small></button>`;
+  const btn = d => `<button type="button" class="dob-mydeck${inPool.has(d.id) ? ' on' : ''}" data-add="${d.id}" data-deck-id="${d.id}" ${inPool.has(d.id) ? 'disabled' : ''}>
+      <span>${esc(d.name)}</span><small>${d.cardCount || 0}${d.roomName ? ' · ' + esc(d.roomName) : ''}</small><small class="dkf-st" data-dkst></small></button>`;
   // dvě sbalovací kategorie jako ve všech hrách (js/sbdecks.js): Moje karty a Všeobecné karty, každá s „Přidat vše“
   const isSb = d => typeof sbIsBuiltin === 'function' && sbIsBuiltin(d.id);
   const by = { own: MY_DECKS.filter(d => !isSb(d)), sb: MY_DECKS.filter(isSb) };
@@ -358,8 +358,9 @@ async function renderMyDecks() {
   }).join('') : '<div class="dob-muted">Nemáš žádné balíčky.</div>';
   el.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => addDeck(MY_DECKS.find(d => d.id === b.dataset.add), b)));
   mcWireGroups(el, async g => {   // přidá postupně všechny ještě nepřidané balíčky skupiny
-    for (const b of el.querySelectorAll(`[data-grp="${g}"] [data-add]:not(:disabled)`)) await addDeck(MY_DECKS.find(d => d.id === b.dataset.add), b);
+    for (const b of el.querySelectorAll(`[data-grp="${g}"] [data-add]:not(:disabled)`)) if (!b.closest('[hidden]')) await addDeck(MY_DECKS.find(d => d.id === b.dataset.add), b);
   });
+  if (MY_DECKS.length && window.SBDeckFilter) SBDeckFilter.mount(el, MY_DECKS, ME.uid);
 }
 
 // Kartičky se do hry ZKOPÍRUJÍ (conquest/{id}/pool) — hostitel by k cizímu

@@ -129,8 +129,8 @@ async function mcFriends() {
 const mcIsSb = d => typeof sbIsBuiltin === 'function' && sbIsBuiltin(d.id);
 // MC_GRP, mcGrpHTML, mcWireGroups … jsou v js/sbdecks.js (sdílí je i Zombie Survival, který mcgame.js nenačítá)
 function mcDeckListHTML(decks, sel) {
-  const row = d => `<label class="mc-deck"><input type="checkbox" value="${d.id}"${sel.has(d.id) ? ' checked' : ''}>
-    <span><b>${esc(d.name)}</b><small>${d.cardCount || 0} karet${d.roomName && !mcIsSb(d) ? ' · ' + esc(d.roomName) : ''}</small></span></label>`;
+  const row = d => `<label class="mc-deck" data-deck-id="${d.id}"><input type="checkbox" value="${d.id}"${sel.has(d.id) ? ' checked' : ''}>
+    <span><b>${esc(d.name)}</b><small>${d.cardCount || 0} karet${d.roomName && !mcIsSb(d) ? ' · ' + esc(d.roomName) : ''}</small><small class="dkf-st" data-dkst></small></span></label>`;
   const by = { own: decks.filter(d => !mcIsSb(d)), sb: decks.filter(mcIsSb) };
   return MC_GRP.filter(([g]) => by[g].length).map(([g, t]) => mcGrpHTML(g, t, by[g].map(row).join(''), by[g].length)).join('');
 }
@@ -139,13 +139,15 @@ function mcGrpCounts(el) {
   el.querySelectorAll('.mc-dgrp').forEach(grp => { const bx = grp.querySelectorAll('input'), c = grp.querySelectorAll('input:checked').length; grp.querySelector('[data-grpn]').textContent = c ? `${c}/${bx.length}` : bx.length; });
 }
 // „Vybrat vše“ nahoře přepíná všechny balíčky, tlačítka ve skupinách jen svou skupinu
-function mcWireDeckAll(el, allBtn, update) {
+function mcWireDeckAll(el, allBtn, update, decks) {
   const upd = () => { mcGrpCounts(el); update(); };
-  const toggle = boxes => { const all = boxes.every(b => b.checked); boxes.forEach(b => { b.checked = !all; }); upd(); };
-  if (allBtn) allBtn.onclick = () => toggle([...el.querySelectorAll('input')]);
+  // jen balíčky, které filtr ukazuje (js/deckfilter.js)
+  const toggle = boxes => { boxes = boxes.filter(b => !b.closest('[hidden]')); if (!boxes.length) return; const all = boxes.every(b => b.checked); boxes.forEach(b => { b.checked = !all; }); upd(); };
+  if (allBtn) allBtn.onclick = () => toggle([...el.querySelectorAll('input[type=checkbox]')]);
   mcWireGroups(el, g => toggle([...el.querySelectorAll(`[data-grp="${g}"] input`)]));
   el.addEventListener('change', () => mcGrpCounts(el));
   mcGrpCounts(el);
+  if (decks && window.SBDeckFilter) SBDeckFilter.mount(el, decks, ME?.uid, update);
 }
 function mcDeckPicker(o) {
   const el = $(o.list);
@@ -160,7 +162,7 @@ function mcDeckPicker(o) {
     $(o.hint).textContent = ds.length ? (o.hintFor ? o.hintFor(n, ds) : `${n} karet k dispozici.`) : 'Vyber aspoň jeden balíček.';
   };
   el.addEventListener('change', update);
-  mcWireDeckAll(el, $(o.all), update);
+  mcWireDeckAll(el, $(o.all), update, o.decks);
   update();
   return () => { const ds = chosen(); try { localStorage.setItem(o.key, JSON.stringify(ds.map(d => d.id))); } catch (_) { /* nic */ } return ds; };
 }

@@ -2635,7 +2635,7 @@ async function loadDeckPicker(){
       if(!snap)return;
       const rid=roomIds[idx];
       snap.docs.forEach(d=>{
-        if(byId.has(d.id))return; // already added as personal
+        if(byId.has(d.id)){byId.get(d.id)._roomName=roomMap[rid]?.name||'Místnost';return;} // already added as personal — just note its room (filters)
         const data=d.data();
         byId.set(d.id,{id:d.id,...data,_mine:data.ownerUid===me.uid,_roomName:roomMap[rid]?.name||'Místnost'});
       });
@@ -2662,8 +2662,8 @@ function renderDeckPicker(){
     const sel=kitSel.deckIds.includes(d.id);
     const name=(d.name||'Balíček').replace(/</g,'&lt;');
     const sub=d._mine||isSb(d)?'':`<span class="deck-chip-room">👥 ${(d._roomName||'sdílené').replace(/</g,'&lt;')}</span>`;
-    return `<button class="deck-chip${sel?' selected':''}" style="--dc:${d.color||'#6366f1'}" onclick="toggleDeck('${d.id}')">
-      <span class="deck-chip-dot"></span><span class="deck-chip-name">${name}${sub}</span><span class="deck-chip-n">${d.cardCount??'?'}</span></button>`;
+    return `<button class="deck-chip${sel?' selected':''}" data-deck-id="${d.id}" style="--dc:${d.color||'#6366f1'}" onclick="toggleDeck('${d.id}')">
+      <span class="deck-chip-dot"></span><span class="deck-chip-name">${name}${sub}<span class="deck-chip-st" data-dkst></span></span><span class="deck-chip-n">${d.cardCount??'?'}</span></button>`;
   };
   // dvě sbalovací kategorie (js/mcgame.js): Moje karty (vlastní + z místností) a Všeobecné karty (vestavěné)
   const by={own:ALL_DECKS.filter(d=>!isSb(d)),sb:ALL_DECKS.filter(isSb)};
@@ -2671,9 +2671,11 @@ function renderDeckPicker(){
     const c=by[k].filter(d=>kitSel.deckIds.includes(d.id)).length;
     return mcGrpHTML(k,t,by[k].map(chip).join(''),c?`${c}/${by[k].length}`:by[k].length);
   }).join('');
-  mcWireGroups(el,k=>toggleGrpDecks(by[k].map(d=>d.id)));
+  mcWireGroups(el,k=>toggleGrpDecks(by[k].filter(d=>!el.querySelector(`[data-deck-id="${d.id}"]`)?.closest('[hidden]')).map(d=>d.id)));
+  if(window.SBDeckFilter)SBDeckFilter.mount(el,ALL_DECKS,me.uid);   // hledání, filtry a statistiky (js/deckfilter.js)
 }
 function toggleGrpDecks(ids){
+  if(!ids.length)return;
   const all=ids.every(id=>kitSel.deckIds.includes(id));
   kitSel.deckIds=kitSel.deckIds.filter(id=>!ids.includes(id));
   if(!all)kitSel.deckIds.push(...ids);

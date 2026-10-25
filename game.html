@@ -117,6 +117,24 @@ canvas{display:block;cursor:crosshair;}
 .deck-picker .mc-dgrp-list{display:flex;flex-wrap:wrap;gap:10px;padding:0 10px 10px;}
 .deck-picker .mc-dgrp.folded .mc-dgrp-list{display:none;}
 .deck-picker{flex-direction:column;flex-wrap:nowrap;}
+.deck-chip-st{display:block;font-size:.6rem;color:var(--muted);font-weight:500;margin-top:1px;}
+.deck-chip-st:empty{display:none;}
+.deck-picker .dkf{width:100%;}
+.deck-picker .dkf-q{flex:1;min-width:150px;background:var(--bg0);border:1px solid var(--brd);color:var(--tx);border-radius:9px;padding:7px 11px;font:inherit;font-size:.8rem;}
+.deck-picker .dkf-top{display:flex;gap:8px;align-items:center;}
+.deck-picker .dkf-btn,.deck-picker .dkf-chip,.deck-picker .dkf-reset{background:var(--bg2);border:1px solid var(--brd);color:var(--muted);border-radius:9px;padding:6px 11px;font:inherit;font-size:.76rem;cursor:pointer;}
+.deck-picker .dkf-btn.on,.deck-picker .dkf-chip.on{color:var(--tx);border-color:var(--acc2);background:color-mix(in srgb,var(--acc2) 16%,var(--bg2));}
+.deck-picker .dkf-n{display:inline-block;min-width:16px;padding:0 5px;border-radius:8px;background:var(--acc2);color:#fff;font-size:.66rem;}
+.deck-picker .dkf-panel{margin-top:8px;padding:10px 12px;border:1px solid var(--brd);border-radius:10px;background:rgba(255,255,255,.02);display:flex;flex-direction:column;gap:8px;}
+.deck-picker .dkf-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.deck-picker .dkf-l{font-size:.72rem;color:var(--muted);min-width:64px;}
+.deck-picker .dkf-chips{display:flex;gap:5px;flex-wrap:wrap;}
+.deck-picker .dkf-sort{background:var(--bg0);border:1px solid var(--brd);color:var(--tx);border-radius:8px;padding:5px 8px;font:inherit;font-size:.76rem;}
+.deck-picker .dkf-sum{font-size:.74rem;color:var(--muted);line-height:1.5;}
+.deck-picker .dkf-sum b{color:var(--tx);}
+.deck-picker .dkf-warn{color:#fbbf24;}
+.deck-picker .dkf-empty{font-size:.78rem;color:var(--muted);padding:6px 2px;}
+.deck-picker [data-deck-id][hidden],.deck-picker .mc-dgrp[hidden]{display:none!important;}
 .deck-chip-n{font-size:.68rem;color:var(--muted);background:var(--bg0);border-radius:5px;padding:1px 6px;}
 
 /* ── Help overlay ────────────────────── */
@@ -771,6 +789,7 @@ canvas{display:block;cursor:crosshair;}
 <script>document.write('<script src="js/zombie-icons.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/sound.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/sbdecks.js?v='+APP_VERSION+'"><\/script>');</script>
+<script>document.write('<script src="js/deckfilter.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>(function(){var s=document.createElement('script');s.src='js/game.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>
 </html>
