@@ -585,4 +585,7 @@
     } else { ctx.restore(); return prevSummon.call(this, ctx, type, x, y, r, angle, ts); }
     ctx.restore();
   };
+
+  // pomůcky pro ikony rozhraní v .io stylu (js/zombie-icons-2.js)
+  window.ZSIO = { orb, blob, box, poly, line, tint, OUT, SKIN, TAU, wSpr, on };
 })();
