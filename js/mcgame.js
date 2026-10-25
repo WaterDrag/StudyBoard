@@ -68,23 +68,41 @@ async function mcLearnBoxes() {
 
 // Čtyři možnosti: správná + špatné z karty, doplněné odpověďmi jiných karet
 // (nejdřív ze stejného balíčku, ať jsou podobného druhu). null = nejde.
-function mcOptions(card, pool, rnd = Math.random) {
+function mcOptions(card, pool, rnd = Math.random, n = 4) {   // n = počet možností (Denní výzva umí i 8)
   const used = new Set(card.ok);
   const wrong = [];
-  const take = v => { v = String(v || '').trim(); if (v && !used.has(v) && wrong.length < 3) { used.add(v); wrong.push(v); } };
+  const take = v => { v = String(v || '').trim(); if (v && !used.has(v) && wrong.length < n - 1) { used.add(v); wrong.push(v); } };
   shuffle(card.w, rnd).forEach(take);
   // Náhradní špatné odpovědi z jiných karet: k číslu čísla, ke krátké odpovědi
   // krátké — jinak by „UDP“ mezi „32 / 128 / 80“ prozradilo samo sebe.
   const num = t => /^[\d\s.,:/×x%+-]+$/.test(t.trim());
   const like = c => (num(c.b) === num(card.b) ? 0 : 3) + Math.abs(Math.log((c.b.length + 4) / (card.b.length + 4))) + (c.deckId === card.deckId ? 0 : 0.6) + rnd() * 0.8;
-  if (wrong.length < 3) pool.filter(c => c !== card && !!c.cl === !!card.cl).map(c => [like(c), c]).sort((a, b) => a[0] - b[0]).forEach(([, c]) => take(c.b));
-  if (wrong.length < 3) return null;
+  if (wrong.length < n - 1) pool.filter(c => c !== card && !!c.cl === !!card.cl).map(c => [like(c), c]).sort((a, b) => a[0] - b[0]).forEach(([, c]) => take(c.b));
+  if (wrong.length < n - 1) return null;
   // Správná je jen jedna z A–D: když má karta víc správných odpovědí (alsoCorrect), střídá se, která z nich to je.
   // Ostatní správné se mezi špatné nedostanou (jsou v `used`).
   const ok = [...card.ok].filter(v => String(v).trim());
   const right = ok.length > 1 ? ok[Math.floor(rnd() * ok.length)] : card.b;
   const opts = shuffle([right, ...wrong], rnd);
   return { opts, correct: opts.indexOf(right) };
+}
+
+// Napsaná odpověď: shoda se zadní stranou nebo „také správně“ — bez ohledu na velikost písmen,
+// háčky, čárky a interpunkci; u slova od 5 znaků projde jeden překlep (od 10 znaků dva).
+const mcNorm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+function mcLev(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 9;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function mcTypedOk(card, text) {
+  const t = mcNorm(text); if (!t) return false;
+  return [...card.ok].some(v => { const g = mcNorm(v); return t === g || mcLev(t, g) <= (g.length >= 10 ? 2 : g.length >= 5 ? 1 : 0); });
 }
 
 // Otázka / odpověď: kód jako blok kódu (codehl.js ho obarví), jinak text.

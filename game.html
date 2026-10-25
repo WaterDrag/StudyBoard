@@ -224,6 +224,18 @@ canvas{display:block;cursor:crosshair;}
   background:var(--glass);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border:1px solid var(--brd);border-radius:16px;padding:8px 10px;
 }
+.repair-btn{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);z-index:30;background:#16a34a;color:#fff;border:2px solid #4ade80;border-radius:12px;padding:8px 16px;font:inherit;font-size:.85rem;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.45);animation:repPulse 1.2s ease-in-out infinite;}
+.repair-btn[hidden]{display:none;}
+@keyframes repPulse{50%{box-shadow:0 0 0 6px rgba(74,222,128,.25),0 6px 20px rgba(0,0,0,.45);}}
+.repair-panel{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);z-index:31;width:min(460px,94vw);background:rgba(10,12,20,.96);border:1px solid #4ade80;border-radius:14px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.6);}
+.repair-panel[hidden]{display:none;}
+.rp-head{display:flex;justify-content:space-between;font-size:.72rem;color:#86efac;margin-bottom:6px;letter-spacing:.3px;}
+.rp-q{font-size:.92rem;font-weight:700;line-height:1.4;margin-bottom:8px;}
+.rp-a{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.rp-a .btn-s{padding:8px 10px;font-size:.78rem;text-align:left;white-space:normal;line-height:1.3;}
+.rp-a .btn-s i{font-style:normal;color:var(--muted);margin-right:4px;}
+.rp-a .btn-s.ok{border-color:#4ade80;}
+.rp-a .btn-s.bad{border-color:#f87171;}
 #buildBar{
   position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
   display:flex;gap:6px;z-index:20;pointer-events:auto;
@@ -537,6 +549,8 @@ canvas{display:block;cursor:crosshair;}
   <canvas id="mmCanvas" width="140" height="140"></canvas>
   <div id="plList"></div>
   <div id="buildBar"></div>
+  <button type="button" id="repairBtn" class="repair-btn" hidden onclick="startRepair()"></button>
+  <div id="repairPanel" class="repair-panel" hidden></div>
   <div id="abilityBar"></div>
   <div id="passiveHint"></div>
   <button type="button" id="spHint" hidden></button>
@@ -628,6 +642,7 @@ canvas{display:block;cursor:crosshair;}
       <div class="help-p">🗺️ <b>Terén</b> (skály a zdi mapy) zombie obcházejí. <b>Tvoje stavby</b> obejdou jen tehdy, když vede krátká obchůzka. Když je základna obehnaná, jdou na nejslabší místo a <b>bourají</b>. Brute (🦍) jde po stavbách schválně.</div>
       <div class="help-p">🔧 Inženýr opravuje klíčem a jeho stavby se pod 30 % životů samy spravují.</div>
       <div class="help-p">🔨 <b>Bourání [X]</b>: klikni na svoji stavbu nebo políčko infrastruktury. Stavba, která má aspoň polovinu životů, se ti vrátí do inventáře, takže ji můžeš postavit jinde. Víc poškozená se rozpadne. Cizí stavby v co-opu bourat nejde.</div>
+      <div class="help-p">🔧 <b>Oprava [V]</b>: přijď k poškozené stavbě (pod 85 % životů) a zmáčkni V nebo zelené tlačítko. Odpověz na otázku z balíčků (klávesy 1–4) — správně a stavba je zase celá, špatně a 8 s ji opravit nejde. Hra mezitím běží dál! Opravit můžeš i stavby spoluhráčů.</div>
     </div>
 
     <div class="help-sec" data-h="voda">

@@ -48,6 +48,7 @@ async function startGame() {
   btn.disabled = true; btn.textContent = 'Připravuji otázky…';
   try {
     const [pool, boxes] = await Promise.all([mcLoadCards(ds), mcLearnBoxes()]);
+    FRIENDS_P = loadFriendLearn();   // pro „Zavolat příteli“ — načítá se na pozadí
     // obtížnost: neznámá karta ~ krabička 2, umím (5) = lehká
     const scored = pool.map(c => ({ c, d: (5 - (boxes[c.id] ?? 2.5)) + Math.random() * 1.6 }))
       .map(x => ({ ...x, o: mcOptions(x.c, pool) })).filter(x => x.o)
@@ -136,18 +137,56 @@ function useAudience() {
   $('milHelp').innerHTML = `<div class="mil-aud">${q.opts.map((_, k) => `<div class="mil-bar"><i style="height:${pct[k] || 0}%"></i><b>${pct[k] ?? 0} %</b><span>${'ABCD'[k]}</span></div>`).join('')}</div>`;
   $('lifeAud').disabled = true;
 }
-function usePhone() {
+// Zavolat příteli: přátelé a jejich učení (krabičky kartiček) se načtou na pozadí při startu hry.
+let FRIENDS_P = null;
+async function loadFriendLearn() {
+  try {
+    const uids = (await mcFriends()).slice(0, 40);
+    const docs = await Promise.all(uids.map(u => db.collection('users').doc(u).get().catch(() => null)));
+    return docs.filter(d => d?.exists).map(d => ({ name: d.data().displayName || 'Přítel', learn: d.data().learn || {} }));
+  } catch (_) { return []; }
+}
+const BOX_P = [0.3, 0.45, 0.65, 0.8, 0.9, 0.97];   // jak pravděpodobně přítel trefí správnou podle krabičky 0–5
+// Jako v show: nejdřív si vybereš, komu zavoláš (jen jména — kdo co umí, se dozvíš až z hovoru).
+async function usePhone() {
   if (G.used.p || G.locked) return;
   G.used.p = true;
   window.sfx?.('hint');
+  $('lifePhone').disabled = true;
   const q = G.qs[G.i];
   const live = q.opts.map((_, k) => k).filter(k => !G.removed.has(k));
+  $('milHelp').innerHTML = '<div class="mil-phone">📞 <span>Načítám kontakty…</span></div>';
+  const friends = [...await (FRIENDS_P || [])].sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+  if (G.locked || G.qs[G.i] !== q) return;   // mezitím už odpovězeno
+  $('milHelp').innerHTML = `<div class="mil-phone mil-call"><div class="mil-call-h">📞 Komu zavoláš?</div><div class="mil-call-list">
+    ${friends.map((f, i) => `<button type="button" class="btn btn-secondary" data-call="${i}">${esc(f.name)}</button>`).join('')}
+    <button type="button" class="btn btn-ghost" data-call="rnd">🎲 Náhodný kamarád</button></div>
+    ${friends.length ? '' : '<small class="mil-phone-why">Zatím nemáš přátele — přidáš je na hlavní stránce v záložce Přátelé.</small>'}</div>`;
+  $('milHelp').querySelectorAll('[data-call]').forEach(btn => btn.onclick = () => {
+    if (G.locked || G.qs[G.i] !== q) return;
+    window.sfx?.('click');
+    if (btn.dataset.call === 'rnd') return phoneRandom(q, live, '');
+    phoneFriend(q, live, friends[+btn.dataset.call]);
+  });
+}
+// Odpověď vybraného přítele podle jeho učení: krabička té kartičky → jak moc si je jistý
+function phoneFriend(q, live, who) {
+  const box = who.learn[q.card.deckId]?.cards?.[q.card.id]?.box || 0;
+  const known = Object.values(who.learn[q.card.deckId]?.cards || {}).filter(e => (e.box || 0) >= 4).length;
+  const p = box ? BOX_P[box] : known ? 0.5 : 0.3;
+  const right = Math.random() < p;
+  const pick = right ? q.correct : shuffle(live.filter(k => k !== q.correct))[0];
+  const L = '<b>' + 'ABCD'[pick] + '</b>';
+  const say = p >= 0.9 ? `Tohle vím jistě. Je to ${L}.` : p >= 0.75 ? `Myslím, že ${L}. Tohle jsem se učil(a).` : p >= 0.5 ? `Možná ${L}… ale nejsem si jistý/á.` : `Tohle jsem nikdy neučil(a). Tipnul(a) bych ${L}, ale neber mě za slovo.`;
+  // proč si je přítel jistý, se neprozrazuje — jako v show: věříš mu, nebo ne
+  $('milHelp').innerHTML = `<div class="mil-phone">📞 <span><b>${esc(who.name)}</b>: ${say}</span></div>`;
+}
+function phoneRandom(q, live, note) {
   const right = Math.random() < knowP();
   const pick = right ? q.correct : shuffle(live.filter(k => k !== q.correct))[0];
   const sure = right ? Math.round(55 + Math.random() * 40 - G.i * 2) : Math.round(30 + Math.random() * 35);
   const say = sure > 80 ? `Tohle vím. Je to <b>${'ABCD'[pick]}</b>.` : sure > 55 ? `Myslím, že <b>${'ABCD'[pick]}</b>… tak na ${sure} %.` : `Hele, nevím jistě. Tipnul bych <b>${'ABCD'[pick]}</b>, ale neber mě za slovo.`;
-  $('milHelp').innerHTML = `<div class="mil-phone">📞 <span>${say}</span></div>`;
-  $('lifePhone').disabled = true;
+  $('milHelp').innerHTML = `<div class="mil-phone">📞 <span>${say}${note ? `<small class="mil-phone-why">${note}</small>` : ''}</span></div>`;
 }
 
 // ── Konec hry ──────────────────────────────────────────────────

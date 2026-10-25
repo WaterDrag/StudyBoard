@@ -5472,6 +5472,24 @@ body.pres-open { overflow: hidden; }
 .mil-bar { width: 44px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; font-size: 0.75rem; }
 .mil-bar i { width: 100%; min-height: 2px; background: linear-gradient(#facc15, #b45309); border-radius: 4px 4px 0 0; }
 .mil-bar span { font-weight: 700; color: #facc15; }
+.day-bet, .day-type, .day-type-res { grid-column: 1 / -1; }
+.day-bet { display: flex; flex-direction: column; gap: 12px; align-items: center; padding: 16px; border: 1px dashed var(--border); border-radius: 14px; }
+.day-bet-h { font-size: 0.95rem; text-align: center; }
+.day-bet-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.day-bet-btns .btn { flex-direction: column; gap: 2px; min-width: 130px; padding: 10px 14px; }
+.day-bet-btns small { font-size: 0.72rem; opacity: 0.8; font-weight: 400; }
+.mil-answers.day-8 { grid-template-columns: 1fr 1fr; }
+.mil-answers.day-8 .mil-ans { padding-top: 9px; padding-bottom: 9px; font-size: 0.88rem; }
+.day-type { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.day-type .input { flex: 1; min-width: 200px; font-size: 1rem; }
+.day-type-hint { width: 100%; font-size: 0.76rem; color: var(--text-muted); }
+.day-type-res { padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border); line-height: 1.6; }
+.day-type-res.ok { border-color: #22c55e; background: color-mix(in srgb, #22c55e 10%, var(--bg-2)); }
+.day-type-res.bad { border-color: #ef4444; background: color-mix(in srgb, #ef4444 10%, var(--bg-2)); }
+.mil-call-h { font-weight: 600; margin-bottom: 8px; }
+.mil-call-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 160px; overflow-y: auto; }
+.mil-call-list .btn { padding: 6px 12px; font-size: 0.85rem; }
+.mil-phone-why { display: block; margin-top: 4px; font-size: 0.76rem; color: var(--text-muted); font-weight: 400; }
 .mil-phone { padding: 12px 16px; border-radius: 14px; background: var(--bg-2); border: 1px solid var(--border); font-size: 0.95rem; }
 .mil-lifelines { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .mil-life {

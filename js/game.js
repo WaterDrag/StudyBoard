@@ -893,6 +893,7 @@ function initGame(){
   gs._builtIds=new Set(); // host: structure ids already created from client requests
   gs._builtInfraKeys=new Set(); // host: infra keys already created from client requests
   gs._treqSeen={};      // host: uid → last processed tend-request batch
+  gs._repSeen={};       // host: uid → poslední použitá oprava (n)
   gs._fxSeen={};        // uid → last replayed FX batch
   gs._structDirty=false;
   me._pendingHits=[];   // client: hits to forward to host
@@ -1014,6 +1015,8 @@ function setupInput(){
     if(e.code==='KeyH'){toggleHelp();}
     if(e.code==='KeyC'){toggleStats();}
     if(e.code==='KeyX'){togglePlacing('demolish');}
+    if(e.code==='KeyV'){startRepair();}
+    if(_repOpen&&!_repOpen.done&&/^Digit[1-4]$/.test(e.code)){resolveRepair(+e.code.slice(5)-1);return;}   // 1–4 = odpověď na opravu
     if(e.code==='Escape'){
       if(placing.active){placing.active=false;document.getElementById('placInfo').style.display='none';document.querySelectorAll('.bb-btn').forEach(b=>b.classList.remove('active'));}
       else if(!document.getElementById('helpOv').classList.contains('hidden'))closeOv('helpOv');
@@ -1129,6 +1132,7 @@ function update(dt,ts){
   updateWorm(dt);
   updateBullets(dt);
   updateStructures(ts);
+  updateRepairPrompt();
   updateFloats(dt);
   updateFx(dt);
   updateInfra(dt,ts);
@@ -2971,6 +2975,82 @@ function demolishAt(wx,wy){
   window.sfx?.('click');
   gToast(`🔨 ${def.name} zbořeno${back?' — vráceno do inventáře':' (byla moc poškozená, rozpadla se)'}`,'#f97316');
 }
+// ── Oprava staveb odpovědí (jako zabedňování v CoD Zombies) ──────────
+// U poškozené stavby (pod 85 % životů) se ukáže 🔧 — klávesa V nebo tlačítko. Otázka z balíčků běží,
+// zatímco hra jede dál (zombie neřeknou „počkám“): správně = stavba zase celá, špatně / čas vypršel =
+// na tuhle stavbu 8 s nejde opravovat. Opravit můžeš i stavbu spoluhráče. V co-opu jde oprava hostiteli
+// jako seznam {id, n} (n roste) — hostitel použije jen nové, takže stará oprava se nikdy nezopakuje.
+const REPAIR={range:70,below:0.85,cdWrong:8000,time:12};
+let _repTarget=null,_repOpen=null;
+const _repUsed=new Set();
+function repairTarget(){
+  if(!me.alive||DECK_CARDS.length<2||gs.screen!=='game')return null;
+  const now=performance.now();
+  let best=null,bd=REPAIR.range;
+  for(const st of gs.structs){
+    if(st.hp<=0||st.hp>=st.maxHp*REPAIR.below||(st._repCd||0)>now)continue;
+    const dx=Math.max(st.x-me.x,0,me.x-(st.x+st.w)),dy=Math.max(st.y-me.y,0,me.y-(st.y+st.h)),d=Math.hypot(dx,dy);
+    if(d<bd){bd=d;best=st;}
+  }
+  return best;
+}
+function updateRepairPrompt(){
+  _repTarget=_repOpen?null:repairTarget();
+  const b=document.getElementById('repairBtn'); if(!b)return;
+  const show=!!_repTarget;
+  if(b.hidden===show)b.hidden=!show;
+  if(show){const def=STRUCT_DEFS[_repTarget.type]; const t=`🔧 Opravit ${def?.name?.toLowerCase()||'stavbu'} (${Math.round(_repTarget.hp/_repTarget.maxHp*100)} %) · V`; if(b.textContent!==t)b.textContent=t;}
+}
+function startRepair(){
+  const st=_repTarget||repairTarget(); if(!st||_repOpen)return;
+  let avail=DECK_CARDS.filter(c=>!_repUsed.has(c.id)&&c.front&&c.back);
+  if(!avail.length){_repUsed.clear();avail=DECK_CARDS.filter(c=>c.front&&c.back);}
+  if(!avail.length)return;
+  const card=avail[Math.floor(Math.random()*avail.length)];
+  _repUsed.add(card.id);
+  const opts=shuffle([card.back,...getGameDistractors(card)]);
+  const p=document.getElementById('repairPanel');
+  const esc_=s=>String(s).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  p.innerHTML=`<div class="rp-head"><span>🔧 Oprava — odpověz správně</span><b id="rpTime">${REPAIR.time}s</b></div>
+    <div class="rp-q">${esc_(card.front)}</div><div class="rp-a">${opts.map((o,k)=>`<button type="button" class="btn-s" data-k="${k}"><i>${k+1}</i> ${esc_(o)}</button>`).join('')}</div>`;
+  p.hidden=false;
+  const t0=performance.now();
+  _repOpen={st,card,opts,done:false,timer:setInterval(()=>{
+    const left=Math.max(0,REPAIR.time-(performance.now()-t0)/1000);
+    const el=document.getElementById('rpTime'); if(el){el.textContent=Math.ceil(left)+'s';el.style.color=left<4?'#f87171':'';}
+    if(!left)resolveRepair(-1);
+  },200)};
+  p.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>resolveRepair(+b.dataset.k));
+  window.sfx?.('click');
+}
+function resolveRepair(k){
+  const r=_repOpen; if(!r||r.done)return;
+  r.done=true; clearInterval(r.timer);
+  const ok=k>=0&&r.opts[k]===r.card.back, st=r.st, p=document.getElementById('repairPanel');
+  p.querySelectorAll('[data-k]').forEach(b=>{b.disabled=true;if(r.opts[+b.dataset.k]===r.card.back)b.classList.add('ok');else if(+b.dataset.k===k)b.classList.add('bad');});
+  if(ok&&st.hp>0){
+    st.hp=st.maxHp;
+    if(!isAuthority()){   // co-op: hostiteli pošleme, co jsem opravil (posledních pár oprav s rostoucím n)
+      me._repN=(me._repN||0)+1;
+      me._repq=[...(me._repq||[]),{id:st.id,n:me._repN}].slice(-6);
+      me._repDirty=true;
+    }
+    window.sfx?.('coin');
+    gToast(`🔧 ${STRUCT_DEFS[st.type]?.name||'Stavba'} opravena`,'#4ade80');
+  } else {
+    st._repCd=performance.now()+REPAIR.cdWrong;
+    window.sfx?.('bad');
+    gToast(`${k<0?'⏰ Čas vypršel':'❌ Špatně'} — správně: ${r.card.back}. Opravit znovu jde za ${REPAIR.cdWrong/1000} s.`,'#f87171');
+  }
+  setTimeout(()=>{p.hidden=true;_repOpen=null;},ok?700:1600);
+}
+// Hostitel: opravy, které poslal hráč uid (jen nové podle n)
+function hostApplyRepair(uid,list){
+  const seen=gs._repSeen[uid]||0;
+  list.forEach(r=>{ if(r.n<=seen)return; const st=gs.structs.find(x=>x.id===r.id); if(st&&st.hp>0)st.hp=st.maxHp; });
+  gs._repSeen[uid]=Math.max(seen,...list.map(r=>r.n||0));
+}
+
 // Hostitel: zbořit, co poslal hráč uid (jen jeho vlastní věci)
 function hostApplyDemo(uid,list){
   list.forEach(d=>{
@@ -4782,6 +4862,10 @@ function syncPlayerState(){
     me._demoDirty=false;
     liveRef('players/'+me.uid+'/demo').set(me._pendingDemo||[]).catch(()=>{});
   }
+  if(me._repDirty){   // opravy staveb odpovědí
+    me._repDirty=false;
+    liveRef('players/'+me.uid+'/rep').set(me._repq||[]).catch(()=>{});
+  }
   // Forward my placed infrastructure (declarative pending set)
   if(me._infraDirty){
     me._infraDirty=false;
@@ -5132,6 +5216,7 @@ function subscribePlayerStates(){
       }
       // Host demolishes what a client tore down (after builds, so a stale build list can't resurrect it)
       if(Array.isArray(node.demo))hostApplyDemo(uid,node.demo);
+      if(Array.isArray(node.rep))hostApplyRepair(uid,node.rep);   // opravy staveb odpovědí
       // Host applies a client's tend requests (plant/water/harvest/clean/drink/clear)
       if(node.treq&&node.treq.b>(gs._treqSeen[uid]||0)){
         gs._treqSeen[uid]=node.treq.b;
