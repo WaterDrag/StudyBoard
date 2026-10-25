@@ -5368,6 +5368,8 @@ body.pres-open { overflow: hidden; }
 .mil-best, .day-streak { font-size: 0.9rem; padding: 6px 14px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--border); }
 .mc-decks-h { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.9rem; }
 .mc-decks { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 340px; overflow-y: auto; text-align: left; }
+.mc-decks-sub { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 0.9rem; }
+.mc-decks-sub span { color: var(--text-muted); font-size: 0.76rem; flex: 1; }
 .mc-deck { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2); cursor: pointer; }
 .mc-deck:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg-2)); }
 .mc-deck input { accent-color: var(--accent); flex-shrink: 0; }

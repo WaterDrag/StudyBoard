@@ -2657,13 +2657,25 @@ function renderDeckPicker(){
   const el=document.getElementById('deckPicker');
   if(!el)return;
   if(!ALL_DECKS.length){el.innerHTML='<div style="color:var(--muted);font-size:.76rem;">Žádné balíčky karet. Otázky se ve hře nebudou zobrazovat.</div>';return;}
-  el.innerHTML=ALL_DECKS.map(d=>{
+  const isSb=d=>typeof sbIsBuiltin==='function'&&sbIsBuiltin(d.id);
+  const chip=d=>{
     const sel=kitSel.deckIds.includes(d.id);
     const name=(d.name||'Balíček').replace(/</g,'&lt;');
-    const sub=d._mine?'':`<span class="deck-chip-room">👥 ${(d._roomName||'sdílené').replace(/</g,'&lt;')}</span>`;
+    const sub=d._mine||isSb(d)?'':`<span class="deck-chip-room">👥 ${(d._roomName||'sdílené').replace(/</g,'&lt;')}</span>`;
     return `<button class="deck-chip${sel?' selected':''}" style="--dc:${d.color||'#6366f1'}" onclick="toggleDeck('${d.id}')">
       <span class="deck-chip-dot"></span><span class="deck-chip-name">${name}${sub}</span><span class="deck-chip-n">${d.cardCount??'?'}</span></button>`;
-  }).join('');
+  };
+  // vlastní a z místností nahoře, vestavěné „Pro všechny“ oddělené pod nimi s vlastním „Vybrat vše“
+  const own=ALL_DECKS.filter(d=>!isSb(d)),sb=ALL_DECKS.filter(isSb);
+  el.innerHTML=own.map(chip).join('')+(sb.length?`<div class="deck-sub"><b>📚 ${SB_LABEL}</b><button type="button" class="deck-sub-all" onclick="toggleSbDecks()">Vybrat vše</button></div>`+sb.map(chip).join(''):'');
+}
+function toggleSbDecks(){
+  const ids=ALL_DECKS.filter(d=>typeof sbIsBuiltin==='function'&&sbIsBuiltin(d.id)).map(d=>d.id);
+  const all=ids.every(id=>kitSel.deckIds.includes(id));
+  kitSel.deckIds=kitSel.deckIds.filter(id=>!ids.includes(id));
+  if(!all)kitSel.deckIds.push(...ids);
+  renderDeckPicker();
+  loadSelectedDecks();
 }
 function toggleDeck(id){
   const i=kitSel.deckIds.indexOf(id);

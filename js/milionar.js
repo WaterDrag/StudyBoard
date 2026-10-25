@@ -28,14 +28,9 @@ function renderDecks() {
   const el = $('milDecks');
   if (!DECKS.length) { el.innerHTML = '<div class="mc-muted">Nemáš žádné balíčky s kartičkami. Vytvoř si nějaký ve Flash Cards.</div>'; return; }
   const sel = savedSel();
-  el.innerHTML = DECKS.map(d => `<label class="mc-deck"><input type="checkbox" value="${d.id}"${sel.has(d.id) ? ' checked' : ''}>
-    <span><b>${esc(d.name)}</b><small>${d.cardCount || 0} karet${d.roomName ? ' · ' + esc(d.roomName) : ''}</small></span></label>`).join('');
+  el.innerHTML = mcDeckListHTML(DECKS, sel);
   el.addEventListener('change', updateStart);
-  $('milAll').onclick = () => {
-    const boxes = [...el.querySelectorAll('input')], all = boxes.every(b => b.checked);
-    boxes.forEach(b => { b.checked = !all; });
-    updateStart();
-  };
+  mcWireDeckAll(el, $('milAll'), updateStart);
   $('milStart').onclick = startGame;
   updateStart();
 }
