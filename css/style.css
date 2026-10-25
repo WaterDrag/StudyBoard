@@ -5923,6 +5923,15 @@ body.pres-open { overflow: hidden; }
 .td-tip { font-size: 0.76rem; color: var(--text-muted); line-height: 1.45; }
 .td-warn { font-size: 0.78rem; color: #fcd34d; line-height: 1.45; background: rgba(250,204,21,.08); border-radius: 10px; padding: 7px 9px; }
 .td-km-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Obrana — co-op: panel Tým a cizí věže */
+.td-coop { display: flex; flex-direction: column; gap: 10px; }
+.td-coop-note { font-size: 0.78rem; color: var(--text-muted); line-height: 1.45; margin: 0; }
+.td-coop-p { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: var(--bg-2); display: flex; flex-direction: column; gap: 8px; }
+.td-coop-p.me { border-color: var(--accent); }
+.td-coop-h { display: flex; gap: 10px; align-items: center; }
+.td-coop-h small { display: block; color: var(--text-muted); font-size: 0.74rem; }
+.td-coop-owner { font-size: 0.8rem; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, #f59e0b 14%, var(--bg-2)); border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--border)); margin-bottom: 8px; }
+.td-foreign :is([data-act="up"], [data-act="sell"], [data-act="target"], [data-act="mode"], [data-act="bank"], [data-act="ability"], [data-act="pick"], [data-act="follow"], [data-act="fly"]) { opacity: 0.45; pointer-events: none; }
 .td-km-acts .btn { flex: 1; justify-content: center; }
 .td-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .td-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px 3px 3px; border-radius: 999px; background: var(--bg-3); font-size: 0.74rem; }

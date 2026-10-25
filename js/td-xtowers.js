@@ -14,7 +14,7 @@ function trackPts(x, y, r) {
   let a = _trackPts.get(k);
   if (!a) {
     a = [];
-    G.paths.forEach((p, pi) => { for (let d = 0; d < p.len; d += 8) { const q = posAt(p, d); if (Math.hypot(q.x - x, q.y - y) <= r) a.push({ x: q.x, y: q.y, pi, d, prog: d / p.len }); } });
+    G.paths.forEach((p, pi) => { for (let d = 0; d < p.len; d += 8) { const q = posAt(p, d); if (DM.hypot(q.x - x, q.y - y) <= r) a.push({ x: q.x, y: q.y, pi, d, prog: d / p.len }); } });
     if (_trackPts.size > 300) _trackPts.clear();
     _trackPts.set(k, a);
   }
@@ -24,12 +24,12 @@ function trackPts(x, y, r) {
 function trackSpot(t, mode) {
   const pts = trackPts(t.x, t.y, effRange(t));
   if (!pts.length) return null;
-  const pick = list => list[Math.floor(Math.random() * list.length)];
+  const pick = list => list[Math.floor(simRnd() * list.length)];
   if (mode === 'first' || mode === 'last') {
     const s = pts.slice().sort((a, b) => b.prog - a.prog), part = s.slice(mode === 'first' ? 0 : Math.floor(s.length * 0.75), mode === 'first' ? Math.max(1, Math.ceil(s.length * 0.25)) : s.length);
     return pick(part);
   }
-  if (mode === 'close') return pick(pts.slice().sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y)).slice(0, Math.max(1, Math.ceil(pts.length * 0.25))));
+  if (mode === 'close') return pick(pts.slice().sort((a, b) => DM.hypot(a.x - t.x, a.y - t.y) - DM.hypot(b.x - t.x, b.y - t.y)).slice(0, Math.max(1, Math.ceil(pts.length * 0.25))));
   return pick(pts);
 }
 // Zlaťáky, které by dal slizák i se všemi vrstvami (klec ho spolkne celého)
@@ -46,10 +46,10 @@ function addTrap(tr) {
   G.traps.push(tr);
   return tr;
 }
-function throwTo(t, x, y, kind = 'potion') { addFx({ kind, x: t.x, y: t.y, tx: x, ty: y, dur: 0.3 }); t.ang = Math.atan2(y - t.y, x - t.x); }
+function throwTo(t, x, y, kind = 'potion') { addFx({ kind, x: t.x, y: t.y, tx: x, ty: y, dur: 0.3 }); t.ang = DM.atan2(y - t.y, x - t.x); }
 function fireProj(t, e, o) {   // přímá střela věže na cíl
   t.firedAt = G.time;
-  return shoot({ x: o.x ?? t.x, y: o.y ?? t.y, ang: o.ang ?? Math.atan2(e.y - (o.y ?? t.y), e.x - (o.x ?? t.x)), spd: projSpeed(t, o.spd || 520), dist: o.dist || effRange(t) * 1.3,
+  return shoot({ x: o.x ?? t.x, y: o.y ?? t.y, ang: o.ang ?? DM.atan2(e.y - (o.y ?? t.y), e.x - (o.x ?? t.x)), spd: projSpeed(t, o.spd || 520), dist: o.dist || effRange(t) * 1.3,
     dmg: o.dmg ?? effDamage(t), type: o.type || t.st.type, pierce: o.pierce ?? effPierce(t), src: t, kind: o.kind, r: o.r || 7, homing: o.homing, tgt: e, onHit: o.onHit, hit: o.hit });
 }
 
@@ -62,7 +62,7 @@ function trapKind(t) {
 }
 function layTrap(t, q) {
   const fx = t.fx, j = 7;
-  addTrap({ kind: trapKind(t), x: q.x + (Math.random() - 0.5) * j, y: q.y + (Math.random() - 0.5) * j, r: fx.trap_hitbox_radius || 14,
+  addTrap({ kind: trapKind(t), x: q.x + (simRnd() - 0.5) * j, y: q.y + (simRnd() - 0.5) * j, r: fx.trap_hitbox_radius || 14,
     hp: effPierce(t), dmg: effDamage(t), type: t.st.type, until: G.time + (fx.trap_lifetime || 50), src: t, persist: !!fx.persist_between_waves });
 }
 function carpetOfTraps(t, n) {   // pasti rovnoměrně po celé cestě
@@ -109,7 +109,7 @@ const XT = {
     });
     if (fx.secondary_ball_lightning_interval) every('ball', fx.secondary_ball_lightning_interval / speedMul(t), () => {
       const e = pickTarget(t, range); if (!e) return;
-      G.movers.push({ kind: 'ball', x: t.x, y: t.y, ang: Math.atan2(e.y - t.y, e.x - t.x), spd: 70, until: G.time + 4, r: fx.ball_lightning_radius || 65, src: t, acc: 0 });
+      G.movers.push({ kind: 'ball', x: t.x, y: t.y, ang: DM.atan2(e.y - t.y, e.x - t.x), spd: 70, until: G.time + 4, r: fx.ball_lightning_radius || 65, src: t, acc: 0 });
     });
     if (fx.global_vine_grab_interval) every('vine', fx.global_vine_grab_interval, () => {
       let best = null, bv = -1;
@@ -152,7 +152,7 @@ const XT = {
     const e = pickTarget(t, range); if (!e) { t.cd = 0; return; }
     aimAt(t, e); t.shots++;
     if (fx.every_nth_shot_flash_bomb && t.shots % fx.every_nth_shot_flash_bomb === 0) {   // oslepující bomba
-      shoot({ x: t.x, y: t.y, ang: t.ang, spd: 420, dist: Math.min(range, Math.hypot(e.x - t.x, e.y - t.y) + 4), lob: true, r: 8, kind: 'flashBomb', src: t,
+      shoot({ x: t.x, y: t.y, ang: t.ang, spd: 420, dist: Math.min(range, DM.hypot(e.x - t.x, e.y - t.y) + 4), lob: true, r: 8, kind: 'flashBomb', src: t,
         onBurst: p => explode(p.x, p.y, fx.flash_bomb_radius || 60, fx.flash_bomb_damage || 4, fx.flash_bomb_damage_type || 'normal', 40, t, { kind: 'boomGold', each: x => {
           if (!isBoss(x)) stun(x, fx.flash_bomb_stun_duration || 1.3);
           else if (fx.can_stun_moab) stun(x, fx.stun_moab_duration || 1);
@@ -164,7 +164,7 @@ const XT = {
       if (fx.strip_camo_on_hit) { x.revealed = true; if (fx.decamo_radius) for (const y of enemiesNear(x.x, x.y, fx.decamo_radius)) y.revealed = true; }
       if (x.immuneFlash === G.time) return;   // nezraněného slizáka nezdržuj (jinak by ho držel věčně)
       if (fx.slow_after_hit_pct) slow(x, pctv(fx.slow_after_hit_pct), G.time + (fx.slow_duration || 1.5));
-      if (fx.knockback_chance && canKnock(x) && Math.random() < fx.knockback_chance) x.d = Math.max(0, x.d - (fx.knockback || 28));
+      if (fx.knockback_chance && canKnock(x) && simRnd() < fx.knockback_chance) x.d = Math.max(0, x.d - (fx.knockback || 28));
     };
     for (let i = 0; i < n; i++) {
       const ang = t.ang + (n > 1 ? (i / (n - 1) - 0.5) * spread : 0);
@@ -180,12 +180,12 @@ const XT = {
     let cx = t.x, cy = t.y, tx, ty;
     if (gr.mode === 'patrol' && gr.pt) { cx = gr.pt.x; cy = gr.pt.y; }
     if (gr.mode === 'follow' && G.cursor) { tx = G.cursor.x; ty = G.cursor.y; }
-    else if (gr.mode === 'eight') { gr.ph += spd / (R * 1.4) * dt; tx = cx + Math.sin(gr.ph) * R * 1.6; ty = cy + Math.sin(gr.ph * 2) * R * 0.8; }
-    else { gr.ph += spd / R * dt; tx = cx + Math.cos(gr.ph) * R; ty = cy + Math.sin(gr.ph) * R; }
-    const dx = tx - gr.x, dy = ty - gr.y, dd = Math.hypot(dx, dy), step = Math.min(dd, spd * 1.8 * dt);
-    if (dd > 0.5) { gr.x += dx / dd * step; gr.y += dy / dd * step; gr.ang = Math.atan2(dy, dx); }
+    else if (gr.mode === 'eight') { gr.ph += spd / (R * 1.4) * dt; tx = cx + DM.sin(gr.ph) * R * 1.6; ty = cy + DM.sin(gr.ph * 2) * R * 0.8; }
+    else { gr.ph += spd / R * dt; tx = cx + DM.cos(gr.ph) * R; ty = cy + DM.sin(gr.ph) * R; }
+    const dx = tx - gr.x, dy = ty - gr.y, dd = DM.hypot(dx, dy), step = Math.min(dd, spd * 1.8 * dt);
+    if (dd > 0.5) { gr.x += dx / dd * step; gr.y += dy / dd * step; gr.ang = DM.atan2(dy, dx); }
     gr.x = Math.max(10, Math.min(TW - 10, gr.x)); gr.y = Math.max(10, Math.min(TH - 10, gr.y));
-    t.ang = Math.atan2(gr.y - t.y, gr.x - t.x);
+    t.ang = DM.atan2(gr.y - t.y, gr.x - t.x);
     const from = { x: gr.x, y: gr.y, target: t.target, st: t.st, aura: t.aura };
     // rakety na slizové krále kdekoli na mapě
     const mi = fx.moab_missile_interval || fx.secondary_moab_missile_interval;
@@ -193,7 +193,7 @@ const XT = {
       const bosses = G.enemies.filter(e => !e.dead && isBoss(e)).sort((a, b) => b.hp - a.hp); if (!bosses.length) return;
       for (let i = 0; i < (fx.moab_missile_count || 2); i++) {
         const e = bosses[i % bosses.length];
-        shoot({ x: gr.x, y: gr.y, ang: Math.atan2(e.y - gr.y, e.x - gr.x) + (i - 0.5) * 0.4, spd: 420, dist: 2200, dmg: 0.001, type: 'normal', pierce: 1, src: t, kind: 'rocket', r: 9, homing: true, tgt: e,
+        shoot({ x: gr.x, y: gr.y, ang: DM.atan2(e.y - gr.y, e.x - gr.x) + (i - 0.5) * 0.4, spd: 420, dist: 2200, dmg: 0.001, type: 'normal', pierce: 1, src: t, kind: 'rocket', r: 9, homing: true, tgt: e,
           onHit: (p, x) => explode(x.x, x.y, 30, fx.moab_missile_damage || 16, fx.moab_missile_damage_type || 'explosion', fx.moab_missile_pierce || 3, t, { kind: 'boomSmall' }) });
       }
     });
@@ -204,7 +204,7 @@ const XT = {
         t.timers.bomb = 0;
         const n = fx.track_bomb_cluster_count || 1;
         for (let i = 0; i < n; i++) {
-          const bx = gr.x - Math.cos(gr.ang) * i * 24, by = gr.y - Math.sin(gr.ang) * i * 24;
+          const bx = gr.x - DM.cos(gr.ang) * i * 24, by = gr.y - DM.sin(gr.ang) * i * 24;
           addFx({ kind: 'drop', x: bx, y: by, dur: 0.35 });
           G.later.push({ at: G.time + 0.35 + i * 0.08, fn: () => explode(bx, by, fx.track_bomb_radius || 45, fx.track_bomb_damage || 3, fx.track_bomb_damage_type || 'explosion', fx.track_bomb_pierce || 15, t, { kind: 'boomFire' }) });
         }
@@ -219,9 +219,9 @@ const XT = {
         const e = pickTarget({ ...from, target: k ? 'strong' : t.target }, 9999, { skip: used }) || pickTarget(from, 9999); if (!e) break;
         used.add(e); fired = true;
         const n = Math.max(1, Math.round(t.st.projectiles));
-        for (let i = 0; i < n; i++) fireProj(t, e, { x: gr.x, y: gr.y, ang: Math.atan2(e.y - gr.y, e.x - gr.x) + (i - (n - 1) / 2) * 0.12, spd: fx.projectile_speed || 500, kind: 'gryfDart', homing: true, dist: 900 });
+        for (let i = 0; i < n; i++) fireProj(t, e, { x: gr.x, y: gr.y, ang: DM.atan2(e.y - gr.y, e.x - gr.x) + (i - (n - 1) / 2) * 0.12, spd: fx.projectile_speed || 500, kind: 'gryfDart', homing: true, dist: 900 });
         if (fx.secondary_explosive_shell_every_n_shots && t.shots % fx.secondary_explosive_shell_every_n_shots === 0)
-          shoot({ x: gr.x, y: gr.y, ang: Math.atan2(e.y - gr.y, e.x - gr.x), spd: 460, dist: Math.hypot(e.x - gr.x, e.y - gr.y) + 4, lob: true, r: 8, kind: 'shell', src: t,
+          shoot({ x: gr.x, y: gr.y, ang: DM.atan2(e.y - gr.y, e.x - gr.x), spd: 460, dist: DM.hypot(e.x - gr.x, e.y - gr.y) + 4, lob: true, r: 8, kind: 'shell', src: t,
             onBurst: p => explode(p.x, p.y, fx.shell_radius || 45, fx.shell_damage || 12, 'normal', 25, t, { kind: 'boom' }) });
       }
       if (!fired) t.cd = 0;
@@ -243,10 +243,10 @@ const XT = {
       const e = pickTarget(t, 9999); if (!e) { t.cd = 0; return; }
       tx = e.x; ty = e.y;
     } else if (!enemiesNear(tx, ty, R + 30).some(e => visibleTo(e, t))) { t.cd = 0; return; }
-    const sc = fx.scatter_radius ?? 14, a = Math.random() * 6.283, rr = Math.random() * sc;
-    tx += Math.cos(a) * rr; ty += Math.sin(a) * rr;
-    const dist = Math.hypot(tx - t.x, ty - t.y);
-    t.ang = Math.atan2(ty - t.y, tx - t.x); t.firedAt = G.time;
+    const sc = fx.scatter_radius ?? 14, a = simRnd() * 6.283, rr = simRnd() * sc;
+    tx += DM.cos(a) * rr; ty += DM.sin(a) * rr;
+    const dist = DM.hypot(tx - t.x, ty - t.y);
+    t.ang = DM.atan2(ty - t.y, tx - t.x); t.firedAt = G.time;
     shoot({ x: t.x, y: t.y, ang: t.ang, spd: Math.max(200, dist / (fx.shell_flight_time || 0.55)), dist, lob: true, arc: true, r: 9, kind: 'mortarShell', src: t, sx: t.x, sy: t.y, onBurst: p => mortarBurst(t, p.x, p.y) });
   },
 
@@ -256,7 +256,7 @@ const XT = {
       const mine = G.sentries.filter(s => s.src === t);
       if (mine.length >= (fx.max_active_sentries || 3)) return;
       for (let k = 0; k < 14; k++) {
-        const a = Math.random() * 6.283, d = 28 + Math.random() * (range - 28), x = t.x + Math.cos(a) * d, y = t.y + Math.sin(a) * d;
+        const a = simRnd() * 6.283, d = 28 + simRnd() * (range - 28), x = t.x + DM.cos(a) * d, y = t.y + DM.sin(a) * d;
         if (x < 12 || y < 12 || x > TW - 12 || y > TH - 12 || distToTrack(x, y) < TRACK_HALF + 8 || inWater(x, y, 8)) continue;
         const types = Array.isArray(fx.sentry_types_set) ? fx.sentry_types_set : null;
         const kind = t.up[0] >= 5 ? 'plasma' : types ? types[(t.sentryN = (t.sentryN || 0) + 1) % types.length] : 'basic';
@@ -351,9 +351,9 @@ function sentryFire(s, dt) {
   const e = pickTarget({ x: s.x, y: s.y, target: 'first', st: t.st, aura: t.aura }, range);
   if (!e) { s.cd = 0.1; return; }
   const iv = fx.sentry_attack_interval || 0.9, dmg = (fx.sentry_damage || 1) + (G.xTrapAdd || 0), type = fx.sentry_damage_type_set || 'sharp', prc = fx.sentry_pierce || 2;
-  s.ang = Math.atan2(e.y - s.y, e.x - s.x); s.firedAt = G.time; s.cd = iv;
+  s.ang = DM.atan2(e.y - s.y, e.x - s.x); s.firedAt = G.time; s.cd = iv;
   if (s.kind === 'explosion_bomb') {
-    shoot({ x: s.x, y: s.y, ang: s.ang, spd: 380, dist: Math.hypot(e.x - s.x, e.y - s.y) + 4, lob: true, r: 7, kind: 'cannon', src: t, onBurst: p => explode(p.x, p.y, 38, dmg, 'explosion', 12, t, { kind: 'boomSmall' }) });
+    shoot({ x: s.x, y: s.y, ang: s.ang, spd: 380, dist: DM.hypot(e.x - s.x, e.y - s.y) + 4, lob: true, r: 7, kind: 'cannon', src: t, onBurst: p => explode(p.x, p.y, 38, dmg, 'explosion', 12, t, { kind: 'boomSmall' }) });
     s.cd = iv * 1.6;
   } else if (s.kind === 'laser_beam') {
     addFx({ kind: 'beam', x: s.x, y: s.y, tx: e.x, ty: e.y, dur: 0.1, col: '#fb923c' });
@@ -426,13 +426,13 @@ function updateExtras(dt) {
         }
       } else if (m.kind === 'ball') {
         if (G.time > m.until) { m.dead = true; continue; }
-        m.x += Math.cos(m.ang) * m.spd * dt; m.y += Math.sin(m.ang) * m.spd * dt;
+        m.x += DM.cos(m.ang) * m.spd * dt; m.y += DM.sin(m.ang) * m.spd * dt;
         m.acc += dt;
         if (m.acc >= 0.25) {
           const k = m.acc; m.acc = 0;
           for (const e of enemiesNear(m.x, m.y, m.r)) {
             hitEnemy(e, (fx.ball_lightning_dps || 8) * k, 'energy', hitOpts(m.src));
-            if (!e.dead && fx.ball_lightning_freeze_chance && Math.random() < fx.ball_lightning_freeze_chance * k) freeze(e, 1, m.src);
+            if (!e.dead && fx.ball_lightning_freeze_chance && simRnd() < fx.ball_lightning_freeze_chance * k) freeze(e, 1, m.src);
           }
         }
       } else if (m.kind === 'vine') {
@@ -473,7 +473,7 @@ function xAuras() {
   const zv = G.towers.filter(t => t.type === 'stinovy_zved'), dr = G.towers.filter(t => t.type === 'lesni_druid');
   for (const t of zv) {
     let n = 0, spd = 0, rng = 0, dmg = 0, boss = 0;
-    for (const h of zv) if (h !== t && h.fx.aura_other_ninjas_attack_speed_pct && Math.hypot(h.x - t.x, h.y - t.y) <= h.st.range) {
+    for (const h of zv) if (h !== t && h.fx.aura_other_ninjas_attack_speed_pct && DM.hypot(h.x - t.x, h.y - t.y) <= h.st.range) {
       if (n++ >= (h.fx.max_shinobi_stacks || 10)) break;
       spd += pctv(h.fx.aura_other_ninjas_attack_speed_pct); rng += pctv(h.fx.aura_other_ninjas_range_pct || 0);
       dmg = Math.max(dmg, h.fx.aura_other_ninjas_damage_add || 0); boss = Math.max(boss, h.fx.aura_other_ninjas_bonus_boss_damage_add || 0);
@@ -481,7 +481,7 @@ function xAuras() {
     t.aura.spd += spd; t.aura.rng += rng; t.aura.dmg += dmg; t.aura.boss = (t.aura.boss || 0) + boss;
   }
   for (const t of dr) {
-    const others = dr.filter(h => h !== t && Math.hypot(h.x - t.x, h.y - t.y) <= Math.max(t.st.range, h.st.range));
+    const others = dr.filter(h => h !== t && DM.hypot(h.x - t.x, h.y - t.y) <= Math.max(t.st.range, h.st.range));
     const leader = t.fx.aura_other_druids_attack_speed_pct ? t : others.find(h => h.fx.aura_other_druids_attack_speed_pct);
     if (!leader || !others.length) continue;
     t.aura.spd += pctv(leader.fx.aura_other_druids_attack_speed_pct) * Math.min(leader.fx.max_pack_stacks || 5, others.length);
@@ -500,7 +500,7 @@ function xWaveEnd() {
 Object.assign(ABILITY, {
   'kladec_pasti:2'(t) { carpetOfTraps(t, t.fx.ability_traps_count || 20); },
   'lesni_druid:2'(t) {
-    const mines = G.towers.filter(o => o.type === 'zlaty_dul' && Math.hypot(o.x - t.x, o.y - t.y) <= effRange(t)).length;
+    const mines = G.towers.filter(o => o.type === 'zlaty_dul' && DM.hypot(o.x - t.x, o.y - t.y) <= effRange(t)).length;
     const g = (t.fx.ability_base_cash || 320) + mines * (t.fx.ability_cash_per_farm_in_range || 130);
     addGold(g); floatText(t.x, t.y - 30, '+' + g + ' zl', '#facc15'); addFx({ kind: 'gold', x: t.x, y: t.y, dur: 0.8 });
   },
@@ -534,7 +534,7 @@ Object.assign(ABILITY, {
   'trpaslici_inzenyr:2'(t) {
     const fx = t.fx;
     const cand = G.towers.filter(o => o !== t && o.type !== 'trpaslici_inzenyr');
-    const near = cand.filter(o => Math.hypot(o.x - t.x, o.y - t.y) <= effRange(t) * 1.5);
+    const near = cand.filter(o => DM.hypot(o.x - t.x, o.y - t.y) <= effRange(t) * 1.5);
     const o = (near.length ? near : cand).sort((a, b) => b.spent - a.spent)[0];
     if (!o) return false;
     o.ocUntil = G.time + (fx.ability_duration || 25); o.ocMul = fx.ability_attack_speed_mult || 1.65;
@@ -593,7 +593,7 @@ const XR = (() => {
           g.beginPath(); g.arc(0, sd * 2, 10, a0, a1); g.stroke();
           g.fillStyle = '#e7e5e4';
           for (let i = 1; i < 6; i++) {
-            const a = (sd > 0 ? 0 : Math.PI) + i * Math.PI / 6, cx = Math.cos(a), cy = Math.sin(a);
+            const a = (sd > 0 ? 0 : Math.PI) + i * Math.PI / 6, cx = DM.cos(a), cy = DM.sin(a);
             g.beginPath(); g.moveTo(cx * 9, sd * 2 + cy * 9); g.lineTo(cx * 6 - cy * 1.5, sd * 2 + cy * 6 + cx * 1.5); g.lineTo(cx * 6 + cy * 1.5, sd * 2 + cy * 6 - cx * 1.5); g.closePath(); g.fill();
           }
         }
@@ -608,7 +608,7 @@ const XR = (() => {
         break;
       }
       case 'crystal': {   // zářící krystalová past
-        g.fillStyle = 'rgba(56,189,248,' + (0.16 + Math.sin(ts / 200) * 0.06) + ')'; g.beginPath(); g.arc(0, 0, 13, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(56,189,248,' + (0.16 + DM.sin(ts / 200) * 0.06) + ')'; g.beginPath(); g.arc(0, 0, 13, 0, TAU); g.fill();
         g.strokeStyle = '#0c4a6e'; g.lineWidth = 0.9;
         for (const [x, y, h, a] of [[-5, 2, 9, -0.35], [0, 0, 12, 0], [5, 2, 8, 0.4]]) {
           g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = '#7dd3fc';
@@ -672,29 +672,29 @@ const XR = (() => {
       case 'tornado': {
         g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(0, 6, 14, 5, 0, 0, TAU); g.fill();
         for (let i = 0; i < 5; i++) {
-          const y = 4 - i * 6, w = 6 + i * 3.2, sw = Math.sin(ts / 90 + i) * 2.5;
+          const y = 4 - i * 6, w = 6 + i * 3.2, sw = DM.sin(ts / 90 + i) * 2.5;
           g.fillStyle = 'rgba(' + (226 - i * 8) + ',' + (232 - i * 6) + ',240,' + (0.75 - i * 0.08) + ')'; g.strokeStyle = 'rgba(100,116,139,.6)'; g.lineWidth = 1;
           g.beginPath(); g.ellipse(sw, y, w, w * 0.32, 0, 0, TAU); g.fill(); g.stroke();
         }
         g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1.4; for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(0, -8, 8 + i * 4, ts / 80 + i * 2, ts / 80 + i * 2 + 1.4); g.stroke(); }
-        g.fillStyle = '#4ade80'; for (let i = 0; i < 3; i++) { const a = ts / 110 + i * 2.1; g.beginPath(); g.ellipse(Math.cos(a) * 13, -10 + Math.sin(a) * 4, 2.6, 1.3, a, 0, TAU); g.fill(); }
+        g.fillStyle = '#4ade80'; for (let i = 0; i < 3; i++) { const a = ts / 110 + i * 2.1; g.beginPath(); g.ellipse(DM.cos(a) * 13, -10 + DM.sin(a) * 4, 2.6, 1.3, a, 0, TAU); g.fill(); }
         break;
       }
       case 'ball': {
         g.strokeStyle = 'rgba(96,165,250,.45)'; g.lineWidth = 1.5; g.setLineDash([5, 6]); g.beginPath(); g.arc(0, 0, m.r, ts / 400, ts / 400 + TAU); g.stroke(); g.setLineDash([]);
         g.fillStyle = 'rgba(147,197,253,.14)'; g.beginPath(); g.arc(0, 0, m.r, 0, TAU); g.fill();
-        const R = 9 + Math.sin(ts / 60) * 1.5;
+        const R = 9 + DM.sin(ts / 60) * 1.5;
         g.fillStyle = 'rgba(191,219,254,.5)'; g.beginPath(); g.arc(0, 0, R + 5, 0, TAU); g.fill();
         g.fillStyle = '#3b82f6'; g.beginPath(); g.arc(0, 0, R, 0, TAU); g.fill();
         g.fillStyle = '#eff6ff'; g.beginPath(); g.arc(-2, -2, R * 0.45, 0, TAU); g.fill();
         g.strokeStyle = '#fef08a'; g.lineWidth = 1.6;
-        for (let i = 0; i < 3; i++) { const a = ts / 70 * (i % 2 ? 1 : -1) + i * 2.1; g.beginPath(); g.moveTo(Math.cos(a) * R, Math.sin(a) * R); g.lineTo(Math.cos(a + 0.3) * (R + 6), Math.sin(a + 0.3) * (R + 6)); g.lineTo(Math.cos(a - 0.1) * (R + 10), Math.sin(a - 0.1) * (R + 10)); g.stroke(); }
+        for (let i = 0; i < 3; i++) { const a = ts / 70 * (i % 2 ? 1 : -1) + i * 2.1; g.beginPath(); g.moveTo(DM.cos(a) * R, DM.sin(a) * R); g.lineTo(DM.cos(a + 0.3) * (R + 6), DM.sin(a + 0.3) * (R + 6)); g.lineTo(DM.cos(a - 0.1) * (R + 10), DM.sin(a - 0.1) * (R + 10)); g.stroke(); }
         break;
       }
       case 'vine': {   // úponky obtočené kolem slizáka
         g.strokeStyle = '#15803d'; g.lineWidth = 2.6; g.lineCap = 'round';
-        for (let i = 0; i < 3; i++) { const a = i * 2.1 + Math.sin(ts / 300) * 0.2; g.beginPath(); g.moveTo(Math.cos(a) * 15, Math.sin(a) * 15 + 6); g.bezierCurveTo(Math.cos(a + 1) * 16, Math.sin(a + 1) * 12, Math.cos(a + 2) * 9, Math.sin(a + 2) * 9, Math.cos(a + 2.6) * 11, Math.sin(a + 2.6) * 11); g.stroke(); }
-        g.fillStyle = '#4ade80'; for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.5; g.beginPath(); g.ellipse(Math.cos(a) * 12, Math.sin(a) * 12, 3.4, 1.8, a + 0.8, 0, TAU); g.fill(); }
+        for (let i = 0; i < 3; i++) { const a = i * 2.1 + DM.sin(ts / 300) * 0.2; g.beginPath(); g.moveTo(DM.cos(a) * 15, DM.sin(a) * 15 + 6); g.bezierCurveTo(DM.cos(a + 1) * 16, DM.sin(a + 1) * 12, DM.cos(a + 2) * 9, DM.sin(a + 2) * 9, DM.cos(a + 2.6) * 11, DM.sin(a + 2.6) * 11); g.stroke(); }
+        g.fillStyle = '#4ade80'; for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.5; g.beginPath(); g.ellipse(DM.cos(a) * 12, DM.sin(a) * 12, 3.4, 1.8, a + 0.8, 0, TAU); g.fill(); }
         g.fillStyle = '#f472b6'; g.beginPath(); g.arc(-10, -9, 2, 0, TAU); g.fill();
         break;
       }
@@ -716,14 +716,14 @@ const XR = (() => {
     g.save(); g.translate(s.x, s.y);
     g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(2, 5, 11, 5, 0, 0, TAU); g.fill();
     g.strokeStyle = '#44403c'; g.lineWidth = 2.2; g.lineCap = 'round';
-    for (let i = 0; i < 3; i++) { const a = i * TAU / 3 + Math.PI / 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * 11, Math.sin(a) * 11); g.stroke(); }
+    for (let i = 0; i < 3; i++) { const a = i * TAU / 3 + Math.PI / 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(DM.cos(a) * 11, DM.sin(a) * 11); g.stroke(); }
     g.fillStyle = '#78716c'; g.strokeStyle = '#1c1917'; g.lineWidth = 1.2; g.beginPath(); g.arc(0, 0, 6.5, 0, TAU); g.fill(); g.stroke();
     g.rotate(s.ang);
     const col = { basic: '#a16207', crushing_mace: '#57534e', explosion_bomb: '#b91c1c', laser_beam: '#ea580c', frost_pulse: '#0ea5e9', plasma: '#a855f7' }[s.kind] || '#a16207';
     switch (s.kind) {
       case 'crushing_mace':
         g.fillStyle = '#44403c'; g.fillRect(0, -1.5, 9, 3); g.fillStyle = '#a8a29e'; g.beginPath(); g.arc(11, 0, 4, 0, TAU); g.fill(); g.stroke();
-        g.fillStyle = '#e7e5e4'; for (let i = 0; i < 6; i++) { const a = i * TAU / 6; g.beginPath(); g.arc(11 + Math.cos(a) * 4.5, Math.sin(a) * 4.5, 1.2, 0, TAU); g.fill(); }
+        g.fillStyle = '#e7e5e4'; for (let i = 0; i < 6; i++) { const a = i * TAU / 6; g.beginPath(); g.arc(11 + DM.cos(a) * 4.5, DM.sin(a) * 4.5, 1.2, 0, TAU); g.fill(); }
         break;
       case 'explosion_bomb':
         g.fillStyle = '#292524'; g.fillRect(0, -4.5, 10, 9); g.strokeRect(0, -4.5, 10, 9); g.fillStyle = '#7f1d1d'; g.fillRect(8, -5, 3, 10);
@@ -738,7 +738,7 @@ const XR = (() => {
         break;
       case 'plasma':
         g.fillStyle = '#44403c'; g.fillRect(0, -2.5, 8, 5);
-        g.fillStyle = 'rgba(192,132,252,' + (0.5 + Math.sin(ts / 80) * 0.2) + ')'; g.beginPath(); g.arc(10, 0, 5, 0, TAU); g.fill(); g.fillStyle = '#67e8f9'; g.beginPath(); g.arc(10, 0, 2.4, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(192,132,252,' + (0.5 + DM.sin(ts / 80) * 0.2) + ')'; g.beginPath(); g.arc(10, 0, 5, 0, TAU); g.fill(); g.fillStyle = '#67e8f9'; g.beginPath(); g.arc(10, 0, 2.4, 0, TAU); g.fill();
         break;
       default:
         g.fillStyle = '#292524'; g.fillRect(0, -2, 12, 4); g.fillRect(0, -4, 4, 8);
@@ -749,7 +749,7 @@ const XR = (() => {
     g.fillStyle = '#facc15'; g.beginPath(); g.arc(-1, -1, 1.2, 0, TAU); g.fill();
     g.restore();
   }
-  function star(g, x, y, r) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - Math.PI / 2, q = i % 2 ? r * 0.45 : r; g.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q); } g.closePath(); g.fill(); }
+  function star(g, x, y, r) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - Math.PI / 2, q = i % 2 ? r * 0.45 : r; g.lineTo(x + DM.cos(a) * q, y + DM.sin(a) * q); } g.closePath(); g.fill(); }
   function air(g, ts) {
     for (const s of G.sentries) {
       if (has('trpaslici_inzenyr')) { ex('trpaslici_inzenyr')(g, 'sentry_' + s.kind, s.x, s.y, s.ang, ts, { firing: s.firedAt ? Math.max(0, 1 - (G.time - s.firedAt) / 0.1) : 0 }); continue; }
@@ -763,7 +763,7 @@ const XR = (() => {
   }
   // Gryf v kresleném stylu: tělo, mávající křídla, bílá hlava se zobákem a jezdec (zbroj podle úrovní)
   function gryf(g, gr, t, ts) {
-    const tier = Math.max(...t.up), s = 1 + tier * 0.06, flap = Math.sin(ts / 90) * 0.35;
+    const tier = Math.max(...t.up), s = 1 + tier * 0.06, flap = DM.sin(ts / 90) * 0.35;
     const armor = tier >= 5 ? '#facc15' : tier >= 4 ? '#60a5fa' : null;
     g.save();
     g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(gr.x + 10, gr.y + 18, 16 * s, 7 * s, 0, 0, TAU); g.fill();

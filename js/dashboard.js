@@ -184,7 +184,7 @@ function loadGames(user) {
       .sort((a, b) => lastActive(b) - lastActive(a)).slice(0, 5);
     wireLobbyX(tdl);
     tdl.innerHTML = games.length ? games.map(g => lobbyRow('tdGames', g, user.uid, `obrana.html?g=${g.id}`, g.hostName || 'Bitva',
-      `${esc(TD_MAPS[g.map] || '')} · ${(g.playerIds || []).length}/4 hráčů · čeká`)).join('')
+      `${g.coop ? '🤝 spolu · ' : '⚔️ proti sobě · '}${esc(TD_MAPS[g.map] || '')} · ${(g.playerIds || []).length}/4 hráčů · čeká`)).join('')
       : '<div class="game-empty">Nikdo z přátel teď bitvu nezaložil.</div>';
   }, () => { tdl.innerHTML = '<div class="game-empty">Bitvy se nepodařilo načíst.</div>'; });
   const dob = document.getElementById('dobLobbies');

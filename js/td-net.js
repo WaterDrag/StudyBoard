@@ -26,7 +26,7 @@ async function vsCreate() {
   rtdb();
   const friends = await mcFriends().catch(() => []);
   const ref = await db.collection('tdGames').add({
-    hostUid: ME.uid, hostName: myName(), status: 'lobby', map: pref.map, teams: false,
+    hostUid: ME.uid, hostName: myName(), status: 'lobby', map: pref.map, teams: false, coop: pref.mode === 'coop',
     allowedUids: [ME.uid, ...friends], playerIds: [ME.uid],
     players: { [ME.uid]: { name: myName(), hero: pref.hero, color: TD_COLORS[0], team: 0 } },
     cards: packCards(POOL),   // svitky ze stejných balíčků pro všechny hráče
@@ -63,7 +63,7 @@ function vsOpen(gid) {
     if (LOBBY.status === 'lobby') { if (LOBBY.playerIds.includes(ME.uid)) renderLobby(); return; }
     if (LOBBY.status === 'play' && !NET && LOBBY.playerIds.includes(ME.uid)) {
       if (!POOL.length) { toast('Hra už běží — rozehranou mapu po obnovení stránky nejde vrátit.'); return; }
-      startVersus(LOBBY);
+      if (LOBBY.coop) startCoop(LOBBY); else startVersus(LOBBY);
     }
   }, e => toast('Hru se nepodařilo načíst: ' + e.message));
 }
@@ -73,9 +73,10 @@ function renderLobby() {
   ['tdSetup', 'tdGame', 'tdEnd'].forEach(id => { $(id).hidden = true; });
   $('tdLobby').hidden = false;
   const map = TD.maps.find(m => m.id === d.map);
-  $('tdLobbyInfo').textContent = `${d.hostName} zakládá bitvu na mapě ${map?.name || ''}. Přátelé ji uvidí v záložce Hry, nebo jim pošli odkaz. Hrají 2–4 hráči.`;
+  $('tdLobbyInfo').textContent = d.coop ? `${d.hostName} zakládá společnou obranu mapy ${map?.name || ''}. Bráníte jednu mapu spolu, každý má svoje zlaťáky a hrdinu. Přátelé hru uvidí v záložce Hry, nebo jim pošli odkaz. Hrají 2–4 hráči.`
+    : `${d.hostName} zakládá bitvu na mapě ${map?.name || ''}. Přátelé ji uvidí v záložce Hry, nebo jim pošli odkaz. Hrají 2–4 hráči.`;
   $('tdLobbyDecks').innerHTML = sbLobbyDecksHTML(d.decks, '📜 Svitky z balíčků');
-  const teams = d.teams && d.playerIds.length === 4;
+  const teams = !d.coop && d.teams && d.playerIds.length === 4;
   $('tdLobbyPlayers').innerHTML = d.playerIds.map(uid => {
     const p = d.players[uid] || {}, h = HDEF[p.hero];
     return `<button type="button" class="td-lp${teams ? ' t' + p.team : ''}" data-uid="${uid}" style="--c:${p.color}" ${host && teams ? '' : 'disabled'}>
@@ -93,9 +94,10 @@ function renderLobby() {
   $('tdGoVs').hidden = !host;
   $('tdGoVs').disabled = n < 2 || (teams && !teamsValid(d));
   $('tdLobbyHint').textContent = n < 2 ? 'Čeká se aspoň na jednoho dalšího hráče.'
+    : d.coop ? (host ? 'Všichni tu? Spusť společnou hru.' : 'Čeká se, až hostitel spustí hru.')
     : teams && !teamsValid(d) ? 'V každém týmu musí být dva hráči.'
     : host ? `Všichni tu? Spusť hru (${teams ? '2 na 2' : n === 2 ? '1 na 1' : 'každý sám za sebe'}).` : 'Čeká se, až hostitel spustí hru.';
-  $('tdGoVs').onclick = () => tdRef().update({ status: 'play', teams, startAt: serverNow() + 6000 }).catch(e => toast('Nepovedlo se: ' + e.message));
+  $('tdGoVs').onclick = () => tdRef().update({ status: 'play', teams, startAt: serverNow() + 6000, ...(d.coop ? { seed: 1 + Math.floor(Math.random() * 2e9) } : {}) }).catch(e => toast('Nepovedlo se: ' + e.message));
   $('tdCopy').onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Odkaz zkopírován.'); } catch (_) { prompt('Zkopíruj odkaz:', location.href); } };
   $('tdLeave').onclick = async () => {
     try {

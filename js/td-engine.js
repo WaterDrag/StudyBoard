@@ -11,25 +11,60 @@ const ECON = TD.econ;
 let G = null;
 let _uid = 0;
 
+// ── Deterministická matematika a náhoda (kvůli co-opu) ──────────────
+// V co-opu počítá každý hráč stejnou simulaci a posílají se jen akce. Math.sin/cos/atan2/hypot se ale mezi
+// JS enginy (Chrome × Safari × Firefox) liší v posledních bitech a mapy by se časem rozešly. Tyhle verze
+// používají jen +, −, ×, ÷ a sqrt, které IEEE 754 předepisuje přesně — všude dají stejný výsledek.
+const DM = (() => {
+  const PI = Math.PI, TAU = PI * 2, HALF = PI / 2, S3 = Math.sqrt(3), T12 = 2 - Math.sqrt(3);
+  function sin(x) {
+    if (!(x > -1e15 && x < 1e15)) return NaN;
+    x -= TAU * Math.round(x / TAU);
+    if (x > HALF) x = PI - x; else if (x < -HALF) x = -PI - x;
+    const x2 = x * x;
+    return x * (1 + x2 * (-1 / 6 + x2 * (1 / 120 + x2 * (-1 / 5040 + x2 * (1 / 362880 + x2 * (-1 / 39916800 + x2 * (1 / 6227020800 + x2 * (-1 / 1307674368000))))))));
+  }
+  function atan(t) {
+    let sign = 1; if (t < 0) { sign = -1; t = -t; }
+    let inv = false; if (t > 1) { t = 1 / t; inv = true; }
+    let off = 0; if (t > T12) { t = (t * S3 - 1) / (S3 + t); off = PI / 6; }
+    const t2 = t * t;
+    let r = off + t * (1 - t2 * (1 / 3 - t2 * (1 / 5 - t2 * (1 / 7 - t2 * (1 / 9 - t2 * (1 / 11 - t2 / 13))))));
+    if (inv) r = HALF - r;
+    return sign * r;
+  }
+  return {
+    sin, cos: x => sin(x + HALF), atan,
+    atan2(y, x) { if (x > 0) return atan(y / x); if (x < 0) return y >= 0 ? atan(y / x) + PI : atan(y / x) - PI; return y > 0 ? HALF : y < 0 ? -HALF : 0; },
+    hypot: (a, b) => Math.sqrt(a * a + b * b),
+  };
+})();
+// náhoda simulace: v co-opu ze společného semínka (G.rng), jinak obyčejná
+function tdRng(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const simRnd = () => (G && G.rng ? G.rng() : Math.random());
+// všichni hrdinové na mapě (v co-opu má každý hráč svého — přepisuje td-coop.js)
+function allHeroes() { return G.hero ? [G.hero] : []; }
+function heroTick(dt) { if (G.hero) updateHero(dt); }
+
 /* ── Cesty ─────────────────────────────────────────────────────── */
 function buildPath(pts) {
   const segs = []; let len = 0;
   for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1], b = pts[i], l = Math.hypot(b.x - a.x, b.y - a.y);
-    segs.push({ a, b, l, from: len, ang: Math.atan2(b.y - a.y, b.x - a.x) });
+    const a = pts[i - 1], b = pts[i], l = DM.hypot(b.x - a.x, b.y - a.y);
+    segs.push({ a, b, l, from: len, ang: DM.atan2(b.y - a.y, b.x - a.x) });
     len += l;
   }
   return { pts, segs, len };
 }
 function posAt(path, d) {
-  if (d <= 0) { const s = path.segs[0]; return { x: s.a.x + Math.cos(s.ang) * d, y: s.a.y + Math.sin(s.ang) * d, ang: s.ang }; }
+  if (d <= 0) { const s = path.segs[0]; return { x: s.a.x + DM.cos(s.ang) * d, y: s.a.y + DM.sin(s.ang) * d, ang: s.ang }; }
   for (const s of path.segs) if (d <= s.from + s.l) { const k = (d - s.from) / s.l; return { x: s.a.x + (s.b.x - s.a.x) * k, y: s.a.y + (s.b.y - s.a.y) * k, ang: s.ang }; }
   const s = path.segs[path.segs.length - 1]; return { x: s.b.x, y: s.b.y, ang: s.ang };
 }
 function distToSeg(px, py, a, b) {
   const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
   let k = l2 ? ((px - a.x) * dx + (py - a.y) * dy) / l2 : 0; k = Math.max(0, Math.min(1, k));
-  return Math.hypot(px - (a.x + dx * k), py - (a.y + dy * k));
+  return DM.hypot(px - (a.x + dx * k), py - (a.y + dy * k));
 }
 function distToTrack(x, y) {
   let m = Infinity;
@@ -40,7 +75,7 @@ function distToTrack(x, y) {
 function nearestTrackPoint(x, y, maxR) {
   let best = null, bd = maxR;
   for (const p of G.paths) for (let d = 0; d < p.len; d += 12) {
-    const q = posAt(p, d), k = Math.hypot(q.x - x, q.y - y);
+    const q = posAt(p, d), k = DM.hypot(q.x - x, q.y - y);
     if (k < bd) { bd = k; best = q; }
   }
   return best;
@@ -68,7 +103,7 @@ function spawnEnemy(t, pathIdx, d, mods = [], opt = {}) {
     armored: def.traits.includes('armored'),
     x: 0, y: 0, lastHit: G.time, frozenUntil: 0, brittle: false, stunUntil: 0, slowPct: 0, slowUntil: 0,
     vuln: 0, vulnUntil: 0, vulnMul: 1, vulnMulUntil: 0, burn: null, acid: null, revealed: false,
-    goldMul: 1, coated: false, spdMul: opt.spdMul || 1, hpMulKids: opt.hpMul || 1, dead: false, wob: Math.random() * 6.28,
+    goldMul: 1, coated: false, spdMul: opt.spdMul || 1, hpMulKids: opt.hpMul || 1, dead: false, wob: simRnd() * 6.28,
   };
   if (opt.bounty) e.bounty = opt.bounty;
   if (mods.includes('zrychleny')) { e.haste = true; e.spdMul *= 1.35; } else if (opt.haste) e.haste = true;   // rychlost potomci dědí v spdMul
@@ -169,15 +204,15 @@ function killEnemy(e, overflow, type, o) {
   if (G.blessUntil > G.time) g += 1;
   addGold(g, true);
   if (e.bounty) { addGold(e.bounty); G.stats.bounty = (G.stats.bounty || 0) + e.bounty; floatText(e.x, e.y - 14, '+' + Math.round(e.bounty), '#fde047'); }
-  for (const t of G.necros) if (Math.hypot(t.x - e.x, t.y - e.y) < t.st.range) { t.souls = Math.min(t.fx.graveyard_max_souls || 50, (t.souls || 0) + 1); break; }
+  for (const t of G.necros) if (DM.hypot(t.x - e.x, t.y - e.y) < t.st.range) { t.souls = Math.min(t.fx.graveyard_max_souls || 50, (t.souls || 0) + 1); break; }
   if (e.coated && isBoss(e)) explode(e.x, e.y, e.coatR, e.maxHp * e.coatPct, 'true', 999, null, { kind: 'boom' });
   if (e.def.tp?.death_frost_nova_radius_px) {
     const r = e.def.tp.death_frost_nova_radius_px;
     addFx({ kind: 'frostRing', x: e.x, y: e.y, r, dur: 0.5 });
-    for (const t of G.towers) if (Math.hypot(t.x - e.x, t.y - e.y) <= r) t.stunUntil = Math.max(t.stunUntil || 0, G.time + (e.def.tp.death_frost_nova_stun_towers_s || 2));
+    for (const t of G.towers) if (DM.hypot(t.x - e.x, t.y - e.y) <= r) t.stunUntil = Math.max(t.stunUntil || 0, G.time + (e.def.tp.death_frost_nova_stun_towers_s || 2));
   }
   if (isBoss(e)) addFx({ kind: 'bossdie', x: e.x, y: e.y, r: e.def.r, col: e.def.col, dur: 0.6 });
-  else if (Math.random() < 0.35 || e.def.hp > 1) addFx({ kind: 'splat', x: e.x, y: e.y, r: e.def.r, col: e.def.col, dur: 0.35 });
+  else if (simRnd() < 0.35 || e.def.hp > 1) addFx({ kind: 'splat', x: e.x, y: e.y, r: e.def.r, col: e.def.col, dur: 0.35 });
   // potomci (vrstvy)
   if (e.shrunk) return;
   const kids = [], tpk = e.def.tp || {}, swarm = !!tpk.spawn_spread_px;
@@ -231,7 +266,7 @@ function enemiesNear(x, y, r) {
   const x0 = Math.floor((x - r2) / CELL), x1 = Math.floor((x + r2) / CELL), y0 = Math.floor((y - r2) / CELL), y1 = Math.floor((y + r2) / CELL);
   for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
     const a = _grid.get((cx + 50) * 1000 + cy + 50); if (!a) continue;
-    for (const e of a) if (!e.dead && Math.hypot(e.x - x, e.y - y) <= r + e.def.r) out.push(e);
+    for (const e of a) if (!e.dead && DM.hypot(e.x - x, e.y - y) <= r + e.def.r) out.push(e);
   }
   return out;
 }
@@ -252,7 +287,7 @@ function pickTarget(t, range, opts = {}) {
     if (mode === 'first') v = progressOf(e);
     else if (mode === 'last') v = -progressOf(e);
     else if (mode === 'strong') v = (isBoss(e) ? 1e6 : 0) + rbeOf(e.t) * 10 + progressOf(e);
-    else v = -Math.hypot(e.x - t.x, e.y - t.y);
+    else v = -DM.hypot(e.x - t.x, e.y - t.y);
     if (v > bv) { bv = v; best = e; }
   }
   return best;
@@ -264,7 +299,7 @@ function strongestEnemy(bossOnly) {
 }
 function randomEnemies(n) {
   const a = G.enemies.filter(e => !e.dead && e.d > 0);
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(simRnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a.slice(0, n);
 }
 
@@ -346,12 +381,12 @@ function canUpgradePath(t, p) {
 function discountAt(x, y, tier) {
   if (tier > 3) return 0;
   let d = 0;
-  for (const h of G.towers) if (h.type === 'strazni_hlaska' && h.fx.discount_upgrades_t1_to_t3_pct && Math.hypot(h.x - x, h.y - y) <= h.st.range) d += h.fx.discount_upgrades_t1_to_t3_pct;
+  for (const h of G.towers) if (h.type === 'strazni_hlaska' && h.fx.discount_upgrades_t1_to_t3_pct && DM.hypot(h.x - x, h.y - y) <= h.st.range) d += h.fx.discount_upgrades_t1_to_t3_pct;
   return Math.min(0.25, d);
 }
 function freeUpgrade(t, tier) {
   if (TDEF[t.type].cat !== 'basic' || tier > 2) return false;
-  for (const h of G.towers) if (h.type === 'strazni_hlaska' && Math.hypot(h.x - t.x, h.y - t.y) <= h.st.range) {
+  for (const h of G.towers) if (h.type === 'strazni_hlaska' && DM.hypot(h.x - t.x, h.y - t.y) <= h.st.range) {
     if (tier === 1 && (h.fx.free_tier1_upgrades_for_basic_towers || h.fx.free_tier2_upgrades_for_basic_towers)) return true;
     if (tier === 2 && h.fx.free_tier2_upgrades_for_basic_towers) return true;
   }
@@ -361,7 +396,7 @@ function upgradeCost(t, p) {
   const u = TDEF[t.type].paths[p][t.up[p]]; if (!u) return null;
   if (freeUpgrade(t, u.tier)) return { gold: 0, km: u.km, u };
   let g = u.cost * G.costMul * (1 - discountAt(t.x, t.y, u.tier));
-  if (G.nextUpgradeDiscount && G.nextUpgradeDiscount.until > G.time && Math.hypot(G.nextUpgradeDiscount.x - t.x, G.nextUpgradeDiscount.y - t.y) <= G.nextUpgradeDiscount.r) g *= 1 - G.nextUpgradeDiscount.pct;
+  if (G.nextUpgradeDiscount && G.nextUpgradeDiscount.until > G.time && DM.hypot(G.nextUpgradeDiscount.x - t.x, G.nextUpgradeDiscount.y - t.y) <= G.nextUpgradeDiscount.r) g *= 1 - G.nextUpgradeDiscount.pct;
   return { gold: Math.round(g), km: u.km, u };
 }
 function buyUpgrade(t, p) {
@@ -370,7 +405,7 @@ function buyUpgrade(t, p) {
   if (G.km < c.km) return `Potřebuješ ${c.km} 💎`;
   if (G.gold + 1e-6 < c.gold) return 'Málo zlaťáků';
   G.gold -= c.gold; G.km -= c.km; t.spent += c.gold; t.kmSpent += c.km;
-  if (G.nextUpgradeDiscount && G.nextUpgradeDiscount.until > G.time && Math.hypot(G.nextUpgradeDiscount.x - t.x, G.nextUpgradeDiscount.y - t.y) <= G.nextUpgradeDiscount.r) G.nextUpgradeDiscount = null;
+  if (G.nextUpgradeDiscount && G.nextUpgradeDiscount.until > G.time && DM.hypot(G.nextUpgradeDiscount.x - t.x, G.nextUpgradeDiscount.y - t.y) <= G.nextUpgradeDiscount.r) G.nextUpgradeDiscount = null;
   t.up[p]++;
   recalcTower(t);
   addFx({ kind: 'upgrade', x: t.x, y: t.y, dur: 0.6 });
@@ -384,7 +419,7 @@ function inRect(x, y, r, z, pad = 0) { return x + r > z.x - pad && x - r < z.x +
 function inWater(x, y, r) { return (G.map.water_zones || []).some(z => inRect(x, y, -r * 0.4, z)); }
 function touchesWater(x, y, r) { return (G.map.water_zones || []).some(z => inRect(x, y, r * 0.7, z)); }
 function waterFrozenAt(x, y) {
-  return G.towers.some(t => t.fx.freeze_on_water_allow_land_towers && Math.hypot(t.x - x, t.y - y) <= t.st.range);
+  return G.towers.some(t => t.fx.freeze_on_water_allow_land_towers && DM.hypot(t.x - x, t.y - y) <= t.st.range);
 }
 // Dá se tady postavit? Vrací null, nebo důvod.
 function placeProblem(type, x, y, ignore) {
@@ -397,7 +432,7 @@ function placeProblem(type, x, y, ignore) {
   for (const o of G.map.obstacles || []) if (!o.removed && inRect(x, y, r * 0.8, o)) return o.name;
   if (water && !inWater(x, y, r)) return 'Loď jen do vody';
   if (!water && touchesWater(x, y, r) && !waterFrozenAt(x, y)) return 'Do vody jen loď';
-  for (const o of [...G.towers, G.hero].filter(Boolean)) if (o !== ignore && Math.hypot(o.x - x, o.y - y) < (o.r + r) * 0.92) return 'Moc blízko jiné věži';
+  for (const o of [...G.towers, ...allHeroes()]) if (o !== ignore && DM.hypot(o.x - x, o.y - y) < (o.r + r) * 0.92) return 'Moc blízko jiné věži';
   return null;
 }
 function placeTower(type, x, y) {
@@ -440,13 +475,13 @@ function refreshAuras() {
     if (t.fx.global_tower_attack_speed_per_market_pct) glob.marketPct = t.fx.global_tower_attack_speed_per_market_pct;
   }
   G.glob = glob;
-  const all = [...G.towers, G.hero].filter(Boolean);
+  const all = [...G.towers, ...allHeroes()];
   for (const t of all) {
     const a = { spd: 0, rng: 0, prc: 0, dmg: 0, camo: false, trueD: false, cash: 0, cdRed: 0, mine: 0, pspd: 0 };
     const cat = t.hero ? 'hero' : TDEF[t.type].cat;
     for (const h of G.towers) {
       if (h.type !== 'strazni_hlaska' || h === t) continue;
-      if (Math.hypot(h.x - t.x, h.y - t.y) > h.st.range) continue;
+      if (DM.hypot(h.x - t.x, h.y - t.y) > h.st.range) continue;
       a.rng = Math.max(a.rng, TDEF.strazni_hlaska.base.aura_range_bonus_pct);
       if (h.fx.aura_attack_speed_bonus_pct) a.spd = Math.max(a.spd, h.fx.aura_attack_speed_bonus_pct);
       if (cat === 'basic' && h.fx.basic_towers_pierce_add) { a.prc += h.fx.basic_towers_pierce_add; a.rng += h.fx.basic_towers_range_pct || 0; a.pspd = h.fx.basic_towers_projectile_speed_pct || 0; }
@@ -457,17 +492,18 @@ function refreshAuras() {
       if (h.fx.bonus_cash_per_pop_in_radius_pct) a.cash = Math.max(a.cash, h.fx.bonus_cash_per_pop_in_radius_pct);
       if (t.type === 'zlaty_dul') a.mine += h.up[2] >= 5 ? 0.5 : (h.fx.bonus_cash_from_farms_in_radius_pct || 0);
     }
-    // Oskar: věže v jeho dosahu
-    const hero = G.hero;
-    if (hero && hero !== t && hero.id === 'kronikar_oskar' && Math.hypot(hero.x - t.x, hero.y - t.y) <= hero.st.range) {
-      const L = hero.level;
-      if (L >= 4) a.rng += 0.1;
-      if (L >= 11) a.dmg += L >= 19 ? 2 : 1;
-      if (L >= 16) a.spd += 0.15;
-      if (L >= 19) a.boss = 5;
+    // Oskar, Bedřich, Radka: věže v dosahu hrdiny (v co-opu každého z hrdinů)
+    for (const hero of allHeroes()) {
+      if (hero && hero !== t && hero.id === 'kronikar_oskar' && DM.hypot(hero.x - t.x, hero.y - t.y) <= hero.st.range) {
+        const L = hero.level;
+        if (L >= 4) a.rng += 0.1;
+        if (L >= 11) a.dmg += L >= 19 ? 2 : 1;
+        if (L >= 16) a.spd += 0.15;
+        if (L >= 19) a.boss = 5;
+      }
+      if (hero && hero !== t && hero.id === 'lovec_bedrich' && hero.level >= 18 && (t.type === 'orli_ostrostrelec' || t.type === 'kralovsky_lucistnik') && DM.hypot(hero.x - t.x, hero.y - t.y) <= hero.st.range) a.spd += 0.15;
+      if (hero && hero !== t && hero.id === 'carodejka_radka' && hero.level >= 8 && cat === 'magic' && DM.hypot(hero.x - t.x, hero.y - t.y) <= hero.st.range) a.prc += 3;
     }
-    if (hero && hero !== t && hero.id === 'lovec_bedrich' && hero.level >= 18 && (t.type === 'orli_ostrostrelec' || t.type === 'kralovsky_lucistnik') && Math.hypot(hero.x - t.x, hero.y - t.y) <= hero.st.range) a.spd += 0.15;
-    if (hero && hero !== t && hero.id === 'carodejka_radka' && hero.level >= 8 && cat === 'magic' && Math.hypot(hero.x - t.x, hero.y - t.y) <= hero.st.range) a.prc += 3;
     if (t.type === 'orli_ostrostrelec') a.spd += glob.snipers;
     if (cat === 'magic') a.dmg += glob.magicDmg;
     if (t.type === 'ricni_galera') a.prc += glob.galleyPrc;
@@ -515,7 +551,7 @@ function hitOpts(t, extra) {
 /* ── Střely ────────────────────────────────────────────────────── */
 // p: { x,y, ang, spd, dist(max), dmg, type, pierce, src, r, kind, expl?, homing?, tx,ty (cíl výbuchu), onHit? }
 function shoot(p) {
-  p.vx = Math.cos(p.ang) * p.spd; p.vy = Math.sin(p.ang) * p.spd; p.trav = 0; p.hits = p.hits || new Set(); p.r = p.r || 6;
+  p.vx = DM.cos(p.ang) * p.spd; p.vy = DM.sin(p.ang) * p.spd; p.trav = 0; p.hits = p.hits || new Set(); p.r = p.r || 6;
   if (G.projs.length < 1400) G.projs.push(p);
   return p;
 }
@@ -536,8 +572,8 @@ function updateProjs(dt) {
   for (const p of G.projs) {
     if (p.dead) continue;
     if (mags.length && !p.lob && (p.type === 'sharp' || p.type === 'normal')) {   // Magnetický sliz stáhne střelu na sebe
-      for (const m of mags) if (!p.hits.has(m) && Math.hypot(m.x - p.x, m.y - p.y) <= m.def.tp.magnet_radius_px) {
-        if (p.magRoll == null) p.magRoll = Math.random() < (m.def.tp.redirect_chance ?? 1);   // každá střela si „hodí“ jen jednou
+      for (const m of mags) if (!p.hits.has(m) && DM.hypot(m.x - p.x, m.y - p.y) <= m.def.tp.magnet_radius_px) {
+        if (p.magRoll == null) p.magRoll = simRnd() < (m.def.tp.redirect_chance ?? 1);   // každá střela si „hodí“ jen jednou
         if (p.magRoll) { p.homing = true; p.tgt = m; }
         break;
       }
@@ -545,10 +581,10 @@ function updateProjs(dt) {
     if (p.homing) {
       if (!p.tgt || p.tgt.dead) p.tgt = pickTarget({ x: p.x, y: p.y, target: 'close', st: p.src?.st, aura: p.src?.aura }, 260);
       if (p.tgt) {
-        const want = Math.atan2(p.tgt.y - p.y, p.tgt.x - p.x);
+        const want = DM.atan2(p.tgt.y - p.y, p.tgt.x - p.x);
         let da = want - p.ang; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
         p.ang += Math.max(-8 * dt, Math.min(8 * dt, da));
-        p.vx = Math.cos(p.ang) * p.spd; p.vy = Math.sin(p.ang) * p.spd;
+        p.vx = DM.cos(p.ang) * p.spd; p.vy = DM.sin(p.ang) * p.spd;
       }
     }
     p.x += p.vx * dt; p.y += p.vy * dt; p.trav += p.spd * dt;
@@ -590,14 +626,14 @@ function updateZones(dt) {
 }
 
 /* ── Útoky jednotlivých věží ───────────────────────────────────── */
-function aimAt(t, e) { t.ang = Math.atan2(e.y - t.y, e.x - t.x); }
+function aimAt(t, e) { t.ang = DM.atan2(e.y - t.y, e.x - t.x); }
 function projSpeed(t, base) { return base * (t.st.pspeed || 1) * (1 + (t.aura?.pspd || 0)); }
 
 function bounceFrom(t, x, y, from, left, dmg, type, hitSet, radius = 130) {
   if (left <= 0) return;
   const cand = enemiesNear(x, y, radius).filter(e => !hitSet.has(e) && e !== from && visibleTo(e, t));
   if (!cand.length) return;
-  const e = cand.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0];
+  const e = cand.sort((a, b) => DM.hypot(a.x - x, a.y - y) - DM.hypot(b.x - x, b.y - y))[0];
   hitSet.add(e);
   addFx({ kind: 'zap', x, y, tx: e.x, ty: e.y, dur: 0.15, col: '#fde68a' });
   hitEnemy(e, dmg, type, hitOpts(t));
@@ -605,7 +641,7 @@ function bounceFrom(t, x, y, from, left, dmg, type, hitSet, radius = 130) {
   bounceFrom(t, e.x, e.y, e, left - 1, dmg, type, hitSet, radius);
 }
 function shrapnel(t, e) {
-  const base = Math.atan2(e.y - t.y, e.x - t.x);
+  const base = DM.atan2(e.y - t.y, e.x - t.x);
   for (let i = 0; i < t.fx.shrapnel_count; i++) {
     shoot({ x: e.x, y: e.y, ang: base + (i - (t.fx.shrapnel_count - 1) / 2) * 0.22, spd: 560, dist: 140, dmg: t.fx.shrapnel_damage || 1, type: 'sharp', pierce: t.fx.shrapnel_pierce || 3, src: t, kind: 'shard', r: 5, hits: new Set([e]) });
   }
@@ -621,7 +657,7 @@ const ATTACK = {
       const ang = t.ang + (n > 1 ? (i - (n - 1) / 2) * spread / Math.max(1, (n - 1) / 2) * 0.5 : 0);
       let crit = 1;
       const cc = (t.fx.crit_chance || 0) + (t.rainUntil > G.time ? 0.5 : 0);
-      if (cc && Math.random() < cc) crit = t.fx.crit_multiplier || 4;
+      if (cc && simRnd() < cc) crit = t.fx.crit_multiplier || 4;
       shoot({ x: t.x, y: t.y, ang, spd: projSpeed(t, 640), dist: effRange(t) * 1.25, dmg: effDamage(t) * crit, type: t.st.type, pierce: effPierce(t), src: t, kind: crit > 1 ? 'arrowCrit' : 'arrow', r: 7,
         onHit: (p, hit) => {
           if (t.fx.bounce_targets && !p.bounced) { p.bounced = true; bounceFrom(t, hit.x, hit.y, hit, t.fx.bounce_targets, p.dmg, p.type, new Set([hit])); }
@@ -665,7 +701,7 @@ const ATTACK = {
     };
     if (t.st.mode === 'projectile') {
       aimAt(t, e);
-      const d = Math.min(effRange(t), Math.hypot(e.x - t.x, e.y - t.y));
+      const d = Math.min(effRange(t), DM.hypot(e.x - t.x, e.y - t.y));
       shoot({ x: t.x, y: t.y, ang: t.ang, spd: projSpeed(t, 420), dist: d, lob: true, r: 8, kind: 'iceball', src: t,
         onBurst: p => {
           explode(p.x, p.y, t.st.expl || 45, effDamage(t), t.st.type === 'freeze' ? 'freeze' : t.st.type, effPierce(t), t, { kind: 'frost', hit: {}, each: x => onFreezeHit(x) });
@@ -698,7 +734,7 @@ const ATTACK = {
   oblehaci_katapult(t, e) {
     aimAt(t, e);
     t.shots++;
-    const d = Math.min(effRange(t), Math.hypot(e.x - t.x, e.y - t.y) + 6);
+    const d = Math.min(effRange(t), DM.hypot(e.x - t.x, e.y - t.y) + 6);
     const second = t.fx.recursive_every_shot || (t.fx.recursive_every_2nd_shot && t.shots % 2 === 0);
     shoot({ x: t.x, y: t.y, ang: t.ang, spd: projSpeed(t, t.st.pspeed > 1 ? 380 : 330), dist: d, lob: true, r: 9, kind: t.fx.bonus_moab_damage >= 15 ? 'harpoonBolt' : 'barrel', src: t,
       onBurst: p => {
@@ -708,7 +744,7 @@ const ATTACK = {
         if (t.fx.cluster_bombs) {
           const wave = (cx, cy, depth) => {
             for (let i = 0; i < t.fx.cluster_bombs; i++) {
-              const a = i / t.fx.cluster_bombs * 6.283 + depth, bx = cx + Math.cos(a) * 34, by = cy + Math.sin(a) * 34;
+              const a = i / t.fx.cluster_bombs * 6.283 + depth, bx = cx + DM.cos(a) * 34, by = cy + DM.sin(a) * 34;
               G.later.push({ at: G.time + 0.08 + depth * 0.15, fn: () => explode(bx, by, 30, (t.fx.cluster_damage || 1) + t.st.clusterAdd, 'normal', 12, t, { kind: 'boomSmall' }) });
             }
           };
@@ -723,7 +759,7 @@ const ATTACK = {
     t.shots++;
     const shell = t.up[1] >= 3 && t.shots % 2 === 0;
     if (shell) {
-      shoot({ x: t.x, y: t.y, ang: t.ang, spd: 360, dist: Math.min(effRange(t), Math.hypot(e.x - t.x, e.y - t.y) + 4), lob: true, r: 8, kind: 'cannon', src: t,
+      shoot({ x: t.x, y: t.y, ang: t.ang, spd: 360, dist: Math.min(effRange(t), DM.hypot(e.x - t.x, e.y - t.y) + 4), lob: true, r: 8, kind: 'cannon', src: t,
         onBurst: p => explode(p.x, p.y, 50, effDamage(t), 'normal', 25, t, { kind: 'boom' }) });
       return;
     }
@@ -747,7 +783,7 @@ const ATTACK = {
       e.armored = false; hitEnemy(e, e.hp + 0.01, 'true', hitOpts(t));
       return;
     }
-    const d = Math.min(effRange(t), Math.hypot(e.x - t.x, e.y - t.y) + 4);
+    const d = Math.min(effRange(t), DM.hypot(e.x - t.x, e.y - t.y) + 4);
     shoot({ x: t.x, y: t.y, ang: t.ang, spd: projSpeed(t, 380), dist: d, lob: true, r: 8, kind: 'flask', src: t,
       onBurst: p => explode(p.x, p.y, t.st.expl || 40, effDamage(t), t.st.type, effPierce(t), t, { kind: 'acid', each: x => {
         if (t.st.acid) x.acid = { dps: t.st.acid, until: G.time + (t.st.acidDur || 3), src: t };
@@ -786,8 +822,8 @@ function updateTower(t, dt) {
   });
   if (fx.secondary_attack_fireball_interval_s) every('fireball', fx.secondary_attack_fireball_interval_s / speedMul(t), () => {
     const e = pickTarget(t, effRange(t)); if (!e) return;
-    const ang = Math.atan2(e.y - t.y, e.x - t.x);
-    shoot({ x: t.x, y: t.y, ang, spd: 360, dist: Math.min(effRange(t), Math.hypot(e.x - t.x, e.y - t.y) + 4), lob: true, r: 9, kind: 'fireball', src: t,
+    const ang = DM.atan2(e.y - t.y, e.x - t.x);
+    shoot({ x: t.x, y: t.y, ang, spd: 360, dist: Math.min(effRange(t), DM.hypot(e.x - t.x, e.y - t.y) + 4), lob: true, r: 9, kind: 'fireball', src: t,
       onBurst: p => explode(p.x, p.y, fx.fireball_radius_px || 45, fx.fireball_damage || 3, fx.fireball_damage_type || 'explosion', 20, t, { kind: 'boomFire' }) });
   });
   if (fx.spawn_fire_wall_on_track_interval_s) every('wall', fx.spawn_fire_wall_on_track_interval_s, () => {
@@ -796,11 +832,11 @@ function updateTower(t, dt) {
   });
   if (fx.continuous_flame_stream || fx.gains_dragon_breath_and_decamo) every('flame', (fx.flame_interval_s || 0.12) / speedMul(t), () => {
     const e = pickTarget(t, Math.min(effRange(t), 140)); if (!e) return;
-    const ang = Math.atan2(e.y - t.y, e.x - t.x);
+    const ang = DM.atan2(e.y - t.y, e.x - t.x);
     addFx({ kind: 'flame', x: t.x, y: t.y, ang, r: Math.min(effRange(t), 140), dur: 0.14 });
     let n = 0;
     for (const x of enemiesNear(t.x, t.y, Math.min(effRange(t), 140))) {
-      let da = Math.atan2(x.y - t.y, x.x - t.x) - ang; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283;
+      let da = DM.atan2(x.y - t.y, x.x - t.x) - ang; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283;
       if (Math.abs(da) > 0.35) continue;
       if (n++ >= (fx.flame_pierce || 6)) break;
       hitEnemy(x, (fx.flame_damage || 1) + t.st.flameAdd, 'energy', hitOpts(t));
@@ -813,13 +849,13 @@ function updateTower(t, dt) {
     if ((t.souls || 0) < 1) return;
     const big = fx.spawn_zombie_moabs && t.souls >= 10;
     t.souls -= big ? 10 : 1;
-    const pi = Math.floor(Math.random() * G.paths.length);
+    const pi = Math.floor(simRnd() * G.paths.length);
     G.allies.push({ path: pi, d: G.paths[pi].len, spd: big ? 45 : 70, dmg: big ? fx.zombie_moab_damage : fx.zombie_damage, pierce: big ? fx.zombie_moab_pierce : fx.zombie_pierce, big, src: t, hits: new Set() });
   });
   if (fx.buff_nearest_tower_interval_s || fx.buff_damage_add) every('potion', fx.buff_nearest_tower_interval_s || 4, () => alchemyBuff(t));
   if (fx.leave_acid_pool_on_track) every('pool', 2.5 / speedMul(t), () => {
     if (pickTarget(t, effRange(t))) return;
-    const q = nearestTrackPoint(t.x + (Math.random() - 0.5) * effRange(t), t.y + (Math.random() - 0.5) * effRange(t), effRange(t));
+    const q = nearestTrackPoint(t.x + (simRnd() - 0.5) * effRange(t), t.y + (simRnd() - 0.5) * effRange(t), effRange(t));
     if (q) G.zones.push({ kind: 'acid', x: q.x, y: q.y, r: 26, dps: Math.max(2, t.st.acid * 2), pierce: fx.pool_pierce || 10, until: G.time + (fx.pool_duration_s || 4), type: 'normal', src: t });
   });
   if (fx.gold_potion_interval_s) every('goldp', fx.gold_potion_interval_s, () => {
@@ -828,7 +864,7 @@ function updateTower(t, dt) {
     for (const x of enemiesNear(e.x, e.y, 45)) x.goldMul = Math.max(x.goldMul, fx.gold_coated_cash_multiplier || 2.5);
   });
   if (fx.shrink_potion_interval_s) every('shrink', fx.shrink_potion_interval_s, () => {
-    const e = G.enemies.find(x => !x.dead && x.t === 'slizovy_obr' && Math.hypot(x.x - t.x, x.y - t.y) <= effRange(t) + 200);
+    const e = G.enemies.find(x => !x.dead && x.t === 'slizovy_obr' && DM.hypot(x.x - t.x, x.y - t.y) <= effRange(t) + 200);
     if (!e) return;
     addFx({ kind: 'shrink', x: e.x, y: e.y, r: e.def.r, dur: 0.6 });
     e.dead = true;
@@ -869,13 +905,13 @@ function updatePhoenix(t, dt) {
   const ph = t.phoenix;
   if (G.time > ph.until) { t.phoenix = null; return; }
   ph.ang += dt * 1.4;
-  ph.x = TW / 2 + Math.cos(ph.ang) * 320; ph.y = TH / 2 + Math.sin(ph.ang * 1.3) * 220;
+  ph.x = TW / 2 + DM.cos(ph.ang) * 320; ph.y = TH / 2 + DM.sin(ph.ang * 1.3) * 220;
   ph.acc = (ph.acc || 0) + dt;
   if (ph.acc < 0.15) return;
   ph.acc = 0;
   const e = pickTarget({ x: ph.x, y: ph.y, target: 'strong', st: { camo: true } }, 2000);
   if (!e) return;
-  shoot({ x: ph.x, y: ph.y, ang: Math.atan2(e.y - ph.y, e.x - ph.x), spd: 620, dist: 900, dmg: 4, type: 'energy', pierce: 3, src: t, kind: 'phoenixFire', r: 7, homing: true, tgt: e });
+  shoot({ x: ph.x, y: ph.y, ang: DM.atan2(e.y - ph.y, e.x - ph.x), spd: 620, dist: 900, dmg: 4, type: 'energy', pierce: 3, src: t, kind: 'phoenixFire', r: 7, homing: true, tgt: e });
 }
 // Alchymista: posilující lektvar na nejbližší útočnou věž
 function alchemyBuff(t) {
@@ -883,8 +919,8 @@ function alchemyBuff(t) {
   const slots = fx.can_keep_2_towers_buffed || fx.buff_is_permanent ? 3 : 1;
   const buffed = G.towers.filter(o => o.buff && o.buff.from === t && o.buff.until > G.time).length;
   if (buffed >= slots && !fx.buff_is_permanent) return;
-  const cand = G.towers.filter(o => o !== t && towerHasAttack(o) && o.type !== 'kralovsky_alchymista' && Math.hypot(o.x - t.x, o.y - t.y) <= effRange(t) + 40 && !(o.buff && o.buff.until > G.time && o.buff.from === t))
-    .sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y));
+  const cand = G.towers.filter(o => o !== t && towerHasAttack(o) && o.type !== 'kralovsky_alchymista' && DM.hypot(o.x - t.x, o.y - t.y) <= effRange(t) + 40 && !(o.buff && o.buff.until > G.time && o.buff.from === t))
+    .sort((a, b) => DM.hypot(a.x - t.x, a.y - t.y) - DM.hypot(b.x - t.x, b.y - t.y));
   const o = cand[0]; if (!o) return;
   const dur = fx.buff_is_permanent ? Infinity : fx.buff_duration_s || (fx.buff_shots ? fx.buff_shots * 0.5 : 6);
   o.buff = { from: t, until: G.time + dur, lead: !!fx.buff_grants_lead_popping || t.up[0] >= 2, boss: fx.buff_bonus_moab_and_ceramic_damage || 0,
@@ -1006,7 +1042,7 @@ function updateHero(dt) {
       if (h.level >= 4 && !cur.dead) cur.burn = { dps: 1, until: G.time + 2, src: h };
       px = cur.x; py = cur.y;
       const nx = enemiesNear(px, py, 90 * (1 + kmBonus * 0.05)).filter(x => !used.has(x) && visibleTo(x, h));
-      cur = nx.sort((a, b) => Math.hypot(a.x - px, a.y - py) - Math.hypot(b.x - px, b.y - py))[0];
+      cur = nx.sort((a, b) => DM.hypot(a.x - px, a.y - py) - DM.hypot(b.x - px, b.y - py))[0];
     }
   }
 }
@@ -1063,12 +1099,12 @@ const ABILITY = {
   },
   'kralovsky_alchymista:2'(t, T) {
     t.beastUntil = G.time + (T >= 5 ? 18 : 15); t.beastDmg = 8;
-    if (T >= 5) G.towers.filter(o => o !== t && towerHasAttack(o) && maxTier(o) <= 3).sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y)).slice(0, 4)
+    if (T >= 5) G.towers.filter(o => o !== t && towerHasAttack(o) && maxTier(o) <= 3).sort((a, b) => DM.hypot(a.x - t.x, a.y - t.y) - DM.hypot(b.x - t.x, b.y - t.y)).slice(0, 4)
       .forEach(o => { o.beastUntil = G.time + 18; o.beastDmg = 9.6; });
   },
   'strazni_hlaska:2'(t, T) {
     if (T >= 5) { G.hornAll = G.time + 15; addFx({ kind: 'horn', x: t.x, y: t.y, r: 900, dur: 1 }); return; }
-    G.towers.forEach(o => { if (Math.hypot(o.x - t.x, o.y - t.y) <= t.st.range) o.hornUntil = G.time + 12; });
+    G.towers.forEach(o => { if (DM.hypot(o.x - t.x, o.y - t.y) <= t.st.range) o.hornUntil = G.time + 12; });
     addFx({ kind: 'horn', x: t.x, y: t.y, r: t.st.range, dur: 1 });
   },
   'zlaty_dul:2'(t, T, a) {
@@ -1275,7 +1311,7 @@ function slimeTraits() {
         }
       }
     }
-    if (tp.tower_attack_speed_slow_pct) { const r = tp.aura_radius_px || 100; for (const t of G.towers) if (t.st.type !== 'energy' && Math.hypot(t.x - e.x, t.y - e.y) <= r) t.chillUntil = G.time + 0.15; }
+    if (tp.tower_attack_speed_slow_pct) { const r = tp.aura_radius_px || 100; for (const t of G.towers) if (t.st.type !== 'energy' && DM.hypot(t.x - e.x, t.y - e.y) <= r) t.chillUntil = G.time + 0.15; }
     if (tp.spawn_interval_s) {   // Královna roje rodí Dělivé slizy a zrychluje okolí
       if (e.broodAt == null) e.broodAt = G.time + tp.spawn_interval_s;
       if (G.time >= e.broodAt) {
@@ -1290,7 +1326,7 @@ function slimeTraits() {
       if (G.time >= e.prismAt) {
         e.prismAt = G.time + tp.shell_cycle_interval_s; e.prismUntil = G.time + (tp.shell_active_duration_s || 2.5);
         addFx({ kind: 'frostRing', x: e.x, y: e.y, r: e.def.r * 2.4, dur: 0.6 });
-        G.towers.slice().sort((a, b) => Math.hypot(a.x - e.x, a.y - e.y) - Math.hypot(b.x - e.x, b.y - e.y)).slice(0, tp.shell_pulse_stuns_nearest_towers_count || 2)
+        G.towers.slice().sort((a, b) => DM.hypot(a.x - e.x, a.y - e.y) - DM.hypot(b.x - e.x, b.y - e.y)).slice(0, tp.shell_pulse_stuns_nearest_towers_count || 2)
           .forEach(t => { t.stunUntil = Math.max(t.stunUntil || 0, G.time + (tp.shell_pulse_tower_stun_duration_s || 2)); });
       }
     }
@@ -1335,7 +1371,7 @@ function step(dt) {
     // štít bosse slábne sám od sebe
     if (e.seal && e.seal.s > 0) e.seal.s = Math.max(0, e.seal.s - e.def.seal.decay * dt);
     // dorůstání: 3 s bez zásahu, pak každé 2 s o vrstvu zpět (u tužších slizáků 25 % životů)
-    if (e.regrow && G.time - e.lastHit > 3 && G.time - (e.regAt || 0) >= 2 && !G.towers.some(h => h.fx.block_regrow_in_radius && Math.hypot(h.x - e.x, h.y - e.y) <= h.st.range)) {
+    if (e.regrow && G.time - e.lastHit > 3 && G.time - (e.regAt || 0) >= 2 && !G.towers.some(h => h.fx.block_regrow_in_radius && DM.hypot(h.x - e.x, h.y - e.y) <= h.st.range)) {
       if (e.hist.length) regrowLayer(e);
       else if (e.def.hp > 1 && e.hp < e.maxHp) { e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.25); e.regAt = G.time; addFx({ kind: 'regrow', x: e.x, y: e.y, r: e.def.r, dur: 0.4 }); }
     }
@@ -1361,7 +1397,7 @@ function step(dt) {
   }
   // věže, hrdina, střely, zóny, spojenci
   for (const t of G.towers) updateTower(t, dt);
-  if (G.hero) updateHero(dt);
+  heroTick(dt);
   updateProjs(dt);
   updateZones(dt);
   updateAllies(dt);
@@ -1387,6 +1423,7 @@ const DIFF = { easy: { name: 'Lehká', cost: 0.85, lives: 200 }, medium: { name:
 // cfg = vlastní obtížnost { lives, gold, cost, income, count, hp, speed, km, waves } (jen sólo)
 function newGame(mapId, heroId, diff = 'medium', vs = null, cfg = null) {
   if (vs) { diff = 'medium'; cfg = null; }
+  _uid = 0;   // id věží a slizáků musí v co-opu sedět u všech
   const D = cfg ? { lives: cfg.lives, cost: cfg.cost } : DIFF[diff] || DIFF.medium;
   const map = JSON.parse(JSON.stringify(TD.maps.find(m => m.id === mapId) || TD.maps[0]));
   G = {

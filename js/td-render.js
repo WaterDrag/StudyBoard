@@ -993,7 +993,7 @@ const TR = (() => {
     for (const e of list) drawEnemy(g, e, time);
     if (pick?.boss && !pick.boss.dead) { const e = pick.boss; g.strokeStyle = '#facc15'; g.lineWidth = 2.5; g.setLineDash([5, 4]); g.beginPath(); g.arc(e.x, e.y, e.def.r + 8, 0, TAU); g.stroke(); g.setLineDash([]); }
     // věže a hrdina (podle y, ať se překrývají přirozeně)
-    const tw = [...G.towers, G.hero].filter(Boolean).sort((a, b) => a.y - b.y);
+    const tw = [...G.towers, ...allHeroes()].sort((a, b) => a.y - b.y);
     for (const t of tw) t.hero ? drawHero(g, t, time) : drawTower(g, t, time, t === sel);
     if (sel) { g.strokeStyle = '#facc15'; g.lineWidth = 2; g.setLineDash([4, 3]); g.beginPath(); g.arc(sel.x, sel.y, sel.r + 4, 0, TAU); g.stroke(); g.setLineDash([]); }
     if (typeof XR !== 'undefined') XR.air(g, performance.now());   // střílny inženýra, gryf
