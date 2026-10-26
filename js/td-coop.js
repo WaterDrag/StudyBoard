@@ -130,7 +130,7 @@ function startCoop(d) {
   coopWallets(order, heroOf, sc.starting_gold_per_player, G.km);
   const root = rtdb().ref('live/td_' + GID);
   COOP = { d, host: d.hostUid === ME.uid, order, root, frames: new Map(), nextN: 1, pending: [], seq: 0, emitN: 0, lastT: 0,
-    simT: 0, lastEmit: 0, lastFrameAt: Date.now(), speed: 1, paused: false, cs: new Map(), csBad: false, startAt: d.startAt, done: false, mineRq: new Set() };
+    simT: 0, playT: 0, lastEmit: 0, lastFrameAt: Date.now(), speed: 1, paused: false, cs: new Map(), csBad: false, startAt: d.startAt, done: false, mineRq: new Set() };
   root.child('players/' + ME.uid + '/rq').remove().catch(() => {});
   root.child('world/f').on('child_added', s => { const f = s.val(); if (f && f.n >= COOP.nextN && !COOP.frames.has(f.n)) COOP.frames.set(f.n, f); });   // vlastní (už přehrané) snímky hostitele ignorovat
   if (COOP.host) {
@@ -145,37 +145,51 @@ function startCoop(d) {
   toast(`🤝 Hrajete spolu na jedné mapě (${n} hráči). Každý má svoje zlaťáky a hrdinu — ▶ Start spustí první vlnu.`);
 }
 
-/* ── Smyčka: hostitel vydává snímky, všichni je přehrávají ─────── */
+/* ── Smyčka: simulace jede plynule, snímky jen určují, kdy se provedou akce ─── */
+// Dřív se svět posunul jen při každém snímku (10× za sekundu) — i u hostitele, takže se to sekalo jako 10–20 FPS.
+// Teď hostitel simuluje každý obrázek podle hodin a snímek s akcemi vydá v kroku, kde právě je. Klient jede
+// plynule ~230 ms za posledním došlým snímkem (vyrovná nepravidelné doručování); dál než ten snímek nesmí,
+// protože by nevěděl o akcích v něm. Když zaostává, mírně zrychlí, když dojíždí na snímek, zpomalí.
+const BUF_T = 14;   // o kolik kroků (60/s, ~230 ms) se klient drží za posledním snímkem
 function coopFrame(real, budget = 240) {
   const C = COOP; if (!C || C.done) return;
   const now = serverNow();
-  if (C.host && now >= C.startAt) {
-    if (!C.paused) C.simT += real * C.speed;
-    const target = Math.max(C.lastT, Math.floor(C.simT / STEP));
-    if (Date.now() - C.lastEmit >= FRAME_MS && (target > C.lastT || C.pending.length)) {
-      C.lastEmit = Date.now();
-      const f = { n: ++C.emitN, t: target, a: C.pending.splice(0, 40), p: C.paused ? 1 : 0, s: C.speed };
-      if (C.emitN % 10 === 0) f.c = [G.coop.tick, coopChecksum()];
-      C.lastT = target;
-      C.frames.set(f.n, f);
-      const upd = { [fkey(f.n)]: f };
-      if (f.n > 400 && f.n % 50 === 0) for (let k = f.n - 400; k < f.n - 350; k++) upd[fkey(k)] = null;   // staré snímky pryč
-      C.root.child('world/f').update(upd).catch(() => {});
+  let goal;
+  if (C.host) {
+    if (now >= C.startAt && !C.paused) C.simT += real * C.speed;
+    goal = Math.floor(C.simT / STEP);
+  } else {
+    let k = C.nextN, maxT = G.coop.tick;
+    while (C.frames.has(k)) { maxT = Math.max(maxT, C.frames.get(k).t); k++; }
+    if (!C.paused) {
+      const lag = maxT - BUF_T - C.playT, rate = 1 + Math.max(-0.1, Math.min(0.25, lag / 200));
+      C.playT += real * C.speed / STEP * rate;
     }
+    if (maxT - C.playT > 90) C.playT = maxT - BUF_T;   // hodně pozadu (záložka byla na pozadí) → dohnat
+    C.playT = Math.max(G.coop.tick, Math.min(maxT, C.playT));
+    goal = Math.floor(C.playT);
   }
-  // přehrát došlé snímky popořadě
+  // krokovat k cíli; akce ze snímku se provedou přesně v jeho kroku
   let n = 0;
-  while (C.frames.has(C.nextN)) {
+  for (;;) {
     const f = C.frames.get(C.nextN);
-    while (G.coop.tick < f.t && n < budget && !G.over) { step(STEP); n++; }
-    if (G.coop.tick < f.t && !G.over) break;   // dojedeme příště
-    if (f.c && !C.csBad) { const mine = C.cs.get(f.c[0]); if (mine != null && mine !== f.c[1]) { C.csBad = true; console.warn('[co-op] rozdílný kontrolní součet', f.c, mine); toast('⚠️ Mapa se rozešla s hostitelem — co vidíš, může se trochu lišit.'); } }
-    (f.a || []).forEach(coopApply);
-    if (!C.host && G.coop.tick % 60 < 7) C.cs.set(G.coop.tick, coopChecksum());   // pro porovnání (hostitel posílá součet po krocích)
-    C.frames.delete(C.nextN); C.nextN++;
-    C.lastFrameAt = Date.now(); C.paused = !!f.p; if (!C.host) C.speed = f.s || 1;
+    if (f && G.coop.tick >= f.t) { coopPlayFrame(f); continue; }
+    if (G.coop.tick >= goal || n >= budget || G.over) break;
+    if (!C.host && !f) break;
+    step(STEP); n++;
   }
-  if (C.host && C.emitN % 10 === 9) C.cs.set(G.coop.tick, coopChecksum());
+  // hostitel: snímek s akcemi v kroku, kde právě je
+  if (C.host && now >= C.startAt && Date.now() - C.lastEmit >= FRAME_MS && (G.coop.tick > C.lastT || C.pending.length || C.paused !== C.sentP || C.speed !== C.sentS)) {   // i změna pauzy/rychlosti
+    C.lastEmit = Date.now();
+    const f = { n: ++C.emitN, t: G.coop.tick, a: C.pending.splice(0, 40), p: C.paused ? 1 : 0, s: C.speed };
+    if (C.emitN % 10 === 0) f.c = [G.coop.tick, coopChecksum()];
+    C.lastT = G.coop.tick; C.sentP = C.paused; C.sentS = C.speed;
+    C.frames.set(f.n, f);
+    const upd = { [fkey(f.n)]: f };
+    if (f.n > 400 && f.n % 50 === 0) for (let k = f.n - 400; k < f.n - 350; k++) upd[fkey(k)] = null;   // staré snímky pryč
+    C.root.child('world/f').update(upd).catch(() => {});
+    coopPlayFrame(f);
+  }
   // banner: start / pauza / hostitel neodpovídá
   const ban = $('tdBanner');
   let msg = '';
@@ -183,6 +197,17 @@ function coopFrame(real, budget = 240) {
   else if (C.paused) msg = '⏸ Hostitel hru pozastavil';
   else if (!C.host && Date.now() - C.lastFrameAt > 6000) msg = '⏳ Čekám na hostitele…';
   if (msg) { ban.hidden = false; const h = TDI.html(msg); if (ban._h !== h) { ban._h = h; ban.innerHTML = h; } }
+}
+function coopPlayFrame(f) {
+  const C = COOP;
+  // kontrolní součet hostitele platí pro stav PŘED akcemi tohoto snímku
+  if (f.c && !C.host && !C.csBad && G.coop.tick === f.c[0] && coopChecksum() !== f.c[1]) {
+    C.csBad = true; console.warn('[co-op] rozdílný kontrolní součet', f.c, coopChecksum());
+    toast('⚠️ Mapa se rozešla s hostitelem — co vidíš, může se trochu lišit.');
+  }
+  (f.a || []).forEach(coopApply);
+  C.frames.delete(C.nextN); C.nextN++;
+  C.lastFrameAt = Date.now(); C.paused = !!f.p; if (!C.host) C.speed = f.s || 1;
 }
 // Záloha, když neběží requestAnimationFrame (záložka na pozadí, skryté okno, úsporný režim telefonu):
 // hra jede dál podle hodin, jinak by hostitel přestal vydávat snímky a ostatním by se zastavila.
