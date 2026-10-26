@@ -616,9 +616,28 @@
 
   const ALL_NAMES = Object.keys(ICONS);
 
+  // Aktivní dovednosti stromu a ultimátka větve C nemají vlastní kresbu: vyvolané věci (past, vlk, prapor…)
+  // se nakreslí herním spritem ZS.summon, ostatní si půjčí příbuznou ikonu.
+  const SUMI = { arc_c1: 'trap', arc_c3: 'lure', arc_c2: 'wolf', ult_arc_c: 'wolf', war_c3: 'banner', mil_c2: 'c4', eng_c1: 'acid_pool', ult_eng_c: 'toxic_zone', ult_mag_c: 'ghost_boss' };
+  const ALIAS = { war_c1: 'taunt', ult_war_c: 'fortify', mag_c3: 'ult_rog_b', mil_c1: 'grenade', rog_c3: 'coins', eng_c3: 'rage', ult_mil_c: 'ult_mil_b', ult_tan_c: 'ult_tan_a', ult_rog_c: 'coins', ult_pri_c: 'ult_pri_a' };
+  const sumUrls = new Map();
+  function summonImg(name, s) {
+    const ZS = global.ZS; if (!ZS || !ZS.summon) return '';
+    const res = s > 24 ? 96 : 48, key = name + '_' + res + '_' + (ZS.texOn ? ZS.texOn() : '');
+    if (!sumUrls.has(key)) {
+      let u = null;
+      try { const cv = document.createElement('canvas'); cv.width = cv.height = res; const c = cv.getContext('2d');
+        c.scale(res / 24, res / 24); c.translate(12, 12.5); c.scale(0.62, 0.62); ZS.summon(c, SUMI[name], 0, 0, 16, -0.6, 0); u = cv.toDataURL('image/png'); } catch (e) { u = null; }
+      sumUrls.set(key, u);
+    }
+    const u = sumUrls.get(key);
+    return u ? `<img src="${u}" width="${s}" height="${s}" alt="" draggable="false">` : '';
+  }
+
   global.ZSI = {
     svg: function (name, size) {
-      const body = ICONS[name];
+      if (!ICONS[name] && SUMI[name]) return summonImg(name, size === undefined ? 24 : size);
+      const body = ICONS[name] || ICONS[ALIAS[name]];
       if (!body) return '';
       const s = size === undefined ? 24 : size;
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true">${body}</svg>`;

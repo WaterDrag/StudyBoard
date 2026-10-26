@@ -106,6 +106,8 @@
   const STR = { wall: [64, 20], barricade: [64, 18], spikes: [48, 48], turret: [40, 40], platform: [72, 72] };
   const INF = { channel: { fed: true, fresh: true, links: { e: 1, w: 1 } }, well: { level: 0.75 }, purifier: { fed: true }, plot: { soil: 'growing' },
     wheel: { active: false }, fence: { powered: true, links: { e: 1, w: 1 } } };
+  const SUMI = { arc_c1: 'trap', arc_c3: 'lure', arc_c2: 'wolf', ult_arc_c: 'wolf', war_c3: 'banner', mil_c2: 'c4', eng_c1: 'acid_pool', ult_eng_c: 'toxic_zone', ult_mag_c: 'ghost_boss' };
+  const ALIAS = { war_c1: 'taunt', ult_war_c: 'fortify', mag_c3: 'ult_rog_b', mil_c1: 'grenade', rog_c3: 'coins', eng_c3: 'rage', ult_mil_c: 'ult_mil_b', ult_tan_c: 'ult_tan_a', ult_rog_c: 'coins', ult_pri_c: 'ult_pri_a' };
   function game(name, c) {
     if (name.startsWith('kit_')) { const k = name.slice(4), [col, wid, wc] = KITC[k] || KITC.warrior;
       c.translate(10.5, 12.5); c.scale(0.72, 0.72);   // kreslit v herní velikosti a zmenšit (stín a čáry mají pevnou šířku)
@@ -118,6 +120,9 @@
     if (STR[name]) { const [w, h] = STR[name], sc = 20 / Math.max(w, h); c.translate(12, 12); c.scale(sc, sc); ZS.structure(c, name, -w / 2, -h / 2, w, h, 1, 0, -0.6); return true; }
     if (INF[name]) { c.translate(12, 12); const sc = 20 / 50; c.scale(sc, sc); ZS.infra(c, name, 0, 0, 50, INF[name], 0); return true; }
     if (name === 'base') { c.translate(11.5, 12.5); c.scale(0.17, 0.17); ZS.base(c, 0, 0, 52, 1, 0); return true; }
+    // aktivní dovednosti stromu a ultimátka větve C: vyvolané věci herní kresbou, ostatní půjčená ikona
+    if (SUMI[name] && ZS.summon) { c.translate(12, 12.5); c.scale(0.62, 0.62); ZS.summon(c, SUMI[name], 0, 0, 16, -0.6, 0); return true; }
+    if (ALIAS[name] && I[ALIAS[name]]) { I[ALIAS[name]](c); return true; }
     return false;
   }
 

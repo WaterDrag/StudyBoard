@@ -429,6 +429,80 @@ canvas{display:block;cursor:crosshair;}
 .sk-name{font-size:.76rem;font-weight:700;}
 .sk-desc{font-size:.62rem;color:var(--muted);margin-top:2px;line-height:1.35;}
 .sk-cost{font-size:.62rem;color:var(--acc2);margin-top:3px;}
+/* ══ HUD v10.77: styl Minecraftu — výrazné pruhy dole nad stavbami ══ */
+#hudTop{grid-template-columns:1fr auto 1fr;}
+#hudTL{display:flex;gap:6px;align-items:center;flex-wrap:wrap;pointer-events:auto;}
+.hud-chip{background:var(--glass);border:1px solid var(--brd2);border-radius:999px;color:var(--tx);padding:6px 12px;font:600 .74rem 'Geist',system-ui,sans-serif;white-space:nowrap;}
+button.hud-chip{cursor:pointer;}
+button.hud-chip:hover{border-color:var(--acc);}
+.hud-chip b{font-size:.62rem;color:var(--muted);border:1px solid var(--brd2);border-radius:4px;padding:0 4px;margin-left:4px;}
+#kitLbl.hud-chip{flex:none;text-align:left;font-size:.72rem;color:#cbd5e1;}
+#kitLbl:empty{display:none;}
+#helpBtn{position:static;}
+#mmCanvas{bottom:auto;top:54px;}   /* nad ní vpravo nahoře jen tlačítko zvuku */
+#plList{top:206px;}
+#hotbar{
+  position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:20;
+  display:flex;flex-direction:column;align-items:stretch;gap:5px;pointer-events:none;
+}
+#hotbar #buildBar{position:static;transform:none;pointer-events:auto;}
+.hb-stats{display:grid;grid-template-columns:1.15fr 1fr;gap:8px;align-items:end;}
+.hb-needs{display:flex;flex-direction:column;gap:4px;}
+.hb-bar{display:flex;align-items:center;gap:6px;}
+.hb-ico{width:22px;height:22px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(1px 1px 0 #000);flex:none;}
+.hb-track,.hb-xp{
+  position:relative;flex:1;background:#1b1b24;border:2px solid #050508;border-radius:3px;overflow:hidden;
+  box-shadow:inset 0 2px 0 rgba(0,0,0,.45),0 2px 0 rgba(0,0,0,.35);
+}
+.hb-track{height:16px;}
+.hb-hp .hb-track{height:26px;}
+.hb-fill{height:100%;transition:width .25s ease;
+  background-image:repeating-linear-gradient(90deg,transparent 0 calc(10% - 2px),rgba(0,0,0,.35) calc(10% - 2px) 10%),linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 45%,rgba(0,0,0,.18));}
+#playerHpFill{background-color:#e11d2a;}
+#hungerFill{background-color:#c2741a;}
+#thirstFill{background-color:#1aa3d9;}
+#xpFill{background-color:#7ed321;background-image:linear-gradient(180deg,rgba(255,255,255,.3),rgba(0,0,0,.15));}
+.hb-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:800 .72rem 'Geist',system-ui,sans-serif;color:#fff;text-shadow:1px 1px 0 #000,-1px 1px 0 #000,1px -1px 0 #000,-1px -1px 0 #000;font-variant-numeric:tabular-nums;}
+.hb-hp .hb-txt{font-size:.86rem;}
+.hb-xp{height:12px;}
+.hb-xp .hb-txt{font-size:.6rem;}
+#coinOrb{
+  position:fixed;left:16px;bottom:14px;z-index:21;min-width:84px;height:84px;padding:0 10px;border-radius:42px;
+  background:radial-gradient(circle at 35% 30%,#fff59d,#fde047 45%,#ca8a04);border:4px solid #050508;
+  box-shadow:0 3px 0 rgba(0,0,0,.45),0 0 0 2px rgba(253,224,71,.25);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;color:#111;pointer-events:auto;cursor:pointer;
+}
+#coinOrb #coinsVal{font:900 1.45rem/1 'Geist',system-ui,sans-serif;font-variant-numeric:tabular-nums;}
+.hb-xpwrap{position:relative;margin-top:12px;}
+#lvlBadge{position:absolute;left:50%;top:-15px;transform:translateX(-50%);z-index:2;pointer-events:auto;cursor:pointer;
+  background:none;border:0;padding:0 4px;font:900 .95rem/1 'Geist',system-ui,sans-serif;color:#86efac;
+  text-shadow:2px 2px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000;white-space:nowrap;}
+#lvlBadge small{font-size:.66rem;color:#c4b5fd;}
+#abilityBar{left:auto;right:14px;bottom:14px;transform:none;flex-direction:column;align-items:flex-end;gap:6px;padding:8px;}
+.ab-row{display:flex;gap:6px;justify-content:flex-end;}
+.ab-btn.ab-ult{border-color:#fbbf24;box-shadow:0 0 0 1px rgba(251,191,36,.25),0 0 14px rgba(251,191,36,.18);}
+.ab-btn .ab-key{font-size:.62rem;font-weight:800;color:#e2e8f0;background:rgba(0,0,0,.55);border-radius:4px;padding:0 4px;bottom:2px;right:3px;}
+#abilityBar .ab-tooltip{left:auto;right:0;transform:none;}
+#hotkeysHint{right:auto;left:14px;bottom:104px;text-align:left;}
+#passiveHint{bottom:146px;}
+#spHint{bottom:174px;}
+.repair-btn,.repair-panel{bottom:206px;}
+#placInfo{bottom:244px;}
+.sk-act{font-size:.62rem;color:#fbbf24;margin-top:3px;font-weight:600;}
+#hudCenter{flex-direction:column;align-items:center;gap:6px;}
+#kingBar{width:min(520px,60vw);text-align:center;}
+#kingBar[hidden]{display:none;}
+.kg-head{font:800 .82rem 'Geist',system-ui,sans-serif;color:#e9d5ff;text-shadow:1px 1px 0 #000,-1px -1px 0 #000;margin-bottom:3px;}
+#kingPhase{color:#fbbf24;}
+.kg-track{position:relative;height:18px;background:#1b1b24;border:2px solid #050508;border-radius:3px;overflow:hidden;box-shadow:0 2px 0 rgba(0,0,0,.4);}
+#kingFill{height:100%;background-color:#9333ea;background-image:linear-gradient(180deg,rgba(255,255,255,.3),rgba(0,0,0,.15));transition:width .2s;}
+#kingFill.shield{background-color:#3b82f6;}
+#kingTxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:800 .7rem 'Geist',system-ui,sans-serif;color:#fff;text-shadow:1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000;}
+@media (max-width:1100px){#hotkeysHint{display:none;}}
+/* užší obrazovky: menší tlačítka staveb a schopností, ať se lišty nepřekrývají */
+@media (max-width:1500px){#buildBar{gap:4px;padding:6px 8px;}.bb-btn{width:44px;height:44px;font-size:1rem;}}
+@media (max-width:1320px){#abilityBar{bottom:132px;}}   /* vedle spodní lišty se nevejdou — nad ni vpravo */
+@media (max-width:1200px){.bb-btn{width:38px;height:38px;padding:2px;}.ab-btn{width:50px;height:50px;}#coinOrb{min-width:70px;height:70px;}#coinOrb #coinsVal{font-size:1.2rem;}}
   </style>
 </head>
 <body>
@@ -499,69 +573,67 @@ canvas{display:block;cursor:crosshair;}
 <div class="screen hidden" id="screenGame" style="padding:0;justify-content:flex-start;">
   <canvas id="gc"></canvas>
 
-  <!-- HUD -->
+  <!-- HUD (v10.77: rozložení jako v Minecraftu — životy, hlad, žízeň a XP dole nad stavbami) -->
   <div id="hud">
     <div id="hudTop">
-
-      <!-- Left: Player stats -->
-      <div id="hudLeft">
-        <div class="hud-bar-wrap">
-          <span class="hud-lbl"><span class="zi" data-zsi="hp" data-emo="❤️" data-sz="14">❤️</span> HP</span>
-          <div class="hud-bar"><div class="hud-bar-fill" id="playerHpFill" style="width:100%"></div></div>
-          <span class="hud-v" id="playerHpVal">80/80</span>
-        </div>
-        <div class="hud-bar-wrap">
-          <span class="hud-lbl"><span class="zi" data-zsi="xp" data-emo="⭐" data-sz="14">⭐</span> XP</span>
-          <div class="hud-bar"><div class="hud-bar-fill" id="xpFill" style="width:0%"></div></div>
-          <span class="hud-v" id="xpVal">0/100</span>
-        </div>
-        <div class="hud-bar-wrap">
-          <span class="hud-lbl"><span class="zi" data-zsi="hunger" data-emo="🍖" data-sz="14">🍖</span> Hlad</span>
-          <div class="hud-bar"><div class="hud-bar-fill" id="hungerFill" style="width:100%;background:#f59e0b;"></div></div>
-          <span class="hud-v" id="hungerVal">100</span>
-        </div>
-        <div class="hud-bar-wrap">
-          <span class="hud-lbl"><span class="zi" data-zsi="thirst" data-emo="💧" data-sz="14">💧</span> Voda</span>
-          <div class="hud-bar"><div class="hud-bar-fill" id="thirstFill" style="width:100%;background:#06b6d4;"></div></div>
-          <span class="hud-v" id="thirstVal">100</span>
-        </div>
-        <div id="hudStrip">
-          <span id="lvlBox"><span class="zi" data-zsi="level" data-emo="" data-sz="14"></span>Lv.<span id="levelVal">1</span></span>
-          <span id="kitLbl"></span>
-          <span id="spWrap">SP:<span id="spVal">0</span></span>
-        </div>
+      <!-- Left: pauza, návod, postava -->
+      <div id="hudTL">
+        <button type="button" id="pauseBtn" class="hud-chip" title="Pauza (P)">⏸ Pauza <b>P</b></button>
+        <button type="button" id="helpBtn" class="hud-chip" title="Jak hrát">📖 Návod <b>H</b></button>
+        <span id="kitLbl" class="hud-chip"></span>
       </div>
 
       <!-- Center: Wave pill -->
       <div id="hudCenter">
         <div id="waveBox"><span class="zi" data-zsi="wave" data-emo="" data-sz="18"></span> Vlna <span id="waveNum">0</span> · <span id="phaseLabel" style="color:#fbbf24;">Příprava</span></div>
-      </div>
-
-      <!-- Right: Base + Coins -->
-      <div id="hudRight">
-        <div class="hud-bar-wrap">
-          <span class="hud-lbl"><span class="zi" data-zsi="base" data-emo="🏠" data-sz="14">🏠</span> Base</span>
-          <div class="hud-bar"><div class="hud-bar-fill" id="baseHpFill" style="width:100%"></div></div>
-          <span class="hud-v" id="baseHpVal">500/500</span>
+        <div id="kingBar" hidden>
+          <div class="kg-head">👑 Král hnízda · <span id="kingPhase">Fáze 1</span></div>
+          <div class="kg-track"><div id="kingFill"></div><span id="kingTxt"></span></div>
         </div>
-        <div id="coinsBox"><span class="zi" data-zsi="coins" data-emo="💰" data-sz="18">💰</span> <span id="coinsVal">0</span></div>
       </div>
 
+      <!-- Right: jen minimapa (životy základny jsou nad základnou, mince vlevo dole) -->
+      <div></div>
     </div>
   </div>
 
   <canvas id="mmCanvas" width="140" height="140"></canvas>
   <div id="plList"></div>
-  <div id="buildBar"></div>
+  <!-- Dole uprostřed: životy | hlad + žízeň, pod tím XP a lišta staveb -->
+  <div id="hotbar">
+    <div class="hb-stats">
+      <div class="hb-bar hb-hp" title="Životy">
+        <span class="hb-ico"><span class="zi" data-zsi="hp" data-emo="❤️" data-sz="16">❤️</span></span>
+        <div class="hb-track"><div class="hb-fill" id="playerHpFill" style="width:100%"></div><span class="hb-txt" id="playerHpVal">80/80</span></div>
+      </div>
+      <div class="hb-needs">
+        <div class="hb-bar hb-food" title="Hlad">
+          <span class="hb-ico"><span class="zi" data-zsi="hunger" data-emo="🍖" data-sz="13">🍖</span></span>
+          <div class="hb-track"><div class="hb-fill" id="hungerFill" style="width:100%"></div><span class="hb-txt" id="hungerVal">100</span></div>
+        </div>
+        <div class="hb-bar hb-water" title="Žízeň">
+          <span class="hb-ico"><span class="zi" data-zsi="thirst" data-emo="💧" data-sz="13">💧</span></span>
+          <div class="hb-track"><div class="hb-fill" id="thirstFill" style="width:100%"></div><span class="hb-txt" id="thirstVal">100</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="hb-xpwrap">
+      <button type="button" id="lvlBadge" title="Level · body dovedností — strom [T]">Lv <span id="levelVal">1</span><small id="spWrap"> · SP <span id="spVal">0</span></small></button>
+      <div class="hb-xp" title="Zkušenosti"><div class="hb-fill" id="xpFill" style="width:0%"></div><span class="hb-txt" id="xpVal">0/100</span></div>
+    </div>
+    <div id="buildBar"></div>
+  </div>
+  <!-- Vlevo dole: mince (klik = obchod) -->
+  <div id="coinOrb" title="Mince — obchod [B]"><span class="zi" data-zsi="coins" data-emo="💰" data-sz="22">💰</span><span id="coinsVal">0</span></div>
   <button type="button" id="repairBtn" class="repair-btn" hidden onclick="startRepair()"></button>
   <div id="repairPanel" class="repair-panel" hidden></div>
+  <!-- Vpravo dole: schopnosti (nahoře ultimátko) -->
   <div id="abilityBar"></div>
   <div id="passiveHint"></div>
   <button type="button" id="spHint" hidden></button>
-  <button type="button" id="helpBtn" title="Jak hrát">📖 Návod <b>H</b></button>
   <div id="placInfo"></div>
   <div id="gToasts"></div>
-  <div id="hotkeysHint"><b>B</b> Obchod · <b>T</b> Dovednosti · <b>G</b> Zahrada<br><b>6–9</b> Infrastruktura · <b>H</b> Nápověda<br><b>C</b> Statistiky · <b>X</b> Bourat · <b>R</b> / kolečko otočit o 15° · <b>Esc</b> zrušit</div>
+  <div id="hotkeysHint"><b>B</b> Obchod · <b>T</b> Dovednosti · <b>G</b> Zahrada<br><b>6–9</b> Infrastruktura · <b>H</b> Nápověda<br><b>C</b> Statistiky · <b>X</b> Bourat · <b>P</b> Pauza<br><b>R</b> / kolečko otočit o 15° · <b>Esc</b> zrušit</div>
 </div>
 
 <!-- ═══════════ OVERLAY: Shop ═══════════ -->
@@ -739,6 +811,20 @@ canvas{display:block;cursor:crosshair;}
   </div>
 </div>
 
+<!-- ═══════════ OVERLAY: Pauza (jen hra pro jednoho) ═══════════ -->
+<div class="ov hidden" id="pauseOv">
+  <div class="panel" style="text-align:center;width:340px;">
+    <div style="font-size:2.6rem;margin-bottom:6px;">⏸</div>
+    <h2 style="margin-bottom:6px;font-size:1.3rem;">Pauza</h2>
+    <p style="color:var(--muted);font-size:.8rem;margin-bottom:16px;">Hra stojí. Pokračuj tlačítkem nebo klávesou P / Esc.</p>
+    <button class="btn-p" id="pauseResume" style="width:100%;padding:11px 0;margin-bottom:8px;">▶ Pokračovat</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-s" id="pauseHelp" style="flex:1;">📖 Návod</button>
+      <button class="btn-s" id="pauseStats" style="flex:1;">📊 Statistiky</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════ OVERLAY: Death ═══════════ -->
 <div class="ov hidden" id="deathOv">
   <div class="panel" style="text-align:center;width:360px;">
@@ -787,7 +873,7 @@ canvas{display:block;cursor:crosshair;}
     <div class="ov-head">
       <div>
         <h2>🌳 Strom dovedností</h2>
-        <p style="font-size:.74rem;color:var(--muted);margin-top:3px;">Dostupné SP: <span id="stSP" style="color:var(--acc2);font-weight:700;font-size:.9rem;">0</span> · T1 = lvl 3 · T2 = lvl 6 · T3 = lvl 9 · T4 = lvl 12</p>
+        <p style="font-size:.74rem;color:var(--muted);margin-top:3px;">Dostupné SP: <span id="stSP" style="color:var(--acc2);font-weight:700;font-size:.9rem;">0</span> · bod za každý level · T1 od lvl 2 · T2 od lvl 4 · T3 od lvl 7 · T4 od lvl 10</p>
       </div>
       <button class="btn-s" id="stClose" style="padding:3px 14px;">✕</button>
     </div>
@@ -804,6 +890,7 @@ canvas{display:block;cursor:crosshair;}
 <script>document.write('<script src="js/zombie-sprites-2.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/zombie-sprites-3.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/zombie-sprites-4.js?v='+APP_VERSION+'"><\/script>');</script>
+<script>document.write('<script src="js/zombie-sprites-5.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/zombie-tex.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/zombie-tex-2.js?v='+APP_VERSION+'"><\/script>');</script>
 <script>document.write('<script src="js/zombie-icons.js?v='+APP_VERSION+'"><\/script>');</script>
