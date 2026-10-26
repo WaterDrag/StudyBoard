@@ -1156,10 +1156,13 @@ function renderLoop(ts){
 // ══════════════════════════════════════════════════════════
 //  UPDATE
 // ══════════════════════════════════════════════════════════
+// Hraješ sám? Z hlavní stránky se hra vždy zakládá přes čekárnu (gs.sessionId je i bez spoluhráčů),
+// takže rozhoduje, jestli jsou ve hře další hráči.
+function soloGame(){ return !gs.sessionId||!Object.keys(gs.players||{}).length; }
 // Pauza — jen když hraješ sám (v co-opu by se hra ostatním rozešla)
 function togglePause(force){
   const want=force===undefined?!gs.paused:!!force;
-  if(want&&gs.sessionId){gToast('⏸ Pauza jde jen ve hře pro jednoho','#f59e0b');return;}
+  if(want&&!soloGame()){gToast('⏸ Pauza jde jen ve hře pro jednoho','#f59e0b');return;}
   gs.paused=want;
   for(const k in keys)keys[k]=false; mouse.down=false;
   if(want)openOv('pauseOv'); else closeOv('pauseOv');

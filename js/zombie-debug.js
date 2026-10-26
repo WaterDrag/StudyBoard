@@ -15,7 +15,7 @@
 
   function enable() {
     if (typeof gs === 'undefined' || gs.screen !== 'game') { toast('Debug jde zapnout až ve hře'); return; }
-    if (gs.sessionId) { toast('🐞 Debug jde jen ve hře pro jednoho', '#f59e0b'); return; }
+    if (!soloGame()) { toast('🐞 Debug jde jen ve hře pro jednoho (jsou tu další hráči)', '#f59e0b'); return; }
     if (!D.on) {
       D.on = true; gs.debugUsed = true;
       // hra s debugem se nepočítá do bodů za hraní
