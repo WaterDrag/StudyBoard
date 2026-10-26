@@ -2764,14 +2764,21 @@ function buildLevelUpRows(pts){
     btn.addEventListener('click',()=>{
       const k=btn.dataset.k,d=parseInt(btn.dataset.d);
       if(d>0&&_luRemaining<=0)return;
+      if(d>0&&(me.stats[k]||0)+(alloc[k]||0)>=STAT_BAR_MAX){gToast(`Maximum je ${STAT_BAR_MAX} bodů`,'#f59e0b');return;}
       if(d<0&&(alloc[k]||0)<=0)return;
       alloc[k]=(alloc[k]||0)+d;
       _luRemaining-=d;
       document.getElementById('lu_v_'+k).textContent='+'+(alloc[k]||0);
-      document.getElementById('luConfirm').disabled=_luRemaining>0;
+      luSync();
     });
   });
-  document.getElementById('luConfirm').disabled=true;
+  // potvrdit jde, až jsou body rozdané — nebo když už je všechno na maximu
+  const luSync=()=>{
+    const room=SDEFS_STATS.some(def=>(me.stats[def.k]||0)+(alloc[def.k]||0)<STAT_BAR_MAX);
+    document.getElementById('luConfirm').disabled=_luRemaining>0&&room;
+    SDEFS_STATS.forEach(def=>{const b=document.getElementById('lu_pl_'+def.k);if(b)b.disabled=(me.stats[def.k]||0)+(alloc[def.k]||0)>=STAT_BAR_MAX;});
+  };
+  luSync();
   document.getElementById('luConfirm').onclick=()=>{
     SDEFS_STATS.forEach(def=>{me.stats[def.k]+=(alloc[def.k]||0);});
     me.maxHp+=(alloc.vit||0)*20;   // přičíst jen novou Vitalitu — koupené Max HP a dovednosti zůstanou
@@ -3114,11 +3121,13 @@ function buildShop(){
     grid.appendChild(h);
     list.forEach(item=>{
     const cost=Math.max(1,Math.round(shopBase(item)*(1-shopDisc(item))));
+    const capped=item.type==='stat'&&(me.stats[item.stat]||0)+item.val>STAT_BAR_MAX;
     const el=document.createElement('div');
-    el.className='si'+(me.coins<cost?' sd':'')+(item.type==='infra'?' si-infra':'');
+    el.className='si'+(me.coins<cost||capped?' sd':'')+(item.type==='infra'?' si-infra':'');
+    if(capped)el.title=`Maximum je ${STAT_BAR_MAX} bodů`;
     const owned=item.type==='infra'?`<div class="si-own">×${me.inv[item.id]||0}</div>`:'';
-    el.innerHTML=`<div class="si-e">${zi(shopIcon(item),item.emoji,30)}</div><div class="si-n">${item.name}</div><div class="si-c">${cost}${zi('coins','💰',14)}</div>${owned}`;
-    el.onclick=()=>{if(me.coins<cost)return;buyItem(item,cost);buildShop();};
+    el.innerHTML=`<div class="si-e">${zi(shopIcon(item),item.emoji,30)}</div><div class="si-n">${item.name}</div><div class="si-c">${capped?`Max ${STAT_BAR_MAX}`:`${cost}${zi('coins','💰',14)}`}</div>${owned}`;
+    el.onclick=()=>{if(me.coins<cost||capped)return;buyItem(item,cost);buildShop();};
     grid.appendChild(el);
     });
   });
@@ -3158,6 +3167,7 @@ function buyItem(item,cost){
     me.inv[item.stype]=(me.inv[item.stype]||0)+item.qty;
     updateInvDisplay();
   } else if(item.type==='stat'){
+    if((me.stats[item.stat]||0)+item.val>STAT_BAR_MAX){me.coins+=cost;gToast(`Maximum je ${STAT_BAR_MAX} bodů`,'#f59e0b');return;}
     me.stats[item.stat]=(me.stats[item.stat]||0)+item.val;
     if(item.stat==='vit'){me.maxHp+=item.val*20;me.hp=Math.min(me.hp+item.val*20,me.maxHp);}
   } else if(item.type==='infra'){
@@ -3815,7 +3825,7 @@ function toggleGarden(){
 }
 
 // ── Statistiky postavy [C]: hodnota statu, pruh do maxima a co konkrétně dává (čísla místo procent)
-const STAT_BAR_MAX=20;
+const STAT_BAR_MAX=20;   // zároveň strop každé vlastnosti (obchod i level) — dřív šlo koupit třeba Sílu 43
 function toggleStats(){
   if(gs.screen!=='game')return;
   const ov=document.getElementById('statsOv');
@@ -3844,7 +3854,7 @@ function buildStatsOv(){
     return `<div class="st-row"><span class="st-name">${name}</span><span class="st-num">${v}</span>
       <div class="st-bar" title="${v} z ${STAT_BAR_MAX}"><i style="width:${Math.min(100,v/STAT_BAR_MAX*100)}%"></i></div>
       <span class="st-eff">${eff}</span></div>`;
-  }).join('')+`<p style="font-size:.7rem;color:var(--muted);margin-top:10px;">Pruh ukazuje hodnotu do ${STAT_BAR_MAX} bodů. Body přibývají s levelem a v obchodě.</p>`;
+  }).join('')+`<p style="font-size:.7rem;color:var(--muted);margin-top:10px;">Každá vlastnost jde nejvýš do ${STAT_BAR_MAX} bodů. Body přibývají s levelem a v obchodě.</p>`;
 }
 
 function toggleHelp(){
