@@ -1,0 +1,27 @@
+# Caddy před Node servery na Oracle VM. Vyřídí HTTPS certifikát sám a zdarma
+# (Let's Encrypt) a přeposílá i WebSockety.
+#
+# Kam: /etc/caddy/Caddyfile   (nasadí relay/nasadit.bat, předtím si udělá zálohu)
+#
+#   /sb/*  → sb-relay (StudyBoard, port 3100) — online hry StudyBoardu
+#   zbytek → GameHub (port 3000)
+vgamehub.duckdns.org {
+	handle_path /sb/* {
+		reverse_proxy localhost:3100
+	}
+
+	handle {
+		reverse_proxy localhost:3000
+	}
+
+	# Ať se v logu pozná, kdo se připojil, i když jedeme za proxy.
+	header {
+		-Server
+	}
+
+	encode gzip
+	log {
+		output file /var/log/caddy/gamehub.log
+		format console
+	}
+}

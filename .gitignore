@@ -21,3 +21,5 @@ node_modules/
 
 # Lokalni nahled designu s falesnou Firebase (_dev/make-preview.js)
 _dev/
+relay/node_modules/
+relay/nasadit.bat

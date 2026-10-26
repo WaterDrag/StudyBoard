@@ -1,0 +1,13 @@
+{
+  "name": "sb-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "StudyBoard – přeposílací server pro online hry (Obrana království co-op)",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "jose": "^5.9.6"
+  }
+}

@@ -118,6 +118,43 @@ function coopChecksum() {
   return h;
 }
 
+/* ── Rychlá cesta přes vlastní server ─────────────────────────────
+   sb-relay na Oracle serveru (vedle GameHubu, zdrojáky v relay/): snímky a žádosti jdou po WebSocketu
+   (desítky ms místo stovek přes Firebase). Firebase se zapisuje dál — kdyby server neběžel nebo spadl,
+   hra jede přes něj jako dřív; co dojde dvakrát, se pozná podle čísla snímku / id žádosti. */
+const RELAY_URL = 'wss://vgamehub.duckdns.org/sb/ws';
+function coopRelay() {
+  const C = COOP; let ws = null, ok = false, tries = 0, closed = false;
+  const open = async () => {
+    if (closed || C.done) return;
+    let token; try { token = await firebase.auth().currentUser.getIdToken(); } catch (e) { return; }
+    try { ws = new WebSocket(RELAY_URL); } catch (e) { retry(); return; }
+    ws.onopen = () => ws.send(JSON.stringify({ t: 'join', kind: 'td', gid: GID, token, since: C.nextN }));
+    ws.onmessage = e => {
+      let m; try { m = JSON.parse(e.data); } catch (_) { return; }
+      if (m.t === 'ok') { ok = true; tries = 0; console.info('[co-op] rychlé spojení přes server'); }
+      else if (m.t === 'f') { const f = m.f; if (f && f.n >= C.nextN && !C.frames.has(f.n)) C.frames.set(f.n, f); }
+      else if (m.t === 'rq' && C.host) coopQueueRq(m.a, m.u);
+      else if (m.t === 'err') { console.warn('[co-op] server:', m.m); closed = true; try { ws.close(); } catch (_) {} }
+    };
+    ws.onclose = () => { ok = false; retry(); };
+    ws.onerror = () => {};
+  };
+  const retry = () => { if (closed || C.done) return; tries++; setTimeout(open, Math.min(30000, 1000 * 2 ** Math.min(tries, 5))); };
+  open();
+  return {
+    send: m => { if (ok && ws && ws.readyState === 1) ws.send(JSON.stringify(m)); },
+    close: () => { closed = true; try { ws && ws.close(); } catch (_) {} },
+    get ok() { return ok; },
+  };
+}
+// hostitel: žádost o akci (z Firebase i ze serveru — každá jen jednou)
+function coopQueueRq(a, u) {
+  const C = COOP; if (!a || !u) return;
+  const k = u + ':' + a.id; if (C.seenRq.has(k)) return;
+  C.seenRq.add(k); C.pending.push({ ...a, u });
+}
+
 /* ── Start ─────────────────────────────────────────────────────── */
 function startCoop(d) {
   const order = [d.hostUid, ...d.playerIds.filter(u => u !== d.hostUid)], n = order.length;
@@ -130,13 +167,14 @@ function startCoop(d) {
   coopWallets(order, heroOf, sc.starting_gold_per_player, G.km);
   const root = rtdb().ref('live/td_' + GID);
   COOP = { d, host: d.hostUid === ME.uid, order, root, frames: new Map(), nextN: 1, pending: [], seq: 0, emitN: 0, lastT: 0,
-    simT: 0, playT: 0, lastEmit: 0, lastFrameAt: Date.now(), speed: 1, paused: false, cs: new Map(), csBad: false, startAt: d.startAt, done: false, mineRq: new Set() };
+    simT: 0, playT: 0, lastEmit: 0, lastFrameAt: Date.now(), speed: 1, paused: false, cs: new Map(), csBad: false, startAt: d.startAt, done: false, mineRq: new Set(), seenRq: new Set() };
   root.child('players/' + ME.uid + '/rq').remove().catch(() => {});
   root.child('world/f').on('child_added', s => { const f = s.val(); if (f && f.n >= COOP.nextN && !COOP.frames.has(f.n)) COOP.frames.set(f.n, f); });   // vlastní (už přehrané) snímky hostitele ignorovat
   if (COOP.host) {
     root.child('world/f').remove().catch(() => {});
-    order.filter(u => u !== ME.uid).forEach(u => root.child('players/' + u + '/rq').on('child_added', s => { const a = s.val(); if (a) COOP.pending.push({ ...a, u }); }));
+    order.filter(u => u !== ME.uid).forEach(u => root.child('players/' + u + '/rq').on('child_added', s => coopQueueRq(s.val(), u)));
   }
+  COOP.relay = coopRelay();
   G.onLose = () => coopFinish(false);
   G.onWin = () => { $('tdWinDesc').textContent = `Společně jste ubránili všech ${winWave()} vln. Hra jede dál jako volná hra — slizáci budou čím dál silnější.`; $('tdWin').hidden = false; window.sfx?.('win'); };
   G.onWaveEnd = w => { if (w % CO.team_quiz_every_n_waves === 0) setTimeout(() => coopTeamQuiz(), 800); else if (w === 1) toast('🤝 Odměny za slizáky a vlny se dělí. Zlato můžeš poslat spoluhráči v záložce Tým.'); };
@@ -188,6 +226,7 @@ function coopFrame(real, budget = 240) {
     const upd = { [fkey(f.n)]: f };
     if (f.n > 400 && f.n % 50 === 0) for (let k = f.n - 400; k < f.n - 350; k++) upd[fkey(k)] = null;   // staré snímky pryč
     C.root.child('world/f').update(upd).catch(() => {});
+    C.relay?.send({ t: 'f', f });
     coopPlayFrame(f);
   }
   // banner: start / pauza / hostitel neodpovídá
@@ -224,6 +263,7 @@ function coopSend(a) {
   a.id = ++C.seq;
   if (C.host) { C.pending.push({ ...a, u: ME.uid }); return; }
   C.mineRq.add(a.id);
+  C.relay?.send({ t: 'rq', a });
   C.root.child(`players/${ME.uid}/rq/${a.id}`).set(a).catch(e => toast('Nepovedlo se poslat: ' + e.message));
 }
 const coopRef = s => !s ? null : s.boss ? { k: 'b', id: s.boss.id } : s.obst ? { k: 'o', i: (G.map.obstacles || []).indexOf(s.obst) } : s.hero ? { k: 'h' } : { k: 't', id: s.id };
@@ -360,6 +400,7 @@ function coopTeamPanel() {
 function coopFinish(won) {
   if (!COOP || COOP.done) return;
   COOP.done = true;
+  COOP.relay?.close();
   if (COOP.host) tdRef().update({ status: 'end' }).catch(() => {});
   setTimeout(() => endGame(won), 900);
 }
