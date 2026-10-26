@@ -1345,6 +1345,31 @@ function pointInWall(w,x,y){ if(!(w.rot%90))return x>w.x&&x<w.x+w.w&&y>w.y&&y<w.
 function wallCorners(w){
   return [[w.x,w.y],[w.x+w.w,w.y],[w.x+w.w,w.y+w.h],[w.x,w.y+w.h]].map(([x,y])=>toWorld(w,x,y));
 }
+// Překrývají se dva (i otočené) obdélníky? Věta o oddělující ose; dotyk hranou a přesah do `tol` px je v pořádku
+// (zdi se dají stavět těsně vedle sebe).
+function obbOverlap(a,b,tol=3){
+  const A=wallCorners(a),B=wallCorners(b);
+  for(const P of [A,B])for(let i=0;i<2;i++){
+    const ax=-(P[i+1][1]-P[i][1]),ay=P[i+1][0]-P[i][0],L=Math.hypot(ax,ay)||1,nx=ax/L,ny=ay/L;
+    let amin=Infinity,amax=-Infinity,bmin=Infinity,bmax=-Infinity;
+    for(const[x,y]of A){const q=x*nx+y*ny;if(q<amin)amin=q;if(q>amax)amax=q;}
+    for(const[x,y]of B){const q=x*nx+y*ny;if(q<bmin)bmin=q;if(q>bmax)bmax=q;}
+    if(amax-tol<=bmin||bmax-tol<=amin)return false;
+  }
+  return true;
+}
+const infraRect=pc=>({x:pc.gx*IT+4,y:pc.gy*IT+4,w:IT-8,h:IT-8});
+// Proč stavba (zeď, věž…) na tohle místo nejde — nebo null. Dřív se dalo stavět přes sebe (deset věží na jednom bodě).
+function structPlaceProblem(r){
+  const cx=r.x+r.w/2,cy=r.y+r.h/2;
+  if(Math.hypot(cx-CX,cy-CY)<BASE_R+30)return 'Příliš blízko základny';
+  if(cx<BARRIER.x||cx>BARRIER.x+BARRIER.w||cy<BARRIER.y||cy>BARRIER.y+BARRIER.h)return 'Mimo arénu';
+  for(const wl of MAPS[gs.mapId].walls)if(obbOverlap(r,wl))return 'Na zdi to nejde';
+  for(const st of gs.structs)if(st.hp>0&&obbOverlap(r,st))return 'Tady už stojí '+(STRUCT_DEFS[st.type]?.name||'stavba').toLowerCase();
+  if(gs.infra)for(const pc of gs.infra.values())if(obbOverlap(r,infraRect(pc)))return 'Tady už stojí '+(INFRA_DEFS[pc.type]?.name||'stavba').toLowerCase();
+  return null;
+}
+
 // Úhel pokládané stavby: R / kolečko otáčí po 15°
 const ROT_STEP=15;
 function rotatePlacing(dir){ placing.rot=((placing.rot+dir*ROT_STEP)%360+360)%360; }
@@ -3191,8 +3216,8 @@ function placeStructure(){
   let w=def.w,h=def.h;
   if(rot===90||rot===270){w=def.h;h=def.w;}   // ostatní úhly: w×h zůstává, otočí se přes rot
   const sx=mouse.wx-w/2, sy=mouse.wy-h/2;
-  // Don't place on top of base
-  if(Math.hypot(mouse.wx-CX,mouse.wy-CY)<BASE_R+30){gToast('Příliš blízko základny','#f59e0b');return;}
+  const why=structPlaceProblem({x:sx,y:sy,w,h,rot});
+  if(why){gToast(why,'#f59e0b');return;}
   const id=(gs.sessionId?(me.uid||'x').slice(0,5)+'-':'')+eid(); // unique across co-op clients
   let sHp=def.hp;
   if(type==='turret'&&hasSkill('eng_a2')) sHp*=2;
@@ -3676,6 +3701,9 @@ function placeInfra(){
   if(cx<BARRIER.x+20||cx>BARRIER.x+BARRIER.w-20||cy<BARRIER.y+20||cy>BARRIER.y+BARRIER.h-20){gToast('Mimo arénu','#f59e0b');return;}
   if(Math.hypot(cx-CX,cy-CY)<BASE_R+24){gToast('Příliš blízko základny','#f59e0b');return;}
   if(infraAt(gx,gy)){gToast('Tady už něco stojí','#f59e0b');return;}
+  const _tile={x:gx*IT+4,y:gy*IT+4,w:IT-8,h:IT-8};
+  const _st=gs.structs.find(st=>st.hp>0&&obbOverlap(_tile,st));
+  if(_st){gToast('Tady už stojí '+(STRUCT_DEFS[_st.type]?.name||'stavba').toLowerCase(),'#f59e0b');return;}
   if(rectOverlapsWall(cx,cy,IT-10,0)){gToast('Na zdi to nejde','#f59e0b');return;}
   if(type==='wheel'&&!tileTouchesRiver(gx,gy)){gToast('⚙️ Vodní kolo musí stát u řeky','#38bdf8');return;}
   const piece={key:gKey(gx,gy),gx,gy,type,owner:me.uid};
@@ -5047,7 +5075,7 @@ function drawPlacingPreview(){
   if(INFRA_DEFS[placing.type]){
     const def=INFRA_DEFS[placing.type];
     const[gx,gy]=gridOf(mouse.wx,mouse.wy);const[cx,cy]=gCenter(gx,gy);
-    const blocked=infraAt(gx,gy)||rectOverlapsWall(cx,cy,IT-10,0)||(placing.type==='wheel'&&!tileTouchesRiver(gx,gy))||Math.hypot(cx-CX,cy-CY)<BASE_R+24;
+    const blocked=infraAt(gx,gy)||rectOverlapsWall(cx,cy,IT-10,0)||gs.structs.some(st=>st.hp>0&&obbOverlap({x:gx*IT+4,y:gy*IT+4,w:IT-8,h:IT-8},st))||(placing.type==='wheel'&&!tileTouchesRiver(gx,gy))||Math.hypot(cx-CX,cy-CY)<BASE_R+24;
     ctx.fillStyle=blocked?'rgba(239,68,68,.25)':'rgba(132,204,22,.25)';
     ctx.strokeStyle=blocked?'rgba(239,68,68,.8)':'rgba(132,204,22,.85)';
     ctx.setLineDash([4,4]);ctx.lineWidth=2;
@@ -5063,10 +5091,11 @@ function drawPlacingPreview(){
   if(placing.rot===90||placing.rot===270){w=def.h;h=def.w;}
   const sx=mouse.wx-w/2,sy=mouse.wy-h/2;
   const pa=placing.rot%90?placing.rot*Math.PI/180:0;
+  const bad=!!structPlaceProblem({x:sx,y:sy,w,h,rot:placing.rot});   // červeně, když tam stavba nejde
   ctx.save();
   if(pa){ctx.translate(mouse.wx,mouse.wy);ctx.rotate(pa);ctx.translate(-mouse.wx,-mouse.wy);}
-  ctx.fillStyle='rgba(99,102,241,.3)';
-  ctx.strokeStyle='rgba(99,102,241,.8)';
+  ctx.fillStyle=bad?'rgba(239,68,68,.28)':'rgba(99,102,241,.3)';
+  ctx.strokeStyle=bad?'rgba(239,68,68,.85)':'rgba(99,102,241,.8)';
   ctx.setLineDash([4,4]);
   ctx.fillRect(sx,sy,w,h);
   ctx.lineWidth=2;ctx.strokeRect(sx,sy,w,h);
