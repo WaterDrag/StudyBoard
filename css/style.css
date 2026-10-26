@@ -1359,6 +1359,9 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   cursor: pointer;
 }
 .context-menu-item:hover { background: var(--bg-3); }
+#boardCtxMenu .context-menu-item { display: flex; align-items: center; gap: 10px; }
+#boardCtxMenu .context-menu-item svg { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+#boardCtxMenu .ctx-kbd { margin-left: auto; padding-left: 12px; opacity: .55; font-size: .72rem; }
 
 /* Faint pin marker on items that are pinned (the shortcut lives up top) */
 .notes-list-row[data-pinned]::after,
@@ -2538,6 +2541,23 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 }
 /* Text pod nadpisem: stejný začátek (16 px) jako v editoru, aby volné obrázky seděly */
 .note-doc { position: relative; padding-top: 16px; }
+/* telefon: volné obrázky vložené do textu (flowFreeImagesNarrow v room-notes.js) */
+.free-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 10px 0; clear: both; }
+.free-row img { position: static !important; max-width: 100% !important; height: auto !important; margin: 0 !important; z-index: auto !important; }
+/* Tabulky v poznámkách: lišta nástrojů (js/room-table.js), výběr buněk, široké tabulky se posouvají */
+.tbl-bar { position: fixed; z-index: 3000; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px; max-width: calc(100vw - 16px); background: var(--bg-3); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.tbl-bar[hidden] { display: none; }
+.tbl-b { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; position: relative; }
+.tbl-b:hover:not(:disabled) { background: var(--bg-4); }
+.tbl-b:disabled { opacity: .35; cursor: default; }
+.tbl-b input[type=color] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
+.tbl-rcol .rich-editor td, .tbl-rcol .rich-editor th { cursor: col-resize; }
+.tbl-rrow .rich-editor td, .tbl-rrow .rich-editor th { cursor: row-resize; }
+.tbl-sep { width: 1px; height: 20px; background: var(--border); margin: 0 3px; }
+.rich-editor td.tsel, .rich-editor th.tsel { box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--accent) 22%, transparent); outline: 1px solid var(--accent); outline-offset: -1px; }
+.note-table[style*="table-layout: fixed"] { display: block; overflow-x: auto; max-width: 100%; }
+.rich-editor .note-table[style*="table-layout: fixed"] { display: table; max-width: none; }
+.note-table td, .note-table th { overflow-wrap: break-word; word-break: normal; }   /* slova se nelámou uprostřed — radši se tabulka posune */   /* tabulka s nastavenými šířkami se na úzkém displeji posouvá */
 .note-detail-title:has(+ .note-doc) { margin-bottom: 0; }
 .note-detail-content img {
   max-width: 100%;
@@ -5727,6 +5747,8 @@ body.pres-open { overflow: hidden; }
 .px-game { display: flex; flex-direction: column; gap: 12px; max-width: 760px; margin: 0 auto; }
 .px-game[hidden] { display: none; }
 .sp-quit { padding: 4px 10px; font-size: 0.78rem; }
+.inf-ico { display: inline-block; width: 1.3em; height: 0.66em; vertical-align: 0.05em; fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; margin-right: 0.2em; overflow: visible; }
+.mil-logo .inf-ico, .sp-end-ico .inf-ico { width: 1.6em; height: 0.8em; }
 .day-timer.inf { visibility: hidden; }
 .px-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 420px; }
 .px-mode { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-2); cursor: pointer; }

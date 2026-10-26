@@ -201,6 +201,12 @@ function mcInfRecord(key, score) {
   try { localStorage.setItem(key, JSON.stringify(s)); } catch (_) { /* nic */ }
   return { ...s, isBest: score > prevBest };
 }
+// Nakreslený znak nekonečna (emoji ♾️ se na iPhonu při každém přepsání stopek znovu načítalo a blikalo)
+const MC_INF = '<svg class="inf-ico" viewBox="0 0 24 12" aria-hidden="true"><path d="M12 6c-2.5-3-7-3.5-7 0s4.5 3 7 0 7-3.5 7 0-4.5 3-7 0z"/></svg>';
+function mcInfClock(el, ms) {   // znak se vloží jednou, dál se přepisuje jen čas
+  if (!el._inf || !el._inf.isConnected) { el.innerHTML = MC_INF + '<span></span>'; el._inf = el.lastChild; }
+  const t = mcClock(ms); if (el._inf.textContent !== t) el._inf.textContent = t;
+}
 const mcClock = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 // ── Krátké pojmy (šibenice, osmisměrka, křížovka) ─────────────────

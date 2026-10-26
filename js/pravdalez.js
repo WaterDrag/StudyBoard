@@ -19,7 +19,7 @@ function showBest() {
   let best = 0;
   try { best = +localStorage.getItem(TF_BEST) || 0; } catch (_) { /* nic */ }
   const inf = mcInfStats(TF_INF);
-  $('tfBest').innerHTML = [best ? `🏆 Tvůj rekord: <b>${best.toLocaleString('cs-CZ')} b</b>` : '', inf.games ? `♾️ Nekonečný: nejvíc <b>${inf.best.toLocaleString('cs-CZ')} b</b>` : ''].filter(Boolean).join(' · ');
+  $('tfBest').innerHTML = [best ? `🏆 Tvůj rekord: <b>${best.toLocaleString('cs-CZ')} b</b>` : '', inf.games ? `${MC_INF} Nekonečný: nejvíc <b>${inf.best.toLocaleString('cs-CZ')} b</b>` : ''].filter(Boolean).join(' · ');
 }
 
 async function startGame() {
@@ -102,9 +102,9 @@ function hud() {
 }
 function tick() {
   if (!T || T.over) return;
-  if (T.inf) { $('tfTime').textContent = '♾️ ' + mcClock(Date.now() - T.t0); return; }   // nekonečný režim: jen stopky
+  if (T.inf) { mcInfClock($('tfTime'), Date.now() - T.t0); return; }   // nekonečný režim: jen stopky
   const left = Math.max(0, T.endAt - (T.busy ? T.pausedAt : Date.now()));   // při chybě čas stojí
-  $('tfTime').textContent = Math.ceil(left / 1000) + ' s';
+  $('tfTime').textContent = Math.ceil(left / 1000) + ' s'; $('tfTime')._inf = null;
   const bar = $('tfBar');
   bar.style.width = (left / TF_TIME * 100) + '%';
   bar.classList.toggle('low', left < 10e3);
@@ -151,10 +151,10 @@ function endGame() {
   const acc = T.n ? Math.round(T.ok / T.n * 100) : 0;
   if (T.inf) {   // nekonečný režim: jen vlastní statistika, žádný rekord ani žebříček
     const st = mcInfRecord(TF_INF, T.score);
-    $('tfEndIco').textContent = st.isBest ? '🎉' : '♾️';
+    $('tfEndIco').innerHTML = st.isBest ? '🎉' : MC_INF;
     $('tfResult').innerHTML = `<b>${T.score.toLocaleString('cs-CZ')} b</b><span>${T.ok} z ${T.n} správně (${acc} %) za ${mcClock(Date.now() - T.t0)} · nejdelší série ${T.bestStreak}</span>`
       + (st.isBest ? '<span class="sp-record">🎉 Nejvíc v nekonečném režimu!</span>' : '')
-      + `<span>♾️ Statistika nekonečného režimu: ${st.games}× hráno, celkem ${st.total.toLocaleString('cs-CZ')} b, nejvíc ${st.best.toLocaleString('cs-CZ')} b</span>`;
+      + `<span>${MC_INF} Statistika nekonečného režimu: ${st.games}× hráno, celkem ${st.total.toLocaleString('cs-CZ')} b, nejvíc ${st.best.toLocaleString('cs-CZ')} b</span>`;
   } else {
     let best = 0;
     try { best = +localStorage.getItem(TF_BEST) || 0; if (T.score > best) localStorage.setItem(TF_BEST, String(T.score)); } catch (_) { /* nic */ }

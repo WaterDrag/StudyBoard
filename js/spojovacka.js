@@ -2,7 +2,7 @@
 // Na ploše je 6 dvojic (vlevo pojmy, vpravo odpovědi, každá strana zamíchaná).
 // Vyčištěná plocha = +5 s a nová várka. Správná spojení rychle za sebou
 // zvedají násobič (×1 → ×5), chyba ho shodí a vezme 3 s.
-const SP_TIME = 60e3, SP_PAIRS = 6, SP_BONUS = 5e3, SP_PENALTY = 3e3, SP_COMBO_MS = 4000;
+const SP_TIME = 60e3, SP_PAIRS = 6, SP_BONUS = 5e3, SP_PENALTY = 3e3, SP_COMBO_MS = 6000, SP_DECAY_MS = 1500;   // kombo drží 6 s, pak ubývá po jednom stupni každých 1,5 s
 const SP_BEST = 'spoj_best', SP_INF = 'spoj_inf';   // SP_INF = statistika nekonečného režimu (mcInfRecord)
 let DECKS = [], pickDecks = () => [], S = null;
 
@@ -21,7 +21,7 @@ function showBest() {
   let best = 0;
   try { best = +localStorage.getItem(SP_BEST) || 0; } catch (_) { /* nic */ }
   const inf = mcInfStats(SP_INF);
-  $('spBest').innerHTML = [best ? `🏆 Tvůj rekord: <b>${best.toLocaleString('cs-CZ')} b</b>` : '', inf.games ? `♾️ Nekonečný: nejvíc <b>${inf.best.toLocaleString('cs-CZ')} b</b>` : ''].filter(Boolean).join(' · ');
+  $('spBest').innerHTML = [best ? `🏆 Tvůj rekord: <b>${best.toLocaleString('cs-CZ')} b</b>` : '', inf.games ? `${MC_INF} Nekonečný: nejvíc <b>${inf.best.toLocaleString('cs-CZ')} b</b>` : ''].filter(Boolean).join(' · ');
 }
 
 const normKey = t => String(t).toLowerCase().replace(/\s+/g, ' ').trim();
@@ -81,7 +81,8 @@ function pick(b) {
   S.sel = null;
   if (prev.dataset.id === b.dataset.id) {
     const now = Date.now();
-    S.mult = S.lastOk && now - S.lastOk < SP_COMBO_MS ? Math.min(5, S.mult + 1) : 1;
+    S.mult = S.lastOk && (now - S.lastOk < SP_COMBO_MS || S.mult > 1) ? Math.min(5, S.mult + 1) : 1;   // dokud kombo úplně nevyprchá, navazuje se
+    S.decayAt = 0;
     S.maxMult = Math.max(S.maxMult, S.mult);
     S.lastOk = now;
     S.score += 100 * S.mult;
@@ -95,7 +96,7 @@ function pick(b) {
       setTimeout(() => { if (!S.over) deal(); }, 450);
     }
   } else {
-    S.mult = 1; S.lastOk = 0; S.wrong++;
+    S.mult = 1; S.lastOk = 0; S.decayAt = 0; S.wrong++;
     window.sfx?.('bad');
     if (!S.inf) S.endAt -= SP_PENALTY;
     // „spletl jsem si“ se počítá oběma kartám, ať je vidíš v opakování
@@ -120,6 +121,15 @@ function pop(el, text, bad) {
   setTimeout(() => p.remove(), 900);
 }
 
+// násobič nevyprchá naráz: po SP_COMBO_MS bez spojení ubude o jeden stupeň, pak další každých SP_DECAY_MS
+function comboDecay() {
+  if (S.mult <= 1) return;
+  const now = Date.now();
+  if (!S.decayAt) S.decayAt = S.lastOk + SP_COMBO_MS;
+  let changed = false;
+  while (S.mult > 1 && now >= S.decayAt) { S.mult--; S.decayAt += SP_DECAY_MS; changed = true; }
+  if (changed) hud();
+}
 function hud() {
   $('spScore').textContent = S.score.toLocaleString('cs-CZ') + ' b';
   const c = $('spCombo');
@@ -129,19 +139,19 @@ function hud() {
 function tick() {
   if (!S || S.over) return;
   if (S.inf) {   // nekonečný režim: jen stopky, bez konce
-    $('spTime').textContent = '♾️ ' + mcClock(Date.now() - S.t0);
-    if (S.mult > 1 && Date.now() - S.lastOk > SP_COMBO_MS) { S.mult = 1; hud(); }
+    mcInfClock($('spTime'), Date.now() - S.t0);
+    comboDecay();
     return;
   }
   const left = Math.max(0, S.endAt - Date.now());
-  $('spTime').textContent = Math.ceil(left / 1000) + ' s';
+  $('spTime').textContent = Math.ceil(left / 1000) + ' s'; $('spTime')._inf = null;
   const bar = $('spBar');
   bar.style.width = Math.min(100, left / SP_TIME * 100) + '%';
   bar.classList.toggle('low', left < 10e3);
   const sec = Math.ceil(left / 1000);
   if (left && left < 5000 && sec !== S.lastTick) { S.lastTick = sec; window.sfx?.('tick'); }
   // násobič vyprchá, když dlouho nic nespojíš
-  if (S.mult > 1 && Date.now() - S.lastOk > SP_COMBO_MS) { S.mult = 1; hud(); }
+  comboDecay();
   if (!left) endGame(false);
 }
 
@@ -157,11 +167,11 @@ function endGame(allDone) {
   $('spGame').hidden = true; $('spEnd').hidden = false;
   if (S.inf) {   // nekonečný režim: jen vlastní statistika, žádný rekord ani žebříček
     const st = mcInfRecord(SP_INF, S.score);
-    $('spEndIco').textContent = allDone ? '🏆' : st.isBest ? '🎉' : '♾️';
+    $('spEndIco').innerHTML = allDone ? '🏆' : st.isBest ? '🎉' : MC_INF;
     $('spEndTitle').textContent = allDone ? 'Všechno spojeno!' : 'Konec nekonečné hry';
     $('spResult').innerHTML = `<b>${S.score.toLocaleString('cs-CZ')} b</b><span>${S.pairs} ${S.pairs >= 1 && S.pairs <= 4 ? 'dvojice' : 'dvojic'} za ${mcClock(Date.now() - S.t0)} · ${acc} % bez chyby · nejvyšší kombo ×${S.maxMult}</span>`
       + (st.isBest ? '<span class="sp-record">🎉 Nejvíc v nekonečném režimu!</span>' : '')
-      + `<span>♾️ Statistika nekonečného režimu: ${st.games}× hráno, celkem ${st.total.toLocaleString('cs-CZ')} b, nejvíc ${st.best.toLocaleString('cs-CZ')} b</span>`;
+      + `<span>${MC_INF} Statistika nekonečného režimu: ${st.games}× hráno, celkem ${st.total.toLocaleString('cs-CZ')} b, nejvíc ${st.best.toLocaleString('cs-CZ')} b</span>`;
   } else {
     let best = 0;
     try { best = +localStorage.getItem(SP_BEST) || 0; if (S.score > best) localStorage.setItem(SP_BEST, String(S.score)); } catch (_) { /* nic */ }

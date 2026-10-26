@@ -614,14 +614,12 @@ function openBoardMenu(clientX, clientY) {
   menu.className = 'context-menu';
   menu.id = 'boardCtxMenu';
   menu.innerHTML = `
-    <button class="context-menu-item" data-act="travel">🧭 Travel agent <span style="opacity:.55;font-size:.72rem;margin-left:6px;">Ctrl+K</span></button>
+    <button class="context-menu-item" data-act="travel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"/></svg>Přejít na… <span class="ctx-kbd">Ctrl+K</span></button>
     <div class="context-menu-sep"></div>
-    <button class="context-menu-item" data-act="note">➕ Přidat poznámku</button>
-    <button class="context-menu-item" data-act="guide">📖 Přidat návod</button>
-    <button class="context-menu-item" data-act="board">🖊️ Přidat tabuli</button>
-    <button class="context-menu-item" data-act="heading">🔠 Přidat nadpis</button>${MY_ROLE === 'owner' ? `
-    <div class="context-menu-sep"></div>
-    <button class="context-menu-item" data-act="bg">🖼️ Pozadí místnosti</button>` : ''}`;
+    <button class="context-menu-item" data-act="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/><path d="M15 21v-6h6"/></svg>Přidat poznámku</button>
+    <button class="context-menu-item" data-act="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>Přidat návod</button>
+    <button class="context-menu-item" data-act="board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>Přidat tabuli</button>
+    <button class="context-menu-item" data-act="heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14M12 5v14"/></svg>Přidat nadpis</button>`;
   document.body.appendChild(menu);
   menu.style.left = clientX + 'px'; menu.style.top = clientY + 'px';
   const r = menu.getBoundingClientRect();
@@ -633,7 +631,6 @@ function openBoardMenu(clientX, clientY) {
   menu.querySelector('[data-act="guide"]').addEventListener('click', () => { closeBoardMenu(); createGuide(sx, sy); });
   menu.querySelector('[data-act="board"]').addEventListener('click', () => { closeBoardMenu(); createWhiteboard(sx, sy); });
   menu.querySelector('[data-act="heading"]').addEventListener('click', () => { closeBoardMenu(); createHeading(sx, sy); });
-  menu.querySelector('[data-act="bg"]')?.addEventListener('click', () => { closeBoardMenu(); openRoomBgPicker(); });
   setTimeout(() => document.addEventListener('click', closeBoardMenu, { once: true }), 0);
 }
 

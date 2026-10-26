@@ -1643,6 +1643,7 @@ function renderGuide() {
   const isMain = mainPage(note)?.id === page.id;
   h.textContent = ((isMain ? '★ ' : '') + pageLabel(note, page.id) + '  ' + (page.title || 'Kapitola')).trim();
   putDetailTitle(contentEl, h);
+  flowFreeImagesNarrow(contentEl);
   addImageClickHandlers(contentEl);
   wirePageLinks(contentEl);
   wireWebLinks(contentEl);
@@ -1715,6 +1716,38 @@ function goToPage(pageId, viaCrumb) {
   GUIDE.pageId = pageId;
   renderGuide();
   document.getElementById('detailContent').scrollTop = 0;
+}
+
+// Telefon: volné obrázky mají px pozici z editoru na počítači (sloupec --doc-w = 800 px). Na úzkém displeji se
+// text zalomí do víc řádků a obrázky by ho překrývaly nebo trčely ven. Jen pro zobrazení (uložená poznámka se
+// nemění) je proto vložíme do textu: k odstavci, u kterého leží na počítači, obrázky blízko sebe do jedné
+// řady, která se podle potřeby zalomí.
+function flowFreeImagesNarrow(root) {
+  const host = root.querySelector('.note-doc') || root;
+  const W = host.clientWidth;
+  if (!W || W >= 600) return;
+  const imgs = [...host.querySelectorAll('img')].filter(i => imgIsFree(i) && !i.closest('.free-row'));   // už vložené přeskočit
+  if (!imgs.length) return;
+  const top = i => parseFloat(i.style.top) || 0, left = i => parseFloat(i.style.left) || 0;
+  imgs.sort((a, b) => top(a) - top(b) || left(a) - left(b));
+  const rows = [];
+  for (const img of imgs) { const last = rows[rows.length - 1]; if (last && top(img) - last.t < 90) last.imgs.push(img); else rows.push({ t: top(img), imgs: [img] }); }
+  // Kde obrázek leží, se zjistí v neviditelné kopii textu široké jako na počítači (800 px): obrázek patří před
+  // první odstavec, jehož střed je pod horním okrajem obrázku. Místa se spočítají dřív, než se cokoli přesune.
+  const blocks = [...host.children].filter(el => !imgs.includes(el));
+  const clone = host.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.style.cssText += ';position:absolute;left:-99999px;top:0;width:800px;visibility:hidden;pointer-events:none;';
+  host.parentNode.appendChild(clone);
+  const cBlocks = [...clone.children].filter(el => !(el.tagName === 'IMG' && imgIsFree(el)));
+  rows.forEach(r => { const i = cBlocks.findIndex(b => b.offsetTop + b.offsetHeight / 2 >= r.t); r.before = i >= 0 ? blocks[i] || null : null; });
+  clone.remove();
+  rows.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'free-row';
+    r.imgs.forEach(i => row.appendChild(i));
+    host.insertBefore(row, r.before);
+  });
 }
 
 // Nadpis v detailu nesmí posunout text pod volně umístěnými obrázky: ty mají
@@ -2765,6 +2798,7 @@ function cleanEditorHtml(html) {
 
   // editing-only leftovers
   d.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+  d.querySelectorAll('.tsel').forEach(el => { el.classList.remove('tsel'); if (!el.className) el.removeAttribute('class'); });   // výběr buněk tabulky
   d.querySelectorAll('li').forEach(li => { if (li.dataset.done === '') delete li.dataset.done; });
 
   // empty paragraphs at the very end
@@ -3757,6 +3791,7 @@ function openNoteDetail(el, note) {
   // are unpublished this call can fail — which used to stop the note opening
   // at all, with nothing on screen to say why.
   openModal('noteDetailModal');
+  flowFreeImagesNarrow(contentEl);   // až je okno otevřené (měří se výška textu)
   try { loadComments(note.id); }
   catch (e) { console.warn('Komentáře se nenačetly:', e); }
   refreshFind();
