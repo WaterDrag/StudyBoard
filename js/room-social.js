@@ -10,6 +10,15 @@ let LAST_AGENT_INVITE = null;
 // použití" flag. A plain permanent link reuses the room's inviteCode (no
 // server write); anything temporary or single-use becomes a server-side
 // entry in ROOM.tempInvites so it can expire, be consumed, or be revoked.
+// Hosté a dočasní členové pozvánky tvořit nemůžou: tlačítko je ztmavené se zámkem
+function shareLocked() { return !!ME.isAnonymous || !!(ROOM.memberExpiry || {})[ME.uid]; }
+function lockShareButton(btn) {
+  if (!btn || !shareLocked() || btn.classList.contains('btn-locked')) return;
+  btn.classList.add('btn-locked');
+  btn.setAttribute('aria-disabled', 'true');
+  btn.title = 'Pozvánky může vytvářet jen stálý člen místnosti';
+  btn.insertAdjacentHTML('beforeend', '<svg class="lock-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>');
+}
 function setupShare() {
   const roleSelect = document.getElementById('inviteRoleSelect');
   const typeSelect = document.getElementById('inviteTypeSelect');
@@ -42,7 +51,9 @@ function setupShare() {
       typeSelect.value === 'temp' ? 'inline-flex' : 'none';
   });
 
+  lockShareButton(document.getElementById('shareBtn'));
   document.getElementById('shareBtn').addEventListener('click', () => {
+    if (shareLocked()) { toast(ME.isAnonymous ? 'Host nemůže zvát další lidi — přihlas se.' : 'S dočasným přístupem nemůžeš zvát další lidi.'); return; }
     document.getElementById('inviteCode').textContent = ROOM.inviteCode || '------';
     renderTempInvites();
     renderFriendInvites();
@@ -109,7 +120,9 @@ async function renderFriendInvites() {
   try {
     const fs = await loadFriendState(true);
     if (!fs.accepted.size) { list.innerHTML = '<div class="fi-empty">Zatím nemáš žádné přátele — přidáš je na hlavní stránce v záložce Přátelé.</div>'; return; }
-    const uids = [...fs.accepted].filter(u => !(ROOM.memberIds || []).includes(u));
+    // dočasný člen jde pozvat natrvalo
+    const tempOf = u => !!(ROOM.memberExpiry || {})[u];
+    const uids = [...fs.accepted].filter(u => !(ROOM.memberIds || []).includes(u) || tempOf(u));
     if (!uids.length) { list.innerHTML = '<div class="fi-empty">Všichni tvoji přátelé už v místnosti jsou. 🎉</div>'; return; }
     const [profiles, sent] = await Promise.all([
       Promise.all(uids.map(u => db.collection('users').doc(u).get().then(s => ({ uid: u, ...(s.data() || {}) })).catch(() => ({ uid: u })))),
@@ -122,7 +135,7 @@ async function renderFriendInvites() {
         <span class="fi-ava">${/^https:\/\//.test(p.photoURL || '') ? `<img src="${esc(p.photoURL).replace(/"/g, '&quot;')}" alt="" referrerpolicy="no-referrer">` : esc(String(p.displayName || '?')[0].toUpperCase())}</span>
         <span class="fi-name">${esc(p.displayName || 'Přítel')}</span>
         ${owner ? `<select class="input fi-role" aria-label="Oprávnění"><option value="viewer">Prohlížeč</option><option value="editor">Editor</option></select>` : ''}
-        <button type="button" class="btn ${pending.has(p.uid) ? 'btn-ghost' : 'btn-secondary'} fi-btn" data-invite="${esc(p.uid)}">${pending.has(p.uid) ? '✓ Pozváno' : 'Pozvat'}</button>
+        <button type="button" class="btn ${pending.has(p.uid) ? 'btn-ghost' : 'btn-secondary'} fi-btn" data-invite="${esc(p.uid)}">${pending.has(p.uid) ? '✓ Pozváno' : tempOf(p.uid) ? 'Pozvat natrvalo' : 'Pozvat'}</button>
       </div>`).join('');
     list.querySelectorAll('[data-invite]').forEach(b => b.addEventListener('click', () => {
       const row = b.closest('.fi-row');
@@ -135,8 +148,18 @@ async function inviteFriend(uid, role, profile, btn) {
   btn.disabled = true;
   const code = Array.from({ length: 10 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
   const exp = Date.now() + FRIEND_INVITE_MS;
-  const entry = { role, exp, by: ME.uid, once: true, to: uid };
+  // keep: 14 dní platí jen pozvánka — člen pak zůstává natrvalo (dřív se mu ta doba zapsala jako konec členství)
+  const entry = { role, exp, by: ME.uid, once: true, to: uid, keep: true };
   try {
+    // Vlastník dočasnému členovi přístup rovnou změní na trvalý
+    if (MY_ROLE === 'owner' && (ROOM.memberIds || []).includes(uid)) {
+      const FV = firebase.firestore.FieldValue;
+      await db.collection('rooms').doc(ROOM_ID).update({ [`memberExpiry.${uid}`]: FV.delete(), [`roles.${uid}`]: role });
+      delete ROOM.memberExpiry[uid]; ROOM.roles[uid] = role;
+      btn.textContent = '✓ Natrvalo'; btn.classList.replace('btn-secondary', 'btn-ghost');
+      toast(`${profile?.displayName || 'Přítel'} má teď trvalý přístup ✓`);
+      return;
+    }
     await db.collection('rooms').doc(ROOM_ID).update({ [`tempInvites.${code}`]: entry });
     ROOM.tempInvites = { ...(ROOM.tempInvites || {}), [code]: entry };
     await db.collection('roomInvites').doc(`${ROOM_ID}_${ME.uid}_${uid}`).set({

@@ -44,7 +44,7 @@ async function start() {
   const b = $('dayStart');
   b.disabled = true; b.textContent = 'Připravuji otázky…';
   try {
-    const decks = (await mcLoadDecks()).slice(0, 25);
+    const decks = (await mcLoadDecks()).filter(d => !/^sb-/.test(d.id)).slice(0, 25);   // bez vestavěných balíčků „Pro všechny“
     if (!decks.length) { toast('Nemáš žádné balíčky s kartičkami — vytvoř si nějaký ve Flash Cards.'); b.textContent = 'Začít výzvu'; b.disabled = false; return; }
     const [pool, boxes] = await Promise.all([mcLoadCards(decks), mcLearnBoxes()]);
     const st = DAILY[TODAY] || {};

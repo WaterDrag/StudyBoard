@@ -193,9 +193,9 @@ function openPinMenu(x, y, id) {
   pop.id = 'pinMenu';
   const isFolder = FOLDERS_MAP.has(id);
   const canMove = MY_ROLE !== 'viewer';
-  pop.innerHTML = `<button class="context-menu-item" data-pm="pin">📌 ${on ? 'Odepnout' : 'Připnout nahoru'}</button>` +
-    (canMove ? `<button class="context-menu-item" data-pm="move">📁 Přesunout do složky…</button>` : '') +
-    (isFolder ? `<button class="context-menu-item" data-pm="present">▶ Prezentovat složku</button>` : '');
+  pop.innerHTML = `<button class="context-menu-item" data-pm="pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 2-2V3H6v1a2 2 0 0 0 2 2 1 1 0 0 1 1 1z"/></svg>${on ? 'Odepnout' : 'Připnout nahoru'}</button>` +
+    (canMove ? `<button class="context-menu-item" data-pm="move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Přesunout do složky…</button>` : '') +
+    (isFolder ? `<button class="context-menu-item" data-pm="present"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>Prezentovat složku</button>` : '');
   document.body.appendChild(pop);
   pop.style.left = x + 'px';
   pop.style.top  = y + 'px';

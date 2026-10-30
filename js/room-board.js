@@ -1329,8 +1329,8 @@ function setupRoomChrome() {
 
   // "Sdílet" in the bar opens the same dialog as the button in the members panel.
   const shareTop = document.getElementById('shareTopBtn');
-  if (ME.isAnonymous) shareTop.style.display = 'none';
-  else shareTop.addEventListener('click', () => document.getElementById('shareBtn').click());
+  lockShareButton(shareTop);
+  shareTop.addEventListener('click', () => document.getElementById('shareBtn').click());
 
   // Tool rail — creating things is for owners/editors only.
   const rail = document.getElementById('toolRail');

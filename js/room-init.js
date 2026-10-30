@@ -40,7 +40,7 @@ auth.onAuthStateChanged(async user => {
         const t = (ROOM.tempInvites || {})[tempCode];
         // exp:null = permanent single-use link — never expires, only gets
         // consumed (on join) or revoked.
-        if (t && (t.exp == null || t.exp > Date.now())) { allowed = true; linkRole = t.role; inviteExp = t.exp; }
+        if (t && (t.exp == null || t.exp > Date.now())) { allowed = true; linkRole = t.role; inviteExp = t.keep ? null : t.exp; }
         else if (t) {
           toast('Tato pozvánka už vypršela.');
           setTimeout(() => (window.location.href = 'dashboard.html'), 1600);
@@ -100,6 +100,30 @@ auth.onAuthStateChanged(async user => {
       if (expiry) ROOM.memberExpiry = { ...(ROOM.memberExpiry || {}), [ME.uid]: expiry };
       MY_ROLE = joinRole;
       toast(`Připojeno jako ${roleLabel(joinRole)}! 🎉`);
+    }
+
+    // Dočasný člen otevřel pozvánku: trvalá mu přístup změní na trvalý, delší dočasná ho prodlouží.
+    // (Dřív se pozvánka u člena vůbec nečetla, takže kamaráda nešlo pozvat natrvalo.)
+    if (MY_ROLE && !ME.isAnonymous && (ROOM.memberExpiry || {})[ME.uid]) {
+      const p = new URLSearchParams(window.location.search), tc = p.get('tcode'), t = tc ? (ROOM.tempInvites || {})[tc] : null;
+      const byCode = p.get('code') && ROOM.inviteCode && p.get('code') === ROOM.inviteCode;
+      if (byCode || (t && (t.exp == null || t.exp > Date.now()))) {
+        const FV = firebase.firestore.FieldValue, perm = byCode || t.keep || t.exp == null;
+        const cur = ROOM.memberExpiry[ME.uid], role = byCode ? p.get('role') : t.role;
+        const up = {};
+        if (perm) up[`memberExpiry.${ME.uid}`] = FV.delete();
+        else if (t.exp > cur) up[`memberExpiry.${ME.uid}`] = t.exp;
+        if (role === 'editor' && MY_ROLE === 'viewer' && (await loadFriendState()).accepted.has(ROOM.ownerId)) up[`roles.${ME.uid}`] = 'editor';
+        if (t?.once) up[`tempInvites.${tc}`] = FV.delete();
+        if (Object.keys(up).length) {
+          try {
+            await doc.ref.update(up);
+            if (perm) delete ROOM.memberExpiry[ME.uid]; else ROOM.memberExpiry[ME.uid] = t.exp;
+            if (up[`roles.${ME.uid}`]) { MY_ROLE = 'editor'; ROOM.roles[ME.uid] = 'editor'; }
+            toast(perm ? 'Máš teď trvalý přístup do místnosti 🎉' : 'Přístup prodloužen ✓');
+          } catch (e) { console.warn('[pozvánka]', e); }
+        }
+      }
     }
 
     // Expired / expiring membership (anonymous guests, temp invites):

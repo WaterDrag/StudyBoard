@@ -66,7 +66,22 @@ service cloud.firestore {
     // join time: only the owner's friends get it.)
     function isTempInviteWrite(roomId) {
       return (request.auth.uid in resource.data.memberIds)
+        && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+        && !(request.auth.uid in resource.data.get('memberExpiry', {}))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tempInvites']);
+    }
+
+    // Dočasný člen, který otevřel pozvánku: změní si jen vlastní konec členství (a roli na editora,
+    // jen když je přítel vlastníka). Není to nic navíc proti odchodu a novému připojení přes odkaz.
+    function isRoomSelfExtend(roomId) {
+      return (request.auth.uid in resource.data.memberIds)
+        && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+        && (request.auth.uid in resource.data.get('memberExpiry', {}))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberExpiry', 'roles', 'tempInvites'])
+        && request.resource.data.get('memberExpiry', {}).diff(resource.data.get('memberExpiry', {})).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.roles.diff(resource.data.roles).affectedKeys().hasOnly([request.auth.uid])
+        && (request.resource.data.roles[request.auth.uid] == resource.data.roles[request.auth.uid]
+            || (request.resource.data.roles[request.auth.uid] == 'editor' && isFriendOfOwner(roomId)));
     }
 
     // The mirror image of a self-join: a member may remove ONLY themselves.
@@ -92,7 +107,8 @@ service cloud.firestore {
         isRoomOwner(roomId) ||
         isRoomSelfJoin(roomId) ||
         isRoomSelfLeave(roomId) ||
-        isTempInviteWrite(roomId)
+        isTempInviteWrite(roomId) ||
+        isRoomSelfExtend(roomId)
       );
       // Rooms are never deleted. The owner "leaving" transfers ownership to a
       // remaining member (a normal owner update), so the room always survives.

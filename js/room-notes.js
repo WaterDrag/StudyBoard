@@ -409,14 +409,14 @@ function openNoteMenu(x, y, noteId) {
   if (!note) return;
   const canWrite = MY_ROLE !== 'viewer' && !(ME.isAnonymous && MY_ROLE !== 'owner');
   const items = [];
-  items.push(`<button class="context-menu-item" data-act="open">👁 Otevřít</button>`);
-  if (canEdit(note))  items.push(`<button class="context-menu-item" data-act="edit">✏️ Upravit</button>`);
-  if (canWrite)       items.push(`<button class="context-menu-item" data-act="dup">📄 Duplikovat</button>`);
-  if (canWrite)       items.push(`<button class="context-menu-item" data-act="move">📁 Přesunout do složky</button>`);
-  items.push(`<button class="context-menu-item" data-act="fact">🔎 Ověřit fakta</button>`);
-  items.push(`<button class="context-menu-item" data-act="export">⬇️ Exportovat tuhle poznámku</button>`);
-  if (canManageNote(note) && !isHeading(note)) items.push(`<button class="context-menu-item" data-act="perm">🔑 Kdo může upravovat…${note.shareEdit || (note.editorIds || []).length ? ' <span class="perm-dot"></span>' : ''}</button>`);
-  if (canManageNote(note))  items.push(`<button class="context-menu-item" data-act="del" style="color:#fca5a5;">🗑️ Smazat</button>`);
+  items.push(`<button class="context-menu-item" data-act="open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Otevřít</button>`);
+  if (canEdit(note))  items.push(`<button class="context-menu-item" data-act="edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/><path d="m15 5 4 4"/></svg>Upravit</button>`);
+  if (canWrite)       items.push(`<button class="context-menu-item" data-act="dup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Duplikovat</button>`);
+  if (canWrite)       items.push(`<button class="context-menu-item" data-act="move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Přesunout do složky</button>`);
+  items.push(`<button class="context-menu-item" data-act="fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Ověřit fakta</button>`);
+  items.push(`<button class="context-menu-item" data-act="export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Exportovat tuhle poznámku</button>`);
+  if (canManageNote(note) && !isHeading(note)) items.push(`<button class="context-menu-item" data-act="perm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Kdo může upravovat…${note.shareEdit || (note.editorIds || []).length ? ' <span class="perm-dot"></span>' : ''}</button>`);
+  if (canManageNote(note))  items.push(`<button class="context-menu-item" data-act="del" style="color:#fca5a5;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Smazat</button>`);
 
   const menu = document.createElement('div');
   menu.className = 'context-menu';
@@ -2638,6 +2638,7 @@ function setupHighlighter(editor, toolbar) {
   });
   const apply = (c = input.value) => {
     editor.focus();
+    if (window.TBL?.massFormat('hiliteColor', c)) return;
     if (saved) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(saved); }
     // hiliteColor is the standard name; some engines only know backColor.
     if (!document.execCommand('hiliteColor', false, c)) {
@@ -2798,7 +2799,7 @@ function cleanEditorHtml(html) {
 
   // editing-only leftovers
   d.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
-  d.querySelectorAll('.tsel').forEach(el => { el.classList.remove('tsel'); if (!el.className) el.removeAttribute('class'); });   // výběr buněk tabulky
+  d.querySelectorAll('.tsel, .ink-auto').forEach(el => { el.classList.remove('tsel', 'ink-auto'); if (!el.className) el.removeAttribute('class'); });   // výběr buněk tabulky, automatická barva písma (room-paper.js)
   d.querySelectorAll('li').forEach(li => { if (li.dataset.done === '') delete li.dataset.done; });
 
   // empty paragraphs at the very end
@@ -3411,6 +3412,7 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
     sizeSel.addEventListener('change', () => {
       const pt = parseFloat(sizeSel.value);
       if (!pt) return;
+      if (window.TBL?.massFormat('fontSize', +(pt / 12).toFixed(3) + 'em')) { editor.focus(); return; }
       restoreRange();
       document.execCommand('styleWithCSS', false, false);
       document.execCommand('fontName', false, '__sbsize__');
@@ -3436,6 +3438,7 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
   toolbar.querySelectorAll('[data-cmd]').forEach(btn => {
     btn.addEventListener('mousedown', e => e.preventDefault());
     btn.addEventListener('click', () => {
+      if (window.TBL?.massFormat(btn.dataset.cmd, btn.dataset.val || null)) { editor.focus(); return; }   // vybrané buňky tabulky
       restoreRange();
       document.execCommand(btn.dataset.cmd, false, btn.dataset.val || null);
       editor.focus();
@@ -3458,6 +3461,7 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
   // Color: save range on mousedown, apply after picker closes
   if (colorInput) {
     const applyColor = () => {
+      if (window.TBL?.massFormat('foreColor', colorInput.value)) { if (colorA) colorA.style.borderBottomColor = colorInput.value; editor.focus(); return; }
       restoreRange();
       document.execCommand('foreColor', false, colorInput.value);
       if (colorA) colorA.style.borderBottomColor = colorInput.value;
@@ -3473,7 +3477,7 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
     const more = colorInput.parentElement.querySelector('.rt-color-more');
     more?.addEventListener('mousedown', e => { e.preventDefault(); saveRange(); });
     more?.addEventListener('click', () => openColorMenu(more, 'text', colorInput, c => {
-      if (!c) { restoreRange(); rtClearTextColor(editor); editor.focus(); return; }
+      if (!c) { if (window.TBL?.massFormat('foreColor', '')) return; restoreRange(); rtClearTextColor(editor); editor.focus(); return; }
       colorInput.value = c; rtRememberColor('text', c); applyColor();
     }));
     if (colorA) colorA.style.borderBottomColor = colorInput.value;

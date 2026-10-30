@@ -1359,9 +1359,9 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   cursor: pointer;
 }
 .context-menu-item:hover { background: var(--bg-3); }
-#boardCtxMenu .context-menu-item { display: flex; align-items: center; gap: 10px; }
-#boardCtxMenu .context-menu-item svg { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
-#boardCtxMenu .ctx-kbd { margin-left: auto; padding-left: 12px; opacity: .55; font-size: .72rem; }
+.context-menu-item { display: flex; align-items: center; gap: 10px; }
+.context-menu-item svg { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+.ctx-kbd { margin-left: auto; padding-left: 12px; opacity: .55; font-size: .72rem; }
 
 /* Faint pin marker on items that are pinned (the shortcut lives up top) */
 .notes-list-row[data-pinned]::after,
@@ -2553,6 +2553,16 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .tbl-b input[type=color] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
 .tbl-rcol .rich-editor td, .tbl-rcol .rich-editor th { cursor: col-resize; }
 .tbl-rrow .rich-editor td, .tbl-rrow .rich-editor th { cursor: row-resize; }
+/* Pozadí poznámek (room-paper.js): bílé / černé bez ohledu na motiv */
+.paper-light { --bg: #ffffff; --bg-2: #f4f4f5; --bg-3: #e4e4e7; --bg-4: #d4d4d8; --border: rgba(0,0,0,.12); --border-strong: rgba(0,0,0,.22); --text: #111318; --text-muted: #52525b; --text-faint: #71717a; color: var(--text); }
+.paper-dark { --bg: #0f1014; --bg-2: #17181d; --bg-3: #1f2127; --bg-4: #2a2c33; --border: rgba(255,255,255,.1); --border-strong: rgba(255,255,255,.2); --text: #eceded; --text-muted: #a1a1aa; --text-faint: #71717a; color: var(--text); }
+.note-detail-content.paper-light, .note-detail-content.paper-dark { background: var(--bg); border-radius: 8px; padding-inline: 10px; }
+.note-detail-content .ink-auto, .rich-editor .ink-auto { color: var(--text) !important; }
+.garden-skins { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 8px 0 4px; }
+.garden-skin { background: var(--bg-3); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font: inherit; font-size: .74rem; padding: 3px 10px; cursor: pointer; }
+.garden-skin.on { border-color: var(--accent); color: var(--text); }
+.btn-locked { opacity: .5; filter: grayscale(.7); cursor: not-allowed; }
+.btn-locked .lock-ico { width: 13px; height: 13px; margin-left: 4px; flex: none; }
 .tbl-sep { width: 1px; height: 20px; background: var(--border); margin: 0 3px; }
 .rich-editor td.tsel, .rich-editor th.tsel { box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--accent) 22%, transparent); outline: 1px solid var(--accent); outline-offset: -1px; }
 .note-table[style*="table-layout: fixed"] { display: block; overflow-x: auto; max-width: 100%; }

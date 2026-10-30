@@ -51,22 +51,40 @@ function gardenAdvance(profile) {
   return { g, changed, todayInfo: gardenDay(profile, today) };
 }
 
+// ── Skiny podle ročního období (nebo ručně vybraný, pamatuje si ho prohlížeč) ──
+const GARDEN_SEASONS = { spring: 'Jaro', summer: 'Léto', autumn: 'Podzim', winter: 'Zima' };
+function gardenSeasonNow() { const m = new Date().getMonth(); return m >= 2 && m <= 4 ? 'spring' : m >= 5 && m <= 7 ? 'summer' : m >= 8 && m <= 10 ? 'autumn' : 'winter'; }
+function gardenSeasonPref() { try { const v = localStorage.getItem('sb_garden_season'); return GARDEN_SEASONS[v] ? v : ''; } catch (_) { return ''; } }
+// obloha (2 barvy), tráva zdravá / povadlá, posun odstínu listí
+const GARDEN_SKIN = {
+  spring: { sky: ['#bae6fd', '#ecfccb'], grass: '#65a30d', dry: '#8a7a2e', hue: -22, sat: 4, lum: 8 },
+  summer: { sky: ['#7dd3fc', '#e0f2fe'], grass: '#4d7c0f', dry: '#7c6f2a', hue: 0, sat: 6, lum: 0 },
+  autumn: { sky: ['#fed7aa', '#fef3c7'], grass: '#7c7a1e', dry: '#7c5a1e', hue: -95, sat: 22, lum: 6 },
+  winter: { sky: ['#cbd5e1', '#f1f5f9'], grass: '#f1f5f9', dry: '#e2e8f0', hue: 0, sat: 0, lum: 0 },
+};
+
 // ── Kreslení stromu (SVG) ───────────────────────────────────────
-function gardenSvg(g, streakDays = 0) {
+function gardenSvg(g, streakDays = 0, season = gardenSeasonPref() || gardenSeasonNow()) {
   const st = gardenStage(g.xp || 0), h = g.health || 4;
   // zdraví 5 = sytě zelená, 1 = vybledlá žlutohnědá
   const hue = 70 + (h - 1) * 15, sat = 30 + (h - 1) * 8, lum = 38 + (5 - h) * 2;
-  const leaf = `hsl(${hue} ${sat}% ${lum}%)`, leaf2 = `hsl(${hue + 8} ${sat + 5}% ${lum + 9}%)`;
-  const trunk = '#7c4a2d';
+  const skin = GARDEN_SKIN[season], winter = season === 'winter';
+  const lh = hue + skin.hue, ls = sat + skin.sat, ll = lum + skin.lum;
+  const leaf = winter ? '#e2e8f0' : `hsl(${lh} ${ls}% ${ll}%)`, leaf2 = winter ? '#f8fafc' : `hsl(${lh + 8 + (season === 'autumn' ? 14 : 0)} ${ls + 5}% ${ll + 9}%)`;
+  const trunk = winter ? '#57534e' : '#7c4a2d';
   let rnd = 7;
   const r = () => { rnd = (rnd * 9301 + 49297) % 233280; return rnd / 233280; };
   let s = `<svg viewBox="0 0 200 200" class="garden-svg" role="img" aria-label="${GARDEN_STAGES[st].name}">`;
+  s += `<defs><linearGradient id="gSky-${season}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${skin.sky[0]}"/><stop offset="1" stop-color="${skin.sky[1]}"/></linearGradient></defs><rect width="200" height="200" rx="14" fill="url(#gSky-${season})"/>`;
+  if (season === 'summer') s += `<circle cx="164" cy="34" r="15" fill="#fde047"/><circle cx="164" cy="34" r="21" fill="#fde047" opacity=".25"/>`;
+  if (season === 'spring') s += `<g fill="#fff" opacity=".85"><ellipse cx="42" cy="34" rx="18" ry="7"/><ellipse cx="56" cy="29" rx="12" ry="7"/><ellipse cx="152" cy="50" rx="15" ry="6"/></g>`;
+  if (season === 'autumn') s += `<g fill="#94a3b8" opacity=".45"><ellipse cx="50" cy="32" rx="24" ry="8"/><ellipse cx="150" cy="24" rx="20" ry="7"/></g>`;
   if (st === 7) s += `<defs><radialGradient id="gGlow"><stop offset="0" stop-color="#fde68a" stop-opacity=".55"/><stop offset="1" stop-color="#fde68a" stop-opacity="0"/></radialGradient></defs><circle cx="100" cy="90" r="90" fill="url(#gGlow)"/>`;
-  s += `<ellipse cx="100" cy="178" rx="78" ry="12" fill="#5b3a24"/><ellipse cx="100" cy="174" rx="74" ry="9" fill="${h >= 3 ? '#4d7c0f' : '#7c6f2a'}"/>`;
+  s += `<ellipse cx="100" cy="178" rx="78" ry="12" fill="${winter ? '#94a3b8' : '#5b3a24'}"/><ellipse cx="100" cy="174" rx="74" ry="9" fill="${h >= 3 ? skin.grass : skin.dry}"/>`;
   // květinky v trávě = dny v řadě (max 7)
   for (let i = 0; i < Math.min(7, streakDays); i++) {
     const x = 36 + i * 21 + (i % 2 ? 4 : 0), y = 172 - (i % 2) * 3;
-    s += `<path d="M${x} ${y}v-9" stroke="#3f6212" stroke-width="1.6"/><circle cx="${x}" cy="${y - 10}" r="3.4" fill="${['#f472b6', '#facc15', '#a78bfa', '#fb7185'][i % 4]}"/><circle cx="${x}" cy="${y - 10}" r="1.2" fill="#fff7"/>`;
+    s += `<path d="M${x} ${y}v-9" stroke="#3f6212" stroke-width="1.6"/><circle cx="${x}" cy="${y - 10}" r="3.4" fill="${winter ? '#fff' : season === 'autumn' ? ['#f97316', '#eab308', '#dc2626', '#fb923c'][i % 4] : ['#f472b6', '#facc15', '#a78bfa', '#fb7185'][i % 4]}"/><circle cx="${x}" cy="${y - 10}" r="1.2" fill="#fff7"/>`;
   }
   if (st === 0) {
     s += `<ellipse cx="100" cy="168" rx="16" ry="7" fill="#6b4226"/><ellipse cx="100" cy="164" rx="7" ry="5" fill="#a16207"/>`;
@@ -84,10 +102,18 @@ function gardenSvg(g, streakDays = 0) {
     if (k >= 1) s += `<path d="M100 ${172 - tH + 14} l -16 -14 M100 ${172 - tH + 8} l 15 -12" stroke="${trunk}" stroke-width="4" stroke-linecap="round"/>`;
     const blobs = [[0, 0, 1], [-0.62, 0.25, 0.7], [0.62, 0.25, 0.7], [-0.35, -0.45, 0.68], [0.38, -0.42, 0.66], [0, 0.42, 0.6]];
     blobs.forEach(([dx, dy, sc], i) => { s += `<circle cx="${100 + dx * cr}" cy="${crownY + dy * cr}" r="${cr * sc * 0.72}" fill="${i % 2 ? leaf2 : leaf}"/>`; });
-    if (st >= 5) for (let i = 0; i < 9; i++) { const a = r() * Math.PI * 2, d = r() * cr * 0.85; s += `<circle cx="${100 + Math.cos(a) * d}" cy="${crownY + Math.sin(a) * d * 0.8}" r="3.2" fill="#fbcfe8"/><circle cx="${100 + Math.cos(a) * d}" cy="${crownY + Math.sin(a) * d * 0.8}" r="1.2" fill="#f472b6"/>`; }
-    if (st >= 6) for (let i = 0; i < 6; i++) { const a = r() * Math.PI * 2, d = r() * cr * 0.75; s += `<circle cx="${100 + Math.cos(a) * d}" cy="${crownY + 6 + Math.sin(a) * d * 0.7}" r="4.6" fill="#dc2626"/><circle cx="${101 + Math.cos(a) * d}" cy="${crownY + 4 + Math.sin(a) * d * 0.7}" r="1.4" fill="#fff6"/>`; }
+    if (st >= 5 && !winter && season !== 'autumn') for (let i = 0; i < (season === 'spring' ? 16 : 9); i++) { const a = r() * Math.PI * 2, d = r() * cr * 0.85; s += `<circle cx="${100 + Math.cos(a) * d}" cy="${crownY + Math.sin(a) * d * 0.8}" r="3.2" fill="#fbcfe8"/><circle cx="${100 + Math.cos(a) * d}" cy="${crownY + Math.sin(a) * d * 0.8}" r="1.2" fill="#f472b6"/>`; }
+    if (st >= 6 && !winter) for (let i = 0; i < (season === 'autumn' ? 9 : 6); i++) { const a = r() * Math.PI * 2, d = r() * cr * 0.75; s += `<circle cx="${100 + Math.cos(a) * d}" cy="${crownY + 6 + Math.sin(a) * d * 0.7}" r="4.6" fill="#dc2626"/><circle cx="${101 + Math.cos(a) * d}" cy="${crownY + 4 + Math.sin(a) * d * 0.7}" r="1.4" fill="#fff6"/>`; }
     if (st === 7) for (let i = 0; i < 10; i++) { const x = 30 + r() * 140, y = 20 + r() * 120; s += `<path d="M${x} ${y - 4} L${x + 1.2} ${y - 1.2} L${x + 4} ${y} L${x + 1.2} ${y + 1.2} L${x} ${y + 4} L${x - 1.2} ${y + 1.2} L${x - 4} ${y} L${x - 1.2} ${y - 1.2} Z" fill="#fde047" opacity=".9"/>`; }
     if (h <= 2) for (let i = 0; i < 4; i++) s += `<ellipse cx="${60 + r() * 80}" cy="${174 + r() * 3}" rx="4" ry="2" fill="#a16207" transform="rotate(${r() * 60 - 30} 100 175)"/>`;
+  }
+  // počasí přes všechno: sníh v zimě, padající listí na podzim, okvětní lístky na jaře
+  const n = winter ? 26 : season === 'summer' ? 0 : 12;
+  for (let i = 0; i < n; i++) {
+    const x = 8 + r() * 184, y = 8 + r() * 160;
+    if (winter) s += `<circle cx="${x}" cy="${y}" r="${1 + r() * 1.6}" fill="#fff" opacity=".95"/>`;
+    else if (season === 'autumn') s += `<ellipse cx="${x}" cy="${y}" rx="3.4" ry="1.8" fill="${['#ea580c', '#ca8a04', '#b91c1c'][i % 3]}" transform="rotate(${r() * 180} ${x} ${y})"/>`;
+    else s += `<ellipse cx="${x}" cy="${y}" rx="2.2" ry="1.3" fill="#fbcfe8" transform="rotate(${r() * 180} ${x} ${y})"/>`;
   }
   return s + '</svg>';
 }
@@ -132,7 +158,8 @@ function openGarden() {
   ov.id = 'gardenModal';
   ov.innerHTML = `<div class="modal garden-modal">
     <div class="modal-header"><h3>🌳 Tvoje zahrada</h3><button class="modal-close" data-gclose>✕</button></div>
-    <div class="garden-view">${gardenSvg(g, streak)}</div>
+    <div class="garden-view" id="gardenView">${gardenSvg(g, streak)}</div>
+    <div class="garden-skins" id="gardenSkins">${[['', 'Podle data'], ...Object.entries(GARDEN_SEASONS)].map(([k, t]) => `<button type="button" class="garden-skin${gardenSeasonPref() === k ? ' on' : ''}" data-season="${k}">${t}</button>`).join('')}</div>
     <div class="garden-name"><b>${GARDEN_STAGES[st].name}</b><span>${HEALTH_TXT[g.health || 4]} · ${g.xp} ${g.xp === 1 ? 'den' : g.xp < 5 ? 'dny' : 'dní'} učení${streak ? ` · 🔥 ${streak} v řadě` : ''}</span></div>
     <div class="garden-next">${next ? `Do fáze <b>${next.emoji} ${next.name}</b> zbývá ${next.xp - g.xp} ${next.xp - g.xp === 1 ? 'den' : next.xp - g.xp < 5 ? 'dny' : 'dní'}` : 'Tvůj strom je v plné kráse ✨'}<div class="garden-prog"><i style="width:${pct}%"></i></div></div>
     <div class="garden-goal">
@@ -144,5 +171,11 @@ function openGarden() {
     <p class="garden-note">Každý den se splněným cílem strom poroste. Když pár dní vynecháš, povadne — ale neuschne, stačí se vrátit. Květinky v trávě ukazují dny v řadě.</p>
   </div>`;
   document.body.appendChild(ov);
-  ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('[data-gclose]')) ov.remove(); });
+  ov.addEventListener('click', e => {
+    if (e.target === ov || e.target.closest('[data-gclose]')) { ov.remove(); return; }
+    const b = e.target.closest('[data-season]'); if (!b) return;
+    try { if (b.dataset.season) localStorage.setItem('sb_garden_season', b.dataset.season); else localStorage.removeItem('sb_garden_season'); } catch (_) {}
+    document.getElementById('gardenView').innerHTML = gardenSvg(g, streak);
+    ov.querySelectorAll('[data-season]').forEach(x => x.classList.toggle('on', x === b));
+  });
 }

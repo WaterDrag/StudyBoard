@@ -71,6 +71,12 @@ function applyExportScopeUi() {
   } else hint.textContent = '';
 }
 
+// Export vybraných poznámek = jen poznámky; kartičky a tabule z celé místnosti se dají zapnout ručně
+function exportScopeDefaults() {
+  const all = document.getElementById('exportScope')?.value === 'all';
+  ['exportCards', 'exportBoards'].forEach(id => { const c = document.getElementById(id); if (c) c.checked = all; });
+}
+
 // Opened from the ⬇️ Export button — whole room unless something is selected.
 function openExportModal(only) {
   EXPORT_ONLY = only instanceof Set ? new Set(only) : null;
@@ -79,6 +85,7 @@ function openExportModal(only) {
   if (scope) scope.value = EXPORT_ONLY ? 'selected' : (hasSel ? 'selected' : 'all');
   renderExportPicker(EXPORT_ONLY || SELECTED);
   applyExportScopeUi();
+  exportScopeDefaults();
   document.getElementById('exportHint').textContent =
     EXPORT_ONLY && EXPORT_ONLY.size === 1 ? 'Vyexportuje se jen tato poznámka.' : document.getElementById('exportHint').textContent;
   openModal('exportModal');
@@ -92,6 +99,7 @@ function setupExport() {
   document.getElementById('exportRunBtn').addEventListener('click', runExport);
   document.getElementById('exportDriveBtn')?.addEventListener('click', runExportToDrive);
   document.getElementById('exportScope')?.addEventListener('change', () => {
+    exportScopeDefaults();
     EXPORT_ONLY = null;                 // the dropdown takes over from here
     applyExportScopeUi();
   });
@@ -450,6 +458,7 @@ function downloadFile(filename, content, mime) {
 function buildExportHtml(data, opts) {
   const noteCount  = data.sections.reduce((s, sec) => s + sec.notes.length, 0);
   const cardCount  = data.decks.reduce((s, dk) => s + dk.cards.length, 0);
+  const study = cardCount > 0;   // bez kartiček nedávají smysl statistiky, zkouška ani „naučené“
   const boardCount = data.whiteboards.length;
   const when = new Date().toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' });
   const roomName = ROOM.name || 'Místnost';
@@ -591,7 +600,7 @@ function buildExportHtml(data, opts) {
               <h3>${title}</h3>
               <div class="ntools">
                 <button class="ntool star" data-star="${esc(n.id)}" title="Označit hvězdičkou (opakovat)">☆</button>
-                <button class="ntool done" data-done="${esc(n.id)}" title="Označit jako naučené">✓</button>
+                <button class="ntool done study" data-done="${esc(n.id)}" title="Označit jako naučené">✓</button>
               </div>
             </div>
             <div class="nmeta">${esc(n.authorName || '')}</div>
@@ -1019,13 +1028,14 @@ function buildExportHtml(data, opts) {
     .fc-face { position:static; }
     .fc-back { transform:none; }
   }
-</style></head><body>
+  body.notes-only .study { display:none !important; }
+</style></head><body${study ? '' : ' class="notes-only"'}>
 <div class="topbar"><div class="tb-in">
   <div class="tb-title"><span class="tb-mark" aria-hidden="true"></span>${esc(roomName)}</div>
   <input id="q" type="search" placeholder="Hledat v poznámkách i kartičkách…  ( / )" autocomplete="off" aria-label="Hledat">
-  <div class="ring" id="ring" title="Naučeno"><i id="ringTxt">0%</i></div>
-  <button class="tb-btn" onclick="openStats()">Statistiky</button>
-  <button class="tb-btn" onclick="openExam()">Zkouška</button>
+  <div class="ring study" id="ring" title="Naučeno"><i id="ringTxt">0%</i></div>
+  <button class="tb-btn study" onclick="openStats()">Statistiky</button>
+  <button class="tb-btn study" onclick="openExam()">Zkouška</button>
   ${bNotes.length ? `<button class="tb-btn" id="viewBtn" onclick="toggleView()" title="Přepnout dokument / nástěnku">Nástěnka</button>` : ''}
   <button class="tb-btn" id="themeBtn" title="Přepnout vzhled">🌙</button>
 </div></div>
@@ -1034,9 +1044,9 @@ function buildExportHtml(data, opts) {
     <div class="toc-h">Obsah</div>
     ${tocHtml || '<div class="hint" style="padding:4px 6px;">Prázdné</div>'}
     <div class="toc-tools">
-      <button onclick="openExam()">Zkouškový režim</button>
-      <button onclick="openStats()">Můj pokrok</button>
-      <button onclick="toggleUnlearned()" id="filtBtn">Jen nenaučené</button>
+      <button class="study" onclick="openExam()">Zkouškový režim</button>
+      <button class="study" onclick="openStats()">Můj pokrok</button>
+      <button class="study" onclick="toggleUnlearned()" id="filtBtn">Jen nenaučené</button>
       <button onclick="window.print()">Tisk / PDF</button>
     </div>
   </nav>
