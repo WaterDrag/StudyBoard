@@ -5261,16 +5261,117 @@ function gameOver(win){
 // Live state goes over RTDB (low-latency); lobby/coins stay on Firestore.
 let _lastSync=0, _rtdb=null;
 function getRtdb(){ if(!_rtdb){ try{_rtdb=firebase.database();}catch(e){console.warn('[rtdb]',e);} } return _rtdb; }
-function liveRef(sub){ const d=getRtdb(); return (d&&gs.sessionId)?d.ref('live/'+gs.sessionId+(sub?'/'+sub:'')):null; }
+// ── Spojení co-opu: vlastní server (sb-relay na Oracle, zdrojáky v relay/), Firebase jako záloha ──
+// Všechna živá data jdou přes liveRef(cesta).set / .update / .on('value'), stejně jako ve Firebase. Server drží stejný
+// strom a změny rozesílá; snímky světa tak nestojí přenos přes Firebase (vlna 30 je ~700 MB za hodinu na hráče) a jsou
+// rychlejší. Když se některý hráč k serveru nepřipojí, zapíše world/rtdb a celá hra se natrvalo přepne na Firebase:
+// všichni musí jet stejnou cestou. Na localhostu jede Firebase, pokud není v adrese ?relay=ws://…
+const ZS_RELAY=/^(localhost|127\.)/.test(location.hostname)?(new URLSearchParams(location.search).get('relay')||''):'wss://vgamehub.duckdns.org/sb/ws';
+const ZNET={started:false,rtdb:false,ws:null,ok:false,downAt:0,tries:0,tree:{},subs:[],queue:new Map(),disc:[]};
+const znPath=p=>'live/'+gs.sessionId+(p?'/'+p:'');
+function liveRef(sub){
+  if(!gs.sessionId)return null;
+  const path=sub||'';
+  return {
+    set:v=>znWrite('s',path,v),
+    update:v=>znWrite('u',path,v),
+    on:(ev,cb)=>{ const s={path,cb}; ZNET.subs.push(s); if(ZNET.rtdb)getRtdb()?.ref(znPath(path)).on('value',cb); },
+    onDisconnect:()=>({remove:()=>{ if(ZNET.rtdb)getRtdb()?.ref(znPath(path)).onDisconnect().remove(); else ZNET.disc.push(path); }}),
+  };
+}
+function znTreeSet(tree,path,v){
+  const a=path.split('/'); let n=tree;
+  for(let i=0;i<a.length-1;i++){ if(n[a[i]]==null||typeof n[a[i]]!=='object'){ if(v==null)return; n[a[i]]={}; } n=n[a[i]]; }
+  if(v==null)delete n[a[a.length-1]]; else n[a[a.length-1]]=v;
+}
+function znApply(kind,path,v){
+  if(kind==='s')znTreeSet(ZNET.tree,path,v);
+  else Object.keys(v||{}).forEach(k=>znTreeSet(ZNET.tree,path?path+'/'+k:k,v[k]));
+}
+function znNotify(path){
+  ZNET.subs.forEach(s=>{
+    if(path!==''&&path!==s.path&&!path.startsWith(s.path+'/')&&!s.path.startsWith(path+'/'))return;
+    const val=s.path.split('/').reduce((n,k)=>n==null?n:n[k],ZNET.tree);
+    try{ s.cb({val:()=>val??null}); }catch(e){ console.error('[net]',e); }
+  });
+}
+function znWrite(kind,path,v){
+  if(ZNET.rtdb){ const r=getRtdb()?.ref(znPath(path)); return r?(kind==='s'?r.set(v):r.update(v)):Promise.resolve(); }
+  znApply(kind,path,v);   // vlastní zápis se neohlašuje: odběratele zajímají ostatní hráči
+  if(ZNET.ok&&ZNET.ws?.readyState===1)ZNET.ws.send(JSON.stringify({t:kind,p:path,v}));
+  else {   // ještě nejsme připojení: drží se jen poslední hodnota každé cesty
+    const q=ZNET.queue.get(path);
+    if(q&&q.t==='u'&&kind==='u')Object.assign(q.v,v); else ZNET.queue.set(path,{t:kind,p:path,v});
+  }
+  return Promise.resolve();
+}
+function znResendPending(){ me._buildDirty=me._demoDirty=me._repDirty=me._infraDirty=true; }
+// Přepnutí celé hry na Firebase (jednosměrné, do konce hry)
+function znUseRtdb(announce){
+  if(ZNET.rtdb)return;
+  ZNET.rtdb=true; ZNET.ok=false;
+  try{ ZNET.ws?.close(); }catch(_){}
+  const d=getRtdb(); if(!d)return;
+  console.info('[co-op] spojení přes Firebase');
+  if(announce)d.ref(znPath('world/rtdb')).set(true).catch(()=>{});
+  ZNET.subs.forEach(s=>d.ref(znPath(s.path)).on('value',s.cb));
+  ZNET.disc.forEach(p=>d.ref(znPath(p)).onDisconnect().remove());
+  ZNET.queue.forEach(m=>{ const r=d.ref(znPath(m.p)); (m.t==='s'?r.set(m.v):r.update(m.v)).catch(()=>{}); });
+  ZNET.queue.clear();
+  gs._hostSeen=false; gs._netStart=Date.now();
+  znResendPending();
+}
+async function znConnect(){
+  if(ZNET.rtdb)return;
+  let token; try{ token=await firebase.auth().currentUser.getIdToken(); }catch(_){ return; }
+  let ws; try{ ws=new WebSocket(ZS_RELAY); }catch(_){ return; }
+  ZNET.ws=ws;
+  ws.onopen=()=>ws.send(JSON.stringify({t:'join',kind:'zs',gid:gs.sessionId,token}));
+  ws.onmessage=e=>{
+    let m; try{ m=JSON.parse(e.data); }catch(_){ return; }
+    if(m.t==='ok'){
+      ZNET.ok=true; ZNET.tries=0; ZNET.downAt=0;
+      console.info('[co-op] spojení přes server');
+      ZNET.queue.forEach(q=>ws.send(JSON.stringify(q))); ZNET.queue.clear();
+      znResendPending();
+    } else if(m.t==='tree'){
+      // po znovupřipojení může být strom prázdný (restart serveru): volba hostitele počká, než se všichni znovu ohlásí
+      const mine=ZNET.tree.players?.[me.uid];
+      ZNET.tree=m.v||{};
+      if(mine)znTreeSet(ZNET.tree,'players/'+me.uid,mine);
+      gs._hostSeen=false; gs._netStart=Date.now();
+      znNotify('');
+    } else if(m.t==='s'||m.t==='u'){ znApply(m.t,m.p,m.v); znNotify(m.p); }
+    else if(m.t==='err'){ console.warn('[co-op] server:',m.m); znUseRtdb(true); }
+  };
+  ws.onclose=()=>{
+    if(ZNET.ws!==ws||ZNET.rtdb)return;
+    ZNET.ok=false; if(!ZNET.downAt)ZNET.downAt=Date.now();
+    setTimeout(znConnect,Math.min(2000,500*2**ZNET.tries++));
+  };
+  ws.onerror=()=>{};
+}
+function znStart(){
+  if(ZNET.started||!gs.sessionId)return;
+  ZNET.started=true; gs._netStart=Date.now();
+  const d=getRtdb();
+  if(!ZS_RELAY){ ZNET.rtdb=true; return; }
+  // ostatní mohli přepnout na Firebase (někdo se k serveru nedostal)
+  d?.ref(znPath('world/rtdb')).on('value',s=>{ if(s.val())znUseRtdb(false); });
+  ZNET.downAt=Date.now();
+  znConnect();
+  setInterval(()=>{ if(!ZNET.rtdb&&!ZNET.ok&&ZNET.downAt&&Date.now()-ZNET.downAt>6000)znUseRtdb(true); },1000);
+}
 function isAuthority(){ return gs.isHost || !gs.sessionId; }
 
 let _lastStructSync=0,_lastInfraSync=0;
 function syncState(ts){
   if(!gs.sessionId)return;
-  if(ts-_lastSync<66)return; // ~15 Hz
+  const alone=!Object.keys(gs.players).length;   // hra z hlavní stránky má čekárnu i bez spoluhráčů: není komu posílat svět
+  if(ts-_lastSync<(alone?1000:66))return; // ~15 Hz
   _lastSync=ts;
   syncPlayerState();
-  if(gs.isHost){
+  if(gs.isHost&&!alone){
     syncWorld();
     if(ts-_lastStructSync>250){ _lastStructSync=ts; syncStructs(); } // ~4 Hz: HP/destruction
     if(ts-_lastInfraSync>250){ _lastInfraSync=ts; syncInfra(); }     // ~4 Hz: farm/water/power
@@ -5564,6 +5665,7 @@ async function joinLobby(lobbyId){
         applyKitSelection();
         loadSelectedDecks();
         initGame();
+        znStart();
         subscribePlayerStates();
         subscribeWorld();
         subscribeCoinTransfers();
@@ -5685,7 +5787,8 @@ function subscribePlayerStates(){
 // If the host disappears, the remaining player with the smallest uid takes over.
 function checkHostMigration(val){
   if(gs.isHost||!gs.sessionId)return;
-  if(gs.hostUid&&val[gs.hostUid])return;        // host still present
+  if(gs.hostUid&&val[gs.hostUid]){gs._hostSeen=true;return;}        // host still present
+  if(!gs._hostSeen&&Date.now()-(gs._netStart||0)<8000)return;   // na začátku (a po znovupřipojení) se hostitel ještě nemusel ohlásit
   // Host is gone — elect deterministically (smallest uid among present + me)
   const present=Object.keys(val); if(!present.includes(me.uid))present.push(me.uid);
   present.sort();
