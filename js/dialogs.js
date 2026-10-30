@@ -22,6 +22,13 @@
       box.className = 'sbd-box';
       box.setAttribute('role', 'alertdialog');
       box.setAttribute('aria-modal', 'true');
+      if (o.avatar) {   // { url, letter }: fotka člověka, o kterého jde
+        const av = document.createElement('div');
+        av.className = 'sbd-av';
+        if (o.avatar.url) { const img = document.createElement('img'); img.src = o.avatar.url; img.alt = ''; img.referrerPolicy = 'no-referrer'; av.appendChild(img); }
+        else av.textContent = o.avatar.letter || '?';
+        box.appendChild(av);
+      }
       const [head, ...rest] = String(o.message).split(/\n\s*\n|\n/);
       const title = document.createElement('div');
       title.className = 'sbd-title';

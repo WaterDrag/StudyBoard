@@ -583,6 +583,10 @@
         <h3>Sdílet místnost</h3>
         <button class="modal-close" data-close="shareModal">✕</button>
       </div>
+      <div class="share-quick">
+        <button type="button" id="quickLinkBtn" class="btn btn-primary">Zkopírovat odkaz pro čtení</button>
+        <p class="share-hint">Stačí ho poslat. Platí 24 hodin a pozvaný nepotřebuje účet. Další možnosti jsou níž.</p>
+      </div>
       <div class="share-tabs" role="tablist">
         <button type="button" class="share-tab on" data-share-tab="friends" role="tab">Přátelé</button>
         <button type="button" class="share-tab" data-share-tab="link" role="tab">Kód a odkaz</button>
@@ -639,7 +643,7 @@
             <div class="invite-code" id="inviteLinkText">–</div>
             <button id="copyLinkBtn" class="btn btn-secondary share-btn">Kopírovat</button>
           </div>
-          <p class="share-hint">Editora může získat jen přítel vlastníka, ostatní se připojí jako prohlížeč. Host (anonym) má přístup nejvýš na 1 hodinu.</p>
+          <p class="share-hint">Editora může získat jen přítel vlastníka, ostatní se připojí jako prohlížeč. Host bez účtu má přístup nejvýš na 24 hodin.</p>
           <p id="editorInviteHint" class="share-hint" style="display:none;">Odkazy s právem editora může vytvářet jen vlastník místnosti.</p>
           <div id="tempInvitesList"></div>
         </div>
@@ -951,6 +955,7 @@
   <script>document.write('<script src="js/sound.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/pomodoro.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/phone.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/room-cardify.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/ai.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>(function(){
     // room.js je rozdělený na moduly (klasické skripty sdílející globály).

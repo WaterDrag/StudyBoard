@@ -42,7 +42,8 @@ googleBtn.addEventListener('click', async () => {
 
 // Host režim — anonymní přihlášení (zapnout v Console → Authentication → Anonymous)
 const guestBtn = document.getElementById('guestBtn');
-if (guestBtn) guestBtn.addEventListener('click', async () => {
+const startGuest = guestBtn => async () => {
+  const label = guestBtn.textContent;
   hideError();
   guestBtn.disabled = true;
   guestBtn.textContent = 'Spouštím…';
@@ -54,9 +55,30 @@ if (guestBtn) guestBtn.addEventListener('click', async () => {
       : e.message;
     showError('Host režim selhal: ' + hint);
     guestBtn.disabled = false;
-    guestBtn.textContent = '🎮 Hrát jako host (bez účtu)';
+    guestBtn.textContent = label;
   }
-});
+};
+if (guestBtn) guestBtn.addEventListener('click', startGuest(guestBtn));
+
+// Přišel z pozvánky do místnosti: nejdřív mu to řekni a nabídni cestu bez účtu
+try {
+  const pendingLink = localStorage.getItem('sb_pending_redirect') || '';
+  const inviteBtn = document.getElementById('inviteGuestBtn');
+  if (inviteBtn && /room(\.html)?\?(.*&)?t?code=/.test(pendingLink)) {
+    document.getElementById('inviteBox').hidden = false;
+    if (guestBtn) guestBtn.hidden = true;
+    inviteBtn.addEventListener('click', startGuest(inviteBtn));
+  } else if (inviteBtn && /[?&](friendInvite|addFriend)=/.test(pendingLink)) {
+    // Přátelství má smysl jen s účtem, cestu bez účtu tu nenabízej
+    const box = document.getElementById('inviteBox');
+    box.hidden = false;
+    box.querySelector('h2').textContent = 'Máš pozvánku do přátel';
+    box.querySelector('p').textContent = 'Přihlas se, nebo si založ účet. Pak pozvánku jedním kliknutím přijmeš.';
+    inviteBtn.hidden = true;
+    box.querySelector('.divider').hidden = true;
+    if (guestBtn) guestBtn.hidden = true;
+  }
+} catch (_) { /* localStorage blocked */ }
 
 authForm.addEventListener('submit', async e => {
   e.preventDefault();

@@ -1331,23 +1331,20 @@ function loadFriends(user) {
     }
   });
 
-  document.getElementById('copyFriendLink').addEventListener('click', () => {
-    const code = document.getElementById('myFriendCode').textContent;
-    if (!code || code === '------') return;
-    const url = new URL('dashboard.html', window.location.href);
-    url.searchParams.set('addFriend', code);
-    navigator.clipboard.writeText(url.href).then(() => toast('Odkaz zkopírován!'));
-  });
+  document.getElementById('copyFriendLink').addEventListener('click', () => copyFriendInvite(user));
 
-  // Otevřený přes pozvánkový odkaz (?addFriend=CODE) — přepni na záložku
-  // Přátelé a předvyplň kód, ať jen kliknou na "Odeslat žádost".
+  // Otevřený přes starší odkaz (?addFriend=CODE) — přepni na záložku Přátelé a předvyplň kód.
+  // Nový odkaz (?friendInvite=…) řeší handleFriendInvite níž.
   const wantTab = new URLSearchParams(window.location.search).get('tab');
   if (wantTab) document.querySelector(`.tab-btn[data-tab="${wantTab}"]`)?.click();
   const addFriendCode = new URLSearchParams(window.location.search).get('addFriend');
   if (addFriendCode) {
     document.querySelector('.tab-btn[data-tab="friends"]')?.click();
     document.getElementById('friendCodeInput').value = addFriendCode.toUpperCase();
+    offerFriendCode(user, addFriendCode.toUpperCase());
   }
+  const friendInviteId = new URLSearchParams(window.location.search).get('friendInvite');
+  if (friendInviteId) { document.querySelector('.tab-btn[data-tab="friends"]')?.click(); handleFriendInvite(user, friendInviteId); }
 
   // Sleduj příchozí žádosti
   db.collection('friendRequests')
@@ -1551,6 +1548,87 @@ function renderRequests(user, docs) {
       } catch (e) { toast('Chyba: ' + e.message); }
     });
   });
+}
+
+// ── Pozvánka do přátel odkazem ─────────────────────────────────
+// Odkaz nese náhodné id dokumentu friendInvites a platí 7 dní. Kdo ji přijme, je rovnou přítel autora:
+// odkaz poslal autor sám. Pravidla ve firestore.rules to dovolí jen s platnou pozvánkou.
+const FRIEND_INVITE_DAYS = 7;
+function clearFriendParams() {
+  const u = new URL(location.href);
+  ['friendInvite', 'addFriend'].forEach(k => u.searchParams.delete(k));
+  history.replaceState(history.state, '', u.pathname + u.search + u.hash);   // po obnovení stránky se nesmí ptát znovu
+}
+async function copyFriendInvite(user) {
+  if (user.isAnonymous) { toast('Pro přátele si nejdřív založ účet v Nastavení.'); return; }
+  const btn = document.getElementById('copyFriendLink');
+  btn.disabled = true;
+  try {
+    // Můj odkaz, který platí ještě aspoň den, se použije znovu; prošlé se uklidí
+    const snap = await db.collection('friendInvites').where('fromUid', '==', user.uid).get();
+    const now = Date.now();
+    snap.docs.filter(d => d.data().exp <= now).forEach(d => d.ref.delete().catch(() => {}));
+    let id = snap.docs.find(d => d.data().exp > now + 86400000)?.id;
+    if (!id) {
+      const ref = db.collection('friendInvites').doc();
+      await ref.set({
+        fromUid: user.uid, fromName: user.displayName || user.email || 'Uživatel', fromPhoto: user.photoURL || null,
+        exp: now + FRIEND_INVITE_DAYS * 86400000,
+      });
+      id = ref.id;
+    }
+    const url = new URL('dashboard.html', location.href);
+    url.searchParams.set('friendInvite', id);
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      try { await navigator.share({ title: 'StudyBoard', text: 'Pozvánka do přátel na StudyBoardu', url: url.href }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(url.href); toast('Odkaz zkopírován! Platí 7 dní.'); }
+    catch (_) { await sbPrompt('Zkopíruj odkaz', url.href, { ok: 'Hotovo', noCancel: true }); }
+  } catch (e) { toast('Chyba: ' + e.message); }
+  finally { btn.disabled = false; }
+}
+async function friendPairDocs(user, otherUid) {
+  const [sent, recv] = await Promise.all([
+    db.collection('friendRequests').where('fromUid', '==', user.uid).where('toUid', '==', otherUid).get(),
+    db.collection('friendRequests').where('fromUid', '==', otherUid).where('toUid', '==', user.uid).get(),
+  ]);
+  return [...sent.docs, ...recv.docs];
+}
+async function handleFriendInvite(user, id) {
+  try {
+    const snap = await db.collection('friendInvites').doc(id).get();
+    const inv = snap.exists ? snap.data() : null;
+    clearFriendParams();
+    if (!inv) { await sbAlert('Tahle pozvánka do přátel neexistuje.\nPožádej o nový odkaz.'); return; }
+    if (inv.fromUid === user.uid) { toast('Tohle je tvůj vlastní odkaz. Pošli ho kamarádovi.'); return; }
+    if (user.isAnonymous) { await sbAlert('Pro přátele potřebuješ účet.\nZaložíš si ho v Nastavení na záložce Účet.'); return; }
+    if (inv.exp <= Date.now()) { await sbAlert(`Pozvánka od uživatele ${inv.fromName} vypršela.\nPožádej o nový odkaz.`); return; }
+    const existing = await friendPairDocs(user, inv.fromUid);
+    if (existing.some(d => d.data().status === 'accepted')) { toast(`S uživatelem ${inv.fromName} už jste přátelé.`); return; }
+    const yes = await sbConfirm(`${inv.fromName} tě zve do přátel\nBudete se navzájem vidět v přátelích a můžete se zvát do místností a her.`,
+      { ok: 'Přijmout', cancel: 'Teď ne', avatar: { url: inv.fromPhoto, letter: initial(inv.fromName) } });
+    if (!yes) return;
+    await Promise.all(existing.map(d => d.ref.delete().catch(() => {})));   // starší nevyřízená nebo odmítnutá žádost
+    await db.collection('friendRequests').doc([user.uid, inv.fromUid].sort().join('_')).set({
+      fromUid: user.uid, fromName: user.displayName || user.email, fromEmail: (user.email || '').toLowerCase(), fromPhoto: user.photoURL || null,
+      toUid: inv.fromUid, toEmail: '', status: 'accepted', inviteId: id,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    toast(`Ty a ${inv.fromName} jste teď přátelé!`);
+  } catch (e) { toast('Pozvánku se nepodařilo přijmout: ' + e.message); }
+}
+// Starý odkaz s kódem: řekne, kdo zve, ale přátelství musí pořád potvrdit druhá strana (kód je trvalý)
+async function offerFriendCode(user, code) {
+  try {
+    const snap = await db.collection('users').where('friendCode', '==', code).limit(1).get();
+    clearFriendParams();
+    if (snap.empty || snap.docs[0].id === user.uid) return;
+    const p = snap.docs[0].data(), name = p.displayName || code;
+    const yes = await sbConfirm(`${name} tě zve do přátel\nPošle se mu žádost, a až ji potvrdí, budete přátelé.`,
+      { ok: 'Poslat žádost', cancel: 'Teď ne', avatar: { url: p.photoURL, letter: initial(name) } });
+    if (yes) document.getElementById('sendReqBtn').click();
+  } catch (_) { /* kód zůstává předvyplněný v políčku */ }
 }
 
 function setupAddFriend(user) {

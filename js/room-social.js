@@ -106,6 +106,8 @@ function setupShare() {
     } catch (e) { toast('Chyba: ' + e.message); }
   });
 
+  document.getElementById('quickLinkBtn').addEventListener('click', quickInvite);
+
   document.getElementById('copyLinkBtn').addEventListener('click', () => {
     const t = linkText.textContent;
     if (t && t !== '–') navigator.clipboard.writeText(t).then(() => toast('Odkaz zkopírován!'));
@@ -175,6 +177,32 @@ async function inviteFriend(uid, role, profile, btn) {
     renderTempInvites();
     toast(`Pozvánka odeslána: ${profile?.displayName || 'přítel'} ✓`);
   } catch (e) { toast('Pozvánku se nepodařilo poslat: ' + e.message); }
+  finally { btn.disabled = false; }
+}
+
+// Rychlé pozvání jedním kliknutím: jen čtení, 24 hodin. Můj platný odkaz se použije znovu, ať se jich nehromadí.
+const QUICK_INVITE_MS = 86400000;
+async function quickInvite() {
+  const btn = document.getElementById('quickLinkBtn');
+  btn.disabled = true;
+  try {
+    let code = Object.entries(ROOM.tempInvites || {}).find(([, t]) => t.quick && t.by === ME.uid && t.exp > Date.now() + 2 * 3600000)?.[0];
+    if (!code) {
+      code = Array.from({ length: 10 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
+      const entry = { role: 'viewer', exp: Date.now() + QUICK_INVITE_MS, by: ME.uid, once: false, quick: true };
+      await db.collection('rooms').doc(ROOM_ID).update({ [`tempInvites.${code}`]: entry });
+      ROOM.tempInvites = { ...(ROOM.tempInvites || {}), [code]: entry };
+      renderTempInvites();
+    }
+    const url = tempInviteUrl(code);
+    // Na telefonu nabídka sdílení (WhatsApp, Messenger…), na počítači schránka
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      try { await navigator.share({ title: ROOM.name || 'StudyBoard', text: 'Pozvánka do místnosti ' + (ROOM.name || ''), url }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(url); toast('Odkaz zkopírován, můžeš ho poslat.'); }
+    catch (_) { await sbPrompt('Zkopíruj odkaz', url, { ok: 'Hotovo', noCancel: true }); }
+  } catch (e) { toast('Chyba: ' + e.message); }
   finally { btn.disabled = false; }
 }
 

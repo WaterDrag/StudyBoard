@@ -74,9 +74,9 @@ auth.onAuthStateChanged(async user => {
 
 
       // Membership expiry: a temp invite carries its own; anonymous guests
-      // are capped at 1 hour no matter which invite they used.
+      // are capped at 24 hours no matter which invite they used.
       let expiry = inviteExp;
-      if (ME.isAnonymous) expiry = Math.min(expiry ?? Infinity, Date.now() + 3600000);
+      if (ME.isAnonymous) expiry = Math.min(expiry ?? Infinity, Date.now() + 86400000);
 
       const joinUpdate = {
         memberIds:             firebase.firestore.FieldValue.arrayUnion(ME.uid),

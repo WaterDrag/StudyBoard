@@ -273,6 +273,19 @@ service cloud.firestore {
       allow delete: if isAuth() && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
     }
 
+    // Pozvánka do přátel přes odkaz: náhodné id je zároveň tajemství odkazu, kdo ho zná, přečte si ji.
+    // Dokud platí, může se přes ni kdokoli s účtem spřátelit s jejím autorem bez dalšího potvrzení (viz friendRequests).
+    match /friendInvites/{inviteId} {
+      allow get: if isAuth();
+      allow list: if isAuth() && resource.data.fromUid == request.auth.uid;
+      allow create: if isAuth()
+        && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.exp is int
+        && request.resource.data.exp <= request.time.toMillis() + 8 * 86400000;
+      allow delete: if isAuth() && resource.data.fromUid == request.auth.uid;
+    }
+
     match /friendRequests/{reqId} {
       allow read: if isAuth() && (
         request.auth.uid == resource.data.fromUid ||
@@ -281,7 +294,14 @@ service cloud.firestore {
       allow create: if isAuth()
         && request.resource.data.fromUid == request.auth.uid
         && reqId == friendPair(request.resource.data.fromUid, request.resource.data.toUid)
-        && request.resource.data.status == 'pending';
+        && (request.resource.data.status == 'pending' || (
+          // Přijetí pozvánky z odkazu: rovnou přátelé, ale jen s autorem platné pozvánky
+          request.resource.data.status == 'accepted'
+          && !request.auth.token.firebase.sign_in_provider.matches('anonymous')
+          && exists(/databases/$(database)/documents/friendInvites/$(request.resource.data.inviteId))
+          && get(/databases/$(database)/documents/friendInvites/$(request.resource.data.inviteId)).data.fromUid == request.resource.data.toUid
+          && get(/databases/$(database)/documents/friendInvites/$(request.resource.data.inviteId)).data.exp > request.time.toMillis()
+        ));
       allow update: if isAuth() && (
         request.auth.uid == resource.data.toUid ||
         (request.auth.uid == resource.data.fromUid && request.resource.data.status != 'accepted')
