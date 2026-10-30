@@ -19,7 +19,12 @@ function lockShareButton(btn) {
   btn.title = 'Pozvánky může vytvářet jen stálý člen místnosti';
   btn.insertAdjacentHTML('beforeend', '<svg class="lock-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>');
 }
+function shareTab(name) {
+  document.querySelectorAll('[data-share-tab]').forEach(b => { const on = b.dataset.shareTab === name; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  document.querySelectorAll('[data-share-panel]').forEach(p => { p.hidden = p.dataset.sharePanel !== name; });
+}
 function setupShare() {
+  document.querySelectorAll('[data-share-tab]').forEach(b => b.addEventListener('click', () => shareTab(b.dataset.shareTab)));
   const roleSelect = document.getElementById('inviteRoleSelect');
   const typeSelect = document.getElementById('inviteTypeSelect');
   const linkText   = document.getElementById('inviteLinkText');
@@ -47,17 +52,17 @@ function setupShare() {
 
   // Duration inputs only make sense for the temporary type
   typeSelect.addEventListener('change', () => {
-    document.getElementById('inviteDurWrap').style.display =
-      typeSelect.value === 'temp' ? 'inline-flex' : 'none';
+    document.getElementById('inviteDurWrap').style.display = typeSelect.value === 'temp' ? '' : 'none';
   });
 
   lockShareButton(document.getElementById('shareBtn'));
   document.getElementById('shareBtn').addEventListener('click', () => {
     if (shareLocked()) { toast(ME.isAnonymous ? 'Host nemůže zvát další lidi — přihlas se.' : 'S dočasným přístupem nemůžeš zvát další lidi.'); return; }
     document.getElementById('inviteCode').textContent = ROOM.inviteCode || '------';
+    shareTab('friends');
     renderTempInvites();
     renderFriendInvites();
-    if (MY_ROLE === 'owner') loadAgentInvites();
+    loadAgentInvites();
     openModal('shareModal');
   });
 
@@ -115,7 +120,6 @@ const FRIEND_INVITE_MS = 14 * 86400000;
 async function renderFriendInvites() {
   const box = document.getElementById('friendInviteBox'), list = document.getElementById('friendInviteList');
   if (!box || ME.isAnonymous) return;
-  box.hidden = false;
   list.innerHTML = '<div class="fi-empty">Načítám přátele…</div>';
   try {
     const fs = await loadFriendState(true);
@@ -192,12 +196,12 @@ function renderTempInvites() {
     .sort((a, b) => (a[1].exp ?? Infinity) - (b[1].exp ?? Infinity));
   if (!mine.length) { el.innerHTML = ''; return; }
 
-  el.innerHTML = `<label class="label" style="margin-bottom:6px;">Aktivní pozvánky</label>` +
+  el.innerHTML = `<div class="share-card-h share-list-h">Aktivní odkazy</div>` +
     mine.map(([code, t]) => `
-      <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-muted);padding:6px 0;border-bottom:1px solid var(--border);">
-        <span style="flex:1;">${roleLabel(t.role)} · ${t.exp == null ? 'trvalá' : 'do ' + new Date(t.exp).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}${t.once ? ' · 1 použití' : ''}</span>
-        <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.72rem;" data-copy-temp="${code}" title="Kopírovat odkaz">📋</button>
-        <button class="btn btn-ghost" style="padding:2px 8px;font-size:0.72rem;color:#fca5a5;" data-revoke-temp="${code}" title="Zrušit pozvánku">✕</button>
+      <div class="share-row">
+        <span class="share-row-main">${roleLabel(t.role)} · ${t.exp == null ? 'trvalá' : 'do ' + new Date(t.exp).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}${t.once ? ' · 1 použití' : ''}</span>
+        <button class="btn btn-ghost share-revoke-c" data-copy-temp="${code}" title="Kopírovat odkaz">Kopírovat</button>
+        <button class="btn btn-ghost share-revoke" data-revoke-temp="${code}" title="Zrušit pozvánku">Zrušit</button>
       </div>`).join('');
 
   el.querySelectorAll('[data-copy-temp]').forEach(b => b.addEventListener('click', () => {
@@ -218,8 +222,13 @@ function renderTempInvites() {
 // ── AI agent access (server-issued, scoped bearer tokens) ──────
 function setupAgentInviteUi() {
   const section = document.getElementById('agentInviteSection');
-  if (!section || MY_ROLE !== 'owner') return;
-  section.style.display = 'block';
+  if (!section || shareLocked()) return;   // hosté a dočasní členové agenta nemají
+  document.querySelector('[data-share-tab="agent"]').hidden = false;
+  // Agent nesmí víc než jeho tvůrce (hlídá to i server): prohlížeč může povolit jen čtení
+  if (MY_ROLE === 'viewer') {
+    ['agentNotesWriteScope', 'agentCommentsScope'].forEach(id => { const c = document.getElementById(id); c.disabled = true; c.closest('label').style.opacity = '.45'; });
+    document.getElementById('agentViewerHint').hidden = false;
+  }
 
   document.getElementById('agentInviteCreate')?.addEventListener('click', createAgentInviteFromRoom);
   document.getElementById('agentInviteCopy')?.addEventListener('click', async () => {
@@ -321,7 +330,7 @@ function agentInviteInstructions(item) {
 }
 
 async function loadAgentInvites() {
-  if (MY_ROLE !== 'owner') return;
+  if (shareLocked()) return;
   const list = document.getElementById('agentInviteList');
   if (!list) return;
   list.innerHTML = '<div style="font-size:0.76rem;color:var(--text-muted);padding:6px 0;">Načítám agentní pozvánky…</div>';
@@ -333,15 +342,18 @@ async function loadAgentInvites() {
     }
     const statusLabel = { active: 'aktivní', expired: 'vypršela', revoked: 'zrušena' };
     const scopeLabels = {
-      'notes:read': 'číst poznámky',
-      'notes:write': 'vytvářet a upravovat textové poznámky',
-      'comments:write': 'přidávat komentáře',
+      'notes:read': 'čtení',
+      'notes:write': 'úpravy poznámek',
+      'comments:write': 'komentáře',
     };
-    list.innerHTML = '<label class="label" style="margin-bottom:5px;">Agentní pozvánky</label>' + invites.map(invite => `
-      <div style="display:flex;align-items:center;gap:8px;font-size:0.76rem;color:var(--text-muted);padding:6px 0;border-bottom:1px solid var(--border);">
-        <span style="flex:1;min-width:0;">${statusLabel[invite.status] || 'neaktivní'} · ${invite.scopes.map(scope => esc(scopeLabels[scope] || scope)).join(', ')} · do ${invite.expiresAt ? new Date(invite.expiresAt).toLocaleString('cs-CZ', { day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit' }) : '–'}</span>
-        ${invite.status === 'active' ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.72rem;color:#fca5a5;" data-revoke-agent="${esc(invite.id)}" title="Zrušit agentní přístup">Zrušit</button>` : ''}
-      </div>`).join('');
+    const row = invite => `
+      <div class="share-row">
+        <span class="share-row-main">${invite.scopes.map(scope => esc(scopeLabels[scope] || scope)).join(', ')}<small>${invite.mine === false && invite.createdByName ? esc(invite.createdByName) + ' · ' : ''}${statusLabel[invite.status] || 'neaktivní'}${invite.expiresAt ? ' · do ' + new Date(invite.expiresAt).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</small></span>
+        ${invite.status === 'active' ? `<button class="btn btn-ghost share-revoke" data-revoke-agent="${esc(invite.id)}" title="Zrušit agentní přístup">Zrušit</button>` : ''}
+      </div>`;
+    const active = invites.filter(x => x.status === 'active'), old = invites.filter(x => x.status !== 'active');
+    list.innerHTML = (active.length ? `<div class="share-card-h share-list-h">Aktivní tokeny</div>${active.map(row).join('')}` : '<p class="share-hint">Žádný aktivní token.</p>')
+      + (old.length ? `<details class="share-history"><summary>Historie (${old.length})</summary>${old.map(row).join('')}</details>` : '');
     list.querySelectorAll('[data-revoke-agent]').forEach(button => button.addEventListener('click', async () => {
       button.disabled = true;
       try {

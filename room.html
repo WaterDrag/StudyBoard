@@ -601,88 +601,104 @@
 
   <!-- MODAL: Sdílet -->
   <div class="modal-overlay" id="shareModal">
-    <div class="modal">
+    <div class="modal modal-share">
       <div class="modal-header">
         <h3>Sdílet místnost</h3>
         <button class="modal-close" data-close="shareModal">✕</button>
       </div>
-      <div id="friendInviteBox" class="fi-box" hidden>
-        <label class="label">👥 Pozvat přátele</label>
-        <p class="fi-hint">Přítel uvidí pozvánku na hlavní stránce a připojí se jedním klikem — nic nemusíš posílat.</p>
-        <div id="friendInviteList" class="fi-list"></div>
+      <div class="share-tabs" role="tablist">
+        <button type="button" class="share-tab on" data-share-tab="friends" role="tab">Přátelé</button>
+        <button type="button" class="share-tab" data-share-tab="link" role="tab">Kód a odkaz</button>
+        <button type="button" class="share-tab" data-share-tab="agent" role="tab" hidden>AI agent</button>
       </div>
-      <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:16px;">
-        Pošli tento kód spolužákovi. Připojí se jako <strong style="color:var(--text);">prohlížeč</strong> – oprávnění lze změnit v sekci Členové.
-      </p>
-      <div class="invite-box">
-        <div class="invite-code" id="inviteCode">------</div>
-        <button id="copyBtn" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Kopírovat</button>
+
+      <!-- Přátelé -->
+      <div class="share-panel" data-share-panel="friends">
+        <p class="share-hint">Přítel uvidí pozvánku na hlavní stránce a připojí se jedním klikem.</p>
+        <div id="friendInviteBox"><div id="friendInviteList" class="fi-list"></div></div>
       </div>
-      <p class="hint" style="text-align:center;">Kód je platný do smazání místnosti.</p>
 
-      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
-        <label class="label">Odkaz s oprávněním</label>
-        <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:10px;">
-          Kdo otevře odkaz, rovnou se připojí. Editora může získat jen
-          <strong style="color:var(--text);">přítel vlastníka</strong> — ostatní se připojí jako prohlížeč.
-          Host (anonym) má členství vždy max&nbsp;1&nbsp;hodinu.
-        </p>
-        <p id="editorInviteHint" style="display:none;color:var(--text-muted);font-size:0.75rem;margin-bottom:10px;">
-          ℹ️ Pozvánky s právem editora může vytvářet jen vlastník místnosti.
-        </p>
-        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
-          <select id="inviteTypeSelect" class="input" style="flex:0 0 auto;">
-            <option value="perm">Trvalý</option>
-            <option value="temp">Dočasný</option>
-          </select>
-          <span id="inviteDurWrap" style="display:none;gap:8px;align-items:center;">
-            <input id="tempDurVal" type="number" min="1" max="999" value="1" class="input" style="width:76px;flex:0 0 auto;">
-            <select id="tempDurUnit" class="input" style="flex:0 0 auto;">
-              <option value="3600000">hodin</option>
-              <option value="86400000">dní</option>
-            </select>
-          </span>
-          <select id="inviteRoleSelect" class="input" style="flex:0 0 auto;">
-            <option value="viewer">Prohlížeč</option>
-            <option value="editor">Editor</option>
-          </select>
-          <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-muted);flex:0 0 auto;cursor:pointer;">
-            <input type="checkbox" id="tempOnceChk"> jen 1 použití
-          </label>
-          <button id="inviteGenBtn" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Vytvořit</button>
+      <!-- Kód a odkaz -->
+      <div class="share-panel" data-share-panel="link" hidden>
+        <div class="share-card">
+          <div class="share-card-h">Kód místnosti</div>
+          <div class="invite-box">
+            <div class="invite-code" id="inviteCode">------</div>
+            <button id="copyBtn" class="btn btn-secondary share-btn">Kopírovat</button>
+          </div>
+          <p class="share-hint">Kdo ho zadá, připojí se jako prohlížeč. Platí, dokud místnost existuje.</p>
         </div>
-        <div class="invite-box" id="inviteLinkBox" style="display:none;">
-          <div class="invite-code" id="inviteLinkText" style="font-size:0.72rem;font-family:inherit;letter-spacing:0;word-break:break-all;">–</div>
-          <button id="copyLinkBtn" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Kopírovat</button>
-        </div>
-        <div id="tempInvitesList" style="margin-top:12px;"></div>
 
-        <div id="agentInviteSection" style="display:none;margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
-          <label class="label">🤖 Pozvánka pro AI agenta</label>
-          <p style="color:var(--text-muted);font-size:0.78rem;margin:0 0 10px;">
-            Agent nepotřebuje být členem místnosti ani přítelem. Přístup dostane přes API podle oprávnění tokenu. Token se ukáže jen při vytvoření; ulož ho do soukromých přihlašovacích údajů agenta.
-          </p>
-          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:0.8rem;color:var(--text-muted);">
-            <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" checked disabled> Číst poznámky</label>
-            <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="agentNotesWriteScope"> Vytvářet a upravovat textové poznámky</label>
-            <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="agentCommentsScope"> Přidávat komentáře</label>
-            <select id="agentInviteExpiry" class="input" style="width:auto;flex:0 0 auto;">
-              <option value="24">Platnost 1 den</option>
-              <option value="168" selected>Platnost 7 dní</option>
-              <option value="720">Platnost 30 dní</option>
-              <option value="1">Platnost 1 hodina</option>
-            </select>
-            <button id="agentInviteCreate" class="btn btn-secondary" style="padding:7px 13px;font-size:0.8rem;">Vytvořit token</button>
+        <div class="share-card">
+          <div class="share-card-h">Odkaz s oprávněním</div>
+          <div class="share-form">
+            <label class="share-field"><span>Platnost</span>
+              <select id="inviteTypeSelect" class="input">
+                <option value="perm">Trvalý</option>
+                <option value="temp">Dočasný</option>
+              </select>
+            </label>
+            <label class="share-field"><span>Oprávnění</span>
+              <select id="inviteRoleSelect" class="input">
+                <option value="viewer">Prohlížeč</option>
+                <option value="editor">Editor</option>
+              </select>
+            </label>
+            <div class="share-field share-dur" id="inviteDurWrap" style="display:none;"><span>Na jak dlouho</span>
+              <div class="share-dur-row">
+                <input id="tempDurVal" type="number" min="1" max="999" value="1" class="input" aria-label="Počet">
+                <select id="tempDurUnit" class="input" aria-label="Jednotka">
+                  <option value="3600000">hodin</option>
+                  <option value="86400000">dní</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <div id="agentInviteError" style="display:none;color:#fca5a5;font-size:0.78rem;margin:8px 0;"></div>
-          <div id="agentInviteResult" style="display:none;background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:10px;margin:10px 0;">
-            <div style="font-size:0.78rem;font-weight:600;margin-bottom:6px;">Token — zobrazí se znovu jen po vytvoření nové pozvánky</div>
-            <textarea id="agentInviteToken" class="input" readonly rows="2" style="width:100%;resize:vertical;font-family:monospace;font-size:0.76rem;word-break:break-all;"></textarea>
-            <button id="agentInviteCopy" class="btn btn-secondary" style="margin-top:8px;padding:6px 10px;font-size:0.78rem;">📋 Kopírovat instrukce pro agenta</button>
-            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">Kdo získá token, může použít přidělená oprávnění. StudyBoard neumí nezávisle ověřit, zda je jeho držitel opravdu AI.</div>
+          <div class="share-actions">
+            <label class="share-check"><input type="checkbox" id="tempOnceChk"> Jen na 1 použití</label>
+            <button id="inviteGenBtn" class="btn btn-primary share-btn">Vytvořit odkaz</button>
           </div>
-          <div id="agentInviteList" style="margin-top:10px;"></div>
+          <div class="invite-box share-result" id="inviteLinkBox" style="display:none;">
+            <div class="invite-code" id="inviteLinkText">–</div>
+            <button id="copyLinkBtn" class="btn btn-secondary share-btn">Kopírovat</button>
+          </div>
+          <p class="share-hint">Editora může získat jen přítel vlastníka, ostatní se připojí jako prohlížeč. Host (anonym) má přístup nejvýš na 1 hodinu.</p>
+          <p id="editorInviteHint" class="share-hint" style="display:none;">Odkazy s právem editora může vytvářet jen vlastník místnosti.</p>
+          <div id="tempInvitesList"></div>
         </div>
+      </div>
+
+      <!-- AI agent (stálí členové, agent nesmí víc než jeho tvůrce) -->
+      <div class="share-panel" id="agentInviteSection" data-share-panel="agent" hidden>
+        <p class="share-hint">Agent nemusí být členem místnosti. Přístup dostane přes API podle oprávnění tokenu. Token se ukáže jen při vytvoření, ulož ho do soukromých údajů agenta. Agent nikdy nesmí víc než ty: když z místnosti odejdeš nebo ti klesne role, jeho přístup se taky omezí.</p>
+        <div class="share-card">
+          <div class="share-card-h">Nový token</div>
+          <div class="share-scopes">
+            <label class="share-check"><input type="checkbox" checked disabled> Číst poznámky</label>
+            <label class="share-check"><input type="checkbox" id="agentNotesWriteScope"> Vytvářet a upravovat textové poznámky</label>
+            <label class="share-check"><input type="checkbox" id="agentCommentsScope"> Přidávat komentáře</label>
+            <p id="agentViewerHint" class="share-hint" hidden>Jako prohlížeč můžeš agentovi povolit jen čtení.</p>
+          </div>
+          <div class="share-actions">
+            <label class="share-field share-inline"><span>Platnost</span>
+              <select id="agentInviteExpiry" class="input">
+                <option value="1">1 hodina</option>
+                <option value="24">1 den</option>
+                <option value="168" selected>7 dní</option>
+                <option value="720">30 dní</option>
+              </select>
+            </label>
+            <button id="agentInviteCreate" class="btn btn-primary share-btn">Vytvořit token</button>
+          </div>
+          <div id="agentInviteError" class="share-err" style="display:none;"></div>
+          <div id="agentInviteResult" class="share-token" style="display:none;">
+            <div class="share-card-h">Token — znovu se neukáže</div>
+            <textarea id="agentInviteToken" class="input" readonly rows="2"></textarea>
+            <button id="agentInviteCopy" class="btn btn-secondary share-btn">📋 Kopírovat instrukce pro agenta</button>
+            <p class="share-hint">Kdo získá token, může použít přidělená oprávnění. StudyBoard neumí ověřit, zda je jeho držitel opravdu AI.</p>
+          </div>
+        </div>
+        <div id="agentInviteList"></div>
       </div>
     </div>
   </div>

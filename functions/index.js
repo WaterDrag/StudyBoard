@@ -320,10 +320,10 @@ function agentContentHtml(content, images) {
   }).join('');
 }
 
-async function requireRoomOwner(req, roomId) {
+async function requireRoomMember(req, roomId) {
   const token = bearerToken(req);
   if (!token || token.startsWith(API_TOKEN_PREFIX)) {
-    throw new ApiError(401, 'Přihlas se jako vlastník místnosti.');
+    throw new ApiError(401, 'Přihlas se jako člen místnosti.');
   }
 
   let claims;
@@ -336,14 +336,28 @@ async function requireRoomOwner(req, roomId) {
   const roomSnap = await db.collection('rooms').doc(roomId).get();
   if (!roomSnap.exists) throw new ApiError(404, 'Místnost nebyla nalezena.');
   const room = roomSnap.data();
-  if (room.ownerId !== claims.uid || room.roles?.[claims.uid] !== 'owner') {
-    throw new ApiError(403, 'Agentní pozvánky může spravovat jen vlastník místnosti.');
+  if (claims.firebase?.sign_in_provider === 'anonymous') {
+    throw new ApiError(403, 'Host nemůže vytvářet agentní pozvánky.');
   }
-  return claims.uid;
+  const role = agentRoleOf(room, claims.uid);
+  if (!role) throw new ApiError(403, 'Agentní pozvánky můžou spravovat jen stálí členové místnosti.');
+  return { uid: claims.uid, role, room };
+}
+
+// Kdo smí co: vlastník a editor všechno, prohlížeč jen čtení. Dočasný člen (memberExpiry) nic.
+// Platí při vytvoření tokenu i při každém jeho použití, takže agent nikdy nesmí víc než jeho tvůrce právě teď.
+function agentRoleOf(room, uid) {
+  if (!uid || room.memberExpiry?.[uid]) return null;
+  if (room.ownerId === uid) return 'owner';
+  const role = room.roles?.[uid];
+  return role === 'editor' || role === 'viewer' ? role : null;
+}
+function agentRoleAllows(role, scope) {
+  return role === 'owner' || role === 'editor' || (role === 'viewer' && scope === 'notes:read');
 }
 
 async function createAgentInvite(req, res, roomId) {
-  const ownerUid = await requireRoomOwner(req, roomId);
+  const { uid, role } = await requireRoomMember(req, roomId);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const expiresInHours = Number(body.expiresInHours);
   if (!ALLOWED_EXPIRY_HOURS.has(expiresInHours)) {
@@ -354,6 +368,9 @@ async function createAgentInvite(req, res, roomId) {
   if (!scopes.includes('notes:read') || scopes.some(scope => !ALLOWED_SCOPES.has(scope))) {
     throw new ApiError(400, 'Agent musí mít oprávnění číst poznámky; ostatní oprávnění nejsou platná.');
   }
+  if (scopes.some(scope => !agentRoleAllows(role, scope))) {
+    throw new ApiError(403, 'Agentovi nemůžeš dát víc oprávnění, než máš sám. Prohlížeč může povolit jen čtení.');
+  }
 
   const token = API_TOKEN_PREFIX + crypto.randomBytes(32).toString('base64url');
   const inviteId = crypto.randomBytes(12).toString('hex');
@@ -361,7 +378,7 @@ async function createAgentInvite(req, res, roomId) {
   const ref = db.collection(TOKEN_COLLECTION).doc(inviteId);
   await ref.create({
     roomId,
-    createdBy: ownerUid,
+    createdBy: uid,
     tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
     scopes,
     createdAt: FieldValue.serverTimestamp(),
@@ -383,25 +400,29 @@ async function createAgentInvite(req, res, roomId) {
 }
 
 async function listAgentInvites(req, res, roomId) {
-  await requireRoomOwner(req, roomId);
-  const snap = await db.collection(TOKEN_COLLECTION)
-    .where('roomId', '==', roomId)
-    .limit(100)
-    .get();
-  const invites = snap.docs.map(safeInvite)
+  const { uid, role, room } = await requireRoomMember(req, roomId);
+  // vlastník vidí tokeny všech členů, ostatní jen svoje
+  let query = db.collection(TOKEN_COLLECTION).where('roomId', '==', roomId);
+  if (role !== 'owner') query = query.where('createdBy', '==', uid);
+  const snap = await query.limit(100).get();
+  const invites = snap.docs.map(doc => {
+    const by = doc.data().createdBy;
+    return { ...safeInvite(doc), mine: by === uid, createdByName: room.members?.[by]?.displayName || null };
+  })
     .sort((a, b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0));
   res.json({ invites });
 }
 
 async function revokeAgentInvite(req, res, roomId, inviteId) {
-  const ownerUid = await requireRoomOwner(req, roomId);
+  const { uid, role } = await requireRoomMember(req, roomId);
   const ref = db.collection(TOKEN_COLLECTION).doc(inviteId);
   const snap = await ref.get();
   if (!snap.exists || snap.data().roomId !== roomId) throw new ApiError(404, 'Pozvánka nebyla nalezena.');
+  if (role !== 'owner' && snap.data().createdBy !== uid) throw new ApiError(403, 'Zrušit můžeš jen svoje tokeny.');
   if (!snap.data().revokedAt) {
     await ref.update({
       revokedAt: FieldValue.serverTimestamp(),
-      revokedBy: ownerUid,
+      revokedBy: uid,
     });
   }
   res.json({ ok: true });
@@ -421,8 +442,10 @@ async function requireAgent(req, roomId, scope) {
   if (matches.empty) throw new ApiError(401, 'Agentní token není platný.');
 
   const ref = matches.docs[0].ref;
+  const roomRef = db.collection('rooms').doc(roomId);
   return db.runTransaction(async tx => {
     const current = await tx.get(ref);
+    const roomSnap = await tx.get(roomRef);
     if (!current.exists) throw new ApiError(401, 'Agentní token není platný.');
     const data = current.data();
     if (data.revokedAt) throw new ApiError(401, 'Tato agentní pozvánka byla zrušena.');
@@ -433,6 +456,10 @@ async function requireAgent(req, roomId, scope) {
     if (!Array.isArray(data.scopes) || !data.scopes.includes(scope)) {
       throw new ApiError(403, 'Agent nemá potřebné oprávnění.');
     }
+    // Tvůrce tokenu musí být pořád členem a mít na to roli: kdo odešel nebo byl vyhozen, nemá přístup ani přes agenta
+    const creatorRole = roomSnap.exists ? agentRoleOf(roomSnap.data(), data.createdBy) : null;
+    if (!creatorRole) throw new ApiError(403, 'Tvůrce tohoto tokenu už v místnosti není.');
+    if (!agentRoleAllows(creatorRole, scope)) throw new ApiError(403, 'Tvůrce tohoto tokenu už na tuto akci nemá oprávnění.');
 
     const now = Date.now();
     const oldStart = Number(data.rateWindowStartedAt) || 0;
