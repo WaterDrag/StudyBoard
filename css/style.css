@@ -5611,13 +5611,16 @@ body.pres-open { overflow: hidden; }
 .garden-chip[hidden] { display: none; }
 .garden-chip:hover { border-color: #4ade80; }
 .garden-chip.done { border-color: color-mix(in srgb, #22c55e 45%, var(--border)); }
-.garden-chip-ico { font-size: 1.5rem; line-height: 1; }
+.garden-chip-ico { display: inline-flex; line-height: 1; }
+.garden-chip-ico .garden-ico { width: 30px; height: 30px; }
+.garden-ico { display: inline-block; width: 1.25em; height: 1.25em; vertical-align: -.28em; flex: none; }
+.garden-title { display: flex; align-items: center; gap: 8px; }
 .garden-chip span:last-child { display: flex; flex-direction: column; }
 .garden-chip b { font-size: 0.85rem; }
 .garden-chip small { font-size: 0.74rem; color: var(--text-muted); }
 .garden-modal { max-width: 440px; }
-.garden-view { display: flex; justify-content: center; padding: 6px 0; border-radius: 16px; background: linear-gradient(180deg, #0c4a6e33, transparent 70%); }
-.garden-svg { width: min(280px, 80vw); height: auto; }
+.garden-view { border-radius: 16px; overflow: hidden; line-height: 0; }
+.garden-svg { display: block; width: 100%; height: auto; }
 .garden-name { text-align: center; display: flex; flex-direction: column; gap: 2px; margin: 8px 0 12px; }
 .garden-name b { font-size: 1.15rem; }
 .garden-name span { color: var(--text-muted); font-size: 0.84rem; }
