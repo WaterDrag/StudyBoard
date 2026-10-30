@@ -5076,6 +5076,16 @@ mark.find-hit.find-cur { background: #FACC15; color: #111; box-shadow: 0 0 0 2px
 }
 .grid-tile:hover { background: var(--bg-2); border-color: var(--border); }
 .grid-tile.dragging { opacity: .4; }
+.grid-tile.selected, .grid-tile.selected:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); }
+.grid-selbar {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px);
+  padding: 8px 10px 8px 14px; border-radius: 12px;
+  background: var(--bg-2); border: 1px solid var(--border-strong); box-shadow: 0 8px 28px rgba(0, 0, 0, .35);
+}
+.grid-selbar[hidden] { display: none; }
+.grid-selbar-n { font-size: 0.82rem; font-weight: 600; white-space: nowrap; }
+@media (max-width: 520px) { .grid-selbar { bottom: 76px; } }
 .grid-folder.drag-over { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: var(--accent); transform: scale(1.04); }
 .gt-icon { position: relative; width: 74px; height: 62px; display: flex; align-items: center; justify-content: center; }
 .gt-icon svg { width: 74px; height: 62px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.3)); }

@@ -187,13 +187,15 @@ function togglePin(id) {
 function closePinMenu() { document.getElementById('pinMenu')?.remove(); }
 function openPinMenu(x, y, id) {
   closePinMenu();
+  if (LIST_LAYOUT === 'grid' && GRID_SEL.size > 1 && GRID_SEL.has(id)) { openGridSelMenu(x, y); return; }
   const on = getPins().has(id);
   const pop = document.createElement('div');
   pop.className = 'context-menu';
   pop.id = 'pinMenu';
   const isFolder = FOLDERS_MAP.has(id);
   const canMove = MY_ROLE !== 'viewer';
-  pop.innerHTML = `<button class="context-menu-item" data-pm="pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 2-2V3H6v1a2 2 0 0 0 2 2 1 1 0 0 1 1 1z"/></svg>${on ? 'Odepnout' : 'Připnout nahoru'}</button>` +
+  const canSelect = canMove && TOUCH_ONLY && LIST_LAYOUT === 'grid';   // na dotyku není Ctrl ani Shift
+  pop.innerHTML = (canSelect ? `<button class="context-menu-item" data-pm="select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Vybrat</button>` : '') + `<button class="context-menu-item" data-pm="pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 2-2V3H6v1a2 2 0 0 0 2 2 1 1 0 0 1 1 1z"/></svg>${on ? 'Odepnout' : 'Připnout nahoru'}</button>` +
     (canMove ? `<button class="context-menu-item" data-pm="move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Přesunout do složky…</button>` : '') +
     (isFolder ? `<button class="context-menu-item" data-pm="present"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>Prezentovat složku</button>` : '') +
     (isFolder && canMove ? `<button class="context-menu-item" data-pm="edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Upravit složku…</button>` +
@@ -209,6 +211,7 @@ function openPinMenu(x, y, id) {
     if (!act) return;
     e.stopPropagation();
     closePinMenu();
+    if (act === 'select') { GRID_SEL.add(id); GRID_ANCHOR = id; syncGridSel(); }
     if (act === 'pin') togglePin(id);
     if (act === 'move') { if (isFolder) openMoveFolderPicker(id); else openMoveToFolderModal(id); }
     if (act === 'present') presentFolder(id);
@@ -335,22 +338,36 @@ function setupFolderModal() {
 function confirmDeleteFolder(folderId) {
   const folder = FOLDERS_MAP.get(folderId);
   if (!folder) return;
-  confirmModal(`Smazat složku „${folder.name}“? Poznámky a složky uvnitř zůstanou, přesunou se o úroveň výš.`, async () => {
-    try {
-      const foldersCol = db.collection('rooms').doc(ROOM_ID).collection('folders');
-      const parentId = folder.parentId && FOLDERS_MAP.has(folder.parentId) ? folder.parentId : null;
-      const batch = db.batch();
+  confirmModal(`Smazat složku „${folder.name}“? Poznámky a složky uvnitř zůstanou, přesunou se o úroveň výš.`, () => deleteFolders([folderId]));
+}
+
+// Obsah mazaných složek jde o úroveň výš: do nejbližší nadřazené složky, která zůstává
+async function deleteFolders(ids) {
+  const gone = new Set(ids);
+  const keptParent = f => {
+    let p = f.parentId;
+    while (p && gone.has(p)) p = FOLDERS_MAP.get(p)?.parentId;
+    return p && FOLDERS_MAP.has(p) ? p : null;
+  };
+  try {
+    const foldersCol = db.collection('rooms').doc(ROOM_ID).collection('folders');
+    const batch = db.batch();
+    ids.forEach(id => {
+      const folder = FOLDERS_MAP.get(id);
+      if (!folder) return;
+      const parentId = keptParent(folder);
       // Reparent any child folders to this one's own parent instead of
       // orphaning them.
       FOLDERS_MAP.forEach(f => {
-        if (f.parentId === folderId) batch.update(foldersCol.doc(f.id), { parentId });
+        if (f.parentId === id && !gone.has(f.id)) batch.update(foldersCol.doc(f.id), { parentId });
       });
       if (parentId && folder.noteIds?.length) batch.update(foldersCol.doc(parentId), { noteIds: firebase.firestore.FieldValue.arrayUnion(...folder.noteIds) });
-      batch.delete(foldersCol.doc(folderId));
-      await batch.commit();
-      if (GRID_FOLDER === folderId) GRID_FOLDER = parentId;
-    } catch (e) { toast('Chyba: ' + e.message); }
-  });
+      batch.delete(foldersCol.doc(id));
+    });
+    const fallback = gone.has(GRID_FOLDER) ? keptParent(FOLDERS_MAP.get(GRID_FOLDER)) : GRID_FOLDER;
+    await batch.commit();
+    GRID_FOLDER = fallback;
+  } catch (e) { toast('Chyba: ' + e.message); }
 }
 
 // Shared by the click-through modal and drag-and-drop — moves a note into
@@ -582,6 +599,9 @@ const TOUCH_ONLY = window.matchMedia('(hover: none)').matches;
 let LIST_LAYOUT = (() => { try { return localStorage.getItem('sb_list_layout') || 'grid'; } catch (_) { return 'grid'; } })();
 let GRID_FOLDER = null;
 let DRAGGING_FROM_GRID = false;
+// Výběr více dlaždic jako ve Windows: Ctrl přidá nebo ubere, Shift vybere rozsah. Obyčejný klik dál otvírá.
+const GRID_SEL = new Set();
+let GRID_ANCHOR = null, GRID_SEL_WHERE = null, GRID_SEL_WIRED = false;
 
 const FOLDER_SVG = '<svg viewBox="0 0 48 40" aria-hidden="true"><path d="M3 8a4 4 0 0 1 4-4h11l4 4h19a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" fill="var(--fc)" opacity=".55"/><path d="M3 14a4 4 0 0 1 4-4h34a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" fill="var(--fc)"/></svg>';
 
@@ -594,6 +614,7 @@ function gridFolderPath(id) {
 
 function renderNotesGrid(el) {
   if (GRID_FOLDER && !FOLDERS_MAP.has(GRID_FOLDER)) GRID_FOLDER = null;
+  if (GRID_SEL_WHERE !== GRID_FOLDER) { GRID_SEL.clear(); GRID_ANCHOR = null; GRID_SEL_WHERE = GRID_FOLDER; }
   const marks = getMarks();
   const pins = getPins();
   const notes = [...NOTES_MAP.values()].filter(n => !isHeading(n));
@@ -643,16 +664,16 @@ function renderNotesGrid(el) {
   el.innerHTML = crumbs + pinned + (tiles
     ? `<div class="grid-tiles">${tiles}</div>`
     : `<div class="grid-empty">${GRID_FOLDER ? 'Složka je prázdná — přetáhni sem poznámky nebo jiné složky.' : 'Zatím žádné poznámky.'}</div>`) +
-    (MY_ROLE !== 'viewer' ? `<div class="grid-hint">${TOUCH_ONLY ? 'Tip: podrž dlaždici → „Přesunout do složky…“ (i složku do složky).' : 'Tip: přetáhni dlaždici na složku (nebo na kus cesty nahoře) a přesune se tam — i složka do složky.'}</div>` : '');
+    (MY_ROLE !== 'viewer' ? `<div class="grid-hint">${TOUCH_ONLY ? 'Tip: podrž dlaždici → „Přesunout do složky…“ (i složku do složky).' : 'Tip: přetáhni dlaždici na složku (nebo na kus cesty nahoře) a přesune se tam — i složka do složky. Víc položek vybereš s Ctrl nebo Shift.'}</div><div class="grid-selbar" id="gridSelBar" hidden></div>` : '');
 
   el.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { GRID_FOLDER = b.dataset.go || null; renderNotesListView(); }));
   el.querySelectorAll('[data-open-folder]').forEach(t => t.addEventListener('click', e => {
-    if (e.target.closest('.list-mark')) return;
+    if (e.target.closest('.list-mark') || gridSelClick(e, t)) return;
     GRID_FOLDER = t.dataset.openFolder; renderNotesListView();
     document.getElementById('notesListView').scrollTop = 0;
   }));
   el.querySelectorAll('[data-note]').forEach(t => t.addEventListener('click', e => {
-    if (e.target.closest('.list-mark')) return;
+    if (e.target.closest('.list-mark') || gridSelClick(e, t)) return;
     const note = NOTES_MAP.get(t.dataset.note);
     if (note) openNoteDetail(null, note);
   }));
@@ -661,24 +682,183 @@ function renderNotesGrid(el) {
   wireListMarks(el);
 
   if (MY_ROLE === 'viewer') return;
+  [...GRID_SEL].forEach(id => { if (!el.querySelector(`[data-note="${id}"], .grid-folder[data-folder-id="${id}"]`)) GRID_SEL.delete(id); });
+  syncGridSel();
+  wireGridSel();
   const listView = document.getElementById('notesListView');
   el.querySelectorAll('.grid-tile[draggable="true"]').forEach(t => {
     t.addEventListener('dragstart', e => {
       const isFolder = t.classList.contains('grid-folder');
-      DRAGGING = { type: isFolder ? 'folder' : 'note', id: isFolder ? t.dataset.folderId : t.dataset.note };
+      const id = gridTileId(t);
+      if (GRID_SEL.has(id) && GRID_SEL.size > 1) DRAGGING = { type: 'many', id };
+      else {
+        if (GRID_SEL.size) { GRID_SEL.clear(); syncGridSel(); }
+        DRAGGING = { type: isFolder ? 'folder' : 'note', id };
+      }
       DRAGGING_FROM_GRID = true;
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', DRAGGING.type + ':' + DRAGGING.id);
       t.classList.add('dragging');
+      if (DRAGGING.type === 'many') el.querySelectorAll('.grid-tile.selected').forEach(s => s.classList.add('dragging'));
       listView.classList.add('dnd-active');
     });
     t.addEventListener('dragend', () => {
       t.classList.remove('dragging');
+      el.querySelectorAll('.grid-tile.dragging').forEach(s => s.classList.remove('dragging'));
       listView.classList.remove('dnd-active');
       DRAGGING = null; DRAGGING_FROM_GRID = false;
     });
   });
   setupListDragDrop(el);
+}
+
+const gridTileId = t => t.dataset.note || t.dataset.folderId;
+
+function gridSelClick(e, t) {
+  if (MY_ROLE === 'viewer') return false;
+  const id = gridTileId(t);
+  if (e.shiftKey && GRID_ANCHOR) {
+    const ids = [...new Set([...document.querySelectorAll('#notesListBody .grid-tile')].map(gridTileId))];
+    const a = ids.indexOf(GRID_ANCHOR), b = ids.indexOf(id);
+    if (a < 0 || b < 0) return true;
+    GRID_SEL.clear();
+    ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(x => GRID_SEL.add(x));
+  } else if (e.ctrlKey || e.metaKey || e.shiftKey || (TOUCH_ONLY && GRID_SEL.size)) {
+    if (GRID_SEL.has(id)) GRID_SEL.delete(id); else GRID_SEL.add(id);
+    GRID_ANCHOR = id;
+  } else {
+    GRID_SEL.clear();
+    GRID_ANCHOR = id;
+    return false;
+  }
+  syncGridSel();
+  return true;
+}
+
+function clearGridSel() { GRID_SEL.clear(); GRID_ANCHOR = null; syncGridSel(); }
+
+// Jen třídy a lišta, bez překreslení: dlaždice pod kurzorem se nesmí vyměnit
+function syncGridSel() {
+  document.querySelectorAll('#notesListBody .grid-tile').forEach(t => t.classList.toggle('selected', GRID_SEL.has(gridTileId(t))));
+  const bar = document.getElementById('gridSelBar');
+  if (!bar) return;
+  bar.hidden = !GRID_SEL.size;
+  if (!GRID_SEL.size) { bar.innerHTML = ''; return; }
+  bar.innerHTML = `<span class="grid-selbar-n">Vybráno: ${GRID_SEL.size}</span>
+    <button type="button" class="btn btn-secondary btn-sm" data-sel="move">Přesunout…</button>
+    <button type="button" class="btn btn-danger btn-sm" data-sel="delete">Smazat</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-sel="clear" aria-label="Zrušit výběr" title="Zrušit výběr">✕</button>`;
+}
+
+function wireGridSel() {
+  if (GRID_SEL_WIRED) return;
+  GRID_SEL_WIRED = true;
+  const view = document.getElementById('notesListView');
+  view.addEventListener('click', e => {
+    const act = e.target.closest('[data-sel]')?.dataset.sel;
+    if (act === 'move') openMoveSelPicker();
+    else if (act === 'delete') deleteGridSel();
+    else if (act === 'clear') clearGridSel();
+    else if (GRID_SEL.size && !e.target.closest('.grid-tile, .grid-selbar, button, a')) clearGridSel();
+  });
+  document.addEventListener('keydown', e => {
+    if (VIEW_MODE !== 'list' || LIST_LAYOUT !== 'grid' || MY_ROLE === 'viewer') return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable="true"]') || document.querySelector('.modal-overlay.open')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      document.querySelectorAll('#notesListBody .grid-tile').forEach(t => GRID_SEL.add(gridTileId(t)));
+      syncGridSel();
+    } else if (e.key === 'Escape' && GRID_SEL.size) clearGridSel();
+    else if (e.key === 'Delete' && GRID_SEL.size) deleteGridSel();
+  });
+}
+
+function openGridSelMenu(x, y) {
+  const pop = document.createElement('div');
+  pop.className = 'context-menu';
+  pop.id = 'pinMenu';
+  pop.innerHTML = `<button class="context-menu-item" data-pm="move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Přesunout vybrané (${GRID_SEL.size})…</button>
+    <button class="context-menu-item" data-pm="delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>Smazat vybrané (${GRID_SEL.size})</button>`;
+  document.body.appendChild(pop);
+  pop.style.left = x + 'px';
+  pop.style.top  = y + 'px';
+  const r = pop.getBoundingClientRect();
+  if (r.right  > window.innerWidth)  pop.style.left = (window.innerWidth  - r.width  - 8) + 'px';
+  if (r.bottom > window.innerHeight) pop.style.top  = (y - r.height) + 'px';
+  pop.addEventListener('click', e => {
+    const act = e.target.closest('[data-pm]')?.dataset.pm;
+    if (!act) return;
+    e.stopPropagation();
+    closePinMenu();
+    if (act === 'move') openMoveSelPicker(); else deleteGridSel();
+  });
+  setTimeout(() => {
+    document.addEventListener('click', closePinMenu, { once: true });
+    document.addEventListener('keydown', function esc(ev) { if (ev.key === 'Escape') { closePinMenu(); document.removeEventListener('keydown', esc); } });
+  }, 0);
+}
+
+function openMoveSelPicker() {
+  const listEl = document.getElementById('moveToFolderList');
+  const picked = [...GRID_SEL].filter(id => FOLDERS_MAP.has(id));
+  const targets = [...FOLDERS_MAP.values()]
+    .filter(f => !picked.some(id => isFolderInside(f.id, id)))
+    .sort((a, b) => nameCmp(folderPathLabel(a), folderPathLabel(b)));
+  listEl.innerHTML = `
+    <div class="move-to-folder-row" data-folder="">⬆️ Nejvyšší úroveň</div>
+    ${targets.map(f => `
+      <div class="move-to-folder-row" data-folder="${f.id}" style="--row-color:${f.color || '#6366f1'}">
+        📁 ${esc(folderPathLabel(f))}
+      </div>`).join('')}`;
+  listEl.querySelectorAll('.move-to-folder-row').forEach(row => {
+    row.addEventListener('click', () => {
+      closeModal('moveToFolderModal');
+      moveGridSel(row.dataset.folder || null);
+    });
+  });
+  openModal('moveToFolderModal');
+}
+
+async function moveGridSel(targetId) {
+  const ids = [...GRID_SEL];
+  if (targetId && ids.some(id => FOLDERS_MAP.has(id) && isFolderInside(targetId, id))) { toast('Nelze vložit složku do sebe.'); return; }
+  try {
+    const foldersCol = db.collection('rooms').doc(ROOM_ID).collection('folders');
+    const FV = firebase.firestore.FieldValue;
+    const batch = db.batch();
+    const noteIds = ids.filter(id => NOTES_MAP.has(id));
+    FOLDERS_MAP.forEach(f => {
+      const out = noteIds.filter(id => f.id !== targetId && (f.noteIds || []).includes(id));
+      if (out.length) batch.update(foldersCol.doc(f.id), { noteIds: FV.arrayRemove(...out) });
+    });
+    if (targetId && noteIds.length) batch.update(foldersCol.doc(targetId), { noteIds: FV.arrayUnion(...noteIds) });
+    ids.filter(id => FOLDERS_MAP.has(id)).forEach(id => batch.update(foldersCol.doc(id), { parentId: targetId }));
+    await batch.commit();
+    clearGridSel();
+    toast('Přesunuto!');
+  } catch (e) { toast('Chyba: ' + e.message); }
+}
+
+function deleteGridSel() {
+  const folders = [...GRID_SEL].filter(id => FOLDERS_MAP.has(id));
+  const notes = [...GRID_SEL].filter(id => NOTES_MAP.has(id));
+  const mine = notes.filter(id => canManageNote(NOTES_MAP.get(id)));
+  const parts = [];
+  if (folders.length) parts.push(`složky: ${folders.length}`);
+  if (mine.length) parts.push(`poznámky: ${mine.length}`);
+  if (!parts.length) { toast('Vybrané poznámky může smazat jen jejich autor nebo vlastník místnosti.'); return; }
+  const skip = notes.length - mine.length;
+  confirmModal(`Smazat ${parts.join(', ')}?` +
+    (folders.length ? ' Obsah složek zůstane, přesune se o úroveň výš.' : '') +
+    (skip ? ` Poznámky od ostatních (${skip}) zůstanou, smazat je může jen autor nebo vlastník.` : ''), async () => {
+    clearGridSel();
+    for (const id of mine) await doDeleteNote(id, false, true);
+    if (folders.length) await deleteFolders(folders);
+    if (mine.length) toastAction(`Smazané poznámky: ${mine.length}`, '↶ Vrátit', async () => {
+      for (let i = 0; i < mine.length; i++) await undoNoteDelete(true);
+      toast('Poznámky obnoveny.');
+    });
+  });
 }
 
 // Is `folderId` the same as, or nested somewhere under, `ancestorId`?
@@ -760,7 +940,8 @@ function setupListDragDrop(body) {
   // A folder target is invalid for a folder-drag if it IS the dragged folder
   // or one of its descendants.
   const targetValid = targetFolderEl => {
-    if (!DRAGGING || DRAGGING.type !== 'folder' || !targetFolderEl || !targetFolderEl.dataset.folderId) return true;
+    if (!DRAGGING || DRAGGING.type === 'note' || !targetFolderEl || !targetFolderEl.dataset.folderId) return true;
+    if (DRAGGING.type === 'many') return ![...GRID_SEL].some(id => FOLDERS_MAP.has(id) && isFolderInside(targetFolderEl.dataset.folderId, id));
     return !isFolderInside(targetFolderEl.dataset.folderId, DRAGGING.id);
   };
 
@@ -803,7 +984,9 @@ function setupListDragDrop(body) {
     if (!folderEl && LIST_LAYOUT === 'grid') return;             // mřížka: pustit vedle = nic
     const targetId = folderEl ? (folderEl.dataset.folderId || null) : null;
     if (DRAGGING_FROM_GRID && targetId === (GRID_FOLDER || null) && data.startsWith('note:')) return;
-    if (data.startsWith('note:')) {
+    if (data.startsWith('many:')) {
+      moveGridSel(targetId);
+    } else if (data.startsWith('note:')) {
       moveNoteToFolder(data.slice(5), targetId);
     } else if (data.startsWith('folder:')) {
       const draggedId = data.slice(7);

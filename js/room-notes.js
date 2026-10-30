@@ -4284,7 +4284,7 @@ async function doDeleteNote(id, fromRedo, quiet) {
   }
 }
 
-async function undoNoteDelete() {
+async function undoNoteDelete(quiet) {
   const rec = NOTE_UNDO.pop();
   if (!rec) { toast('Není co vrátit.'); return; }
   const roomRef = db.collection('rooms').doc(ROOM_ID);
@@ -4299,7 +4299,7 @@ async function undoNoteDelete() {
     await batch.commit();
     NOTE_REDO.push(rec.id);
     logActivity('note', `obnovil poznámku „${rec.label}"`);
-    toast('Poznámka obnovena.');
+    if (quiet !== true) toast('Poznámka obnovena.');
   } catch (e) { toast('Chyba: ' + e.message); NOTE_UNDO.push(rec); }
 }
 
