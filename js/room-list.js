@@ -195,7 +195,9 @@ function openPinMenu(x, y, id) {
   const canMove = MY_ROLE !== 'viewer';
   pop.innerHTML = `<button class="context-menu-item" data-pm="pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 2-2V3H6v1a2 2 0 0 0 2 2 1 1 0 0 1 1 1z"/></svg>${on ? 'Odepnout' : 'Připnout nahoru'}</button>` +
     (canMove ? `<button class="context-menu-item" data-pm="move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Přesunout do složky…</button>` : '') +
-    (isFolder ? `<button class="context-menu-item" data-pm="present"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>Prezentovat složku</button>` : '');
+    (isFolder ? `<button class="context-menu-item" data-pm="present"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>Prezentovat složku</button>` : '') +
+    (isFolder && canMove ? `<button class="context-menu-item" data-pm="edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Upravit složku…</button>` +
+      `<button class="context-menu-item" data-pm="delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>Smazat složku</button>` : '');
   document.body.appendChild(pop);
   pop.style.left = x + 'px';
   pop.style.top  = y + 'px';
@@ -210,6 +212,8 @@ function openPinMenu(x, y, id) {
     if (act === 'pin') togglePin(id);
     if (act === 'move') { if (isFolder) openMoveFolderPicker(id); else openMoveToFolderModal(id); }
     if (act === 'present') presentFolder(id);
+    if (act === 'edit') openFolderModal(id);
+    if (act === 'delete') confirmDeleteFolder(id);
   });
   setTimeout(() => {
     document.addEventListener('click', closePinMenu, { once: true });
@@ -324,20 +328,28 @@ function setupFolderModal() {
     const folderId = PENDING_FOLDER_ID;
     if (!folderId) return;
     closeModal('folderModal');
-    confirmModal('Smazat složku? Poznámky uvnitř zůstanou, jen se z ní vyjmou.', async () => {
-      try {
-        const folder = FOLDERS_MAP.get(folderId);
-        const foldersCol = db.collection('rooms').doc(ROOM_ID).collection('folders');
-        const batch = db.batch();
-        // Reparent any child folders to this one's own parent instead of
-        // orphaning them.
-        FOLDERS_MAP.forEach(f => {
-          if (f.parentId === folderId) batch.update(foldersCol.doc(f.id), { parentId: folder?.parentId || null });
-        });
-        batch.delete(foldersCol.doc(folderId));
-        await batch.commit();
-      } catch (e) { toast('Chyba: ' + e.message); }
-    });
+    confirmDeleteFolder(folderId);
+  });
+}
+
+function confirmDeleteFolder(folderId) {
+  const folder = FOLDERS_MAP.get(folderId);
+  if (!folder) return;
+  confirmModal(`Smazat složku „${folder.name}“? Poznámky a složky uvnitř zůstanou, přesunou se o úroveň výš.`, async () => {
+    try {
+      const foldersCol = db.collection('rooms').doc(ROOM_ID).collection('folders');
+      const parentId = folder.parentId && FOLDERS_MAP.has(folder.parentId) ? folder.parentId : null;
+      const batch = db.batch();
+      // Reparent any child folders to this one's own parent instead of
+      // orphaning them.
+      FOLDERS_MAP.forEach(f => {
+        if (f.parentId === folderId) batch.update(foldersCol.doc(f.id), { parentId });
+      });
+      if (parentId && folder.noteIds?.length) batch.update(foldersCol.doc(parentId), { noteIds: firebase.firestore.FieldValue.arrayUnion(...folder.noteIds) });
+      batch.delete(foldersCol.doc(folderId));
+      await batch.commit();
+      if (GRID_FOLDER === folderId) GRID_FOLDER = parentId;
+    } catch (e) { toast('Chyba: ' + e.message); }
   });
 }
 
@@ -360,7 +372,7 @@ async function moveNoteToFolder(noteId, targetFolderId, quiet) {
 function openMoveToFolderModal(noteId) {
   const listEl = document.getElementById('moveToFolderList');
   const currentFolder = [...FOLDERS_MAP.values()].find(f => (f.noteIds || []).includes(noteId));
-  const folders = [...FOLDERS_MAP.values()].sort((a, b) => folderPathLabel(a).localeCompare(folderPathLabel(b), 'cs'));
+  const folders = [...FOLDERS_MAP.values()].sort((a, b) => nameCmp(folderPathLabel(a), folderPathLabel(b)));
 
   if (!folders.length) {
     listEl.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;padding:8px 0;text-align:center;">Zatím žádné složky — vytvoř je tlačítkem "📁+ Složka" v horní liště.</div>`;
@@ -392,7 +404,7 @@ function openMoveFolderPicker(folderId) {
   const cur = FOLDERS_MAP.get(folderId);
   const targets = [...FOLDERS_MAP.values()]
     .filter(f => !isFolderInside(f.id, folderId))
-    .sort((a, b) => folderPathLabel(a).localeCompare(folderPathLabel(b), 'cs'));
+    .sort((a, b) => nameCmp(folderPathLabel(a), folderPathLabel(b)));
 
   listEl.innerHTML = `
     <div class="move-to-folder-row${!cur?.parentId ? ' current' : ''}" data-folder="">⬆️ Nejvyšší úroveň</div>
@@ -438,7 +450,7 @@ function renderNotesListView() {
 
   function renderFolderNode(folder) {
     const children = [...FOLDERS_MAP.values()].filter(f => f.parentId === folder.id)
-      .sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+      .sort((a, b) => nameCmp(a.name, b.name));
     const ownNotes = (folder.noteIds || []).map(id => NOTES_MAP.get(id)).filter(Boolean)
       .sort((a, b) => noteRecency(b) - noteRecency(a));
     const canManage = MY_ROLE !== 'viewer';
@@ -458,7 +470,7 @@ function renderNotesListView() {
   }
 
   const topFolders = [...FOLDERS_MAP.values()].filter(f => !f.parentId || !FOLDERS_MAP.has(f.parentId))
-    .sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+    .sort((a, b) => nameCmp(a.name, b.name));
   const unfiled = notes.filter(n => !filedIds.has(n.id)).sort((a, b) => noteRecency(b) - noteRecency(a));
 
   // Pinned section: a full, interactive copy of each pinned note/folder at the
@@ -593,7 +605,7 @@ function renderNotesGrid(el) {
   const isTop = f => !f.parentId || !FOLDERS_MAP.has(f.parentId);
   const folders = [...FOLDERS_MAP.values()]
     .filter(f => GRID_FOLDER ? f.parentId === GRID_FOLDER : isTop(f))
-    .sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+    .sort((a, b) => nameCmp(a.name, b.name));
   const here = GRID_FOLDER
     ? (FOLDERS_MAP.get(GRID_FOLDER).noteIds || []).map(id => NOTES_MAP.get(id)).filter(n => n && !isHeading(n))
     : notes.filter(n => !filedIds.has(n.id));

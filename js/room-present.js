@@ -22,7 +22,7 @@ function presFolderNotes(folderId) {
   const f = FOLDERS_MAP.get(folderId);
   if (!f) return [];
   const own = (f.noteIds || []).map(id => NOTES_MAP.get(id)).filter(n => n && !isHeading(n));
-  const subs = [...FOLDERS_MAP.values()].filter(x => x.parentId === folderId).sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+  const subs = [...FOLDERS_MAP.values()].filter(x => x.parentId === folderId).sort((a, b) => nameCmp(a.name, b.name));
   return [...own, ...subs.flatMap(s => presFolderNotes(s.id))];
 }
 

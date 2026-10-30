@@ -408,7 +408,7 @@ function renderAllFiles() {
       <a class="files-open" href="${esc(safeFileLink(f.link))}" target="_blank" rel="noopener">otevřít ↗</a>
     </div>`;
   const renderNode = (node, depth, folders) =>
-    Object.keys(node.dirs).sort((a, b) => a.localeCompare(b, 'cs')).map(name => {
+    Object.keys(node.dirs).sort((a, b) => a.localeCompare(b, 'cs', { numeric: true })).map(name => {
       const d = node.dirs[name], dl = folders.find(f => f.name === d.path);
       return `
       <details class="allfiles-dir" ${q ? 'open' : ''}>

@@ -256,7 +256,7 @@ function buildFolderSections() {
     if (!byParent.has(p)) byParent.set(p, []);
     byParent.get(p).push(f);
   });
-  byParent.forEach(arr => arr.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'cs')));
+  byParent.forEach(arr => arr.sort((a, b) => nameCmp(a.name, b.name)));
 
   const sections = [];
   const seen = new Set();               // guards a malformed parent cycle

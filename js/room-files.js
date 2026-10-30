@@ -80,7 +80,7 @@ function renderRoomFiles() {
       ${canDel(f) ? `<button class="files-del" data-del="${esc(f.id)}" title="Odebrat ze seznamu">🗑️</button>` : ''}
     </div>`;
   const renderNode = node =>
-    Object.keys(node.dirs).sort((a, b) => a.localeCompare(b, 'cs')).map(name => {
+    Object.keys(node.dirs).sort(nameCmp).map(name => {
       const d = node.dirs[name], files = all(d);
       const size = files.reduce((n, f) => n + (+f.size || 0), 0);
       const by = [...new Set(files.map(f => f.byName).filter(Boolean))].join(', ');

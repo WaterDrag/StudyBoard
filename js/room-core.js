@@ -146,6 +146,9 @@ function setupConnColorModal() {
   });
 }
 
+// Řazení názvů jako ve Windows: čísla podle hodnoty, takže MO 2 je před MO 10
+function nameCmp(a, b) { return String(a || '').localeCompare(String(b || ''), 'cs', { numeric: true }); }
+
 // ── Generic confirm popup (replaces native confirm()) ───────────
 function confirmModal(message, onConfirm) {
   const overlay = document.getElementById('confirmModal');

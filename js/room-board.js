@@ -919,7 +919,7 @@ function openMoveSelectionToFolder() {
   const ids = [...SELECTED];
   if (!ids.length) return;
   const listEl = document.getElementById('moveToFolderList');
-  const folders = [...FOLDERS_MAP.values()].sort((a, b) => folderPathLabel(a).localeCompare(folderPathLabel(b), 'cs'));
+  const folders = [...FOLDERS_MAP.values()].sort((a, b) => nameCmp(folderPathLabel(a), folderPathLabel(b)));
   listEl.innerHTML = `<div class="move-to-folder-row" data-folder="">🚫 Bez složky</div>` +
     folders.map(f => `
       <div class="move-to-folder-row" data-folder="${f.id}" style="--row-color:${f.color || '#6366f1'}">
