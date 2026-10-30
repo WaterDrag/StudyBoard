@@ -256,7 +256,7 @@
     wrap.hidden = false;
     btn?.classList.add('on');
     clock(); render();
-    requestAnimationFrame(() => wrap.classList.add('open'));
+    requestAnimationFrame(() => { wrap.classList.add('open'); document.dispatchEvent(new Event('sb-phone')); });
     window.sfx?.('click');
     if (matchMedia('(pointer: fine)').matches) wrap.querySelector('.ph-screen a, .ph-screen button')?.focus();
     loadData();
@@ -266,6 +266,7 @@
   function close() {
     if (!wrap || wrap.hidden) return;
     wrap.classList.remove('open');
+    document.dispatchEvent(new Event('sb-phone'));
     btn?.classList.remove('on');
     clearInterval(open._t);
     setTimeout(() => { if (!wrap.classList.contains('open')) wrap.hidden = true; }, 220);

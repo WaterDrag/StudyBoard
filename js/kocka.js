@@ -1,6 +1,6 @@
 /* kocka.js — kočka z kočičího tématu (easter egg: hlasitost hudby i efektů 9 ze 100). Vykukuje u spodního okraje
  * a dělá to co uživatel: píše → ťuká do klávesnice, brouzdá → drží myš a sleduje kurzor očima, hraje (stránky her)
- * → sluchátka a ovladač, nic nedělá → usne. Zobrazí se jen při data-theme="kocka" (sleduje změnu tématu). */
+ * → sluchátka a ovladač, otevřený telefon (phone.js) → má taky telefon a ťuká do něj, nic nedělá → usne. Zobrazí se jen při data-theme="kocka" (sleduje změnu tématu). */
 (function () {
   'use strict';
   const GAMES = /^(obrana|game|pexeso|dobyvatel|denni|spojovacka|pravdalez|osmismerka|krizovka|sibenice|milionar)$/;
@@ -12,6 +12,15 @@
   .sb-cat .prop { display: none; }
   .sb-cat.typing .kb, .sb-cat.browsing .ms, .sb-cat.gaming .hp, .sb-cat.gaming .pad, .sb-cat.sleep .zz { display: inline; }
   .sb-cat.gaming .kb, .sb-cat.gaming .ms { display: none; }
+  /* telefon: drží ho oběma tlapkama, kouká do něj, obličej má nasvícený; při kliknutí ťukne pravou */
+  .sb-cat.phone .tel { display: inline; }
+  .sb-cat.phone .pl { transform: translate(10px, 5px) rotate(14deg); }
+  .sb-cat.phone .pr { transform: translate(-13px, 5px) rotate(-14deg); }
+  .sb-cat.phone.click .pr { transform: translate(-20px, -6px) rotate(-8deg); transition: transform .05s ease-in; }
+  .sb-cat.phone .pupil { transform: translate(0, 1.5px); }
+  .sb-cat .tel-app { animation: sbcTel 2.4s infinite steps(1); } .sb-cat .tel-app.b { animation-delay: .8s; } .sb-cat .tel-app.c { animation-delay: 1.6s; }
+  @keyframes sbcTel { 0%, 33% { opacity: 1; } 34%, 100% { opacity: .35; } }
+  .sb-cat.phone.click .tel-scr { fill: #fff; }
   .sb-cat .eye-open { transition: opacity .15s; }
   .sb-cat.sleep .eye-open { opacity: 0; } .sb-cat .eye-shut { opacity: 0; } .sb-cat.sleep .eye-shut { opacity: 1; }
   .sb-cat .pupil { transform: translate(var(--px, 0px), var(--py, 0px)); transition: transform .12s ease-out; }
@@ -77,6 +86,14 @@
       <g transform="translate(-7.6 0)"><g class="stick"><path d="M38.6 68.4h3.2v-3.2h3.2v3.2h3.2v3.2h-3.2v3.2h-3.2v-3.2h-3.2Z" fill="${INK}"/></g></g>
       <g transform="translate(7 0)"><circle class="btn" data-b="0" cx="81" cy="66.4" r="1.8" fill="#f472b6"/><circle class="btn" data-b="1" cx="84.6" cy="69.6" r="1.8" fill="#4ade80"/><circle class="btn" data-b="2" cx="77.4" cy="69.6" r="1.8" fill="#60a5fa"/><circle class="btn" data-b="3" cx="81" cy="72.8" r="1.8" fill="#facc15"/></g>
     </g>
+    <g class="tel prop">
+      <ellipse cx="62" cy="49" rx="17" ry="7" fill="#f9a8d4" opacity=".28"/>
+      <rect x="49" y="53" width="26" height="30" rx="4" fill="#241a2a" ${LINE}/>
+      <rect class="tel-scr" x="51.4" y="55.6" width="21.2" height="24" rx="2" fill="#f4a6c6"/>
+      <rect x="58" y="56.8" width="8" height="1.8" rx=".9" fill="#241a2a"/>
+      <rect class="tel-app" x="53.6" y="61" width="5" height="5" rx="1.4" fill="#6366f1"/><rect class="tel-app b" x="59.6" y="61" width="5" height="5" rx="1.4" fill="#fff"/><rect class="tel-app c" x="65.6" y="61" width="5" height="5" rx="1.4" fill="#10b981"/>
+      <rect class="tel-app b" x="53.6" y="68" width="5" height="5" rx="1.4" fill="#ef4444"/><rect class="tel-app c" x="59.6" y="68" width="5" height="5" rx="1.4" fill="#f59e0b"/><rect class="tel-app" x="65.6" y="68" width="5" height="5" rx="1.4" fill="#fff"/>
+    </g>
     <g class="fx l">${FX(35)}</g><g class="fx r">${FX(89)}</g>
     <g class="pl"><g transform="translate(35 0)">${PAW}</g></g>
     <g class="pr"><g transform="translate(89 0)">${PAW}</g></g>
@@ -114,8 +131,13 @@
   function update() {
     if (!el) return;
     const now = Date.now(), typing = now - lastType < 1400, browsing = now - lastMove < 2500, idle = now - lastAct > 25000;
-    let st = idle ? 'sleep' : typing && !gaming ? 'typing' : gaming ? 'gaming' : browsing ? 'browsing' : '';
+    const tel = !!document.querySelector('.ph-wrap.open');
+    if (tel) lastAct = now;   // s telefonem v ruce neusne
+    let st = tel ? 'phone' : idle ? 'sleep' : typing && !gaming ? 'typing' : gaming ? 'gaming' : browsing ? 'browsing' : '';
     place();
+    // aby byla kočka vidět nad ztmavením telefonu; na úzkém displeji by zakrývala aplikace, tam zůstane pod ním
+    if (tel && innerWidth >= 640) el.style.zIndex = '10001';
+    else if (el.style.zIndex === '10001') { el.style.zIndex = ''; placed = ''; }
     el.className = 'sb-cat' + (gaming ? ' g' : '') + (st ? ' ' + st : '') + (now < hitL ? ' hl' : '') + (now < hitR ? ' hr' : '') + (now < clickT ? ' click' : '');
   }
   // Bongo Cat: klávesa z levé půlky klávesnice = levá tlapka, z pravé = pravá (ostatní střídavě); pod tlapkou se promáčkne klávesa
@@ -145,7 +167,8 @@
   const isField = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
   document.addEventListener('keydown', e => {
     lastAct = Date.now();
-    if (isField(e.target) || gaming) { lastType = lastAct; if (!e.repeat && !/^(Shift|Control|Alt|Meta|CapsLock)$/.test(e.key)) hit(e.key); }
+    if (document.querySelector('.ph-wrap.open')) { clickT = lastAct + 120; update(); setTimeout(update, 130); }   // ovládání telefonu klávesnicí = ťuknutí
+    else if (isField(e.target) || gaming) { lastType = lastAct; if (!e.repeat && !/^(Shift|Control|Alt|Meta|CapsLock)$/.test(e.key)) hit(e.key); }
     else if (el) update();
   }, true);
   const moved = e => {
@@ -165,6 +188,7 @@
     else if (!isField(e.target)) { clickT = Date.now() + 120; update(); setTimeout(update, 130); }
   }, { passive: true, capture: true });
   ['wheel', 'scroll', 'touchstart', 'pointerdown'].forEach(ev => document.addEventListener(ev, () => { lastAct = lastMove = Date.now(); }, { passive: true, capture: true }));
+  document.addEventListener('sb-phone', update);   // phone.js: telefon se otevřel nebo zavřel
   function sync() { (document.documentElement.getAttribute('data-theme') === 'kocka') ? mount() : unmount(); }
   new MutationObserver(sync).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   if (document.body) sync(); else document.addEventListener('DOMContentLoaded', sync);
