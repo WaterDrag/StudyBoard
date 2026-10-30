@@ -136,8 +136,8 @@ async function downloadRoomFolder(path) {
 
 async function removeRoomFolder(path) {
   const files = roomFileEntries().filter(f => underPath(f.name, path));
-  if (!confirm('Odebrat složku „' + path + '" (' + files.length + ' ' + filesPlural(files.length, 'soubor', 'soubory', 'souborů') + ') ze seznamu?\n\n' +
-               'Z Google Disku se NESMAŽE — tam ji případně smaž sám.')) return;
+  if (!await sbConfirm('Odebrat složku „' + path + '" (' + files.length + ' ' + filesPlural(files.length, 'soubor', 'soubory', 'souborů') + ') ze seznamu?\n\n' +
+               'Z Google Disku se NESMAŽE, tam ji případně smaž sám.', { ok: 'Odebrat', danger: true })) return;
   const ids = new Set(files.map(f => f.id));
   const mine = roomFiles().filter(f => f.by === ME.uid && (ids.has(f.id) || (isFolderEntry(f) && (f.name === path || underPath(f.name, path)))));
   try {
@@ -301,8 +301,8 @@ async function uploadRoomFiles(fileList) {
 async function removeRoomFile(id) {
   const f = roomFiles().find(x => x.id === id);
   if (!f) return;
-  if (!confirm('Odebrat „' + f.name + '" ze seznamu?\n\n' +
-               'Ze tvého Google Disku se NESMAŽE — tam ho případně smaž sám.')) return;
+  if (!await sbConfirm('Odebrat „' + f.name + '" ze seznamu?\n\n' +
+               'Ze tvého Google Disku se NESMAŽE, tam ho případně smaž sám.', { ok: 'Odebrat', danger: true })) return;
   try {
     await saveRoomFiles(list => list.filter(x => x.id !== id));
     // Sdílení odkazem zrušíme, ale jen když je to MŮJ soubor — cizí Disk

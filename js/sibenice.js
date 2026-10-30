@@ -224,7 +224,7 @@ function renderRaceLobby() {
   $('hgGo').disabled = RACE.playerIds.length < 2;
   $('hgLobbyHint').textContent = host ? (RACE.playerIds.length < 2 ? 'Čeká se aspoň na jednoho soupeře.' : 'Všichni tu? Spusť závod.') : 'Čeká se, až hostitel závod spustí.';
   $('hgGo').onclick = () => rref().update({ status: 'play', startAt: Date.now() }).catch(e => toast('Nepovedlo se: ' + e.message));
-  $('hgCopy').onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Odkaz zkopírován.'); } catch (_) { prompt('Zkopíruj odkaz:', location.href); } };
+  $('hgCopy').onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Odkaz zkopírován.'); } catch (_) { sbPrompt('Zkopíruj odkaz', location.href, { ok: 'Hotovo', noCancel: true }); } };
   $('hgLeave').onclick = async () => {
     try {
       if (host) await rref().delete();

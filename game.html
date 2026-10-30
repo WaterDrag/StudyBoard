@@ -436,6 +436,9 @@ canvas{display:block;cursor:crosshair;}
 button.hud-chip{cursor:pointer;}
 button.hud-chip:hover{border-color:var(--acc);}
 .hud-chip b{font-size:.62rem;color:var(--muted);border:1px solid var(--brd2);border-radius:4px;padding:0 4px;margin-left:4px;}
+.net-chip{display:inline-flex;align-items:center;gap:6px;}
+.net-chip[hidden]{display:none;}
+.net-chip::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--net,#22c55e);}
 #kitLbl.hud-chip{flex:none;text-align:left;font-size:.72rem;color:#cbd5e1;}
 #kitLbl:empty{display:none;}
 #helpBtn{position:static;}
@@ -581,6 +584,7 @@ button.hud-chip:hover{border-color:var(--acc);}
         <button type="button" id="pauseBtn" class="hud-chip" title="Pauza (P)">⏸ Pauza <b>P</b></button>
         <button type="button" id="helpBtn" class="hud-chip" title="Jak hrát">📖 Návod <b>H</b></button>
         <span id="kitLbl" class="hud-chip"></span>
+        <span id="netChip" class="hud-chip net-chip" role="status" hidden></span>
       </div>
 
       <!-- Center: Wave pill -->

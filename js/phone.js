@@ -152,6 +152,7 @@
     const seg = (name, val, opts) => `<div class="ph-seg">${opts.map(([v, t]) => `<button type="button" data-seg="${name}" data-v="${v}" class="${v === val ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     const gfx = window.SBGfx ? Object.entries(SBGfx.GAMES).map(([g, G]) => `<label class="ph-field">${esc2(G.name)}</label>${seg('gfx:' + g, (GFX && GFX[g]) || SBGfx.read(g), G.opts.map(([k, n]) => [k, n]))}`).join('') : '<p class="ph-empty">Načítám…</p>';
     return `<div class="ph-set">
+      <button type="button" class="ph-wide" data-act="help">Tutoriál: zkratky, hry a funkce</button>
       <div class="ph-sec">Vzhled</div>
       <div class="ph-themes">${THEMES.filter(t => t[0] !== 'kocka' || cat).map(([k, n, bg, ac]) => `<button type="button" class="ph-theme${k === cur ? ' on' : ''}" data-ptheme="${k}" title="${n}"><i style="background:linear-gradient(135deg, ${bg} 50%, ${ac} 50%)"></i>${n}</button>`).join('')}</div>
       ${S ? `<div class="ph-sec">Zvuk</div>
@@ -218,6 +219,7 @@
       const act = a.dataset.act;
       if (act === 'games' || act === 'home' || act === 'rooms' || act === 'settings') { e.preventDefault(); show(act); return; }
       if (act === 'savekeys') { saveKeys(); return; }
+      if (act === 'help') { close(); (window.SBHelp ? Promise.resolve() : loadScript('js/help.js')).then(() => window.SBHelp?.open()); return; }
       if (act === 'account') { e.stopPropagation(); close(); document.getElementById('settingsBtn')?.click(); return; }
       if (act.startsWith('tab:') && onDashboard) { e.preventDefault(); close(); document.querySelector(`.tab-btn[data-tab="${act.slice(4)}"]`)?.click(); return; }
       if (act === 'zombie') { e.preventDefault(); close(); document.querySelector('.tab-btn[data-tab="games"]')?.click(); document.getElementById('survivalCard')?.dispatchEvent(new CustomEvent('gameplay')); return; }
@@ -281,7 +283,7 @@
     btn.addEventListener('click', () => (wrap && !wrap.hidden ? close() : open()));
     document.body.appendChild(btn);
     document.addEventListener('keydown', e => {
-      if (e.key === 'F2') { e.preventDefault(); wrap && !wrap.hidden ? close() : open(); }
+      if (e.key === 'F2') { if (document.querySelector('.hp-wrap:not([hidden]), .sbd-wrap')) return; e.preventDefault(); wrap && !wrap.hidden ? close() : open(); }
       else if (e.key === 'Escape' && wrap && !wrap.hidden) { e.stopPropagation(); close(); }
     }, true);
   }

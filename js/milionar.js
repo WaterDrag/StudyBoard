@@ -86,7 +86,7 @@ function renderQ() {
   $('life50').onclick = use5050; $('lifeAud').onclick = useAudience; $('lifePhone').onclick = usePhone;
   const have = G.i ? G.ladder[G.i - 1] : 0;
   $('milQuit').textContent = have ? `Odstoupit s ${money(have)}` : 'Odstoupit';
-  $('milQuit').onclick = () => { if (!G.locked && confirm(have ? `Opravdu odstoupit a odejít s ${money(have)}?` : 'Opravdu skončit?')) endGame('quit', have); };
+  $('milQuit').onclick = async () => { if (!G.locked && await sbConfirm(have ? `Opravdu odstoupit a odejít s ${money(have)}?` : 'Opravdu skončit?', { ok: have ? 'Odstoupit' : 'Skončit', danger: true })) endGame('quit', have); };
   renderLadder();
 }
 

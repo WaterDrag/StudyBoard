@@ -98,7 +98,7 @@ function renderLobby() {
     : teams && !teamsValid(d) ? 'V každém týmu musí být dva hráči.'
     : host ? `Všichni tu? Spusť hru (${teams ? '2 na 2' : n === 2 ? '1 na 1' : 'každý sám za sebe'}).` : 'Čeká se, až hostitel spustí hru.';
   $('tdGoVs').onclick = () => tdRef().update({ status: 'play', teams, startAt: serverNow() + 6000, ...(d.coop ? { seed: 1 + Math.floor(Math.random() * 2e9) } : {}) }).catch(e => toast('Nepovedlo se: ' + e.message));
-  $('tdCopy').onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Odkaz zkopírován.'); } catch (_) { prompt('Zkopíruj odkaz:', location.href); } };
+  $('tdCopy').onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Odkaz zkopírován.'); } catch (_) { sbPrompt('Zkopíruj odkaz', location.href, { ok: 'Hotovo', noCancel: true }); } };
   $('tdLeave').onclick = async () => {
     try {
       if (host) await tdRef().delete();

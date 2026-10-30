@@ -1729,6 +1729,8 @@ function setupSettings(user) {
     SBGfx.save(user.uid, b.dataset.game, b.dataset.v);
   });
 
+  document.getElementById('helpOpenBtn')?.addEventListener('click', () => window.SBHelp?.open());
+
   // Předvyplň aktuálně uloženými klíči
   btn.addEventListener('click', () => {
     renderGfx(null);

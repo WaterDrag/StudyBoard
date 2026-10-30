@@ -849,6 +849,14 @@ function setupSearch() {
     setTimeout(() => input.focus(), 60);
   });
   input.addEventListener('input', () => renderSearchResults(input.value));
+  const all = document.getElementById('searchAllRooms');
+  if (ME?.isAnonymous) document.getElementById('searchAllWrap').hidden = true;   // host je jen v téhle místnosti
+  all.addEventListener('change', () => {
+    input.placeholder = all.checked ? 'Hledat ve všech místnostech' : 'Hledat v poznámkách';
+    if (all.checked) loadOtherRoomNotes();
+    renderSearchResults(input.value);
+    input.focus();
+  });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { const first = document.querySelector('#searchResults [data-note-id]'); if (first) first.click(); }
   });
@@ -857,11 +865,11 @@ function setupSearch() {
 
 // All notes matching q, with a snippet around the first hit. Shared by the
 // search window and the result list kept beside an opened note.
-function searchHits(q) {
+function searchHits(q, notes = NOTES_MAP) {
   const nq = searchNormalize(q.trim());
   if (!nq) return [];
   const hits = [];
-  NOTES_MAP.forEach(note => {
+  notes.forEach(note => {
     if (isHeading(note)) return;
     const title = note.title || '';
     const combined = (title ? title + ' — ' : '') + noteToPlainText(note);
@@ -882,21 +890,56 @@ function searchHits(q) {
   return hits;
 }
 
-function renderSearchResults(q) {
-  const el = document.getElementById('searchResults');
-  if (!q.trim()) { el.innerHTML = `<div style="color:var(--text-muted);font-size:.85rem;padding:10px 2px;">Napiš, co hledáš — prohledají se názvy i obsah poznámek.</div>`; return; }
-  const hits = searchHits(q);
+// Poznámky ostatních místností: načtou se až po zaškrtnutí a jen jednou za otevření stránky (každá poznámka je čtení z databáze)
+let OTHER_ROOMS = null;   // { total, done, rooms: [{ id, name, notes }] }
+async function loadOtherRoomNotes() {
+  if (OTHER_ROOMS) return;
+  OTHER_ROOMS = { total: 0, done: 0, rooms: [] };
+  const refresh = () => { if (document.getElementById('searchAllRooms').checked) renderSearchResults(document.getElementById('searchInput').value); };
+  const rooms = (await travelLoadRemote()).rooms.filter(r => r.id !== ROOM_ID);
+  OTHER_ROOMS.total = rooms.length;
+  refresh();
+  const queue = [...rooms];
+  const worker = async () => {
+    for (let r; (r = queue.shift());) {
+      try {
+        const snap = await db.collection('rooms').doc(r.id).collection('notes').get();
+        OTHER_ROOMS.rooms.push({ id: r.id, name: r.name, notes: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+      } catch (_) {}
+      OTHER_ROOMS.done++;
+      refresh();
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+}
 
-  if (!hits.length) { el.innerHTML = `<div style="color:var(--text-muted);font-size:.85rem;padding:10px 2px;">Nic nenalezeno.</div>`; return; }
-
-  el.innerHTML = hits.slice(0, 40).map(h => `
-    <div class="search-hit" data-note-id="${h.note.id}" style="padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--border);margin-bottom:6px;--row-color:${h.note.color || '#fef9c3'};border-left:3px solid var(--row-color);">
+function searchHitHtml(h, roomId) {
+  return `<div class="search-hit" data-note-id="${esc(h.note.id)}"${roomId ? ` data-room-id="${esc(roomId)}"` : ''} style="padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--border);margin-bottom:6px;--row-color:${esc(h.note.color || '#fef9c3')};border-left:3px solid var(--row-color);">
       <div style="font-weight:600;font-size:0.88rem;display:flex;gap:8px;"><span style="flex:1;min-width:0;">${esc(h.title)}</span>${h.count > 1 ? `<span class="search-count">${h.count}×</span>` : ''}</div>
       <div class="search-snip">${h.snippet}</div>
-    </div>`).join('') + (hits.length > 40 ? `<div style="color:var(--text-muted);font-size:.75rem;padding:6px 2px;">…a další (${hits.length - 40})</div>` : '');
+    </div>`;
+}
+
+function renderSearchResults(q) {
+  const el = document.getElementById('searchResults');
+  const allRooms = document.getElementById('searchAllRooms').checked;
+  const muted = t => `<div class="srch-note">${t}</div>`;
+  const loading = allRooms && OTHER_ROOMS && OTHER_ROOMS.done < OTHER_ROOMS.total
+    ? muted(`Načítám ostatní místnosti (${OTHER_ROOMS.done}/${OTHER_ROOMS.total})…`) : '';
+  if (!q.trim()) { el.innerHTML = muted(allRooms ? 'Napiš, co hledáš. Prohledají se názvy i obsah poznámek ve všech tvých místnostech.' : 'Napiš, co hledáš. Prohledají se názvy i obsah poznámek v téhle místnosti.') + loading; return; }
+  const hits = searchHits(q);
+  const others = allRooms && OTHER_ROOMS ? OTHER_ROOMS.rooms.map(r => ({ room: r, hits: searchHits(q, r.notes) })).filter(g => g.hits.length) : [];
+
+  if (!hits.length && !others.length) { el.innerHTML = muted('Nic nenalezeno.') + loading; return; }
+
+  el.innerHTML = (others.length && hits.length ? '<div class="srch-group">Tato místnost</div>' : '') +
+    hits.slice(0, 40).map(h => searchHitHtml(h)).join('') + (hits.length > 40 ? `<div style="color:var(--text-muted);font-size:.75rem;padding:6px 2px;">…a další (${hits.length - 40})</div>` : '') +
+    others.map(g => `<div class="srch-group">${esc(g.room.name)}</div>` + g.hits.slice(0, 15).map(h => searchHitHtml(h, g.room.id)).join('') +
+      (g.hits.length > 15 ? `<div style="color:var(--text-muted);font-size:.75rem;padding:6px 2px;">…a další (${g.hits.length - 15})</div>` : '')).join('') + loading;
 
   el.querySelectorAll('[data-note-id]').forEach(row => {
     row.addEventListener('click', () => {
+      if (row.dataset.roomId) { window.location.href = `room.html?id=${encodeURIComponent(row.dataset.roomId)}&note=${encodeURIComponent(row.dataset.noteId)}`; return; }
       const note = NOTES_MAP.get(row.dataset.noteId);
       if (!note) return;
       closeModal('searchModal');

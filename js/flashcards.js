@@ -703,11 +703,11 @@ async function bulkGenerateDistractors() {
   let targets = mine.filter(c => (c.distractors || []).length < POOL_WRONG);
   let topUp = true;
   if (!targets.length) {
-    if (!confirm(`Všechny karty už mají plnou zásobu (${POOL_WRONG} špatných odpovědí).
-Vygenerovat je znovu a ty staré přepsat?`)) return;
+    if (!await sbConfirm(`Všechny karty už mají plnou zásobu (${POOL_WRONG} špatných odpovědí).
+Vygenerovat je znovu a ty staré přepsat?`, { ok: 'Přepsat', danger: true })) return;
     targets = mine;
     topUp = false;
-  } else if (!confirm(
+  } else if (!await sbConfirm(
       `Doplnit AI odpovědi u ${targets.length} z ${mine.length} karet?
 
 ` +
@@ -715,7 +715,7 @@ Vygenerovat je znovu a ty staré přepsat?`)) return;
 ` +
       `vybere jinou sadu, takže se otázky neokoukají. Kde to dává smysl, přidá i další
 ` +
-      `správné odpovědi (pak se zaškrtává víc možností).`)) {
+      `správné odpovědi (pak se zaškrtává víc možností).`, { ok: 'Doplnit' })) {
     return;
   }
 

@@ -209,7 +209,7 @@ function headingSize(note) {
 async function createHeading(storeX, storeY) {
   const canWrite = MY_ROLE !== 'viewer' && !(ME.isAnonymous && MY_ROLE !== 'owner');
   if (!canWrite) { toast('Nadpis muze pridat jen editor.'); return; }
-  const title = prompt('Text nadpisu:', '');
+  const title = await sbPrompt('Text nadpisu', '', { ok: 'Přidat', placeholder: 'Nadpis' });
   if (title === null) return;
   const data = {
     kind: 'heading',
@@ -292,7 +292,7 @@ function openHeadingBar(el, id) {
     if (!b) return;
     e.stopPropagation();
     if (b.dataset.del) {
-      if (!confirm('Smazat nadpis?')) return;
+      if (!await sbConfirm('Smazat nadpis?', { ok: 'Smazat', danger: true })) return;
       closeHeadingBar();
       await doDeleteNote(id, false);
       return;
@@ -1340,7 +1340,7 @@ function openHotspotEditor(img) {
     box.style.cssText = `left:${x}%;top:${y}%;width:${w}%;height:${h}%;`;
     box._rect = { x, y, w, h };
   };
-  stage.onmouseup = e => {
+  stage.onmouseup = async e => {
     if (!box) return;
     const rect = box._rect;
     box.remove(); box = null;
@@ -1348,8 +1348,8 @@ function openHotspotEditor(img) {
     if (!rect || rect.w < 2 || rect.h < 2) return;
     // Just a name here. Where it leads is drawn in the map, the same way
     // chapters are wired to each other — one place for all the connecting.
-    const label = prompt('Jak se ta oblast jmenuje?', '');
-    if (label === null) return;
+    const label = await sbPrompt('Jak se ta oblast jmenuje?', '', { ok: 'Přidat', placeholder: 'Oblast' });
+    if (label === null || !HS) return;
     HS.spots.push({ ...rect, label: label.trim() || 'Oblast', page: null });
     drawHotspotBoxes();
   };
@@ -1476,7 +1476,7 @@ async function setPageNumber(pageId) {
   const page = pageById(note, pageId);
   if (!page) return;
   const cur = page.num != null ? String(page.num) : '';
-  const v = prompt('Cislo kapitoly (prazdne = zpet na poradi):', cur);
+  const v = await sbPrompt('Číslo kapitoly\nKdyž ho necháš prázdné, vrátí se číslo podle pořadí.', cur);
   if (v === null) return;
   await savePages(GUIDE.noteId, pagesOf(note).map(p =>
     p.id === pageId ? { ...p, num: v.trim() || null } : p));
@@ -1561,7 +1561,7 @@ async function savePages(noteId, pages, extra) {
 async function createGuide(storeX, storeY) {
   const canWrite = MY_ROLE !== 'viewer' && !(ME.isAnonymous && MY_ROLE !== 'owner');
   if (!canWrite) { toast('Návod může přidat jen editor.'); return; }
-  const title = prompt('Název návodu:', 'Nový návod');
+  const title = await sbPrompt('Název návodu', 'Nový návod', { ok: 'Vytvořit' });
   if (title === null) return;
   const first = { id: newPageId(), title: 'Úvod', content: '', links: [], main: true };
   const data = {
@@ -1797,7 +1797,7 @@ async function addChapter(title, fromId, at) {
 // The "＋ Kapitola" button in the open guide: a new chapter this one leads to.
 async function addSubChapter() {
   if (!GUIDE) return;
-  const title = prompt('Název navazující kapitoly:');
+  const title = await sbPrompt('Název navazující kapitoly', '', { ok: 'Přidat' });
   if (title === null) return;
   const page = await addChapter(title, GUIDE.pageId);
   if (page) goToPage(page.id);
@@ -1996,7 +1996,7 @@ function openGmapMenu(clientX, clientY, pageId, at) {
     closeGmapMenu();
     try {
       if (m === 'add') {
-        const t = prompt('Název kapitoly:');
+        const t = await sbPrompt('Název kapitoly', '', { ok: 'Přidat' });
         if (t === null) return;
         await addChapter(t, null, { mx: Math.round(at.x), my: Math.round(at.y) });
         renderGuideMap();
@@ -2005,7 +2005,7 @@ function openGmapMenu(clientX, clientY, pageId, at) {
       } else if (m === 'open') {
         goToPage(pageId); closeModal('guideMapModal');
       } else if (m === 'sub') {
-        const t = prompt('Název navazující kapitoly:');
+        const t = await sbPrompt('Název navazující kapitoly', '', { ok: 'Přidat' });
         if (t === null) return;
         await addChapter(t, pageId);
         renderGuideMap();
@@ -2016,7 +2016,7 @@ function openGmapMenu(clientX, clientY, pageId, at) {
       } else if (m === 'num') {
         await setPageNumber(pageId);
       } else if (m === 'ren') {
-        const t = prompt('Název kapitoly:', page?.title || '');
+        const t = await sbPrompt('Název kapitoly', page?.title || '');
         if (t === null) return;
         await savePages(GUIDE.noteId, pagesOf(note).map(p =>
           p.id === pageId ? { ...p, title: t.trim() || p.title } : p));
@@ -2200,7 +2200,7 @@ function wireGuideMap(note, editable) {
       e.stopPropagation();
       const from = pageById(note, el.dataset.from), to = pageById(note, el.dataset.to);
       if (!from || !to) return;
-      if (!confirm('Zrušit šipku „' + (from.title || 'Kapitola') + '" → „' + (to.title || 'Kapitola') + '"?')) return;
+      if (!await sbConfirm('Zrušit šipku „' + (from.title || 'Kapitola') + '" → „' + (to.title || 'Kapitola') + '"?', { ok: 'Zrušit šipku', cancel: 'Nechat', danger: true })) return;
       await removeGuideLink(el.dataset.from, el.dataset.to);
       renderGuideMap();
     });
@@ -2211,7 +2211,7 @@ function wireGuideMap(note, editable) {
       e.stopPropagation();
       const from = pageById(note, el.dataset.zfrom);
       if (!from) return;
-      if (!confirm('Odpojit tuhle klikací oblast? Zůstane na obrázku, jen nikam nepovede.')) return;
+      if (!await sbConfirm('Odpojit tuhle klikací oblast?\nZůstane na obrázku, jen nikam nepovede.', { ok: 'Odpojit', danger: true })) return;
       await setZoneTarget(el.dataset.zfrom, +el.dataset.zimg, +el.dataset.zspot, null);
       renderGuideMap();
     });
@@ -2252,7 +2252,7 @@ function wireGuideMap(note, editable) {
       // saved, the map never refreshed, and it looked like nothing happened.
       try {
         if (act === 'sub') {
-          const t = prompt('Název navazující kapitoly:');
+          const t = await sbPrompt('Název navazující kapitoly', '', { ok: 'Přidat' });
           if (t === null) return;
           await addChapter(t, id);
           renderGuideMap();
@@ -2266,7 +2266,7 @@ function wireGuideMap(note, editable) {
           renderGuideMap();
         } else if (act === 'ren') {
           const page = pageById(note, id);
-          const t = prompt('Název kapitoly:', page?.title || '');
+          const t = await sbPrompt('Název kapitoly', page?.title || '');
           if (t === null) return;
           await savePages(GUIDE.noteId, pagesOf(note).map(p => p.id === id ? { ...p, title: t.trim() || p.title } : p));
           renderGuideMap();
@@ -2344,7 +2344,7 @@ async function finishGuideLink(toId) {
   if (!from || from === toId) { renderGuideMap(); return; }
   const note = NOTES_MAP.get(GUIDE.noteId);
   const target = pageById(note, toId);
-  const label = prompt('Jak se má odkaz jmenovat?', target?.title || 'Odkaz');
+  const label = await sbPrompt('Jak se má odkaz jmenovat?', target?.title || 'Odkaz');
   if (label === null) { renderGuideMap(); return; }
   const pages = pagesOf(note).map(p => p.id === from
     ? { ...p, links: [...linksOf(p).filter(l => l.to !== toId), { to: toId, label: label.trim() || 'Odkaz' }] }
@@ -2365,7 +2365,7 @@ async function deleteChapter(id) {
   const msg = 'Smazat kapitolu „' + (page.title || 'Kapitola') + '"?' + '\n' + '\n' +
     (arrows ? 'Zruší se ' + arrows + ' šipek, které do ní vedou nebo z ní vychází. ' : '') +
     'Text kapitoly se ztratí.';
-  if (!confirm(msg)) return;
+  if (!await sbConfirm(msg, { ok: 'Smazat', danger: true })) return;
   let pages = pagesOf(note)
     .filter(p => p.id !== id)
     .map(p => ({ ...p, links: linksOf(p).filter(l => l.to !== id) }));
@@ -2383,7 +2383,7 @@ async function deleteChapter(id) {
 
 function setupGuideMap() {
   document.getElementById('gmapAddRoot')?.addEventListener('click', async () => {
-    const t = prompt('Název nové kapitoly:');
+    const t = await sbPrompt('Název nové kapitoly', '', { ok: 'Přidat' });
     if (t === null) return;
     await addChapter(t);            // standalone — you wire it up yourself
     renderGuideMap();
@@ -3143,7 +3143,7 @@ function setupEditorExtras(editor, toolbar) {
       e.preventDefault();
       e.stopPropagation();                     // jinak se otevře i rychlé hledání místnosti
       grabRange();
-      openWebLinkPop(editor, linkBtn || editor, linkRange);
+      openWebLinkPop(editor, linkBtn?.offsetParent ? linkBtn : toolbar, linkRange);   // tlačítko může být na skryté kartě
     }
   });
   // V editoru se odkaz neotvírá (klik = psaní) — Ctrl+klik ho otevře jako ve Wordu.
@@ -3433,6 +3433,15 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
       saveRange();
     });
   }
+
+  // Karty lišty jako ve Wordu: přepnutí nesmí vzít editoru kurzor
+  toolbar.querySelectorAll('.rtb-tab').forEach(tab => {
+    tab.addEventListener('mousedown', e => e.preventDefault());
+    tab.addEventListener('click', () => {
+      toolbar.querySelectorAll('.rtb-tab').forEach(t => { const on = t === tab; t.classList.toggle('on', on); t.setAttribute('aria-selected', on); });
+      toolbar.querySelectorAll('.rtb-panel').forEach(p => { p.hidden = p.dataset.rtb !== tab.dataset.rtb; });
+    });
+  });
 
   // Format buttons: prevent blur, apply command
   toolbar.querySelectorAll('[data-cmd]').forEach(btn => {
@@ -4126,7 +4135,7 @@ const NOTE_UNDO = []; // records of deleted notes (newest last)
 const NOTE_REDO = []; // note ids that were undone and can be re-deleted
 
 async function deleteNote(id) {
-  if (!confirm('Opravdu chceš smazat tuto poznámku?')) return;
+  if (!await sbConfirm('Opravdu chceš smazat tuto poznámku?', { ok: 'Smazat', danger: true })) return;
   await doDeleteNote(id, false);
 }
 

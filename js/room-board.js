@@ -614,8 +614,6 @@ function openBoardMenu(clientX, clientY) {
   menu.className = 'context-menu';
   menu.id = 'boardCtxMenu';
   menu.innerHTML = `
-    <button class="context-menu-item" data-act="travel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"/></svg>Přejít na… <span class="ctx-kbd">Ctrl+K</span></button>
-    <div class="context-menu-sep"></div>
     <button class="context-menu-item" data-act="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/><path d="M15 21v-6h6"/></svg>Přidat poznámku</button>
     <button class="context-menu-item" data-act="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>Přidat návod</button>
     <button class="context-menu-item" data-act="board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>Přidat tabuli</button>
@@ -626,7 +624,6 @@ function openBoardMenu(clientX, clientY) {
   if (r.right > window.innerWidth)  menu.style.left = (window.innerWidth - r.width - 8) + 'px';
   if (r.bottom > window.innerHeight) menu.style.top = (clientY - r.height) + 'px';
 
-  menu.querySelector('[data-act="travel"]').addEventListener('click', () => { closeBoardMenu(); openTravelAgent(); });
   menu.querySelector('[data-act="note"]').addEventListener('click', () => { closeBoardMenu(); PENDING_ADD_POS = { x: sx, y: sy }; openAddNote(); });
   menu.querySelector('[data-act="guide"]').addEventListener('click', () => { closeBoardMenu(); createGuide(sx, sy); });
   menu.querySelector('[data-act="board"]').addEventListener('click', () => { closeBoardMenu(); createWhiteboard(sx, sy); });
@@ -905,7 +902,7 @@ function applySelectionRect(r, additive) {
 async function deleteSelection() {
   const ids = [...SELECTED];
   if (!ids.length) return;
-  if (!confirm(`Smazat ${ids.length} vybraných poznámek?`)) return;
+  if (!await sbConfirm(`Smazat ${ids.length} vybraných poznámek?`, { ok: 'Smazat', danger: true })) return;
   let ok = 0, skipped = 0;
   for (const id of ids) {
     const n = NOTES_MAP.get(id);
@@ -1322,7 +1319,6 @@ function setupRoomChrome() {
   menu.addEventListener('click', () => closeRoomMoreMenu());
   document.addEventListener('click', e => { if (!e.target.closest('.nav-menu-wrap')) closeRoomMoreMenu(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRoomMoreMenu(); });
-  document.getElementById('travelMenuBtn').addEventListener('click', () => openTravelAgent());
   // Mobile: buttons that don't fit the bar are reachable from the menu.
   menu.querySelectorAll('[data-proxy]').forEach(item => item.addEventListener('click', () =>
     document.getElementById(item.dataset.proxy)?.click()));
@@ -1366,7 +1362,7 @@ const ORB_GROUPS = [
     ['toolBoard', 'Tabule'], ['connectBtn', 'Propojit'], ['newFolderBtn', 'Složka'],
   ]],
   ['Místnost', [
-    ['searchBtn', 'Hledat'], ['travelMenuBtn', 'Přejít na…'], ['filesBtn', 'Soubory'],
+    ['searchBtn', 'Hledat'], ['filesBtn', 'Soubory'],
     ['aiCardsBtn', 'AI'], ['flashcardsBtn', 'Kartičky'], ['membersBtn', 'Členové'],
     ['shareTopBtn', 'Sdílet'], ['importBtn', 'Import'], ['presentBtn', 'Prezentace'], ['pomoBtn', 'Pomodoro'], ['sndBtn', 'Zvuk'], ['exportBtn', 'Export'], ['roomBgBtn', 'Pozadí'],
   ]],

@@ -5351,9 +5351,29 @@ async function znConnect(){
   };
   ws.onerror=()=>{};
 }
+// Ukazatel spojení v HUDu. Sám ve hře nic neukazuje, není s kým být spojený.
+let _netState='';
+function znChip(){
+  const el=document.getElementById('netChip'); if(!el)return;
+  const others=Object.keys(gs.players||{}).length>0;
+  const silent=others&&gs._netRx&&Date.now()-gs._netRx>3000;
+  const st=!others?'':(!ZNET.rtdb&&!ZNET.ok)?'down':silent?'silent':ZNET.rtdb?'backup':'ok';
+  if(st===_netState)return;
+  const was=_netState; _netState=st;
+  const [txt,col,tip]={
+    ok:['Spojení v pořádku','#22c55e','Hra běží přes rychlý server.'],
+    backup:['Záložní spojení','#f59e0b','Server není dostupný, hra běží přes Firebase a může být pomalejší.'],
+    down:['Obnovuji spojení…','#ef4444','Spojení se serverem vypadlo, zkouším ho obnovit.'],
+    silent:['Spoluhráči neodpovídají','#ef4444','Několik sekund nedorazila žádná data od ostatních.'],
+  }[st]||['','',''];
+  el.hidden=!st; el.textContent=txt; el.title=tip; if(col)el.style.setProperty('--net',col);
+  if(st==='backup'&&was!=='silent')gToast('Server není dostupný, hra jede přes záložní spojení','#f59e0b');
+  else if(st==='ok'&&(was==='down'||was==='silent'))gToast('Spojení obnoveno','#22c55e');
+}
 function znStart(){
   if(ZNET.started||!gs.sessionId)return;
   ZNET.started=true; gs._netStart=Date.now();
+  setInterval(znChip,500);
   const d=getRtdb();
   if(!ZS_RELAY){ ZNET.rtdb=true; return; }
   // ostatní mohli přepnout na Firebase (někdo se k serveru nedostal)
@@ -5730,6 +5750,7 @@ function subscribePlayerStates(){
       if(uid===me.uid)return;
       const node=val[uid]||{};
       const d=node.s; if(!d)return;       // player state lives under /s
+      gs._netRx=Date.now();
       let p=gs.players[uid];
       if(!p){p={uid,x:d.x,y:d.y};gs.players[uid]=p;}
       if(d.an&&p.an!==undefined&&d.an!==p.an)p._atkAt=performance.now();   // animace útoku v nové grafice

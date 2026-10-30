@@ -117,7 +117,7 @@ function renderLobby() {
     const order = shuffle(P.playerIds);
     gref().update({ status: 'play', order, turn: order[0], turnAt: Date.now(), startedAt: Date.now(), open: [], matched: {}, moves: 0 }).catch(e => toast('Nepovedlo se: ' + e.message));
   };
-  $('pxCopy').onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Odkaz zkopírován.'); } catch (_) { prompt('Zkopíruj odkaz:', location.href); } };
+  $('pxCopy').onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast('Odkaz zkopírován.'); } catch (_) { sbPrompt('Zkopíruj odkaz', location.href, { ok: 'Hotovo', noCancel: true }); } };
   $('pxLeave').onclick = async () => {
     try {
       if (host) await gref().delete();

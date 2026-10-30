@@ -345,7 +345,7 @@ function wireWbImage(el, node, wbId) {
 
   node.querySelector('.wb-img-del').addEventListener('click', async e => {
     e.stopPropagation();
-    if (!confirm('Odstranit obrázek z tabule?')) return;
+    if (!await sbConfirm('Odstranit obrázek z tabule?', { ok: 'Odstranit', danger: true })) return;
     await saveWbImages(wbId, (WHITEBOARDS_MAP.get(wbId).images || []).filter(i => i.id !== iid));
   });
 
@@ -712,7 +712,7 @@ function wireWhiteboard(el, id) {
   el.querySelector('.wb-del').addEventListener('click', async () => {
     const wb = WHITEBOARDS_MAP.get(id);
     if (!(MY_ROLE === 'owner' || wb.authorId === ME.uid)) { toast('Smazat může jen autor nebo vlastník.'); return; }
-    if (!confirm('Smazat celou tabuli i s kresbou?')) return;
+    if (!await sbConfirm('Smazat celou tabuli i s kresbou?', { ok: 'Smazat', danger: true })) return;
     try { await wbCol().doc(id).delete(); logActivity('board', 'smazal tabuli'); }
     catch (e) { toast('Chyba: ' + e.message); }
   });

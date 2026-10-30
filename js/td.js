@@ -74,8 +74,8 @@ function openCustom(i) {
     const sl = custSlots(); sl[i] = c; saveSlots(sl);
     pref.diff = 'c' + (i + 1); savePref(); ov.hidden = true; renderSetup();
   };
-  if (had) $('tdCustDel').onclick = () => {
-    if (!confirm(`Smazat „${c.name}“?`)) return;
+  if (had) $('tdCustDel').onclick = async () => {
+    if (!await sbConfirm(`Smazat „${c.name}“?`, { ok: 'Smazat', danger: true })) return;
     const sl = custSlots(); sl[i] = null; saveSlots(sl);
     try { const b = JSON.parse(localStorage.getItem(BEST_KEY) || '{}'); for (const k of Object.keys(b)) if (k.endsWith(':c' + (i + 1))) delete b[k]; localStorage.setItem(BEST_KEY, JSON.stringify(b)); } catch (_) { /* nic */ }
     if (pref.diff === 'c' + (i + 1)) { pref.diff = 'medium'; savePref(); }

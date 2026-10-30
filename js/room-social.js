@@ -500,13 +500,13 @@ async function leaveRoom() {
     // One other member → straight confirm; several → let the owner choose.
     if (others.length === 1) {
       successor = others[0];
-      if (!confirm(`Opustit místnost? Vlastnictví převezme ${memberName(successor)}.`)) return;
+      if (!await sbConfirm(`Opustit místnost?\nVlastnictví převezme ${memberName(successor)}.`, { ok: 'Opustit', danger: true })) return;
     } else {
       successor = await openSuccessorPicker(others);
       if (!successor) return; // cancelled
     }
   } else {
-    if (!confirm('Opustit místnost? Ztratíš k ní přístup.')) return;
+    if (!await sbConfirm('Opustit místnost?\nZtratíš k ní přístup.', { ok: 'Opustit', danger: true })) return;
   }
 
   try {
@@ -537,8 +537,8 @@ function openSuccessorPicker(candidateIds) {
     let done = false;
     const finish = val => { if (done) return; done = true; closeModal('successorModal'); resolve(val); };
     list.querySelectorAll('.successor-opt').forEach(btn =>
-      btn.addEventListener('click', () => {
-        if (!confirm(`Předat vlastnictví uživateli ${memberName(btn.dataset.uid)} a opustit místnost?`)) return;
+      btn.addEventListener('click', async () => {
+        if (!await sbConfirm(`Předat vlastnictví uživateli ${memberName(btn.dataset.uid)} a opustit místnost?`, { ok: 'Předat a opustit', danger: true })) return;
         finish(btn.dataset.uid);
       }));
     document.getElementById('successorCancel').onclick = () => finish(null);
@@ -586,7 +586,7 @@ function scheduleExpiryKick(expiry) {
   const remaining = Math.min(expiry - Date.now(), 2147483647);
   setTimeout(async () => {
     await performLeave().catch(() => {});
-    alert('Tvůj dočasný přístup do místnosti vypršel.');
+    await sbAlert('Tvůj dočasný přístup do místnosti vypršel.');
     window.location.href = 'dashboard.html';
   }, remaining);
 }
@@ -1040,7 +1040,7 @@ async function renderMembers() {
     const rmBtn = row.querySelector('[data-rm]');
     if (rmBtn) {
       rmBtn.addEventListener('click', async () => {
-        if (!confirm('Odebrat tohoto člena?')) return;
+        if (!await sbConfirm('Odebrat tohoto člena?', { ok: 'Odebrat', danger: true })) return;
         try {
           await db.collection('rooms').doc(ROOM_ID).update({
             memberIds:                        firebase.firestore.FieldValue.arrayRemove(uid),

@@ -148,6 +148,25 @@ function coopRelay() {
     get ok() { return ok; },
   };
 }
+// Ukazatel spojení v liště. Firebase jede pořád souběžně, bez serveru je hra jen pomalejší.
+function coopNetChip() {
+  const el = $('hudNet'); if (!el) return;
+  const C = COOP; let last = '';
+  const iv = setInterval(() => {
+    if (C.done || COOP !== C) { clearInterval(iv); el.hidden = true; return; }
+    const st = !C.host && Date.now() - C.lastFrameAt > 3000 ? 'silent' : C.relay?.ok ? 'ok' : 'backup';
+    if (st === last) return;
+    const was = last; last = st;
+    const [txt, col, tip] = {
+      ok: ['Spojení v pořádku', '#22c55e', 'Hra běží přes rychlý server.'],
+      backup: ['Záložní spojení', '#f59e0b', 'Server není dostupný, hra běží přes Firebase a může být pomalejší.'],
+      silent: ['Čekám na hostitele', '#ef4444', 'Několik sekund nedorazila data od hostitele.'],
+    }[st];
+    el.hidden = false; el.textContent = txt; el.title = tip; el.style.setProperty('--net', col);
+    if (st === 'backup' && was === 'ok') toast('Server není dostupný, hra jede přes záložní spojení.');
+    else if (st === 'ok' && was && was !== 'ok') toast('Spojení obnoveno.');
+  }, 500);
+}
 // hostitel: žádost o akci (z Firebase i ze serveru — každá jen jednou)
 function coopQueueRq(a, u) {
   const C = COOP; if (!a || !u) return;
@@ -175,6 +194,7 @@ function startCoop(d) {
     order.filter(u => u !== ME.uid).forEach(u => root.child('players/' + u + '/rq').on('child_added', s => coopQueueRq(s.val(), u)));
   }
   COOP.relay = coopRelay();
+  coopNetChip();
   G.onLose = () => coopFinish(false);
   G.onWin = () => { $('tdWinDesc').textContent = `Společně jste ubránili všech ${winWave()} vln. Hra jede dál jako volná hra — slizáci budou čím dál silnější.`; $('tdWin').hidden = false; window.sfx?.('win'); };
   G.onWaveEnd = w => { if (w % CO.team_quiz_every_n_waves === 0) setTimeout(() => coopTeamQuiz(), 800); else if (w === 1) toast('🤝 Odměny za slizáky a vlny se dělí. Zlato můžeš poslat spoluhráči v záložce Tým.'); };
