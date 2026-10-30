@@ -778,6 +778,28 @@ function buildExportHtml(data, opts) {
     background-size:6px 9px,6px 5px,6px 9px; background-position:6px 6px,14px 6px,14px 13px; background-repeat:no-repeat; }
   #q { flex:1; min-width:140px; height:36px; padding:0 12px; border:1px solid var(--bd); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; font-size:.9rem; }
   #q:focus { outline:none; border-color:var(--ac); box-shadow:0 0 0 3px color-mix(in srgb, var(--ac) 22%, transparent); }
+  #qPanel { position:absolute; top:100%; left:0; right:0; margin:6px auto 0; width:min(680px, calc(100% - 24px)); max-height:62vh; overflow-y:auto; padding:8px; background:var(--panel); border:1px solid var(--bd); border-radius:12px; box-shadow:0 12px 36px rgba(0,0,0,.3); }
+  #qPanel[hidden], #findBar[hidden], #findSide[hidden] { display:none; }
+  .qh { display:block; width:100%; text-align:left; padding:9px 10px; margin-bottom:6px; background:none; color:var(--text); border:1px solid var(--bd); border-left:3px solid var(--nc, var(--ac)); border-radius:8px; cursor:pointer; font:inherit; }
+  .qh:hover, .qh.on { background:var(--bg); }
+  .qh.on { border-color:var(--ac); border-left-color:var(--nc, var(--ac)); }
+  .qh-t { display:flex; gap:8px; font-weight:600; font-size:.88rem; }
+  .qh-t span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .qh-t b { flex-shrink:0; font:600 .68rem var(--mono); color:var(--ac); }
+  .qh-s { display:block; margin-top:2px; font-size:.78rem; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .qh-s mark { background:color-mix(in srgb, var(--ac) 30%, transparent); color:var(--text); border-radius:3px; padding:0 1px; }
+  .qh-note { padding:8px 4px; font-size:.85rem; color:var(--muted); }
+  .qh-group { padding:8px 4px 5px; font-size:.7rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+  #findBar { display:flex; align-items:center; gap:6px; max-width:1200px; margin:0 auto; padding:0 20px 8px; font-size:.85rem; }
+  #fbTitle { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+  #fbCount { font:600 .8rem var(--mono); white-space:nowrap; }
+  #findBar button { width:30px; height:28px; background:var(--panel); color:var(--text); border:1px solid var(--bd); border-radius:7px; cursor:pointer; font-size:.72rem; }
+  #findBar button:hover { background:var(--bg); }
+  mark.find-hit { background:color-mix(in srgb, #FACC15 45%, transparent); color:inherit; border-radius:3px; padding:0 1px; }
+  mark.find-hit.find-cur { background:#FACC15; color:#111; box-shadow:0 0 0 2px #FACC15; }
+  .fc.flash { outline:2px solid var(--ac); outline-offset:3px; }
+  @media (min-width:861px){ .toc.finding { top:112px; max-height:calc(100vh - 128px); } .toc.finding > :not(#findSide) { display:none; } }
+  @media (max-width:860px){ #findSide { display:none; } }
   .tb-btn { height:36px; background:var(--panel); border:1px solid var(--bd); border-radius:8px; padding:0 12px; cursor:pointer; font-size:.85rem; font-weight:500; color:var(--text); }
   .tb-btn:hover { background:var(--bg); border-color:color-mix(in srgb, var(--ac) 50%, var(--bd)); }
   .ring { --p:0; width:34px; height:34px; border-radius:50%; flex-shrink:0;
@@ -1052,9 +1074,17 @@ function buildExportHtml(data, opts) {
   <button class="tb-btn study" onclick="openExam()">Zkouška</button>
   ${bNotes.length ? `<button class="tb-btn" id="viewBtn" onclick="toggleView()" title="Přepnout dokument / nástěnku">Nástěnka</button>` : ''}
   <button class="tb-btn" id="themeBtn" title="Přepnout vzhled">🌙</button>
-</div></div>
+</div>
+  <div id="qPanel" hidden></div>
+  <div id="findBar" hidden><span id="fbTitle"></span><b id="fbCount"></b>
+    <button type="button" id="fbPrev" title="Předchozí (Shift+Enter)" aria-label="Předchozí výskyt">▲</button>
+    <button type="button" id="fbNext" title="Další (Enter)" aria-label="Další výskyt">▼</button>
+    <button type="button" id="fbClose" title="Zavřít (Esc)" aria-label="Zavřít hledání">✕</button>
+  </div>
+</div>
 <div class="wrap">
   <nav class="toc">
+    <div id="findSide" hidden></div>
     <div class="toc-h">Obsah</div>
     ${tocHtml || '<div class="hint" style="padding:4px 6px;">Prázdné</div>'}
     <div class="toc-tools">
@@ -1295,7 +1325,7 @@ var ONLY_UNLEARNED = false;
 function toggleUnlearned(){
   ONLY_UNLEARNED = !ONLY_UNLEARNED;
   document.getElementById('filtBtn').textContent = ONLY_UNLEARNED ? 'Zobrazit vše' : 'Jen nenaučené';
-  runSearch();
+  applyFilter();
 }
 
 /* ── Fold a folder — subfolders are following siblings with a bigger depth ── */
@@ -1311,13 +1341,12 @@ function toggleFolder(h){
   }
 }
 
-/* ── Search over notes (and, when it matches, jump-to-card hints) ── */
-function norm(s){ return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
-function runSearch(){
-  var v = norm((document.getElementById('q').value || '').trim()), any = false;
+/* ── Filtr Jen nenaučené ── */
+function applyFilter(){
+  var any = false;
   document.querySelectorAll('article.note').forEach(function(n){
-    var hit = !v || norm(n.textContent).indexOf(v) !== -1;
-    if (hit && ONLY_UNLEARNED && n.dataset.nid){
+    var hit = true;
+    if (ONLY_UNLEARNED && n.dataset.nid){
       var f = DB.notes[n.dataset.nid] || {};
       if (f.done) hit = false;
     }
@@ -1338,25 +1367,189 @@ function runSearch(){
       if (folderDepth(secs[j]) < d){ keep[j] = true; d = folderDepth(secs[j]); }
     }
   }
-  secs.forEach(function(s, i){
-    s.style.display = keep[i] ? '' : 'none';
-    if (v) s.classList.remove('collapsed');
-  });
-  /* cards matching the query */
-  var shownCards = 0;
-  document.querySelectorAll('.fc').forEach(function(c){
-    var hit = !v || norm(c.textContent).indexOf(v) !== -1;
-    c.style.display = hit ? '' : 'none';
-    if (hit) shownCards++;
-  });
-  document.querySelectorAll('.deck').forEach(function(d){
-    var vis = false;
-    d.querySelectorAll('.fc').forEach(function(c){ if (c.style.display !== 'none') vis = true; });
-    d.style.display = (!v || vis) ? '' : 'none';
-  });
-  document.getElementById('noHits').style.display = (any || shownCards) ? 'none' : 'block';
+  secs.forEach(function(s, i){ s.style.display = keep[i] ? '' : 'none'; });
+  document.getElementById('noHits').style.display = (any || document.querySelector('.fc')) ? 'none' : 'block';
 }
-document.getElementById('q').addEventListener('input', runSearch);
+
+/* ── Hledání jako v místnosti: seznam výsledků s úryvkem, po kliknutí zvýrazněné výskyty a 1 / 5 ▲▼.
+   Výskyty se počítají po textových uzlech, stejně jako je pak označí qMark. ── */
+function norm(s){ return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function qEsc(s){ var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+var qInput = document.getElementById('q'), qPanel = document.getElementById('qPanel');
+var findBar = document.getElementById('findBar'), findSide = document.getElementById('findSide');
+var QI = null, QHITS = [], FINDX = null;   // FINDX: { q, hit, idx, marks }
+var Q_SKIP = '.ntools, .nmeta, .gbar, .gmap, .gpage-links, .gpage-in, script, style';
+
+function qNodes(root){
+  var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function(n){
+    return n.parentElement.closest(Q_SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+  } }), out = [];
+  while (w.nextNode()) out.push(w.currentNode);
+  return out;
+}
+function qIndex(){
+  if (QI) return QI;
+  QI = [];
+  var add = function(el, title, card){
+    var parts = qNodes(el).map(function(n){ return n.data; });
+    var text = parts.join(' ').replace(/\\s+/g, ' ').trim();
+    QI.push({ el: el, title: title, card: card, nparts: parts.map(norm), parts: parts, text: text, ntext: norm(text), njoin: norm(parts.join('')) });
+  };
+  document.querySelectorAll('article.note').forEach(function(n){
+    var h = n.querySelector('h3');
+    add(n, (h && h.textContent.trim()) || '(bez názvu)', false);
+  });
+  document.querySelectorAll('.fc').forEach(function(c){
+    var front = c.querySelector('.fc-front'), dk = c.closest('.deck'), dh = dk && dk.querySelector('h3');
+    add(c, ((dh && dh.firstChild && dh.firstChild.data.trim()) || 'Kartička') + ' · ' + ((front && front.textContent.trim().slice(0, 50)) || ''), true);
+  });
+  return QI;
+}
+function qHits(q){
+  var nq = norm(q.trim());
+  if (!nq) return [];
+  var hits = [];
+  qIndex().forEach(function(it){
+    var count = 0;
+    it.nparts.forEach(function(p, i){
+      if (p.length !== it.parts[i].length) return;
+      for (var at = p.indexOf(nq); at !== -1; at = p.indexOf(nq, at + nq.length)) count++;
+    });
+    if (!count && it.njoin.indexOf(nq) === -1) return;
+    var pos = Math.max(0, it.ntext.indexOf(nq)), start = Math.max(0, pos - 32), end = Math.min(it.text.length, pos + 80);
+    var snip = it.ntext.indexOf(nq) === -1 ? qEsc(it.text.slice(0, 110))
+      : (start > 0 ? '…' : '') + qEsc(it.text.slice(start, pos)) + '<mark>' + qEsc(it.text.slice(pos, pos + nq.length)) + '</mark>' + qEsc(it.text.slice(pos + nq.length, end)) + (end < it.text.length ? '…' : '');
+    hits.push({ it: it, count: count, snip: snip });
+  });
+  return hits;
+}
+function qRow(h, i, on){
+  var c = h.it.el.style.getPropertyValue('--nc');
+  return '<button type="button" class="qh' + (on ? ' on' : '') + '" data-qi="' + i + '"' + (c ? ' style="--nc:' + qEsc(c) + '"' : '') + '>' +
+    '<span class="qh-t"><span>' + qEsc(h.it.title) + '</span>' + (h.count > 1 ? '<b>' + h.count + '×</b>' : '') + '</span>' +
+    '<span class="qh-s">' + h.snip + '</span></button>';
+}
+function qRenderPanel(){
+  var q = qInput.value;
+  if (!q.trim()){ qPanel.hidden = true; return; }
+  QHITS = qHits(q);
+  var html = '', firstCard = true;
+  if (!QHITS.length) html = '<div class="qh-note">Nic nenalezeno.</div>';
+  QHITS.slice(0, 40).forEach(function(h, i){
+    if (h.it.card && firstCard){ html += '<div class="qh-group">Kartičky</div>'; firstCard = false; }
+    html += qRow(h, i);
+  });
+  if (QHITS.length > 40) html += '<div class="qh-note">…a další (' + (QHITS.length - 40) + ')</div>';
+  qPanel.innerHTML = html;
+  qPanel.hidden = false;
+}
+function qMark(root, q){
+  var nq = norm(q.trim()), out = [];
+  if (!nq) return out;
+  qNodes(root).forEach(function(node){
+    var n = norm(node.data);
+    if (n.length !== node.data.length) return;
+    var at = n.indexOf(nq), cur = node, base = 0;
+    while (at !== -1){
+      var hit = cur.splitText(at - base), rest = hit.splitText(nq.length), m = document.createElement('mark');
+      m.className = 'find-hit';
+      hit.parentNode.replaceChild(m, hit);
+      m.appendChild(hit);
+      out.push(m);
+      base = at + nq.length;
+      cur = rest;
+      at = n.indexOf(nq, base);
+    }
+  });
+  return out;
+}
+function qUnmark(){
+  if (!FINDX) return;
+  var el = FINDX.hit.it.el;
+  el.querySelectorAll('mark.find-hit').forEach(function(m){ m.parentNode.replaceChild(m.firstChild, m); });
+  el.normalize();
+}
+/* Poznámka může být ve sbalené složce, skrytá filtrem nebo v jiné kapitole návodu */
+function qReveal(el){
+  setView('doc');
+  if (ONLY_UNLEARNED && el.style.display === 'none') toggleUnlearned();
+  var sec = el.closest('section.folder');
+  if (!sec) return;
+  var d = folderDepth(sec), chain = [sec];
+  for (var p = sec.previousElementSibling; p && p.classList.contains('folder') && d > 0; p = p.previousElementSibling){
+    if (folderDepth(p) < d){ chain.unshift(p); d = folderDepth(p); }
+  }
+  chain.forEach(function(s){ if (s.classList.contains('collapsed')) toggleFolder({ parentNode: s }); });
+}
+function qShowCurrent(){
+  var F = FINDX, el = F.hit.it.el, cnt = document.getElementById('fbCount');
+  if (!F.marks.length){
+    cnt.textContent = '';
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('flash');
+    setTimeout(function(){ el.classList.remove('flash'); }, 1600);
+    return;
+  }
+  F.idx = (F.idx + F.marks.length) % F.marks.length;
+  F.marks.forEach(function(m, i){ m.classList.toggle('find-cur', i === F.idx); });
+  var cur = F.marks[F.idx];
+  cnt.textContent = (F.idx + 1) + ' / ' + F.marks.length;
+  var pg = cur.closest('.gpage'), wrap = pg && pg.closest('.gpages');
+  if (pg && !pg.classList.contains('on') && !wrap.classList.contains('all')) gShow(wrap.getAttribute('data-gid'), pg.getAttribute('data-pid'), false);
+  if (F.hit.it.card) el.classList.toggle('flip', !!cur.closest('.fc-back'));
+  cur.scrollIntoView({ block: 'center' });
+}
+function qRenderSide(){
+  var head = '<div class="toc-h">Nalezeno: ' + QHITS.length + '</div>';
+  findSide.innerHTML = head + QHITS.slice(0, 60).map(function(h, i){ return qRow(h, i, h === FINDX.hit); }).join('');
+  findSide.hidden = false;
+  findSide.parentNode.classList.add('finding');
+  // Jen uvnitř postranního panelu: scrollIntoView by zrušil posun stránky na výskyt
+  var on = findSide.querySelector('.on'), toc = findSide.parentNode;
+  if (on) toc.scrollTop += on.getBoundingClientRect().top - toc.getBoundingClientRect().top - 60;
+}
+function qOpen(hit){
+  qUnmark();
+  qPanel.hidden = true;
+  FINDX = { q: qInput.value, hit: hit, idx: 0, marks: [] };
+  qReveal(hit.it.el);
+  FINDX.marks = qMark(hit.it.el, FINDX.q);
+  document.getElementById('fbTitle').textContent = hit.it.title;
+  findBar.hidden = false;
+  qShowCurrent();
+  qRenderSide();
+}
+function qStep(d){
+  if (!FINDX || !FINDX.marks.length) return;
+  FINDX.idx += d;
+  qShowCurrent();
+}
+function qCloseFind(){
+  qUnmark();
+  FINDX = null;
+  findBar.hidden = true;
+  findSide.hidden = true;
+  findSide.parentNode.classList.remove('finding');
+}
+qInput.addEventListener('input', function(){
+  if (FINDX) qCloseFind();
+  qRenderPanel();
+});
+qInput.addEventListener('focus', function(){ if (!FINDX) qRenderPanel(); });
+qInput.addEventListener('keydown', function(e){
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  if (FINDX && qPanel.hidden) qStep(e.shiftKey ? -1 : 1);
+  else if (QHITS.length && !qPanel.hidden) qOpen(QHITS[0]);
+});
+document.getElementById('fbPrev').addEventListener('click', function(){ qStep(-1); });
+document.getElementById('fbNext').addEventListener('click', function(){ qStep(1); });
+document.getElementById('fbClose').addEventListener('click', function(){ qCloseFind(); qInput.value = ''; });
+document.addEventListener('click', function(e){
+  var row = e.target.closest ? e.target.closest('[data-qi]') : null;
+  if (row){ qOpen(QHITS[+row.getAttribute('data-qi')]); return; }
+  if (e.target !== qInput && !(e.target.closest && e.target.closest('#qPanel'))) qPanel.hidden = true;
+});
 
 /* ── Flip all cards in a deck ── */
 function flipAll(btn){
@@ -1778,7 +1971,12 @@ function openStats(){
 /* ── Keyboard ── */
 document.addEventListener('keydown', function(e){
   var ovOpen = document.getElementById('ov').style.display === 'flex';
-  if (e.key === 'Escape'){ if (ovOpen) closeOv(); return; }
+  if (e.key === 'Escape'){
+    if (ovOpen) closeOv();
+    else if (!qPanel.hidden) qPanel.hidden = true;
+    else if (FINDX){ qCloseFind(); qInput.value = ''; }
+    return;
+  }
   if (!ovOpen){
     if (e.key === '/' && document.activeElement !== document.getElementById('q')){
       e.preventDefault(); document.getElementById('q').focus();
@@ -1804,6 +2002,6 @@ document.addEventListener('keydown', function(e){
 
 applyNoteFlags();
 refreshProgress();
-runSearch();
+applyFilter();
 </script></body></html>`;
 }
