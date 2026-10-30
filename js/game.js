@@ -724,7 +724,14 @@ auth.onAuthStateChanged(user=>{
   document.getElementById('statsClose').onclick=()=>closeOv('statsOv');
   document.getElementById('helpBtn').onclick=toggleHelp;
   document.getElementById('pauseBtn').onclick=()=>togglePause();
-  document.getElementById('pauseResume').onclick=()=>togglePause(false);
+  document.getElementById('pauseResume').onclick=()=>{resetPauseExit();togglePause(false);};
+  // Odchod chce druhé kliknutí, ať si člověk omylem nezahodí rozehranou hru
+  document.getElementById('pauseExit').onclick=e=>{
+    if(e.currentTarget.dataset.sure){location.href='dashboard.html?tab=games';return;}
+    e.currentTarget.dataset.sure='1';
+    e.currentTarget.textContent='Opravdu odejít? Rozehraná hra se neuloží';
+    e.currentTarget.style.borderColor='#ef4444'; e.currentTarget.style.color='#fca5a5';
+  };
   document.getElementById('pauseHelp').onclick=()=>{closeOv('pauseOv');openOv('helpOv');};
   document.getElementById('pauseStats').onclick=()=>{closeOv('pauseOv');buildStatsOv();openOv('statsOv');};
   document.getElementById('lvlBadge').onclick=toggleSkillTree;
@@ -1160,10 +1167,12 @@ function renderLoop(ts){
 // takže rozhoduje, jestli jsou ve hře další hráči.
 function soloGame(){ return !gs.sessionId||!Object.keys(gs.players||{}).length; }
 // Pauza — jen když hraješ sám (v co-opu by se hra ostatním rozešla)
+function resetPauseExit(){const b=document.getElementById('pauseExit');if(!b)return;delete b.dataset.sure;b.textContent='Odejít do her';b.style.borderColor='';b.style.color='';}
 function togglePause(force){
   const want=force===undefined?!gs.paused:!!force;
   if(want&&!soloGame()){gToast('⏸ Pauza jde jen ve hře pro jednoho','#f59e0b');return;}
   gs.paused=want;
+  resetPauseExit();
   for(const k in keys)keys[k]=false; mouse.down=false;
   if(want)openOv('pauseOv'); else closeOv('pauseOv');
   const b=document.getElementById('pauseBtn');

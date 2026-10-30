@@ -219,6 +219,13 @@ function loadGames(user) {
   }, () => { surv.innerHTML = '<div class="game-empty">Hry se nepodařilo načíst.</div>'; });
 
   const survCard = document.getElementById('survivalCard');
+  // Z telefonu na jiné stránce: ?play=zombie rovnou založí hru (parametr pryč, ať ji obnovení stránky nezaloží znovu)
+  setTimeout(() => {
+    const u = new URL(location.href);
+    if (u.searchParams.get('play') !== 'zombie') return;
+    u.searchParams.delete('play'); history.replaceState(null, '', u.href);
+    survCard.dispatchEvent(new CustomEvent('gameplay'));
+  });
   survCard.addEventListener('gameplay', async () => {
     if (survCard.dataset.busy) return; survCard.dataset.busy = '1';
     try {
@@ -1683,6 +1690,7 @@ async function migrateAiKeys(user, snap) {
 
 function setupSettings(user) {
   const btn      = document.getElementById('settingsBtn');
+  if (new URLSearchParams(location.search).get('open') === 'settings') setTimeout(() => btn.click());   // z telefonu
   const saveBtn  = document.getElementById('settingsSave');
   const gInput   = document.getElementById('settingsGeminiKey');
   const gStatus  = document.getElementById('geminiKeyStatus');

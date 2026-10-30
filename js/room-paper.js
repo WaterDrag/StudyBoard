@@ -87,5 +87,6 @@
     document.querySelectorAll(BOXES).forEach(box => new MutationObserver(() => later(box)).observe(box, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'color'] }));
     new MutationObserver(() => { clearTimeout(t); t = setTimeout(apply, 50); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
+  window.SBPaper = { apply };   // nastavení v telefonu (phone.js)
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

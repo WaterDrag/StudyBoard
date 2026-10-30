@@ -190,6 +190,7 @@ async function initGarden(user) {
     chip.innerHTML = `<span class="garden-chip-ico">${gardenIcon(gardenStage(g.xp))}</span><span><b>${st.name}</b><small>${todayInfo.met ? '✅ dnešní cíl splněn' : gardenTodayLeft(todayInfo)}</small></span>`;
     chip.classList.toggle('done', todayInfo.met);
     chip.onclick = openGarden;
+    if (new URLSearchParams(location.search).get('open') === 'garden') openGarden();   // z telefonu
   } catch (_) { /* zahrada je jen bonus */ }
 }
 function gardenTodayLeft(t) {

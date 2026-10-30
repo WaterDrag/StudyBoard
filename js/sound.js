@@ -213,6 +213,18 @@
     setTimeout(() => document.addEventListener('click', closePop, { once: true }), 0);
   }
   function closePop() { pop?.remove(); pop = null; }
+  // Totéž pro nastavení v telefonu (phone.js)
+  window.SBSound = {
+    get: () => ({ ...S }),
+    set(k, v) {
+      unlock();
+      S[k] = v;
+      if (k === 'music') { if (S.music) musicStart(); else musicStop(); }
+      if (k === 'sfxVol') window.sfx('click');
+      save(); applyVol(); paint();
+      if ((k === 'musicVol' || k === 'sfxVol') && Math.round(S.musicVol * 100) === 9 && Math.round(S.sfxVol * 100) === 9) catEgg();
+    },
+  };
   // Easter egg: hudba i efekty na 9 (ze 100) → kočičí téma (kočky mají 9 životů)
   function catEgg() {
     let cur = '';
