@@ -16,12 +16,12 @@ function noteToPlainText(note) {
   const pages = Array.isArray(note.pages) ? note.pages : [];
   if (note.contentType !== 'html' && !pages.length) return (note.content || '').trim();
   const d = document.createElement('div');
-  d.innerHTML = note.content || '';
+  d.innerHTML = sbSafeHtml(note.content);
   // A guide keeps its text in chapters — fold them in, so search, AI cards
   // and fact-checking see the whole thing and not the (often empty) body.
   pages.forEach(pg => {
     const sec = document.createElement('div');
-    sec.innerHTML = `<p>${pg.title || ''}</p>` + (pg.content || '');
+    sec.innerHTML = `<p>${esc(pg.title || '')}</p>` + sbSafeHtml(pg.content);
     d.appendChild(sec);
   });
   d.querySelectorAll('table').forEach(table => {

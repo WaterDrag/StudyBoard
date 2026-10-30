@@ -252,7 +252,8 @@ function setupFolders() {
   db.collection('rooms').doc(ROOM_ID).collection('folders')
     .onSnapshot(snap => {
       snap.docChanges().forEach(ch => {
-        if (ch.type === 'added' || ch.type === 'modified') FOLDERS_MAP.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() });
+        if (!sbSafeId(ch.doc.id)) return;
+        if (ch.type === 'added' || ch.type === 'modified') { const d = ch.doc.data(); FOLDERS_MAP.set(ch.doc.id, { id: ch.doc.id, ...d, color: sbSafeColor(d.color) }); }
         if (ch.type === 'removed') FOLDERS_MAP.delete(ch.doc.id);
       });
       if (VIEW_MODE === 'list') renderNotesListView();
@@ -904,7 +905,7 @@ async function loadOtherRoomNotes() {
     for (let r; (r = queue.shift());) {
       try {
         const snap = await db.collection('rooms').doc(r.id).collection('notes').get();
-        OTHER_ROOMS.rooms.push({ id: r.id, name: r.name, notes: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+        OTHER_ROOMS.rooms.push({ id: r.id, name: r.name, notes: snap.docs.filter(d => sbSafeId(d.id)).map(d => ({ id: d.id, ...sbSafeNote(d.data()) })) });
       } catch (_) {}
       OTHER_ROOMS.done++;
       refresh();

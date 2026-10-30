@@ -205,7 +205,7 @@ function setupNoteHistoryKeys() {
 function esc(str) {
   const d = document.createElement('div');
   d.textContent = str;
-  return d.innerHTML;
+  return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');   // uvozovky kvůli použití v atributech (title="…", style="…")
 }
 function initial(str) { return (str || '?')[0].toUpperCase(); }
 function roleLabel(r) { return { owner: 'Vlastník', editor: 'Editor', viewer: 'Prohlížeč' }[r] || r; }

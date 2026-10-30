@@ -28,7 +28,7 @@ let MAP = null, MAP_KEY = '', REGION = null;   // REGION: { ids:Set, adj:Map }
 let NEW_MAP = 'cesko', NEW_VIS = 'friends';
 
 const $ = id => document.getElementById(id);
-const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
 const shuffle = a => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 const ref = () => db.collection('conquest').doc(GAME_ID);
 const isHost = () => GAME && ME && GAME.hostUid === ME.uid;

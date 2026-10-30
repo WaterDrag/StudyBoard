@@ -24,6 +24,7 @@ function setupConnections() {
   db.collection('rooms').doc(ROOM_ID).collection('connections')
     .onSnapshot(snap => {
       snap.docChanges().forEach(ch => {
+        if (!sbSafeId(ch.doc.id)) return;
         if (ch.type === 'added' || ch.type === 'modified') CONNS_MAP.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() });
         if (ch.type === 'removed') CONNS_MAP.delete(ch.doc.id);
       });

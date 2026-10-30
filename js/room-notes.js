@@ -9,8 +9,10 @@ function setupNotes() {
     .orderBy('createdAt', 'asc')
     .onSnapshot(snap => {
       snap.docChanges().forEach(ch => {
-        if (ch.type === 'added')    { renderNote(ch.doc.id, ch.doc.data()); NOTES_MAP.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() }); }
-        if (ch.type === 'modified') { patchNote(ch.doc.id, ch.doc.data());  NOTES_MAP.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() }); }
+        if (!sbSafeId(ch.doc.id)) return;
+        // Vše dál pracuje jen s vyčištěnou kopií (safe-html.js)
+        if (ch.type === 'added')    { const d = sbSafeNote(ch.doc.data()); renderNote(ch.doc.id, d); NOTES_MAP.set(ch.doc.id, { id: ch.doc.id, ...d }); }
+        if (ch.type === 'modified') { const d = sbSafeNote(ch.doc.data()); patchNote(ch.doc.id, d);  NOTES_MAP.set(ch.doc.id, { id: ch.doc.id, ...d }); }
         if (ch.type === 'removed')  { document.getElementById('n-' + ch.doc.id)?.remove(); NOTES_MAP.delete(ch.doc.id); }
       });
       if (VIEW_MODE === 'list') renderNotesListView();
@@ -139,7 +141,7 @@ function askEditConflict(fresh, pageId, mine, base) {
     const useMerged = raw => {
       const html = sanitizeAiHtml(raw);
       if (!html) { aiStatus.textContent = 'Odpověď AI je prázdná.'; return; }
-      document.getElementById('noteEditorEdit').innerHTML = html;
+      document.getElementById('noteEditorEdit').innerHTML = sbSafeHtml(html);
       closeModal('editConflictModal');
       resolve('merged');
     };
@@ -181,7 +183,7 @@ function canManageNote(note) {
 
 function setNoteContent(contentEl, note) {
   if (note.contentType === 'html') {
-    contentEl.innerHTML = note.content || '';
+    contentEl.innerHTML = sbSafeHtml(note.content);
   } else {
     contentEl.textContent = note.content || '';
   }
@@ -1637,7 +1639,7 @@ function renderGuide() {
 
   renderGuideTree(note);
 
-  contentEl.innerHTML = page.content || '<p style="color:var(--text-muted);">Zatím prázdná kapitola.</p>';
+  contentEl.innerHTML = sbSafeHtml(page.content) || '<p style="color:var(--text-muted);">Zatím prázdná kapitola.</p>';
   const h = document.createElement('h4');
   h.className = 'note-detail-title';
   const isMain = mainPage(note)?.id === page.id;
@@ -1831,7 +1833,7 @@ function editCurrentChapter() {
   EDIT_ID = note.id;
   EDIT_PAGE_ID = page.id;                       // edit modal saves into this chapter
   document.getElementById('noteTitleInputEdit').value = page.title || '';
-  document.getElementById('noteEditorEdit').innerHTML = page.content || '';
+  document.getElementById('noteEditorEdit').innerHTML = sbSafeHtml(page.content);
   document.getElementById('editModalTitle').textContent = 'Upravit kapitolu';
   openModal('editModal');
   startEditSession(note.id, page.id);
@@ -1872,7 +1874,7 @@ function zonesOfPage(page) {
   const out = [];
   if (!page?.content) return out;
   const d = document.createElement('div');
-  d.innerHTML = page.content;
+  d.innerHTML = sbSafeHtml(page.content);
   d.querySelectorAll('img[data-spots]').forEach((img, ii) => {
     let arr = [];
     try { arr = JSON.parse(img.getAttribute('data-spots')) || []; } catch (_) { return; }
@@ -1889,7 +1891,7 @@ async function setZoneTarget(pageId, imgIndex, spotIndex, targetId) {
   const page = pageById(note, pageId);
   if (!page || !canEdit(note)) return;
   const d = document.createElement('div');
-  d.innerHTML = page.content || '';
+  d.innerHTML = sbSafeHtml(page.content);
   const img = d.querySelectorAll('img[data-spots]')[imgIndex];
   if (!img) return;
   let arr = [];
@@ -2771,15 +2773,16 @@ function editorIsEmpty(editor) {
 // poznámka jen s obrázkem, by se jinak v seznamu jmenovala "(prázdná poznámka)".
 function noteBlankLabel(note) {
   const d = document.createElement('div');
-  d.innerHTML = (note.content || '') +
-    (Array.isArray(note.pages) ? note.pages.map(p => p.content || '').join('') : '');
+  d.innerHTML = sbSafeHtml((note.content || '') +
+    (Array.isArray(note.pages) ? note.pages.map(p => p.content || '').join('') : ''));
   if (d.querySelector('img')) return '🖼️ Obrázek';
   if (d.querySelector('table')) return '📊 Tabulka';
   return '';
 }
 
 function cleanEditorHtml(html) {
-  const d = document.createElement('div');
+  // Ve vlastním dokumentu bez okna: obrázky se nenačítají a nic se nespustí
+  const d = new DOMParser().parseFromString('<div></div>', 'text/html').body.firstChild;
   d.innerHTML = html || '';
 
   // <font color/size> -> inline styles on a span
@@ -2836,7 +2839,7 @@ function wireWebLinks(root) {
 // editoru se barvy a velikosti zachovají.
 const PASTE_TAGS = new Set(['P', 'DIV', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'SUB', 'SUP',
   'H1', 'H2', 'H3', 'H4', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'CODE', 'A', 'IMG', 'HR',
-  'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH', 'SPAN', 'MARK']);
+  'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH', 'SPAN', 'MARK', 'SUB', 'SUP']);
 const PASTE_DROP = new Set(['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'IFRAME', 'OBJECT', 'EMBED',
   'svg', 'SVG', 'CANVAS', 'VIDEO', 'AUDIO', 'NOSCRIPT', 'TEMPLATE', 'FORM', 'INPUT', 'BUTTON', 'SELECT', 'TEXTAREA']);
 
@@ -2848,6 +2851,11 @@ function cleanPastedHtml(html, keepLook) {
       if (n.nodeType === 8) { n.remove(); return; }                 // komentáře (Word)
       if (n.nodeType !== 1) return;
       if (PASTE_DROP.has(n.tagName)) { n.remove(); return; }
+      if (n.classList.contains('sb-math')) {   // vzorec: uvnitř editoru zůstává, z cizí stránky jen text jeho zápisu
+        if (keepLook && window.SBMath) SBMath.clean(n);
+        else n.replaceWith(doc.createTextNode(n.getAttribute('data-tex') || n.textContent));
+        return;
+      }
       walk(n);
       if (!PASTE_TAGS.has(n.tagName)) { n.replaceWith(...n.childNodes); return; }
       const st = n.style;
@@ -3380,7 +3388,7 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
 
   // Light up B / I / U / lists / alignment while the caret sits in such text,
   // and show the font size under the caret (in points, like Word).
-  const STATEFUL = ['bold', 'italic', 'underline', 'strikeThrough', 'insertUnorderedList', 'insertOrderedList',
+  const STATEFUL = ['bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript', 'insertUnorderedList', 'insertOrderedList',
                     'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'];
   const sizeSel = toolbar.querySelector('.rt-fontsize');
   function syncActive() {
@@ -3414,24 +3422,91 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
       if (!pt) return;
       if (window.TBL?.massFormat('fontSize', +(pt / 12).toFixed(3) + 'em')) { editor.focus(); return; }
       restoreRange();
-      document.execCommand('styleWithCSS', false, false);
-      document.execCommand('fontName', false, '__sbsize__');
-      editor.querySelectorAll('font[face="__sbsize__"]').forEach(f => {
-        const span = document.createElement('span');
-        span.style.fontSize = +(pt / 12).toFixed(3) + 'em';
-        // Sizes set before on the same text would otherwise win from inside.
-        f.querySelectorAll('[style*="font-size"]').forEach(x => { x.style.fontSize = ''; });
-        f.querySelectorAll('font[size]').forEach(x => x.removeAttribute('size'));
-        while (f.firstChild) span.appendChild(f.firstChild);
-        f.replaceWith(span);
-      });
-      editor.querySelectorAll('span[style*="__sbsize__"]').forEach(sp => {
-        sp.style.fontFamily = '';
-        sp.style.fontSize = +(pt / 12).toFixed(3) + 'em';
-      });
+      setSelectionSize(+(pt / 12).toFixed(3) + 'em');
       editor.focus();
       saveRange();
     });
+  }
+  function setSelectionSize(em) {
+    document.execCommand('styleWithCSS', false, false);
+    document.execCommand('fontName', false, '__sbsize__');
+    editor.querySelectorAll('font[face="__sbsize__"]').forEach(f => {
+      const span = document.createElement('span');
+      span.style.fontSize = em;
+      // Sizes set before on the same text would otherwise win from inside.
+      f.querySelectorAll('[style*="font-size"]').forEach(x => { x.style.fontSize = ''; });
+      f.querySelectorAll('font[size]').forEach(x => x.removeAttribute('size'));
+      while (f.firstChild) span.appendChild(f.firstChild);
+      f.replaceWith(span);
+    });
+    editor.querySelectorAll('span[style*="__sbsize__"]').forEach(sp => {
+      sp.style.fontFamily = '';
+      sp.style.fontSize = em;
+    });
+  }
+
+  // ── Kopírovat formát (štětec jako ve Wordu): klik = jednou, dvojklik = vícekrát, Esc = konec ──
+  const paintBtn = toolbar.querySelector('.rt-paint');
+  let paint = null;   // { sticky, bold, italic, underline, strike, color, bg, em }
+  const stopPaint = () => { paint = null; paintBtn?.classList.remove('active'); editor.classList.remove('rt-painting'); };
+  function capturePaint() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !editor.contains(sel.anchorNode)) return null;
+    const node = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+    const st = getComputedStyle(node), base = getComputedStyle(editor);
+    let bg = '';
+    for (let n = node; n && n !== editor; n = n.parentElement) {
+      const c = getComputedStyle(n).backgroundColor;
+      if (c && c !== 'transparent' && !/rgba\(\s*\d+,\s*\d+,\s*\d+,\s*0\s*\)/.test(c)) { bg = c; break; }
+    }
+    const q = c => { try { return document.queryCommandState(c); } catch (_) { return false; } };
+    return {
+      sticky: false, bold: q('bold'), italic: q('italic'), underline: q('underline'), strike: q('strikeThrough'),
+      color: st.color !== base.color ? st.color : '', bg,
+      em: st.fontSize !== base.fontSize ? +(parseFloat(st.fontSize) / parseFloat(base.fontSize)).toFixed(3) + 'em' : '',
+    };
+  }
+  function applyPaint() {
+    const sel = window.getSelection();
+    if (!paint || !sel.rangeCount || sel.isCollapsed || !editor.contains(sel.anchorNode)) return;
+    const p = paint;
+    document.execCommand('removeFormat');
+    document.execCommand('styleWithCSS', false, false);
+    if (p.bold) document.execCommand('bold');
+    if (p.italic) document.execCommand('italic');
+    if (p.underline) document.execCommand('underline');
+    if (p.strike) document.execCommand('strikeThrough');
+    document.execCommand('styleWithCSS', false, true);
+    if (p.color) document.execCommand('foreColor', false, p.color);
+    if (p.bg) document.execCommand('hiliteColor', false, p.bg);
+    if (p.em) setSelectionSize(p.em);
+    document.execCommand('styleWithCSS', false, false);
+    saveRange();
+    if (!p.sticky) stopPaint();
+  }
+  if (paintBtn) {
+    paintBtn.addEventListener('mousedown', e => e.preventDefault());
+    paintBtn.addEventListener('click', () => {
+      if (paint) { stopPaint(); return; }
+      paint = capturePaint();
+      if (!paint) { toast('Nejdřív klikni do textu, jehož formát chceš zkopírovat.'); return; }
+      paintBtn.classList.add('active');
+      editor.classList.add('rt-painting');
+    });
+    paintBtn.addEventListener('dblclick', () => {
+      paint = paint || capturePaint();
+      if (!paint) return;
+      paint.sticky = true;
+      paintBtn.classList.add('active');
+      editor.classList.add('rt-painting');
+    });
+    editor.addEventListener('mouseup', () => { if (paint) setTimeout(applyPaint); });
+    // Na dotykovém displeji se výběr dělá táhly, žádné mouseup nepřijde
+    if (matchMedia('(pointer: coarse)').matches) {
+      let t = 0;
+      document.addEventListener('selectionchange', () => { if (paint) { clearTimeout(t); t = setTimeout(applyPaint, 700); } });
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && paint) { e.stopPropagation(); stopPaint(); } }, true);
   }
 
   // Karty lišty jako ve Wordu: přepnutí nesmí vzít editoru kurzor
@@ -3578,6 +3653,7 @@ function setupAdd() {
         await db.collection('rooms').doc(ROOM_ID).collection('notes').doc(ADD_SAVED_ID).update({
           content, contentType: 'html', title: title || null, color, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
+        window.SBDraft?.saved();
         if (keepOpen) toast('Uloženo ✓');
         else { ADD_SAVED_ID = null; closeModal('addModal'); editor.innerHTML = ''; }
         btn.disabled = false;
@@ -3608,6 +3684,7 @@ function setupAdd() {
         updatedAt:  firebase.firestore.FieldValue.serverTimestamp(),
       });
 
+      window.SBDraft?.saved();
       if (keepOpen) { ADD_SAVED_ID = ref.id; toast('Uloženo ✓ — poznámka je na nástěnce, můžeš psát dál.'); }
       else { closeModal('addModal'); editor.innerHTML = ''; }
     } catch (e) {
@@ -3670,9 +3747,9 @@ function setupEdit() {
 
     try {
       if (EDIT_SESSION && EDIT_SESSION.id === EDIT_ID) {
-        const fresh = (await noteRef(EDIT_ID).get()).data() || {};
+        const fresh = sbSafeNote((await noteRef(EDIT_ID).get()).data() || {});
         const now = editSnapshotOf({ id: EDIT_ID, ...fresh }, EDIT_PAGE_ID), base = EDIT_SESSION.base;
-        if (now.content !== base.content || now.title !== base.title) {
+        if (now.content !== sbSafeHtml(base.content) || now.title !== base.title) {
           const choice = await askEditConflict({ id: EDIT_ID, ...fresh }, EDIT_PAGE_ID, content, base);
           if (choice === 'back') { btn.disabled = false; return; }
           if (choice === 'merged') {   // sloučená verze je v editoru; další uložení už počítá s tou uloženou
@@ -3689,6 +3766,7 @@ function setupEdit() {
               authorId: ME.uid, authorName: ME.displayName || ME.email,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
+            window.SBDraft?.saved();
             closeModal('editModal');
             toast('Tvoje verze je uložená jako nová poznámka vedle původní.');
             btn.disabled = false;
@@ -3715,6 +3793,7 @@ function setupEdit() {
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
       }
+      window.SBDraft?.saved();
       if (keepOpen) {
         // další uložení porovnává s tím, co jsem právě uložil já — moje vlastní uložení není konflikt
         if (EDIT_SESSION && EDIT_SESSION.id === EDIT_ID) EDIT_SESSION.base = { content, title: savedTitle };
@@ -3734,7 +3813,7 @@ function openEdit(id, note) {
   document.getElementById('noteTitleInputEdit').value = note.title || '';
   const editor = document.getElementById('noteEditorEdit');
   if (note.contentType === 'html') {
-    editor.innerHTML = note.content || '';
+    editor.innerHTML = sbSafeHtml(note.content);
   } else {
     editor.textContent = note.content || '';
   }
@@ -3787,6 +3866,7 @@ function openNoteDetail(el, note) {
     // A guide — chapters, breadcrumbs and the tree take over the body.
     GUIDE = { noteId: note.id, pageId: pagesOf(note)[0].id, history: [] };
     renderGuide();
+    document.getElementById('noteToc').hidden = true;   // návod má vlastní strom kapitol
   } else {
     GUIDE = null;
     document.getElementById('guideBar').style.display = 'none';
@@ -3798,6 +3878,7 @@ function openNoteDetail(el, note) {
       h.textContent = note.title;
       putDetailTitle(contentEl, h);
     }
+    buildNoteToc(contentEl);
   }
 
   // Open FIRST: comments are a nice-to-have, and while their Firestore rules
@@ -3808,6 +3889,37 @@ function openNoteDetail(el, note) {
   try { loadComments(note.id); }
   catch (e) { console.warn('Komentáře se nenačetly:', e); }
   refreshFind();
+}
+
+// Obsah dlouhé poznámky: nadpisy po straně s proklikem, od tří nadpisů výš
+function buildNoteToc(contentEl) {
+  const toc = document.getElementById('noteToc');
+  const heads = [...contentEl.querySelectorAll('h1, h2, h3')].filter(h => h.textContent.trim());
+  contentEl.onscroll = null;
+  toc.hidden = heads.length < 3;
+  if (toc.hidden) { toc.innerHTML = ''; return; }
+  const items = heads.map((h, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'note-toc-item' + (h.tagName === 'H3' ? ' sub' : '');
+    b.textContent = h.textContent.trim();
+    b.title = b.textContent;
+    b.addEventListener('click', () => {
+      const top = h.getBoundingClientRect().top - contentEl.getBoundingClientRect().top + contentEl.scrollTop - 8;
+      contentEl.scrollTo({ top, behavior: 'smooth' });
+    });
+    return b;
+  });
+  toc.innerHTML = '<div class="note-toc-h">Obsah</div>';
+  toc.append(...items);
+  const mark = () => {
+    const y = contentEl.getBoundingClientRect().top + 24;
+    let cur = 0;
+    heads.forEach((h, i) => { if (h.getBoundingClientRect().top <= y) cur = i; });
+    items.forEach((b, i) => b.classList.toggle('on', i === cur));
+  };
+  contentEl.onscroll = mark;
+  mark();
 }
 
 // ── Comments on notes ─────────────────────────────────────────
@@ -3975,7 +4087,7 @@ function renderComments(docs) {
         <div class="comment-meta"><strong>${esc(c.authorName || 'Anon')}</strong><span>${esc(when)}</span></div>
         <div class="comment-text">${formatCommentText(c.text || '')}</div>
       </div>
-      ${canDel ? `<button class="comment-del" data-cid="${d.id}" title="Smazat">✕</button>` : ''}
+      ${canDel ? `<button class="comment-del" data-cid="${esc(d.id)}" title="Smazat">✕</button>` : ''}
     </div>`;
   }).join('');
   listEl.querySelectorAll('.comment-del').forEach(b => b.addEventListener('click', async () => {

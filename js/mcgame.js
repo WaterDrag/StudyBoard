@@ -2,7 +2,7 @@
 // Otázky s možnostmi A–D z kartiček: balíčky, ze kterých se hraje, sestavení
 // možností (špatné odpovědi z karty, doplněné odpověďmi jiných karet),
 // krabičky z učení (podle nich se řídí obtížnost) a body do žebříčku.
-const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
 const shuffle = (a, rnd = Math.random) => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 const $ = id => document.getElementById(id);
 let ME = null;

@@ -70,7 +70,7 @@
 
   // ── obrazovky ──
   const tile = (o) => `<${o.href ? `a href="${esc2(o.href)}"` : 'button type="button"'} class="ph-app" ${o.act ? `data-act="${o.act}"` : ''} title="${esc2(o.title || o.label)}">
-      <span class="ph-ico" style="--c:${o.color}">${o.html || svg(o.ico)}${o.badge ? `<i class="ph-badge">${o.badge}</i>` : ''}</span>
+      <span class="ph-ico" style="--c:${esc2(o.color)}">${o.html || svg(o.ico)}${o.badge ? `<i class="ph-badge">${o.badge}</i>` : ''}</span>
       <span class="ph-label">${esc2(o.label)}</span></${o.href ? 'a' : 'button'}>`;
   function homeApps() {
     const dash = t => (onDashboard ? null : `dashboard.html?tab=${t}`);

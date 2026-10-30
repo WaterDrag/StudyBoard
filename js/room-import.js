@@ -228,7 +228,7 @@ function mdToHtml(text) {
 
 // Rozdělit HTML podle nejvyšší úrovně nadpisů, která se v souboru opakuje.
 function splitByHeadings(html, fallbackTitle) {
-  const d = document.createElement('div'); d.innerHTML = html;
+  const d = document.createElement('div'); d.innerHTML = sbSafeHtml(html);
   const levels = ['H1', 'H2', 'H3'];
   const lvl = levels.find(L => d.querySelectorAll(L.toLowerCase()).length >= 2) || null;
   if (!lvl) return [{ title: fallbackTitle, html: d.innerHTML }];
@@ -266,7 +266,7 @@ function importSections(split) {
   const out = [];
   sections.forEach(s => {
     if (size(s.html) <= IMPORT_MAX_CHARS) { out.push(s); return; }
-    const d = document.createElement('div'); d.innerHTML = s.html;
+    const d = document.createElement('div'); d.innerHTML = sbSafeHtml(s.html);
     let part = '', n = 1;
     [...d.childNodes].forEach(node => {
       const h = node.outerHTML || esc(node.textContent || '');
@@ -312,7 +312,7 @@ function importRenderOptions() {
 // Obrázky z Wordu přijdou jako data: URL — do poznámky by se nevešly, tak se
 // nahrají na ImgBB (stejně jako vložený screenshot v editoru).
 async function importUploadImages(html, onStep) {
-  const d = document.createElement('div'); d.innerHTML = html;
+  const d = document.createElement('div'); d.innerHTML = sbSafeHtml(html);
   const imgs = [...d.querySelectorAll('img')].filter(i => /^data:/.test(i.getAttribute('src') || ''));
   for (const img of imgs) {
     onStep?.();

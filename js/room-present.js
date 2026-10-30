@@ -118,7 +118,7 @@ function presRender() {
   const doc = document.getElementById('presDoc');
   doc.classList.remove('in-l', 'in-r'); void doc.offsetWidth;
   doc.classList.add(PRES.dir < 0 ? 'in-l' : 'in-r');
-  doc.innerHTML = (s.title ? `<h1 class="pres-title">${esc(s.title)}</h1>` : '') + `<div class="note-doc note-detail-content pres-content">${s.html}</div>`;
+  doc.innerHTML = (s.title ? `<h1 class="pres-title">${esc(s.title)}</h1>` : '') + `<div class="note-doc note-detail-content pres-content">${sbSafeHtml(s.html)}</div>`;
   wireWebLinks(doc);
   wirePageLinks?.(doc);
   document.getElementById('presStage').scrollTop = 0;

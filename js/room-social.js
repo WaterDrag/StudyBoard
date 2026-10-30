@@ -554,7 +554,7 @@ function openSuccessorPicker(candidateIds) {
       const m = (ROOM.members || {})[uid] || {};
       const role = (ROOM.roles || {})[uid] || 'viewer';
       return `<button class="successor-opt" data-uid="${uid}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg-2);color:var(--text);cursor:pointer;margin-bottom:8px;">
-        <div class="m-avatar">${m.photoURL ? `<img src="${m.photoURL}" alt="">` : initial(m.displayName || m.email || '?')}</div>
+        <div class="m-avatar">${m.photoURL ? `<img src="${esc(m.photoURL)}" alt="">` : esc(initial(m.displayName || m.email || '?'))}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;font-size:0.88rem;">${esc(m.displayName || m.email || uid)}</div>
           <div style="font-size:0.74rem;color:var(--text-muted);">${roleLabel(role)}</div>
@@ -1016,7 +1016,7 @@ async function renderMembers() {
 
     const online = ONLINE_UIDS.has(uid);
     row.innerHTML = `
-      <div class="m-avatar${online ? ' online' : ''}">${m.photoURL ? `<img src="${m.photoURL}" alt="">` : initial(m.displayName || m.email || '?')}</div>
+      <div class="m-avatar${online ? ' online' : ''}">${m.photoURL ? `<img src="${esc(m.photoURL)}" alt="">` : esc(initial(m.displayName || m.email || '?'))}</div>
       <div class="m-info">
         <div class="m-name">${esc(m.displayName || m.email || (m.isAnon ? 'Host' : 'Člen bez jména'))}${isMe ? ' <span style="color:var(--text-muted);font-weight:400;">(ty)</span>' : ''}${online ? ' <span style="color:#22c55e;font-size:0.7rem;">● online</span>' : ''}</div>
         <div class="m-email">${esc(m.email || '')}</div>
@@ -1100,7 +1100,7 @@ function renderIncomingRequests(incoming) {
     <div class="label" style="margin-bottom:8px;">Žádosti o přátelství (${incoming.length})</div>` +
     incoming.map(r => `
       <div class="member-row" style="padding:6px 0;">
-        <div class="m-avatar">${r.fromPhoto ? `<img src="${r.fromPhoto}" alt="">` : initial(r.fromName || r.fromEmail || '?')}</div>
+        <div class="m-avatar">${r.fromPhoto ? `<img src="${esc(r.fromPhoto)}" alt="">` : esc(initial(r.fromName || r.fromEmail || '?'))}</div>
         <div class="m-info">
           <div class="m-name">${esc(r.fromName || r.fromEmail || r.fromUid)}</div>
           <div class="m-email">${esc(r.fromEmail || '')}</div>

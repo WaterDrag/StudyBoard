@@ -14,7 +14,7 @@ auth.onAuthStateChanged(user => {
 async function init(user) {
   const avatar = document.getElementById('userAvatar');
   document.getElementById('userName').textContent = user.displayName || user.email;
-  if (user.photoURL) avatar.innerHTML = `<img src="${user.photoURL}" alt="">`;
+  if (user.photoURL) avatar.innerHTML = `<img src="${esc(user.photoURL)}" alt="">`;
   else avatar.textContent = initial(user.displayName || user.email);
 
   document.getElementById('logoutBtn').addEventListener('click', () =>
@@ -575,9 +575,7 @@ function renderInbox(items, user) {
 }
 
 function stripHtml(html) {
-  const d = document.createElement('div');
-  d.innerHTML = html;
-  return d.textContent || '';
+  return new DOMParser().parseFromString(html || '', 'text/html').body.textContent || '';   // v dokumentu bez okna se nic nespustí
 }
 
 // ── Hlavička nástěnky: pozdrav, hledání, řazení ─────────────────
@@ -1440,7 +1438,7 @@ function renderFriendsList(myUid, friendMap, nicknames) {
       const row   = document.createElement('div');
       row.className = 'friend-row';
       row.innerHTML = `
-        <div class="f-av">${p.photoURL ? `<img src="${p.photoURL}" alt="">` : initial(p.displayName || p.email)}</div>
+        <div class="f-av">${p.photoURL ? `<img src="${esc(p.photoURL)}" alt="">` : esc(initial(p.displayName || p.email))}</div>
         <div class="f-info">
           <div class="f-name">${esc(p.displayName || p.email)}</div>
           ${nick ? `<div class="f-nick">✦ ${esc(nick)}</div>` : ''}
@@ -1515,7 +1513,7 @@ function renderRequests(user, docs) {
     const row = document.createElement('div');
     row.className = 'req-row';
     row.innerHTML = `
-      <div class="f-av">${r.fromPhoto ? `<img src="${r.fromPhoto}" alt="">` : initial(r.fromName || r.fromEmail)}</div>
+      <div class="f-av">${r.fromPhoto ? `<img src="${esc(r.fromPhoto)}" alt="">` : esc(initial(r.fromName || r.fromEmail))}</div>
       <div class="req-info">
         <div class="f-name">${esc(r.fromName || r.fromEmail)}</div>
         <div class="f-email">${esc(r.fromEmail || '')}</div>
@@ -2027,7 +2025,7 @@ function toast(msg) {
 // ── Helpers ─────────────────────────────────────────────────────
 function genCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 function initial(s) { return (s || '?')[0].toUpperCase(); }
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }   // uvozovky kvůli použití v atributech
 function fmtDate(ts) {
   if (!ts) return '';
   const d = ts.toDate ? ts.toDate() : new Date(ts);

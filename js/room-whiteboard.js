@@ -141,6 +141,7 @@ async function maybeMigrateStrokes(id) {
 function setupWhiteboards() {
   wbCol().onSnapshot(snap => {
     snap.docChanges().forEach(ch => {
+      if (!sbSafeId(ch.doc.id)) return;
       if (ch.type === 'removed') {
         WB_STROKE_UNSUBS.get(ch.doc.id)?.();
         WB_STROKE_UNSUBS.delete(ch.doc.id);

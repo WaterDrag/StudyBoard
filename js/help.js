@@ -96,6 +96,10 @@
       ${item('Nástěnka a seznam', 'Nahoře v místnosti přepínáš mezi volnou nástěnkou a seznamem se složkami. Pravým tlačítkem na nástěnce otevřeš nabídku.')}
       ${item('Druhy obsahu', 'Kromě poznámek můžeš přidat nadpis, návod s kapitolami a tabuli na kreslení. Poznámky na nástěnce jde propojit provázkem.')}
       ${item('Vzhled poznámky', 'Lišta nad poznámkou má dvě karty jako ve Wordu: na Domů je formátování, na Vložení tabulka, obrázek, odkaz a další. Pozadí poznámky může být podle motivu, bílé nebo černé.')}
+      ${item('Rozepsaný text', 'Rozepsaná poznámka se průběžně ukládá v tomto prohlížeči. Když okno zavřeš nebo vypadne internet, při dalším otevření ti aplikace nabídne Obnovit.')}
+      ${item('Vzorce a indexy', 'Horní a dolní index jsou na kartě Domů. Vzorec vložíš na kartě Vložení, zapisuje se v LaTeXu a klikem na něj ho upravíš.')}
+      ${item('Kopírovat formát', 'Klikni do textu, stiskni štětec na kartě Domů a označ text, který má vypadat stejně. Dvojklik na štětec ho nechá zapnutý, Esc ho vypne.')}
+      ${item('Obsah poznámky', 'Poznámka se třemi a více nadpisy má při čtení po straně obsah s proklikem.')}
       ${item('Tabulky', 'Sloupce a řádky měníš tažením za okraj. Víc buněk vybereš s Ctrl nebo Shift a můžeš jim hromadně změnit formát. Nabídka tabulky je na pravém tlačítku.')}
       ${item('Hledání', 'Tlačítko Hledat v poznámkách prohledá názvy i obsah poznámek. Když zaškrtneš Hledat i v ostatních místnostech, projde všechny tvoje místnosti.')}
       ${item('Prezentace', 'Vybrané poznámky nebo kapitoly návodu pustíš přes celou obrazovku.')}

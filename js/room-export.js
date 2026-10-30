@@ -48,7 +48,18 @@ function renderExportPicker(preselect) {
         folderOf(n.id) ? ` <i style="color:var(--text-muted);">· ${esc(folderOf(n.id))}</i>` : ''}</span>
     </label>`).join('') || '<div style="color:var(--text-muted);font-size:0.82rem;padding:8px;">Žádné poznámky.</div>';
   list.querySelectorAll('.export-pick').forEach(c => c.addEventListener('change', updateExportPickCount));
+  const search = document.getElementById('exportPickSearch');
+  if (search) search.value = '';
   updateExportPickCount();
+}
+
+function filterExportPicks(q) {
+  const nq = searchNormalize(q.trim());
+  document.querySelectorAll('#exportPickList .ai-note-row').forEach(row => {
+    const note = NOTES_MAP.get(row.querySelector('.export-pick').dataset.id);
+    const text = row.textContent + ' ' + (note ? noteToPlainText(note) : '');
+    row.hidden = !!nq && !searchNormalize(text).includes(nq);
+  });
 }
 
 function updateExportPickCount() {
@@ -103,14 +114,17 @@ function setupExport() {
     EXPORT_ONLY = null;                 // the dropdown takes over from here
     applyExportScopeUi();
   });
+  // Hledání ve výběru: vybrat a zrušit se týká jen toho, co je právě vidět
+  const shownPicks = () => [...document.querySelectorAll('.ai-note-row:not([hidden]) .export-pick')];
   document.getElementById('exportPickAll')?.addEventListener('click', () => {
-    document.querySelectorAll('.export-pick').forEach(c => { c.checked = true; });
+    shownPicks().forEach(c => { c.checked = true; });
     updateExportPickCount();
   });
   document.getElementById('exportPickNone')?.addEventListener('click', () => {
-    document.querySelectorAll('.export-pick').forEach(c => { c.checked = false; });
+    shownPicks().forEach(c => { c.checked = false; });
     updateExportPickCount();
   });
+  document.getElementById('exportPickSearch')?.addEventListener('input', e => filterExportPicks(e.target.value));
 }
 
 // ── Embedding images ──────────────────────────────────────────
