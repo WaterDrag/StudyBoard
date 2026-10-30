@@ -1010,7 +1010,7 @@ ${text.slice(0, 6000)}
     renderFactCheck(items, sources, queries);
   } catch (e) {
     const msg = e.message === 'no-gemini-key'
-      ? 'Kontrola faktů potřebuje Gemini klíč — nastav ho v AI kartách.'
+      ? 'Kontrola faktů potřebuje klíč Gemini — vyber ho v Nastavení.'
       : e.message === 'rate-limit'
         ? 'Vyčerpaný denní limit vyhledávání (1500/den). Zkus to zítra.'
         : e.message === 'invalid-key'

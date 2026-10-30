@@ -238,7 +238,7 @@
     } catch (_) { /* nic */ }
     window.sfx('meow');
     document.querySelectorAll('#themePicker [data-theme="kocka"]').forEach(b => { b.hidden = false; });
-    const msg = 'Mňau! Kočky mají 9 životů — odemkl sis kočičí téma. Přepnout zpátky můžeš v Nastavení → Téma.';
+    const msg = 'Mňau! Kočky mají 9 životů — odemkl sis kočičí téma. Přepnout zpátky můžeš v Nastavení → Vzhled.';
     if (typeof window.toast === 'function') window.toast(msg);
     else { const t = document.createElement('div'); t.className = 'cat-toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 5000); }
   }

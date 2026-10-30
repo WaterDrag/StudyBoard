@@ -1665,8 +1665,10 @@ async function loadAiKeys(user) {
   try {
     const snap = await aiKeyDoc(user.uid).get();
     const d = snap.exists ? snap.data() : {};
-    if (d.geminiKey) localStorage.setItem('sb_gemini_key', d.geminiKey);
-    if (d.groqKey)   localStorage.setItem('sb_groq_key', d.groqKey);
+    if (!snap.exists) return;
+    // Podle účtu i mazání: klíč odebraný na jiném zařízení tady nesmí zůstat, jinak by přebil nově vybraného poskytovatele
+    if (d.geminiKey) localStorage.setItem('sb_gemini_key', d.geminiKey); else localStorage.removeItem('sb_gemini_key');
+    if (d.groqKey)   localStorage.setItem('sb_groq_key', d.groqKey);     else localStorage.removeItem('sb_groq_key');
   } catch (_) { /* offline or rules not published — localStorage still works */ }
 }
 
@@ -1690,17 +1692,68 @@ async function migrateAiKeys(user, snap) {
 
 function setupSettings(user) {
   const btn      = document.getElementById('settingsBtn');
-  if (new URLSearchParams(location.search).get('open') === 'settings') setTimeout(() => btn.click());   // z telefonu
-  const saveBtn  = document.getElementById('settingsSave');
-  const gInput   = document.getElementById('settingsGeminiKey');
-  const gStatus  = document.getElementById('geminiKeyStatus');
-  const qInput   = document.getElementById('settingsGroqKey');
-  const qStatus  = document.getElementById('groqKeyStatus');
-
-  const updateStatus = (el, key) => {
-    if (key) { el.textContent = '✓ nastaven'; el.style.color = '#4ade80'; }
-    else      { el.textContent = 'nenastaveno'; el.style.color = 'var(--text-muted)'; }
+  if (new URLSearchParams(location.search).get('open') === 'settings') setTimeout(() => { btn.click(); showSettingsTab(new URLSearchParams(location.search).get('tab')); });   // z telefonu
+  const keyInput = document.getElementById('settingsAiKey');
+  const keyStatus = document.getElementById('aiKeyStatus');
+  const keyHint  = document.getElementById('aiKeyHint');
+  const provBox  = document.getElementById('aiProvider');
+  const PROV = {
+    gemini: { store: 'sb_gemini_key', ph: 'AQ.Ab8R…', hint: 'Zdarma na <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color:var(--accent);">aistudio.google.com</a>. Umí všechno včetně kontroly faktů.' },
+    groq:   { store: 'sb_groq_key',   ph: 'gsk_…',   hint: 'Zdarma na <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--accent);">console.groq.com</a>. Kontrola faktů s ním nefunguje, ta potřebuje Gemini.' },
   };
+  let prov = 'gemini';
+
+  const updateStatus = (key, saved) => {
+    if (key) { keyStatus.textContent = saved ? '✓ uloženo' : '✓ nastaven'; keyStatus.style.color = '#4ade80'; }
+    else     { keyStatus.textContent = 'nenastaveno'; keyStatus.style.color = 'var(--text-muted)'; }
+  };
+  const showProv = p => {
+    prov = p;
+    provBox.querySelectorAll('[data-prov]').forEach(b => b.classList.toggle('selected', b.dataset.prov === p));
+    keyInput.placeholder = PROV[p].ph;
+    keyHint.innerHTML = PROV[p].hint;
+    keyInput.value = localStorage.getItem(PROV[p].store) || '';
+    updateStatus(keyInput.value);
+  };
+  // Přepnutí jen ukáže klíč daného poskytovatele. Uloží se až vložený klíč a teprve ten smaže klíč toho druhého.
+  provBox.addEventListener('click', e => { const b = e.target.closest('[data-prov]'); if (b) showProv(b.dataset.prov); });
+
+  // Vše v nastavení platí hned, tlačítko Uložit není. Klíč se ukládá po opuštění políčka nebo Enteru.
+  const showSettingsTab = id => {
+    const tab = document.querySelector(`#settingsModal .hp-tab[data-set="${CSS.escape(id || '')}"]`) ? id : 'look';
+    document.querySelectorAll('#settingsModal .hp-tab').forEach(t => { const on = t.dataset.set === tab; t.classList.toggle('on', on); t.setAttribute('aria-selected', on); });
+    document.querySelectorAll('#settingsModal .set-pane').forEach(p => { p.hidden = p.dataset.set !== tab; });
+    document.querySelector('#settingsModal .hp-body').scrollTop = 0;
+  };
+  window.showSettingsTab = showSettingsTab;
+  document.querySelector('#settingsModal .hp-tabs').addEventListener('click', e => { const t = e.target.closest('.hp-tab'); if (t) showSettingsTab(t.dataset.set); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !document.getElementById('settingsModal').classList.contains('open') || document.querySelector('.hp-wrap:not([hidden]), .sbd-wrap, .ph-wrap:not([hidden])')) return;
+    document.activeElement?.blur?.();   // rozepsaný klíč se uloží
+    closeModal('settingsModal');
+  });
+
+  // Pozadí poznámek
+  const paperBox = document.getElementById('paperPicker');
+  const showPaper = () => { let v = ''; try { v = localStorage.getItem('sb_note_paper') || ''; } catch (_) {} paperBox.querySelectorAll('[data-paper]').forEach(b => b.classList.toggle('selected', b.dataset.paper === v)); };
+  paperBox.addEventListener('click', e => {
+    const b = e.target.closest('[data-paper]'); if (!b) return;
+    try { if (b.dataset.paper) localStorage.setItem('sb_note_paper', b.dataset.paper); else localStorage.removeItem('sb_note_paper'); } catch (_) {}
+    showPaper();
+  });
+
+  // Zvuk (stejné nastavení jako ikona reproduktoru v liště)
+  const soundPane = document.querySelector('#settingsModal .set-pane[data-set="sound"]');
+  const showSound = () => {
+    const S = window.SBSound?.get(); if (!S) return;
+    soundPane.querySelectorAll('[data-snd]').forEach(c => { c.checked = !!S[c.dataset.snd]; });
+    soundPane.querySelectorAll('[data-vol]').forEach(r => { r.value = Math.round(S[r.dataset.vol] * 100); });
+  };
+  soundPane.addEventListener('input', e => {
+    const t = e.target;
+    if (t.dataset.vol) window.SBSound?.set(t.dataset.vol, +t.value / 100);
+    if (t.dataset.snd) window.SBSound?.set(t.dataset.snd, t.checked);
+  });
 
   // Výběr tématu — aplikuje se okamžitě, uloží se i na účet
   document.querySelectorAll('#themePicker .theme-opt').forEach(opt => {
@@ -1733,24 +1786,24 @@ function setupSettings(user) {
 
   // Předvyplň aktuálně uloženými klíči
   btn.addEventListener('click', () => {
+    showSettingsTab('look');
+    showPaper();
+    showSound();
     renderGfx(null);
     window.SBGfx?.load(user.uid).then(g => { if (g) renderGfx(g); });
     renderAccountMethods();
-    gInput.value = localStorage.getItem('sb_gemini_key') || '';
-    qInput.value = localStorage.getItem('sb_groq_key') || '';
-    updateStatus(gStatus, gInput.value);
-    updateStatus(qStatus, qInput.value);
+    showProv(!localStorage.getItem('sb_gemini_key') && localStorage.getItem('sb_groq_key') ? 'groq' : 'gemini');
     markSelectedTheme(localStorage.getItem('sb_theme') || '');
     openModal('settingsModal');
   });
 
-  gInput.addEventListener('input', () => updateStatus(gStatus, gInput.value.trim()));
-  qInput.addEventListener('input', () => updateStatus(qStatus, qInput.value.trim()));
-
-  saveBtn.addEventListener('click', async () => {
-    const gKey = gInput.value.trim();
-    const qKey = qInput.value.trim();
-    saveBtn.disabled = true;
+  keyInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); keyInput.blur(); } });
+  keyInput.addEventListener('change', async () => {
+    const key = keyInput.value.trim();
+    if (key === (localStorage.getItem(PROV[prov].store) || '')) return;
+    // Klíč je jen jeden: uložením se ten od druhého poskytovatele smaže
+    const gKey = prov === 'gemini' ? key : '';
+    const qKey = prov === 'groq' ? key : '';
     try {
       if (gKey) localStorage.setItem('sb_gemini_key', gKey); else localStorage.removeItem('sb_gemini_key');
       if (qKey) localStorage.setItem('sb_groq_key', qKey);   else localStorage.removeItem('sb_groq_key');
@@ -1758,10 +1811,8 @@ function setupSettings(user) {
         geminiKey: gKey || null,
         groqKey:   qKey || null,
       }, { merge: true });
-      closeModal('settingsModal');
-      toast('Klíče uloženy ✓');
+      updateStatus(key, true);
     } catch(e) { toast('Chyba: ' + e.message); }
-    saveBtn.disabled = false;
   });
 }
 

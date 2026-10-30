@@ -99,7 +99,7 @@
       ${item('Tabulky', 'Sloupce a řádky měníš tažením za okraj. Víc buněk vybereš s Ctrl nebo Shift a můžeš jim hromadně změnit formát. Nabídka tabulky je na pravém tlačítku.')}
       ${item('Hledání', 'Tlačítko Hledat v poznámkách prohledá názvy i obsah poznámek. Když zaškrtneš Hledat i v ostatních místnostech, projde všechny tvoje místnosti.')}
       ${item('Prezentace', 'Vybrané poznámky nebo kapitoly návodu pustíš přes celou obrazovku.')}
-      ${item('AI', 'Z vybraných poznámek ti AI udělá kartičky nebo tě z nich vyzkouší. V nastavení k tomu potřebuješ bezplatný API klíč Gemini, Groq slouží jako záloha.')}
+      ${item('AI', 'Z vybraných poznámek ti AI udělá kartičky nebo tě z nich vyzkouší. V nastavení si vybereš Gemini, nebo Groq a vložíš bezplatný API klíč. Kontrola faktů funguje jen s Gemini.')}
       ${item('Soubory a export', 'Soubory místnosti se ukládají na Google Disk. Poznámky můžeš vyexportovat a uložit do složky StudyBoard na Disku.')}`],
 
     ['cards', 'Kartičky', `
@@ -132,7 +132,7 @@
     ['more', 'Ostatní', `
       ${item('Telefon', 'Ikona vlevo dole nebo F2. Rychle tě přesune do místností, her a kartiček a najdeš v něm i nastavení. Na stránkách her schválně není.')}
       ${item('Pomodoro', 'Minutka na učení v horní liště. Běží dál, i když přecházíš mezi stránkami, a odpracovaný čas se počítá do žebříčku týdne.')}
-      ${item('Vzhled a grafika', 'Motivy a grafiku her změníš v nastavení. Hudbu a efekty nastavíš v telefonu.')}
+      ${item('Vzhled a grafika', 'Motivy, pozadí poznámek, zvuk a grafiku her změníš v nastavení. Všechno platí hned, nic se neukládá tlačítkem.')}
       ${item('Účet', 'V nastavení můžeš k jednomu účtu připojit Google i e-mail s heslem. Host si tam vytvoří trvalý účet a nepřijde o to, co vytvořil.')}`],
   ];
 

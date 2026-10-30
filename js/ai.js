@@ -1,5 +1,5 @@
 'use strict';
-// ── Shared AI layer (Gemini primary + Groq free-tier fallback) ─────────────
+// ── Shared AI layer (uživatel si vybere Gemini, nebo Groq) ─────────────
 // Both providers support calling straight from the browser (CORS-verified),
 // so this needs no backend. Used by flashcards.js (distractor suggestions)
 // and room.js (AI flashcards from notes) — kept in one place so a fix here
@@ -90,14 +90,12 @@ async function callAiProvider(provider, model, key, prompt, { temperature, maxOu
   return { res, text };
 }
 
-// Shared low-level AI caller. Builds a candidate list — Gemini's discovered
-// models first (best quality for structured JSON extraction), then Groq's as
-// a free-tier fallback if a key is set for it — and tries each in turn. ANY
-// failure (429, 404 for a retired/unavailable model, a malformed response the
-// optional `parse` callback rejects, ...) advances to the next candidate
-// instead of being mislabeled as a rate limit; the real last error is what
-// surfaces to the caller. An invalid key only disables THAT provider's
-// remaining candidates — Groq still gets tried if Gemini's key is bad, etc.
+// Shared low-level AI caller. Uživatel má jeden klíč (Gemini, nebo Groq; starý účet s oběma jede na Gemini).
+// Builds a candidate list from that provider's discovered models and tries each
+// in turn. ANY failure (429, 404 for a retired/unavailable model, a malformed
+// response the optional `parse` callback rejects, ...) advances to the next
+// candidate instead of being mislabeled as a rate limit; the real last error is
+// what surfaces to the caller. An invalid key stops the remaining candidates.
 // ── Grounded generation (Google Search) ───────────────────────
 // Separate from aiGenerate on purpose: this one must run on a specific model
 // (the free search allowance is far bigger on 2.5 Flash), Groq cannot do it
@@ -145,7 +143,7 @@ async function aiGenerate(prompt, { temperature = 0.9, maxOutputTokens = 1600, p
 
   const candidates = [];
   if (gKey) { const m = (await listModelsFor('gemini', gKey)) || GEMINI_MODELS; m.forEach(model => candidates.push({ provider: 'gemini', model, key: gKey })); }
-  if (qKey) { const m = (await listModelsFor('groq', qKey)) || GROQ_MODELS; m.forEach(model => candidates.push({ provider: 'groq', model, key: qKey })); }
+  else { const m = (await listModelsFor('groq', qKey)) || GROQ_MODELS; m.forEach(model => candidates.push({ provider: 'groq', model, key: qKey })); }
 
   const disabledProviders = new Set();
   let lastErr = new Error('unknown');
@@ -189,9 +187,9 @@ async function aiGenerate(prompt, { temperature = 0.9, maxOutputTokens = 1600, p
 // that these cases are never collapsed into a fake "rate limit".
 function aiErrorMessage(e) {
   switch (e.message) {
-    case 'no-key':       return '🔑 Nastav Gemini nebo Groq API klíč v <b>⚙️ Nastavení</b> na dashboardu.';
+    case 'no-key':       return '🔑 Nastav API klíč (Gemini nebo Groq) v <b>⚙️ Nastavení</b> na hlavní stránce.';
     case 'invalid-key':  return '🔑 Klíč je neplatný nebo bez oprávnění — zkontroluj ho v <b>⚙️ Nastavení</b>.';
-    case 'rate-limit':   return '⏱ Limit AI překročen na obou nastavených klíčích — počkej chvíli a zkus znovu.';
+    case 'rate-limit':   return '⏱ Limit AI překročen — počkej chvíli a zkus znovu.';
     case 'empty-response': case 'parse-failed':
                           return '🤖 Model odpověděl neočekávaně — zkus to prosím znovu.';
     default:

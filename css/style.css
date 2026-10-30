@@ -2686,6 +2686,17 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .sbd-input { width: 100%; margin-top: 13px; }
 .sbd-btns { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 
+/* ── Nastavení: záložky vlevo (sdílí vzhled s Tutoriálem) ── */
+#settingsModal .modal { max-width: 720px; height: min(600px, calc(100dvh - 40px)); padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+#settingsModal .modal-header { flex: none; margin: 0; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.set-pane[hidden] { display: none; }
+.set-pane > .form-group:last-child { margin-bottom: 0; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: .9rem; cursor: pointer; }
+.set-row input { accent-color: var(--accent); width: 17px; height: 17px; }
+.set-range { display: block; width: 100%; margin: 6px 0 18px; accent-color: var(--accent); }
+.set-text { margin: 0 0 12px; color: var(--text-muted); }
+@media (max-width: 640px) { #settingsModal { padding: 0; } #settingsModal .modal { max-width: none; height: 100%; max-height: none; border: 0; border-radius: 0; } }
+
 /* ── Tutoriál (js/help.js) ── */
 .hp-wrap { position: fixed; inset: 0; z-index: 10002; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(5,6,9,.65); }
 .hp-wrap[hidden] { display: none; }

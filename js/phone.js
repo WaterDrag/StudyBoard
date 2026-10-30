@@ -146,30 +146,36 @@
     ['svetly', 'Světlý', '#eef2f7', '#6366f1'], ['breidlice', 'Břidlice', '#14181d', '#78909c'], ['kava', 'Káva', '#1a1613', '#b08d6a'], ['salvej', 'Šalvěj', '#141a16', '#8aa891'], ['serik', 'Šeřík', '#191519', '#a48ca8'],
     ['malina', 'Malina', '#1a0f16', '#ec4899'], ['jantar', 'Jantar', '#1a1508', '#f59e0b'], ['fialka', 'Fialka', '#130f24', '#a855f7'], ['cerna', 'Černá', '#000000', '#38bdf8'], ['papir', 'Papír', '#f4eee4', '#b45309']];
   const ls = k => { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } };
-  let GFX = null;
+  let GFX = null, AIP = null;
+  const AI_PROV = { gemini: ['sb_gemini_key', 'AQ.Ab8R…'], groq: ['sb_groq_key', 'gsk_…'] };
+  const LIGHT = ['svetly', 'papir'];
+  const themeGrid = (filter, cur) => `<div class="ph-themes">${THEMES.filter(filter).map(([k, n, bg, ac]) => `<button type="button" class="ph-theme${k === cur ? ' on' : ''}" data-ptheme="${k}" title="${n}"><i style="background:linear-gradient(135deg, ${bg} 50%, ${ac} 50%)"></i>${n}</button>`).join('')}</div>`;
   function settingsHtml() {
     const cur = ls('sb_theme'), cat = ls('sb_cat') === '1' || cur === 'kocka', S = window.SBSound?.get(), paper = ls('sb_note_paper');
     const seg = (name, val, opts) => `<div class="ph-seg">${opts.map(([v, t]) => `<button type="button" data-seg="${name}" data-v="${v}" class="${v === val ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     const gfx = window.SBGfx ? Object.entries(SBGfx.GAMES).map(([g, G]) => `<label class="ph-field">${esc2(G.name)}</label>${seg('gfx:' + g, (GFX && GFX[g]) || SBGfx.read(g), G.opts.map(([k, n]) => [k, n]))}`).join('') : '<p class="ph-empty">Načítám…</p>';
     return `<div class="ph-set">
-      <button type="button" class="ph-wide" data-act="help">Tutoriál: zkratky, hry a funkce</button>
       <div class="ph-sec">Vzhled</div>
-      <div class="ph-themes">${THEMES.filter(t => t[0] !== 'kocka' || cat).map(([k, n, bg, ac]) => `<button type="button" class="ph-theme${k === cur ? ' on' : ''}" data-ptheme="${k}" title="${n}"><i style="background:linear-gradient(135deg, ${bg} 50%, ${ac} 50%)"></i>${n}</button>`).join('')}</div>
+      <label class="ph-field">Tmavé motivy</label>
+      ${themeGrid(t => !LIGHT.includes(t[0]) && (t[0] !== 'kocka' || cat), cur)}
+      <label class="ph-field">Světlé motivy</label>
+      ${themeGrid(t => LIGHT.includes(t[0]), cur)}
+      <label class="ph-field">Pozadí poznámek</label>
+      ${seg('paper', paper, [['', 'Podle motivu'], ['light', 'Bílé'], ['dark', 'Černé']])}
       ${S ? `<div class="ph-sec">Zvuk</div>
       <label class="ph-row"><span>Hudba</span><input type="checkbox" data-snd="music" ${S.music ? 'checked' : ''}></label>
       <input type="range" class="ph-range" min="0" max="100" value="${Math.round(S.musicVol * 100)}" data-vol="musicVol" aria-label="Hlasitost hudby">
       <label class="ph-row"><span>Efekty</span><input type="checkbox" data-snd="sfx" ${S.sfx ? 'checked' : ''}></label>
       <input type="range" class="ph-range" min="0" max="100" value="${Math.round(S.sfxVol * 100)}" data-vol="sfxVol" aria-label="Hlasitost efektů">` : ''}
-      <div class="ph-sec">Pozadí poznámek</div>
-      ${seg('paper', paper, [['', 'Podle motivu'], ['light', 'Bílé'], ['dark', 'Černé']])}
-      <div class="ph-sec">Grafika her</div>
+      <div class="ph-sec">Hry</div>
       ${gfx}
-      <div class="ph-sec">AI klíče</div>
-      <label class="ph-field" for="phGem">Gemini</label><input id="phGem" type="password" class="ph-input" autocomplete="off" placeholder="AQ.Ab8R…" value="${esc2(ls('sb_gemini_key'))}">
-      <label class="ph-field" for="phGroq">Groq (záložní)</label><input id="phGroq" type="password" class="ph-input" autocomplete="off" placeholder="gsk_…" value="${esc2(ls('sb_groq_key'))}">
-      <button type="button" class="ph-wide" data-act="savekeys">Uložit klíče</button>
       <div class="ph-sec">Účet</div>
-      ${onDashboard ? '<button type="button" class="ph-wide" data-act="account">Účet a přihlášení</button>' : '<a class="ph-wide" href="dashboard.html?open=settings">Účet a přihlášení</a>'}
+      ${onDashboard ? '<button type="button" class="ph-wide" data-act="account">Účet a přihlášení</button>' : '<a class="ph-wide" href="dashboard.html?open=settings&tab=account">Účet a přihlášení</a>'}
+      <div class="ph-sec">AI</div>
+      ${seg('aiprov', AIP || (AIP = !ls('sb_gemini_key') && ls('sb_groq_key') ? 'groq' : 'gemini'), [['gemini', 'Gemini'], ['groq', 'Groq']])}
+      <input id="phKey" type="password" class="ph-input" autocomplete="off" aria-label="API klíč" placeholder="${AI_PROV[AIP][1]}" value="${esc2(ls(AI_PROV[AIP][0]))}">
+      <div class="ph-sec">Nápověda</div>
+      <button type="button" class="ph-wide" data-act="help">Otevřít Tutoriál</button>
     </div>`;
   }
   function setTheme(k) {
@@ -181,12 +187,13 @@
     db.collection('users').doc(UID).update({ theme: k }).catch(() => {});
   }
   async function saveKeys() {
-    const g = wrap.querySelector('#phGem').value.trim(), q = wrap.querySelector('#phGroq').value.trim();
+    const k = wrap.querySelector('#phKey').value.trim(), g = AIP === 'gemini' ? k : '', q = AIP === 'groq' ? k : '';   // klíč je jen jeden
+    if (k === ls(AI_PROV[AIP][0])) return;
     try {
       if (g) localStorage.setItem('sb_gemini_key', g); else localStorage.removeItem('sb_gemini_key');
       if (q) localStorage.setItem('sb_groq_key', q); else localStorage.removeItem('sb_groq_key');
       await db.collection('users').doc(UID).collection('private').doc('ai').set({ geminiKey: g || null, groqKey: q || null }, { merge: true });
-      window.toast?.('Klíče uloženy ✓');
+      window.toast?.('Klíč uložen ✓');
     } catch (e) { window.toast?.('Chyba: ' + e.message); }
   }
   function clock() {
@@ -211,21 +218,23 @@
       if (sg) {
         const name = sg.dataset.seg, v = sg.dataset.v;
         sg.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === sg));
-        if (name === 'paper') { try { if (v) localStorage.setItem('sb_note_paper', v); else localStorage.removeItem('sb_note_paper'); } catch (_) {} window.SBPaper?.apply(); }
+        if (name === 'aiprov') { AIP = v; const i = wrap.querySelector('#phKey'); i.placeholder = AI_PROV[v][1]; i.value = ls(AI_PROV[v][0]); }
+        else if (name === 'paper') { try { if (v) localStorage.setItem('sb_note_paper', v); else localStorage.removeItem('sb_note_paper'); } catch (_) {} window.SBPaper?.apply(); }
         else if (name.startsWith('gfx:')) { window.SBGfx?.save(UID, name.slice(4), v); (GFX || (GFX = {}))[name.slice(4)] = v; }
         return;
       }
       const a = e.target.closest('[data-act]'); if (!a) return;
       const act = a.dataset.act;
       if (act === 'games' || act === 'home' || act === 'rooms' || act === 'settings') { e.preventDefault(); show(act); return; }
-      if (act === 'savekeys') { saveKeys(); return; }
       if (act === 'help') { close(); (window.SBHelp ? Promise.resolve() : loadScript('js/help.js')).then(() => window.SBHelp?.open()); return; }
-      if (act === 'account') { e.stopPropagation(); close(); document.getElementById('settingsBtn')?.click(); return; }
+      if (act === 'account') { e.stopPropagation(); close(); document.getElementById('settingsBtn')?.click(); window.showSettingsTab?.('account'); return; }
       if (act.startsWith('tab:') && onDashboard) { e.preventDefault(); close(); document.querySelector(`.tab-btn[data-tab="${act.slice(4)}"]`)?.click(); return; }
       if (act === 'zombie') { e.preventDefault(); close(); document.querySelector('.tab-btn[data-tab="games"]')?.click(); document.getElementById('survivalCard')?.dispatchEvent(new CustomEvent('gameplay')); return; }
       if (act === 'pomo') { e.preventDefault(); e.stopPropagation(); close(); document.getElementById('pomoBtn')?.click(); return; }
       if (act === 'garden' && onDashboard) { e.preventDefault(); close(); if (typeof openGarden === 'function' && typeof GARDEN !== 'undefined' && GARDEN) openGarden(); }
     });
+    // Klíč platí hned po opuštění políčka nebo Enteru, stejně jako v nastavení na hlavní stránce
+    wrap.addEventListener('change', e => { if (e.target.id === 'phKey') saveKeys(); });
     wrap.addEventListener('input', e => {
       const t = e.target;
       if (t.dataset.vol) window.SBSound?.set(t.dataset.vol, +t.value / 100);
@@ -233,6 +242,7 @@
     });
     wrap.addEventListener('keydown', e => {
       e.stopPropagation();   // psaní a šipky v telefonu nesmí ovládat stránku pod ním
+      if (e.target.id === 'phKey' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); return; }
       if (e.target.matches('input, select, textarea')) return;
       const items = [...wrap.querySelectorAll('.ph-screen a, .ph-screen button')], i = items.indexOf(document.activeElement);
       const cols = screen === 'home' ? 4 : screen === 'settings' ? 1 : 2;
@@ -267,6 +277,7 @@
   }
   function close() {
     if (!wrap || wrap.hidden) return;
+    wrap.querySelector('#phKey')?.blur();   // rozepsaný klíč se uloží
     wrap.classList.remove('open');
     document.dispatchEvent(new Event('sb-phone'));
     btn?.classList.remove('on');

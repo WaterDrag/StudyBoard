@@ -525,17 +525,25 @@
 
   <!-- MODAL: Nastavení -->
   <div class="modal-overlay" id="settingsModal">
-    <div class="modal" style="max-width:420px;">
+    <div class="modal">
       <div class="modal-header">
         <h3>⚙️ Nastavení</h3>
-        <button class="modal-close" data-close="settingsModal">✕</button>
+        <button class="modal-close" data-close="settingsModal" aria-label="Zavřít">✕</button>
       </div>
-      <div class="form-group">
-        <button type="button" id="helpOpenBtn" class="btn btn-secondary" style="width:100%;justify-content:center;">Tutoriál: zkratky, hry a funkce</button>
-      </div>
-      <div class="form-group">
-        <label class="label">Vzhled</label>
-        <div class="theme-picker" id="themePicker">
+      <div class="hp-main">
+        <div class="hp-tabs" role="tablist" aria-label="Části nastavení">
+          <button type="button" class="hp-tab" role="tab" data-set="look">Vzhled</button>
+          <button type="button" class="hp-tab" role="tab" data-set="sound">Zvuk</button>
+          <button type="button" class="hp-tab" role="tab" data-set="games">Hry</button>
+          <button type="button" class="hp-tab" role="tab" data-set="account">Účet</button>
+          <button type="button" class="hp-tab" role="tab" data-set="ai">AI</button>
+          <button type="button" class="hp-tab" role="tab" data-set="help">Nápověda</button>
+        </div>
+        <div class="hp-body">
+          <section class="set-pane" data-set="look">
+            <div class="form-group" id="themePicker">
+              <label class="label">Tmavé motivy</label>
+              <div class="theme-picker">
           <button type="button" class="theme-opt" data-theme="">
             <span class="theme-opt-swatch" style="--to-bg:#0D0E12;--to-accent:#8B93FF;"></span>Půlnoc
           </button>
@@ -550,9 +558,6 @@
           </button>
           <button type="button" class="theme-opt" data-theme="kocka" hidden>
             <span class="theme-opt-swatch" style="--to-bg:#17121a;--to-accent:#f4a6c6;"></span>Kočičí
-          </button>
-          <button type="button" class="theme-opt" data-theme="svetly">
-            <span class="theme-opt-swatch" style="--to-bg:#eef2f7;--to-accent:#6366f1;"></span>Světlý
           </button>
           <button type="button" class="theme-opt" data-theme="breidlice">
             <span class="theme-opt-swatch" style="--to-bg:#14181d;--to-accent:#78909c;"></span>Břidlice
@@ -578,36 +583,54 @@
           <button type="button" class="theme-opt" data-theme="cerna">
             <span class="theme-opt-swatch" style="--to-bg:#000000;--to-accent:#38bdf8;"></span>Černá
           </button>
+              </div>
+              <label class="label" style="margin-top:14px;">Světlé motivy</label>
+              <div class="theme-picker">
+          <button type="button" class="theme-opt" data-theme="svetly">
+            <span class="theme-opt-swatch" style="--to-bg:#eef2f7;--to-accent:#6366f1;"></span>Světlý
+          </button>
           <button type="button" class="theme-opt" data-theme="papir">
             <span class="theme-opt-swatch" style="--to-bg:#f4eee4;--to-accent:#b45309;"></span>Papír
           </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="label">Pozadí poznámek</label>
+              <div id="paperPicker" class="gfx-seg" role="group" aria-label="Pozadí poznámek">
+                <button type="button" data-paper="">Podle motivu</button>
+                <button type="button" data-paper="light">Bílé</button>
+                <button type="button" data-paper="dark">Černé</button>
+              </div>
+            </div>
+          </section>
+          <section class="set-pane" data-set="sound" hidden>
+            <label class="set-row"><span>Hudba</span><input type="checkbox" data-snd="music"></label>
+            <input type="range" class="set-range" min="0" max="100" data-vol="musicVol" aria-label="Hlasitost hudby">
+            <label class="set-row"><span>Efekty</span><input type="checkbox" data-snd="sfx"></label>
+            <input type="range" class="set-range" min="0" max="100" data-vol="sfxVol" aria-label="Hlasitost efektů">
+          </section>
+          <section class="set-pane" data-set="games" hidden>
+            <label class="label">Grafika her</label>
+            <div id="gfxPicker" class="gfx-picker"></div>
+          </section>
+          <section class="set-pane" data-set="account" hidden>
+            <label class="label">Účet a přihlášení</label>
+            <div id="acctMethods" class="acct-methods"></div>
+          </section>
+          <section class="set-pane" data-set="ai" hidden>
+            <label class="label">AI klíč <span id="aiKeyStatus" style="font-size:0.75rem;margin-left:6px;"></span></label>
+            <div id="aiProvider" class="gfx-seg" role="group" aria-label="Poskytovatel AI" style="margin-bottom:8px;">
+              <button type="button" data-prov="gemini">Gemini</button>
+              <button type="button" data-prov="groq">Groq</button>
+            </div>
+            <input id="settingsAiKey" type="password" class="input" autocomplete="off" aria-label="API klíč">
+            <p id="aiKeyHint" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;"></p>
+          </section>
+          <section class="set-pane" data-set="help" hidden>
+            <p class="set-text">Tutoriál ukáže klávesové zkratky, hry a všechny funkce aplikace.</p>
+            <button type="button" id="helpOpenBtn" class="btn btn-secondary">Otevřít Tutoriál</button>
+          </section>
         </div>
-      </div>
-      <div class="form-group">
-        <label class="label">Grafika her</label>
-        <div id="gfxPicker" class="gfx-picker"></div>
-      </div>
-      <div class="form-group">
-        <label class="label">Účet a přihlášení</label>
-        <div id="acctMethods" class="acct-methods"></div>
-      </div>
-      <div class="form-group">
-        <label class="label">Gemini API klíč <span id="geminiKeyStatus" style="font-size:0.75rem;margin-left:6px;"></span></label>
-        <input id="settingsGeminiKey" type="password" class="input" placeholder="AQ.Ab8R…" autocomplete="off">
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">
-          Zdarma na <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a> — hlavní zdroj pro AI funkce (návrhy špatných odpovědí atd.).
-        </p>
-      </div>
-      <div class="form-group">
-        <label class="label">Groq API klíč (záložní) <span id="groqKeyStatus" style="font-size:0.75rem;margin-left:6px;"></span></label>
-        <input id="settingsGroqKey" type="password" class="input" placeholder="gsk_…" autocomplete="off">
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">
-          Zdarma na <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent);">console.groq.com</a> — použije se automaticky, když je Gemini vytížený nebo nedostupný.
-        </p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-close="settingsModal">Zrušit</button>
-        <button id="settingsSave" class="btn btn-primary">Uložit</button>
       </div>
     </div>
   </div>

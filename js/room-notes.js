@@ -118,7 +118,7 @@ function askEditConflict(fresh, pageId, mine, base) {
           <button type="button" class="btn btn-ghost" data-ec="back">Zpět k úpravám</button>
         </div>
         <div class="ec-ai" id="ecAi" hidden>
-          <div class="ec-ai-row"><button type="button" class="btn btn-primary btn-sm" data-ec-ai="gemini">✨ Sloučit přes Gemini</button><span class="ec-ai-status" id="ecAiStatus"></span></div>
+          <div class="ec-ai-row"><button type="button" class="btn btn-primary btn-sm" data-ec-ai="gemini">✨ Sloučit přes AI</button><span class="ec-ai-status" id="ecAiStatus"></span></div>
           <div class="ec-ai-h">nebo přes jinou AI (ChatGPT, Claude…)</div>
           <div class="ec-ai-row"><button type="button" class="btn btn-secondary btn-sm" data-ec-ai="copy">📋 Zkopírovat zadání</button><span class="ec-ai-status" id="ecAiCopyMsg"></span></div>
           <textarea class="input" id="ecAiPaste" rows="4" placeholder="Sem vlož odpověď z AI…"></textarea>
