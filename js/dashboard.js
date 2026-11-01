@@ -176,6 +176,17 @@ function loadGames(user) {
       `${g.pairs || ''} dvojic · ${(g.playerIds || []).length} hráčů · ${g.status === 'play' ? 'hraje se' : 'čeká'}`)).join('')
       : '<div class="game-empty">Nikdo z přátel teď pexeso nezaložil.</div>';
   }, () => { pxl.innerHTML = '<div class="game-empty">Hry se nepodařilo načíst.</div>'; });
+  // Blackjack: stoly přátel s volným místem a ty, u kterých sedím
+  const bjl = document.getElementById('bjLobbies');
+  db.collection('blackjack').where('allowedUids', 'array-contains', user.uid).onSnapshot(snap => {
+    const games = liveGames('blackjack', snap.docs, user.uid)
+      .filter(g => (g.seats || []).length < 5 || (g.seats || []).includes(user.uid))
+      .sort((a, b) => lastActive(b) - lastActive(a)).slice(0, 5);
+    wireLobbyX(bjl);
+    bjl.innerHTML = games.length ? games.map(g => lobbyRow('blackjack', g, user.uid, `blackjack.html?g=${g.id}`, g.hostName || 'Stůl',
+      `${(g.seats || []).length} z 5 míst obsazeno`)).join('')
+      : '<div class="game-empty">Nikdo z přátel teď stůl neotevřel.</div>';
+  }, () => { bjl.innerHTML = '<div class="game-empty">Stoly se nepodařilo načíst.</div>'; });
   // Obrana království — čekárny bitev přátel (rozehranou bitvu po odchodu vrátit nejde)
   const tdl = document.getElementById('tdLobbies');
   const TD_MAPS = { kralovske_predhradi: 'Královské předhradí', soutok_dvou_rek: 'Soutok dvou řek' };
@@ -245,6 +256,7 @@ async function loadDailyCard(user) {
   try {
     const best = +localStorage.getItem('mil_best') || 0;
     document.getElementById('milStatus').innerHTML = best ? `🏆 Rekord: <b>${best.toLocaleString('cs-CZ')} Kč</b>` : '';
+    try { const bj = JSON.parse(localStorage.getItem('bj_state') || 'null'); document.getElementById('bjStatus').innerHTML = bj && bj.bal ? `${bj.bal < 0 ? 'Dluh' : 'Na účtu'}: <b>${Math.abs(bj.bal).toLocaleString('cs-CZ')} Kč</b>` : ''; } catch (_) { /* nic */ }
     const bestOf = (k, unit) => { const v = +localStorage.getItem(k) || 0; return v ? `🏆 Rekord: <b>${v.toLocaleString('cs-CZ')} ${unit}</b>` : ''; };
     document.getElementById('tfStatus').innerHTML = bestOf('tf_best', 'b');
     document.getElementById('wsStatus').innerHTML = bestOf('ws_best', 'b');

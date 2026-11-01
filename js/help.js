@@ -73,6 +73,8 @@
         [`Pravda, nebo lež: ${k('→')} ${k('D')} / ${k('←')} ${k('A')}`, 'Pravda / lež'],
         [`Křížovka: ${k('Enter')} ${k('Tab')}`, 'Další slovo'],
         [`Šibenice: písmena a ${k('Enter')}`, 'Hádání a další slovo'],
+        [`Blackjack: ${k('H')} ${k('S')} ${k('D')}`, 'Další karta, stojím, zdvojit'],
+        [`Blackjack: ${k('1')} až ${k('4')}`, 'Vybrat odpověď'],
       ])}
       ${group('Obrana království', [
         [`${k('Mezera')} ${k('Q')}`, 'Otevřít kartu s otázkou'],
@@ -123,6 +125,7 @@
       ${item('Křížovka', 'Sám. Poskládá se z krátkých pojmů, legendou jsou otázky z kartiček.')}
       ${item('Šibenice', 'Sám i závod s přáteli. Hádáš 10 slov po písmenech, na každé máš 8 chyb. Háčky neřešíš.')}
       ${item('Milionář', 'Sám. 15 otázek, každá těžší, jistoty na 5. a 10. otázce a tři nápovědy.')}
+      ${item('Blackjack', 'Sám i s přáteli, stůl má pět míst. Výhry dostáváš rovnou, ale minimální sázka se mění každou ruku. Když na ni nemáš, vyděláš si jen správnou odpovědí a špatná tě může dostat do dluhu.')}
       ${item('Dobyvatel', 'Sám i s přáteli, 2 až 6 hráčů a boti. Zabíráš území a dobýváš sousedy otázkami.')}
       ${item('Obrana království', 'Sám i s přáteli. Tower defense se 40 vlnami. Co-op na jedné mapě nebo souboj 2 až 4 hráčů či 2 na 2. Za správné odpovědi dostáváš zlaťáky a krystaly.')}
       ${item('Zombie Survival', 'Sám nebo až ve 4. Bráníš základnu, staviš a staráš se o zahradu. Mezi vlnami je kvíz a špatné odpovědi posílí další vlnu. Podrobný návod otevřeš ve hře klávesou H.')}`],

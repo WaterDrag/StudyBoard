@@ -3,7 +3,7 @@
  * → sluchátka a ovladač, otevřený telefon (phone.js) → má taky telefon a ťuká do něj, nic nedělá → usne. Zobrazí se jen při data-theme="kocka" (sleduje změnu tématu). */
 (function () {
   'use strict';
-  const GAMES = /^(obrana|game|pexeso|dobyvatel|denni|spojovacka|pravdalez|osmismerka|krizovka|sibenice|milionar)$/;
+  const GAMES = /^(obrana|game|pexeso|dobyvatel|denni|spojovacka|pravdalez|osmismerka|krizovka|sibenice|milionar|blackjack)$/;
   const page = (location.pathname.split('/').pop() || 'index').replace(/^_/, '').replace(/\.html$/, '');
   const gaming = GAMES.test(page);
   const CSS = `

@@ -21,7 +21,7 @@
   const GAMES = [
     ['denni', 'Denní výzva', 'denni.html'], ['spojovacka', 'Spojovačka', 'spojovacka.html'], ['pravdalez', 'Pravda / lež', 'pravdalez.html'],
     ['pexeso', 'Pexeso', 'pexeso.html'], ['osmismerka', 'Osmisměrka', 'osmismerka.html'], ['krizovka', 'Křížovka', 'krizovka.html'],
-    ['sibenice', 'Šibenice', 'sibenice.html'], ['milionar', 'Milionář', 'milionar.html'], ['dobyvatel', 'Dobyvatel', 'dobyvatel.html'],
+    ['sibenice', 'Šibenice', 'sibenice.html'], ['milionar', 'Milionář', 'milionar.html'], ['blackjack', 'Blackjack', 'blackjack.html'], ['dobyvatel', 'Dobyvatel', 'dobyvatel.html'],
     ['obrana', 'Obrana království', 'obrana.html'], ['zombie', 'Zombie Survival', 'dashboard.html?tab=games&play=zombie'],
   ];
   const esc2 = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

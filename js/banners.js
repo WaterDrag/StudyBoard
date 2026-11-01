@@ -1,6 +1,6 @@
 /* banners.js — ilustrované bannery her (SVG scény 400×120) místo velkých emoji, realističtější styl:
  * materiály (papír, dřevo, kov, sklo, plsť, pergamen), zrno, mlha v dálce, rozostřené pozadí, měkké stíny a odlesky.
- * Prvek s data-banner="denni|spojovacka|pravdalez|pexeso|osmismerka|krizovka|sibenice|milionar|dobyvatel|obrana|zombie"
+ * Prvek s data-banner="denni|spojovacka|pravdalez|pexeso|osmismerka|krizovka|sibenice|milionar|blackjack|dobyvatel|obrana|zombie"
  * se vyplní scénou (karty her na nástěnce, úvod každé hry). SBB.svg(id) vrátí SVG. */
 (function () {
   'use strict';
@@ -144,6 +144,19 @@
         ${['P', '', 'Á', '', 'K', ''].map((ch, i) => `<g transform="translate(${250 + i * 24} 62)" filter="url(#shs${k})"><rect width="20" height="24" rx="3" fill="url(#tile${k})"/>${ch ? `<text x="10" y="18" font-size="15" font-weight="700" text-anchor="middle" fill="#292524" font-family="Georgia, serif">${ch}</text>` : '<path d="M5 18h10" stroke="#57534e" stroke-width="2"/>'}</g>`).join('')}
         ${vignette(k, 0.55)}${grain(k)}</svg-content>`; },
 
+    // Blackjack: zelené plátno pod lampou, blackjack v kartách a sloupce žetonů
+    blackjack: () => { const k = nid('bj');
+      const card = (x, y, rot, r, s, red) => `<g transform="translate(${x} ${y}) rotate(${rot})" filter="url(#sh${k})"><rect width="50" height="72" rx="5" fill="url(#pap${k})"/><text x="6" y="17" font-family="Georgia,serif" font-size="15" font-weight="700" fill="${red ? '#b91c1c' : '#111827'}">${r}</text><path d="${s}" transform="translate(14 25)" fill="${red ? '#b91c1c' : '#111827'}"/></g>`;
+      const spade = 'M11 0C7 7 0 11 0 17c0 4 5 6 9 3-1 3-2 4-3 5h10c-1-1-2-2-3-5 4 3 9 1 9-3 0-6-7-10-11-17z';
+      const heart = 'M11 24C4 17 0 13 0 7c0-7 8-9 11-3 3-6 11-4 11 3 0 6-4 10-11 17z';
+      const chips = (x, n, c) => Array.from({ length: n }, (_, i) => `<g transform="translate(${x} ${98 - i * 6})"><ellipse rx="19" ry="7" cy="3" fill="#0a0a0a" opacity=".5"/><ellipse rx="19" ry="7" fill="${c}"/><ellipse rx="19" ry="7" fill="none" stroke="#f8fafc" stroke-width="2" stroke-dasharray="5 7"/></g>`).join('');
+      return `<svg-content>${defs(k, rad('felt' + k, 0.5, 0.25, 0.85, [[0, '#15803d'], [0.6, '#14532d'], [1, '#052e16']]) + lin('pap' + k, 0, 0, 1, 1, [[0, '#ffffff'], [1, '#e7e5e4']]) + lin('rail' + k, 0, 0, 0, 1, [[0, '#6b3a1e'], [1, '#2a140a']]))}
+        <rect width="400" height="120" fill="url(#felt${k})"/>
+        <path d="M-10 26C110 52 290 52 410 26" fill="none" stroke="#fde68a" stroke-width="1.5" opacity=".45"/>
+        ${chips(66, 5, '#b91c1c')}${chips(112, 3, '#1d4ed8')}${chips(344, 6, '#0f172a')}${chips(298, 3, '#b91c1c')}
+        ${card(158, 32, -9, 'A', spade, false)}${card(198, 26, 8, 'K', heart, true)}
+        <rect width="400" height="9" fill="url(#rail${k})"/>
+        ${vignette(k, 0.5)}${grain(k)}</svg-content>`; },
     // Milionář: televizní studio s kuželi světla, lesklá podlaha s odrazy, zlatý panel otázky a mince
     milionar: () => { const k = nid('m');
       return `<svg-content>${defs(k, lin('bg' + k, 0, 0, 0, 1, [[0, '#020617'], [1, '#1e1b4b']]) + lin('beam' + k, 0, 0, 0, 1, [[0, '#93c5fd', 0.5], [1, '#93c5fd', 0]]) + lin('floor' + k, 0, 0, 0, 1, [[0, '#1e3a8a'], [1, '#0b1026']]) + lin('panel' + k, 0, 0, 0, 1, [[0, '#1e3a8a'], [1, '#0f1d4a']]) + lin('bez' + k, 0, 0, 1, 0, [[0, '#a16207'], [0.3, '#fde68a'], [0.6, '#ca8a04'], [1, '#fef3c7']]) + lin('coin' + k, 0, 0, 1, 0, [[0, '#a16207'], [0.35, '#fde68a'], [0.7, '#d97706'], [1, '#fef3c7']]) + lin('bill' + k, 0, 0, 1, 1, [[0, '#86b46c'], [0.5, '#5f8f49'], [1, '#3e6a30']]))}
