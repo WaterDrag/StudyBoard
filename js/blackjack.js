@@ -456,7 +456,10 @@ function cardHtml(c, hidden, delay, flip) {
   const suit = s + '︎';   // bez toho z nich telefon udělá barevné emoji
   return `<div class="bj-card${red ? ' red' : ''}${flip ? ' flip' : ''}"${style}><span class="bj-c-tl">${r}<i>${suit}</i></span><span class="bj-c-m">${suit}</span><span class="bj-c-br">${r}<i>${suit}</i></span></div>`;
 }
-function valText(cards) { const v = handValue(cards); return v.soft && v.t < 21 ? `${v.t - 10} / ${v.t}` : String(v.t); }
+// Měkká ruka (eso za 11) ukazuje obě hodnoty, jen dokud se o ní rozhoduje. Dohraná ruka ukáže tu platnou.
+function valText(cards, final) { const v = handValue(cards); return !final && v.soft && v.t < 21 ? `${v.t - 10} / ${v.t}` : String(v.t); }
+// Výsledek ruky se ukáže, až krupiér dohraje a peníze se připíšou, ať se nic neprozradí předem
+const roundShown = () => S.phase === 'done' && !dealerRevealing();
 // Jen nové karty dostanou animaci, stávající se nepřekreslují
 function syncCards(el, cards, hideFrom, stepMs = 0) {
   if (!cards.length) { el.innerHTML = ''; return; }
@@ -511,13 +514,13 @@ function renderSeats() {
       cards.innerHTML = '';
     }
     syncHand(cards, h, S.turn === uid ? h?.cur : -1);
-    el.querySelector('.bj-seat-val').textContent = played(h) ? partsOf(h).map(p => valText(p.cards)).join(' · ') : '';
+    el.querySelector('.bj-seat-val').textContent = played(h) ? partsOf(h).map(p => valText(p.cards, p.done || h.done || S.phase === 'done')).join(' · ') : '';
     const bet = el.querySelector('.bj-seat-bet');
     // Vlastní rozestavěnou sázku vidí jen hráč, ostatním se ukáže až po vsazení
     const pending = uid === me() && !h && S.phase === 'bet' ? BET : 0;
     renderStack(el.querySelector('.bj-stack'), h ? h.bet : pending, !!pending);
     if (!h) { bet.textContent = pending ? money(pending) : uid && S.phase !== 'bet' ? 'nehraje' : ''; bet.dataset.kind = ''; return; }
-    if (S.phase === 'done' && played(h)) {
+    if (roundShown() && played(h)) {
       const r = outcomeAll(h, S.dealer);
       bet.textContent = r.delta ? signed(r.delta) : 'remíza';
       bet.dataset.kind = r.kind;
@@ -587,7 +590,7 @@ function renderStatus() {
     html = shown < 2 ? 'Tak se podíváme…' : `Mám ${valText(S.dealer.slice(0, shown))}. Beru další kartu…`;
     kind = '';
   } else if (S.phase === 'done' && played(mine()) && A.lastR !== `${S.tid}:${S.round}`) {
-    html = `Mám ${valText(S.dealer)}.`;   // chvilka před vyúčtováním, ať neprobleskne zpráva z minulého kola
+    html = `Mám ${valText(S.dealer, true)}.`;   // chvilka před vyúčtováním, ať neprobleskne zpráva z minulého kola
     kind = '';
   }
   if (m.innerHTML !== html) m.innerHTML = html;
@@ -596,7 +599,7 @@ function renderStatus() {
 }
 function renderPanels() {
   const h = mine(), myTurn = S.turn === me();
-  const canEarn = !Q && A.bal < A.min && (!h || S.phase === 'done');
+  const canEarn = !Q && A.bal < A.min && (!h || (S.phase === 'done' && A.lastR === `${S.tid}:${S.round}`));
   $('bjBetPanel').hidden = Q || h || S.phase !== 'bet' || A.bal < A.min;
   $('bjEarnPanel').hidden = !canEarn;
   $('bjPlayPanel').hidden = !myTurn;
@@ -625,7 +628,7 @@ let REVEAL_T = 0, REVEAL_SEEN = '';
 function renderDealer() {
   const shown = dealerShown(), cards = S.dealer.slice(0, Math.max(shown, Math.min(2, S.dealer.length)));
   syncCards($('bjDealer'), cards, shown < cards.length ? shown : null, S.phase === 'done' ? 0 : CARD_MS);
-  $('bjDealerVal').textContent = shown ? valText(S.dealer.slice(0, shown)) : '';
+  $('bjDealerVal').textContent = shown ? valText(S.dealer.slice(0, shown), S.phase === 'done' && shown === S.dealer.length) : '';
   // Každá nově odkrytá karta cvakne; další krok se naplánuje přesně na svůj čas
   const seen = `${S.tid}:${S.round}:${shown}`;
   if (S.phase === 'done' && REVEAL_SEEN && REVEAL_SEEN !== seen && REVEAL_SEEN.startsWith(`${S.tid}:${S.round}:`)) window.sfx?.('flip');
