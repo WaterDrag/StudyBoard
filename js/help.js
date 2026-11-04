@@ -96,7 +96,7 @@
 
     ['notes', 'Poznámky a místnosti', `
       ${item('Nástěnka a seznam', 'Nahoře v místnosti přepínáš mezi volnou nástěnkou a seznamem se složkami. Pravým tlačítkem na nástěnce otevřeš nabídku.')}
-      ${item('Druhy obsahu', 'Kromě poznámek můžeš přidat nadpis, návod s kapitolami a tabuli na kreslení. Poznámky na nástěnce jde propojit provázkem.')}
+      ${item('Druhy obsahu', 'Kromě poznámek můžeš přidat nadpis, návod s kapitolami a tabuli na kreslení. Na velké tabuli otevřeš lištu s nástroji pravým tlačítkem přímo u kurzoru (na dotyku podržením prstu). Poznámky na nástěnce jde propojit provázkem.')}
       ${item('Vzhled poznámky', 'Lišta nad poznámkou má dvě karty jako ve Wordu: na Domů je formátování, na Vložení tabulka, obrázek, odkaz a další. Pozadí poznámky může být podle motivu, bílé nebo černé.')}
       ${item('Rozepsaný text', 'Rozepsaná poznámka se průběžně ukládá v tomto prohlížeči. Když okno zavřeš nebo vypadne internet, při dalším otevření ti aplikace nabídne Obnovit.')}
       ${item('Vzorce a indexy', 'Horní a dolní index jsou na kartě Domů. Vzorec vložíš na kartě Vložení, zapisuje se v LaTeXu a klikem na něj ho upravíš.')}

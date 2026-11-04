@@ -1725,6 +1725,17 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   color: var(--text);
 }
 .wb-bar-ro { justify-content: center; padding: 6px; }
+.wb-float-x { display: none; }
+.wb-bar.wb-floating {
+  position: fixed; right: auto; z-index: 9000;
+  width: max-content; max-width: calc(100vw - 16px);
+  border: 1px solid var(--border-strong); border-radius: 12px;
+  background: var(--bg-2); backdrop-filter: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .4);
+  cursor: move;
+}
+.wb-bar.wb-floating .wb-spacer { flex: 0 0 8px; }
+.wb-bar.wb-floating .wb-float-x { display: inline-flex; }
 .wb-ro-label { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); }
 .wb-spacer { flex: 1; }
 .wb-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; flex-shrink: 0; }

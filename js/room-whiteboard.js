@@ -146,6 +146,7 @@ function setupWhiteboards() {
         WB_STROKE_UNSUBS.get(ch.doc.id)?.();
         WB_STROKE_UNSUBS.delete(ch.doc.id);
         WHITEBOARDS_MAP.delete(ch.doc.id);
+        if (WB_FLOAT?.el.id === 'wb-' + ch.doc.id) closeWbFloat();
         document.getElementById('wb-' + ch.doc.id)?.remove();
         return;
       }
@@ -290,6 +291,7 @@ function renderWhiteboard(wb) {
         <button class="wb-btn wb-redo" title="Znovu" aria-label="Znovu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
         <span class="wb-spacer"></span>
         <button class="wb-btn wb-del" title="Smazat tabuli" aria-label="Smazat tabuli">🗑️</button>
+        <button class="wb-btn wb-float-x" title="Zavřít lištu (Esc)" aria-label="Zavřít lištu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>` : `<div class="wb-bar wb-bar-ro"><span class="wb-ro-label">Tabule</span></div>`}
       ${editable ? handles : ''}`;
     // Behind notes: z-index 0 via CSS. Board grid shows through transparent bits.
@@ -670,17 +672,39 @@ function wireWhiteboard(el, id) {
   });
   canvas.addEventListener('mouseleave', () => { brush.style.display = 'none'; });
 
+  // Podržení prstu na místě (bez tahu) otevře lištu u prstu místo tečky
+  let lpTimer = 0, lpAt = null;
   canvas.addEventListener('touchstart', e => {
     if (!el.classList.contains('drawing') || e.touches.length !== 1) return;
-    startDraw(e.touches[0].clientX, e.touches[0].clientY);
+    const t = e.touches[0];
+    startDraw(t.clientX, t.clientY);
+    lpAt = [t.clientX, t.clientY];
+    clearTimeout(lpTimer);
+    lpTimer = setTimeout(() => {
+      stroke = null; textDrag = null; shapeMode = false;
+      redrawWbCanvas(canvas, WHITEBOARDS_MAP.get(id) || { strokes: [] });
+      openWbFloat(el, lpAt[0], lpAt[1]);
+    }, 550);
     e.stopPropagation(); e.preventDefault();
   }, { passive: false });
   canvas.addEventListener('touchmove', e => {
+    if (lpAt && Math.hypot(e.touches[0].clientX - lpAt[0], e.touches[0].clientY - lpAt[1]) > 10) clearTimeout(lpTimer);
     if ((!stroke && !textDrag) || e.touches.length !== 1) return;
     moveDraw(e.touches[0].clientX, e.touches[0].clientY);
     e.stopPropagation(); e.preventDefault();
   }, { passive: false });
-  canvas.addEventListener('touchend', e => { if (stroke || textDrag) { endDraw(); e.stopPropagation(); } });
+  canvas.addEventListener('touchend', e => { clearTimeout(lpTimer); if (stroke || textDrag) { endDraw(); e.stopPropagation(); } });
+
+  // Pravé tlačítko kdekoli na tabuli otevře lištu u kurzoru. Tažení pravým tlačítkem dál posouvá nástěnku.
+  let rdX = 0, rdY = 0;
+  el.addEventListener('mousedown', e => { if (e.button === 2) { rdX = e.clientX; rdY = e.clientY; } });
+  el.addEventListener('contextmenu', e => {
+    if (e.target.closest('.wb-text-body')) return;   // v textu zůstává nabídka prohlížeče (kopírovat, vložit)
+    e.preventDefault(); e.stopPropagation();
+    if (Math.hypot(e.clientX - rdX, e.clientY - rdY) > 6) return;
+    openWbFloat(el, e.clientX, e.clientY);
+  });
+  el.querySelector('.wb-float-x').addEventListener('click', closeWbFloat);
 
   // ── Undo (my last stroke; owner may undo anyone's) — pushes the removed
   //    stroke onto a redo stack. ──
@@ -714,6 +738,7 @@ function wireWhiteboard(el, id) {
     const wb = WHITEBOARDS_MAP.get(id);
     if (!(MY_ROLE === 'owner' || wb.authorId === ME.uid)) { toast('Smazat může jen autor nebo vlastník.'); return; }
     if (!await sbConfirm('Smazat celou tabuli i s kresbou?', { ok: 'Smazat', danger: true })) return;
+    if (WB_FLOAT?.el === el) closeWbFloat();
     try { await wbCol().doc(id).delete(); logActivity('board', 'smazal tabuli'); }
     catch (e) { toast('Chyba: ' + e.message); }
   });
@@ -722,6 +747,7 @@ function wireWhiteboard(el, id) {
   const bar = el.querySelector('.wb-bar');
   bar.addEventListener('mousedown', e => {
     if (e.target.closest('.wb-btn, .wb-color, .wb-type, .wb-wrange, .wb-wnum')) return;
+    if (bar.classList.contains('wb-floating')) { dragWbFloat(e); return; }   // plovoucí lišta se posouvá sama, tabule zůstane
     const wb = WHITEBOARDS_MAP.get(id);
     if (!(MY_ROLE === 'owner' || wb.authorId === ME.uid)) return;
     e.stopPropagation(); e.preventDefault();
@@ -825,3 +851,44 @@ function wireWhiteboard(el, id) {
 }
 
 // ── Board right-click menu: add a note or a tabule at the cursor ──
+
+// ── Plovoucí lišta ───────────────────────────────────────────
+// Lišta tabule je uvnitř nástěnky, takže se při oddálení zmenší spolu s ní. Pravým tlačítkem
+// (na dotyku podržením prstu) se tatáž lišta přesune do stránky k místu kliknutí v běžné velikosti.
+// Zůstane otevřená, dokud se kreslí na téhle tabuli; zavře ji Esc, křížek nebo klik jinam.
+let WB_FLOAT = null;   // { bar, el }
+function openWbFloat(el, x, y) {
+  closeWbFloat();
+  const bar = el.querySelector('.wb-bar:not(.wb-bar-ro)');
+  if (!bar) return;
+  if (!el.classList.contains('drawing')) { el.classList.add('drawing'); bar.querySelector('.wb-draw')?.classList.add('active'); }
+  bar.classList.add('wb-floating');
+  document.body.appendChild(bar);
+  WB_FLOAT = { bar, el };
+  const r = bar.getBoundingClientRect(), pad = 8;
+  const below = y + 16 + r.height <= innerHeight - pad;
+  bar.style.left = Math.max(pad, Math.min(x - r.width / 2, innerWidth - r.width - pad)) + 'px';
+  bar.style.top = Math.max(pad, below ? y + 16 : y - 16 - r.height) + 'px';
+}
+function closeWbFloat() {
+  if (!WB_FLOAT) return;
+  const { bar, el } = WB_FLOAT;
+  WB_FLOAT = null;
+  bar.classList.remove('wb-floating');
+  bar.style.left = bar.style.top = '';
+  if (!el.isConnected) { bar.remove(); return; }
+  const brush = el.querySelector('.wb-brush');
+  if (brush) brush.after(bar); else el.prepend(bar);
+}
+function dragWbFloat(e) {
+  e.preventDefault();
+  const bar = WB_FLOAT.bar, sx = e.clientX - bar.offsetLeft, sy = e.clientY - bar.offsetTop;
+  const mv = ev => { bar.style.left = (ev.clientX - sx) + 'px'; bar.style.top = (ev.clientY - sy) + 'px'; };
+  const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
+  window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+}
+['mousedown', 'touchstart'].forEach(type => document.addEventListener(type, e => {
+  if (!WB_FLOAT || e.target.closest?.('.wb-floating, .sbd-wrap, .modal-overlay') || WB_FLOAT.el.contains(e.target)) return;
+  closeWbFloat();
+}, { capture: true, passive: true }));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && WB_FLOAT) closeWbFloat(); });
