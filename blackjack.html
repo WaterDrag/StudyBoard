@@ -33,7 +33,7 @@
     <section id="bjSetup" class="mc-setup">
       <div class="game-banner" data-banner="blackjack"></div>
       <h1>Blackjack</h1>
-      <p class="mc-sub">Hraješ proti krupiérovi a výhry dostáváš rovnou. Minimální sázka se ale mění každou ruku. Když na ni nemáš, vydělat si můžeš jen správnou odpovědí a špatná tě může dostat do dluhu. U stolu je pět míst, můžeš ho otevřít přátelům.</p>
+      <p class="mc-sub">Hraješ proti krupiérovi a výhry dostáváš rovnou. Minimální sázka se ale mění každou ruku. Když na ni nemáš, správná odpověď ti dorovná účet na minimum, i z velkého dluhu, a špatná tě stojí jen minimum. U stolu je pět míst, můžeš ho otevřít přátelům.</p>
       <p class="mc-hint" id="bjTableInfo" hidden></p>
       <div class="mil-best" id="bjAccount"></div>
       <div class="mc-decks-h"><b>Z jakých balíčků?</b><button type="button" class="btn btn-ghost btn-sm" id="bjAll">Vybrat vše</button></div>
@@ -97,10 +97,11 @@
       </div>
 
       <!-- Tah -->
-      <div class="bj-panel bj-row" id="bjPlayPanel" hidden>
-        <button type="button" class="btn btn-secondary" id="bjHit">Další karta</button>
-        <button type="button" class="btn btn-primary" id="bjStand">Stojím</button>
-        <button type="button" class="btn btn-secondary" id="bjDouble">Zdvojit</button>
+      <div class="bj-panel bj-row bj-acts" id="bjPlayPanel" hidden>
+        <button type="button" class="bj-act split" id="bjSplit" title="Rozdělit na dvě ruce (P)" hidden><span class="bj-act-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-8"/><path d="m12 13-6-7"/><path d="m12 13 6-7"/><path d="M5 11V5h5"/><path d="M19 11V5h-5"/></svg></span><small>Rozdělit</small></button>
+        <button type="button" class="bj-act dbl" id="bjDouble" title="Zdvojit sázku a vzít poslední kartu (D)"><span class="bj-act-c"><b>×2</b></span><small>Zdvojit</small></button>
+        <button type="button" class="bj-act stand" id="bjStand" title="Stojím (S)"><span class="bj-act-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m6.5 6.5 11 11"/></svg></span><small>Stojím</small></button>
+        <button type="button" class="bj-act hit" id="bjHit" title="Další karta (H)"><span class="bj-act-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><small>Další karta</small></button>
       </div>
 
       <!-- Na minimum nestačí účet -->
@@ -131,6 +132,7 @@
   <script>document.write('<script src="js/sbdecks.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/deckfilter.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/mcgame.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/wallet.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>(function(){var s=document.createElement('script');s.src='js/blackjack.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>
 </html>

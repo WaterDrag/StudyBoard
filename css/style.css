@@ -6590,6 +6590,8 @@ img.card-img { cursor: zoom-in; }
 .bj-c-br { right: 4px; bottom: 4px; transform: rotate(180deg); }
 .bj-c-m { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--cw, 64px) * .42); }
 @keyframes bjDeal { from { opacity: 0; transform: translateY(-16px) scale(.92); } }
+.bj-card.flip { animation: bjFlip .5s ease-out both; }
+@keyframes bjFlip { 0% { transform: perspective(400px) rotateY(90deg); filter: brightness(.7); } 100% { transform: none; } }
 /* Místa u stolu */
 .bj-seats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; align-items: end; }
 .bj-seat { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; padding: 8px 4px; border-radius: 16px; transition: background .15s; }
@@ -6598,6 +6600,12 @@ img.card-img { cursor: zoom-in; }
 .bj-seat:nth-child(2), .bj-seat:nth-child(4) { margin-bottom: 8px; }
 .bj-seat-cards { display: flex; justify-content: center; min-height: 72px; --cw: 50px; }
 .bj-seat-cards .bj-card + .bj-card { margin-left: -32px; }
+/* Rozdělená ruka: dvě skupiny vedle sebe, menší karty, hraná část svítí */
+.bj-seat-cards.split { gap: 8px; --cw: 40px; }
+.bj-part { display: flex; border-radius: 8px; transition: opacity .2s, box-shadow .2s; }
+.bj-part.cur { box-shadow: 0 0 0 2px #fbbf24, 0 0 14px rgba(251, 191, 36, .6); }
+.bj-seat.turn .bj-seat-cards.split .bj-part:not(.cur) { opacity: .55; }
+.bj-seat-cards.split .bj-card + .bj-card { margin-left: -26px; }
 .bj-seat-val { min-height: 18px; font: 700 0.86rem var(--font-mono); }
 .bj-ava { width: 46px; height: 46px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; border: 3px solid var(--c); background: color-mix(in srgb, var(--c) 55%, #0f172a); font-weight: 700; color: #fff; }
 .bj-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -6616,6 +6624,29 @@ img.card-img { cursor: zoom-in; }
 /* Panely */
 .bj-panel { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; background: var(--bg-2); border: 1px solid var(--border); }
 .bj-row { display: flex; flex-flow: row wrap; align-items: center; justify-content: center; gap: 8px; }
+/* Tahy jako kulatá kasinová tlačítka: oranžové ×2, červené stop, zelené + */
+.bj-acts { gap: 22px; padding: 14px 12px 10px; }
+.bj-act { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; border: none; background: none; color: var(--text); font: 600 0.8rem var(--font); cursor: pointer; }
+.bj-act-c {
+  display: grid; place-items: center; width: 62px; height: 62px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 32%, var(--hi), var(--c) 62%, var(--lo));
+  border: 3px solid rgba(255, 255, 255, .85); color: #fff;
+  box-shadow: 0 0 0 2px var(--lo), 0 6px 14px rgba(0, 0, 0, .45), inset 0 -4px 8px rgba(0, 0, 0, .25);
+  transition: transform .12s, filter .12s;
+}
+.bj-act-c svg { width: 28px; height: 28px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+.bj-act-c b { font-size: 1.3rem; font-weight: 800; text-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+.bj-act[hidden] { display: none; }
+.bj-act.split { --hi: #93c5fd; --c: #2563eb; --lo: #1e3a8a; }
+.bj-act.dbl   { --hi: #fdba74; --c: #ea580c; --lo: #9a3412; }
+.bj-act.stand { --hi: #fca5a5; --c: #dc2626; --lo: #7f1d1d; }
+.bj-act.hit   { --hi: #86efac; --c: #16a34a; --lo: #14532d; }
+.bj-act:hover:not(:disabled) .bj-act-c { transform: translateY(-2px) scale(1.05); filter: brightness(1.08); }
+.bj-act:active:not(:disabled) .bj-act-c { transform: scale(.95); }
+.bj-act:focus-visible { outline: none; }
+.bj-act:focus-visible .bj-act-c { outline: 3px solid var(--accent); outline-offset: 3px; }
+.bj-act:disabled { cursor: default; opacity: .4; }
+.bj-act:disabled .bj-act-c { filter: grayscale(.8); }
 .bj-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .bj-chip { width: 58px; height: 58px; border-radius: 50%; border: 3px dashed #f8fafc; background: var(--chip, #0f172a); color: #fff; font: 700 0.85rem var(--font-mono); cursor: pointer; transition: transform .12s, opacity .12s; }
 .bj-chip:hover:not(:disabled) { transform: translateY(-3px); }
@@ -6630,6 +6661,20 @@ img.card-img { cursor: zoom-in; }
 .bj-q-stake { text-align: center; font-size: 0.95rem; }
 .bj-q-stake small { display: block; margin-top: 2px; font-size: 0.76rem; color: var(--text-muted); }
 .bj-q-next { align-self: center; min-width: 180px; justify-content: center; }
+/* Otázka v barvách stolu: zelené sukno se zlatým lemem, odpovědi jako tmavé žetony */
+.bj-q-stake b { color: #fbbf24; }
+.bj-page .mil-question {
+  background: radial-gradient(ellipse at 50% 0%, #166534, #0f3d23 70%, #072a17);
+  border: 2px solid #b8913a; color: #fefce8;
+  box-shadow: inset 0 0 0 4px rgba(0, 0, 0, .18), 0 12px 36px -18px rgba(251, 191, 36, .55);
+}
+.bj-page .mil-deck { color: #d6c08a; }
+.bj-page .mil-ans { border-color: #7c6428; background: linear-gradient(180deg, #13261b, #0a1710); color: #fefce8; }
+.bj-page .mil-ans i { color: #fbbf24; }
+.bj-page .mil-ans:hover:not(:disabled) { background: linear-gradient(180deg, #1c3d2a, #10261a); border-color: #d4a73c; }
+.bj-page .mil-ans.picked { background: #7c4a03; border-color: #fbbf24; }
+.bj-page .mil-ans.right { background: #15803d; border-color: #86efac; }
+.bj-page .mil-ans.wrong { background: #8b1a1a; border-color: #f87171; }
 @media (max-width: 720px) {
   .bj-table { padding: 10px; border-radius: 20px; }
   .bj-house { grid-template-columns: 76px minmax(0, 1fr); min-height: 0; gap: 8px; }

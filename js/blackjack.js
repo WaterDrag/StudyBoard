@@ -1,19 +1,25 @@
 // ═══ blackjack.js — blackjack s minimální sázkou, která se mění každou ruku, sám i s přáteli
 // Hraje se normálně a výhry se vyplácí rovnou. Otázka přijde, až na minimální sázku nestačí účet:
-// správná odpověď přidá zvolenou částku, špatná ji strhne a může skončit dluhem.
+// správná odpověď vždy dorovná účet přesně na minimum (i z velkého dluhu), špatná strhne jen minimum.
 // Minimum se odvíjí od účtu a občas ho přesáhne (rollMin), takže na otázky dojde i tomu, kdo vyhrává.
-// Účet, minimum a otázky má každý svoje (users/{uid}.bj), minimum obnovení stránky nezmění.
-// Pravidla stolu: 6 balíčků, krupiér stojí na 17, blackjack platí 3:2, zdvojit jde na prvních dvou kartách.
+// Peníze jsou ve společné peněžence her (wallet.js, users/{uid}.wallet), minimum a stav kola v users/{uid}.bj.
+// Pravidla stolu: 6 balíčků, krupiér stojí na 17, blackjack platí 3:2, zdvojit jde na prvních dvou kartách,
+// dvě karty stejné hodnoty jde jednou rozdělit (split): z es jde jen po jedné kartě a 21 po rozdělení není blackjack.
 //
 // Stůl má pět míst. Sólo běží ve stavu S v paměti, s přáteli je S dokument blackjack/{id}:
 //   { hostUid, hostName, tid, allowedUids, playerIds, seats[uid], players{uid:{name,photo,seen}},
-//     round, phase bet|play|done, shoe[], pos, dealer[], hidden, hands{uid:{bet,cards,done}}, turn, turnAt, betAt, doneAt }
+//     round, phase bet|play|done, shoe[], pos, dealer[], hidden, hands{uid:{bet,cards,done,parts?,cur?}}, turn, turnAt, betAt, doneAt }
+// Rozdělená ruka má parts[{bet,cards,done,sp}] a cur (která se hraje); bet je pak součet sázek, cards prázdné.
 // Obě varianty mění stůl stejnými funkcemi přes act(): s přáteli v transakci, takže je jedno, kdo akci spustí.
 // Peníze si každý připisuje sám, když ruku uvidí dohranou (settle); A.lastR hlídá, aby to bylo jen jednou.
 const SEL_KEY = 'bj_decks', STATE_KEY = 'bj_state';
 const CHIPS = [50, 100, 500, 1000, 5000, 25000], SEATS = 5;
 const START_BAL = 1000, FORCE_CHANCE = 0.15;   // jak často je minimum vyšší než celý účet
 const BET_MS = 15000, TURN_MS = 30000, DONE_MS = 3200, CARD_MS = 450, BEAT_MS = 30000, GONE_MS = 90000;
+// Krupiér dohrává pomalu, ať je to napínavé: chvíli počká, otočí skrytou kartu a pak bere po jedné.
+// Odvíjí se od času konce kola (turnAt), takže všichni u stolu vidí totéž a obnovení stránky nic nepřehraje.
+const HOLE_MS = 1100, DRAW_MS = 1400;
+const revealMs = n => HOLE_MS + Math.max(0, n - 2) * DRAW_MS;
 const SEAT_COLORS = ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899'];
 const SUITS = ['♠', '♥', '♦', '♣'], RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 const money = n => n.toLocaleString('cs-CZ') + ' Kč';
@@ -63,24 +69,23 @@ async function describeTable() {
 
 // ── Účet ───────────────────────────────────────────────────────
 async function loadAccount() {
-  try { A = { ...A, ...JSON.parse(localStorage.getItem(STATE_KEY) || '{}') }; } catch (_) { /* nic */ }
-  try {
-    const snap = await db.collection('users').doc(me()).get();
-    if (snap.exists && snap.data().bj) A = { ...A, ...snap.data().bj };
-  } catch (_) { /* bez sítě zůstane poslední stav z tohoto prohlížeče */ }
+  let local = {};
+  try { local = JSON.parse(localStorage.getItem(STATE_KEY) || '{}') || {}; } catch (_) { /* nic */ }
+  const { w, g } = await walletLoad(me(), 'bj', local);
+  A = { ...newAccount(), ...local, ...g, ...w };   // peníze vždy z peněženky, zbytek z uloženého stavu hry
 }
 function saveAccount() {
   A.best = Math.max(A.best, A.bal);
   A.low = Math.min(A.low, A.bal);
   try { localStorage.setItem(STATE_KEY, JSON.stringify(A)); } catch (_) { /* nic */ }
-  db.collection('users').doc(me()).set({ bj: A }, { merge: true }).catch(() => {});
+  walletSave(me(), A, { bj: { min: A.min, lastR: A.lastR, hands: A.hands } });
 }
 function showAccount() {
   const debt = A.bal < 0;
   $('bjAccount').innerHTML = `${debt ? 'Dlužíš' : 'Na účtu máš'} <b>${money(Math.abs(A.bal))}</b>`;
   $('bjReset').hidden = !A.hands && !A.right && !A.wrong;
   $('bjReset').onclick = async () => {
-    if (!await sbConfirm('Vynulovat účet, rekord i statistiky?', { ok: 'Vynulovat', danger: true })) return;
+    if (!await sbConfirm('Vynulovat účet, rekord i statistiky? Peněženka je společná pro všechny hry o peníze.', { ok: 'Vynulovat', danger: true })) return;
     A = newAccount();
     saveAccount();
     showAccount();
@@ -207,6 +212,22 @@ function handValue(cards) {
   return { t, soft: aces > 0 };
 }
 const isBJ = cards => cards.length === 2 && handValue(cards).t === 21;
+// Rozdělená ruka: části se hrají postupně, nerozdělená ruka je sama sobě jedinou částí
+const partsOf = h => h?.parts || (h ? [h] : []);
+const curPart = h => h.parts ? h.parts[h.cur] : h;
+const played = h => partsOf(h).some(p => p.cards?.length);
+const cardVal = c => { const r = rankOf(c); return r === 'A' ? 11 : /^(J|Q|K|10)$/.test(r) ? 10 : +r; };
+const canSplit = h => !!h && !h.parts && h.cards.length === 2 && cardVal(h.cards[0]) === cardVal(h.cards[1]);
+// Aktuální část je dohraná: hraje se další část, nebo je na řadě další hráč
+function finishPart(d, h) {
+  if (h.parts) {
+    h.parts[h.cur].done = true;
+    const next = h.parts.findIndex(p => !p.done);
+    if (next >= 0) { h.cur = next; d.turnAt = Date.now(); return; }
+  }
+  h.done = true;
+  advance(d);
+}
 const draw = d => d.shoe[d.pos++];
 const stateOf = d => {
   const out = { seats: d.seats, playerIds: d.playerIds, players: d.players, hostUid: d.hostUid, hostName: d.hostName, round: d.round, phase: d.phase, pos: d.pos, dealer: d.dealer, hidden: d.hidden, hands: d.hands, turn: d.turn, turnAt: d.turnAt, betAt: d.betAt, doneAt: d.doneAt };
@@ -240,10 +261,10 @@ function advance(d) {
 function finishRound(d) {
   d.hidden = false;
   d.turn = null;
-  const live = Object.values(d.hands).some(h => handValue(h.cards).t <= 21 && !isBJ(h.cards));
+  const live = Object.values(d.hands).some(h => partsOf(h).some(p => handValue(p.cards).t <= 21 && (p.sp || !isBJ(p.cards))));
   if (live && !isBJ(d.dealer)) while (handValue(d.dealer).t < 17) d.dealer.push(draw(d));
   d.phase = 'done';
-  d.doneAt = Date.now() + Math.max(0, d.dealer.length - 2) * CARD_MS + DONE_MS;
+  d.doneAt = Date.now() + revealMs(d.dealer.length) + DONE_MS;
   d.turnAt = Date.now();
 }
 function nextRound(d) {
@@ -269,7 +290,7 @@ function nextRound(d) {
 // Jak ruka dopadla: vrácená částka včetně sázky, změna účtu a kolik to dělá.
 function outcome(h, dealer) {
   const p = handValue(h.cards).t, v = handValue(dealer).t, bet = h.bet;
-  const pBJ = isBJ(h.cards), dBJ = isBJ(dealer);
+  const pBJ = !h.sp && isBJ(h.cards), dBJ = isBJ(dealer);
   if (p > 21) return { back: 0, delta: -bet, kind: 'bad', why: `Máš ${p}, to je přes 21.` };
   if (pBJ && dBJ) return { back: bet, delta: 0, kind: '', why: 'Oba máte blackjack.' };
   if (dBJ) return { back: 0, delta: -bet, kind: 'bad', why: 'Krupiér má blackjack.' };
@@ -278,6 +299,13 @@ function outcome(h, dealer) {
   if (p > v) return { back: bet * 2, delta: bet, kind: 'good', why: `${p} proti ${v}.` };
   if (p < v) return { back: 0, delta: -bet, kind: 'bad', why: `${p} proti ${v}.` };
   return { back: bet, delta: 0, kind: '', why: `Oba máte ${p}.` };
+}
+// Celá ruka hráče, u rozdělené součet obou částí
+function outcomeAll(h, dealer) {
+  const rs = partsOf(h).map(p => outcome(p, dealer));
+  if (rs.length === 1) return rs[0];
+  const back = rs.reduce((s, r) => s + r.back, 0), delta = rs.reduce((s, r) => s + r.delta, 0);
+  return { back, delta, kind: delta > 0 ? 'good' : delta < 0 ? 'bad' : '', why: rs.every(r => r.why === rs[0].why) ? `Obě ruce: ${rs[0].why}` : rs.map((r, i) => `${i + 1}. ruka: ${r.why}`).join(' ') };
 }
 
 // Změna stolu. fn vrátí false, když už se akce nehodí (někdo byl rychlejší).
@@ -338,11 +366,10 @@ function hit() {
   if (S.turn !== me()) return;
   act(d => {
     if (d.turn !== me()) return false;
-    const h = d.hands[me()];
-    h.cards.push(draw(d));
-    const v = handValue(h.cards).t;
+    const h = d.hands[me()], p = curPart(h);
+    p.cards.push(draw(d));
     d.turnAt = Date.now();
-    if (v >= 21) { h.done = true; advance(d); }
+    if (handValue(p.cards).t >= 21) finishPart(d, h);
   });
   window.sfx?.('flip');
 }
@@ -350,21 +377,46 @@ function stand() {
   if (S.turn !== me()) return;
   act(d => {
     if (d.turn !== me()) return false;
-    d.hands[me()].done = true;
-    advance(d);
+    finishPart(d, d.hands[me()]);
   });
 }
 async function doubleDown() {
+  const h0 = mine(), p0 = h0 && curPart(h0);
+  if (S.turn !== me() || !p0 || p0.cards.length !== 2 || A.bal < p0.bet) return;
+  const extra = p0.bet;
+  const ok = await act(d => {
+    const h = d.hands[me()], p = curPart(h);
+    if (d.turn !== me() || p.cards.length !== 2) return false;
+    p.bet += extra;
+    if (h.parts) h.bet += extra;
+    p.cards.push(draw(d));
+    finishPart(d, h);
+  });
+  if (!ok) return;
+  A.bal -= extra;
+  saveAccount();
+  window.sfx?.('flip');
+  render();
+}
+// Split: dvě karty stejné hodnoty se rozdělí na dvě ruce, druhá dostane stejnou sázku.
+// Každá část dobere druhou kartu; rozdělená esa dostanou jen tu jednu a hned stojí.
+async function splitHand() {
   const h0 = mine();
-  if (S.turn !== me() || !h0 || h0.cards.length !== 2 || A.bal < h0.bet) return;
+  if (S.turn !== me() || !canSplit(h0) || A.bal < h0.bet) return;
   const extra = h0.bet;
   const ok = await act(d => {
-    if (d.turn !== me() || d.hands[me()].cards.length !== 2) return false;
     const h = d.hands[me()];
-    h.bet *= 2;
-    h.cards.push(draw(d));
-    h.done = true;
-    advance(d);
+    if (d.turn !== me() || !canSplit(h)) return false;
+    const aces = rankOf(h.cards[0]) === 'A';
+    h.parts = h.cards.map(c => {
+      const cards = [c, draw(d)];
+      return { bet: extra, cards, done: aces || handValue(cards).t >= 21, sp: true };
+    });
+    h.cards = [];
+    h.bet = extra * 2;
+    h.cur = 0;
+    d.turnAt = Date.now();
+    if (h.parts[0].done) finishPart(d, h);
   });
   if (!ok) return;
   A.bal -= extra;
@@ -376,11 +428,11 @@ async function doubleDown() {
 // Ruku dohranou krupiérem si každý vyúčtuje sám, až dojede animace karet
 function settle() {
   const h = mine();
-  if (S.phase !== 'done' || !h || !h.cards.length) return;
+  if (S.phase !== 'done' || !played(h)) return;
   const key = `${S.tid}:${S.round}`;
   if (A.lastR === key || settling === key) return;
   settling = key;
-  const dealer = S.dealer.slice(), bet = h.bet, res = outcome(h, dealer);
+  const dealer = S.dealer.slice(), res = outcomeAll(h, dealer);
   setTimeout(() => {
     if (A.lastR === key) return;
     A.lastR = key;
@@ -389,30 +441,45 @@ function settle() {
     saveAccount();
     window.sfx?.(res.kind === 'good' ? 'coin' : res.kind === 'bad' ? 'bad' : 'click');
     MSG = {
-      html: res.delta > 0 ? `${res.why} Výhra <b>${money(res.delta)}</b>.` : res.delta < 0 ? `${res.why} Prohra <b>${money(bet)}</b>.` : `${res.why} Remíza, sázka se vrací.`,
+      html: res.delta > 0 ? `${res.why} Výhra <b>${money(res.delta)}</b>.` : res.delta < 0 ? `${res.why} Prohra <b>${money(-res.delta)}</b>.` : `${res.why} Remíza, sázka se vrací.`,
       kind: res.kind,
     };
     render();
-  }, Math.max(0, dealer.length - 2) * CARD_MS + 250);
+  }, Math.max(0, S.turnAt + revealMs(dealer.length) + 350 - Date.now()));
 }
 
 // ── Vykreslení ─────────────────────────────────────────────────
-function cardHtml(c, hidden, delay) {
+function cardHtml(c, hidden, delay, flip) {
   const style = delay ? ` style="animation-delay:${delay}ms"` : '';
   if (hidden) return `<div class="bj-card back"${style}></div>`;
   const s = suitOf(c), r = rankOf(c), red = s === '♥' || s === '♦';
   const suit = s + '︎';   // bez toho z nich telefon udělá barevné emoji
-  return `<div class="bj-card${red ? ' red' : ''}"${style}><span class="bj-c-tl">${r}<i>${suit}</i></span><span class="bj-c-m">${suit}</span><span class="bj-c-br">${r}<i>${suit}</i></span></div>`;
+  return `<div class="bj-card${red ? ' red' : ''}${flip ? ' flip' : ''}"${style}><span class="bj-c-tl">${r}<i>${suit}</i></span><span class="bj-c-m">${suit}</span><span class="bj-c-br">${r}<i>${suit}</i></span></div>`;
 }
 function valText(cards) { const v = handValue(cards); return v.soft && v.t < 21 ? `${v.t - 10} / ${v.t}` : String(v.t); }
 // Jen nové karty dostanou animaci, stávající se nepřekreslují
 function syncCards(el, cards, hideFrom, stepMs = 0) {
   if (!cards.length) { el.innerHTML = ''; return; }
   const hidden = i => hideFrom != null && i >= hideFrom;
-  [...el.children].forEach((node, i) => { if (node.classList.contains('back') && !hidden(i)) node.outerHTML = cardHtml(cards[i], false); });
+  [...el.children].forEach((node, i) => { if (node.classList.contains('back') && !hidden(i)) node.outerHTML = cardHtml(cards[i], false, 0, true); });
   const have = el.children.length;
   cards.slice(have).forEach((c, i) => el.insertAdjacentHTML('beforeend', cardHtml(c, hidden(have + i), i * stepMs)));
   el.dataset.n = cards.length;
+}
+// Karty hráče; rozdělená ruka má každou část ve vlastní skupině a ta, která se hraje, svítí
+function syncHand(el, h, active) {
+  const parts = partsOf(h);
+  if (parts.length < 2) {
+    if (el.querySelector('.bj-part')) el.innerHTML = '';
+    el.classList.remove('split');
+    syncCards(el, parts[0]?.cards || []);
+    return;
+  }
+  if (!el.classList.contains('split') || el.children.length !== parts.length) {
+    el.classList.add('split');
+    el.innerHTML = parts.map(() => '<div class="bj-part"></div>').join('');
+  }
+  parts.forEach((p, i) => { const pe = el.children[i]; syncCards(pe, p.cards); pe.classList.toggle('cur', i === active); });
 }
 function buildSeats() {
   $('bjSeats').innerHTML = Array.from({ length: SEATS }, (_, i) => `<div class="bj-seat" data-i="${i}" style="--c:${SEAT_COLORS[i]}">
@@ -443,15 +510,15 @@ function renderSeats() {
       el.querySelector('.bj-seat-name').textContent = uid ? (uid === me() ? 'Ty' : p?.name || 'Hráč') : 'Volno';
       cards.innerHTML = '';
     }
-    syncCards(cards, h?.cards || []);
-    el.querySelector('.bj-seat-val').textContent = h?.cards?.length ? valText(h.cards) : '';
+    syncHand(cards, h, S.turn === uid ? h?.cur : -1);
+    el.querySelector('.bj-seat-val').textContent = played(h) ? partsOf(h).map(p => valText(p.cards)).join(' · ') : '';
     const bet = el.querySelector('.bj-seat-bet');
     // Vlastní rozestavěnou sázku vidí jen hráč, ostatním se ukáže až po vsazení
     const pending = uid === me() && !h && S.phase === 'bet' ? BET : 0;
     renderStack(el.querySelector('.bj-stack'), h ? h.bet : pending, !!pending);
     if (!h) { bet.textContent = pending ? money(pending) : uid && S.phase !== 'bet' ? 'nehraje' : ''; bet.dataset.kind = ''; return; }
-    if (S.phase === 'done' && h.cards.length) {
-      const r = outcome(h, S.dealer);
+    if (S.phase === 'done' && played(h)) {
+      const r = outcomeAll(h, S.dealer);
       bet.textContent = r.delta ? signed(r.delta) : 'remíza';
       bet.dataset.kind = r.kind;
     } else { bet.textContent = money(h.bet); bet.dataset.kind = ''; }
@@ -491,26 +558,37 @@ function renderBet() {
   $('bjChips').innerHTML = shown.map(c => `<button type="button" class="bj-chip" data-chip="${c}" style="--chip:var(--chip-${c})"${c > A.bal - BET ? ' disabled' : ''} aria-label="Přidat ${money(c)}">${c >= 1000 ? c / 1000 + 'k' : c}</button>`).join('') +
     `<button type="button" class="bj-chip all" data-chip="all"${A.bal <= BET ? ' disabled' : ''}>Vše</button>`;
   if (A.bal >= A.min) return;
-  const need = A.min - A.bal, earn = [need, up50(need * 2), up50(need * 4)].join();
-  $('bjEarnH').innerHTML = `Minimální sázka je <b>${money(A.min)}</b> a ${A.bal < 0 ? `dlužíš <b>${money(-A.bal)}</b>` : `máš <b>${money(A.bal)}</b>`}. Vyber, o kolik odpovíš. Správně částku získáš, špatně o ni přijdeš.`;
+  // Jedna otázka vždy stačí: správně dorovná účet přesně na minimum, špatně stojí jen minimum (nikdy víc, než by přidala)
+  const { gain, loss } = earnStake(), earn = `${gain},${loss}`;
+  $('bjEarnH').innerHTML = `Minimální sázka je <b>${money(A.min)}</b> a ${A.bal < 0 ? `dlužíš <b>${money(-A.bal)}</b>` : `máš <b>${money(A.bal)}</b>`}. ` +
+    `Správná odpověď ti přidá <b>${money(gain)}</b>${A.bal < 0 ? ', splatí celý dluh' : ''} a budeš mít přesně na minimum. Špatná tě stojí <b>${money(loss)}</b>.`;
   if ($('bjEarn').dataset.v !== earn) {
     $('bjEarn').dataset.v = earn;
-    $('bjEarn').innerHTML = earn.split(',').map(n => `<button type="button" class="btn btn-secondary btn-sm" data-earn="${n}">${money(+n)}</button>`).join('');
+    $('bjEarn').innerHTML = `<button type="button" class="btn btn-primary" data-earn="1">Odpovědět na otázku</button>`;
   }
 }
+const earnStake = () => { const gain = A.min - A.bal; return { gain, loss: Math.min(A.min, gain) }; };
 // Co krupiér říká a co je zrovna vidět
 function renderStatus() {
   const m = $('bjMsg'), now = Date.now();
   let html = MSG.html, kind = MSG.kind;
   if (S.phase === 'play' && S.turn) {
     const left = S.solo ? '' : ` (${Math.max(0, Math.ceil((S.turnAt + TURN_MS - now) / 1000))} s)`;
-    html = S.turn === me() ? `Jsi na řadě${left}.` : `Hraje ${esc(S.players[S.turn]?.name || 'hráč')}${left}.`;
+    const part = S.hands[S.turn]?.parts ? `, ${S.hands[S.turn].cur + 1}. ruka` : '';
+    html = S.turn === me() ? `Jsi na řadě${part}${left}.` : `Hraje ${esc(S.players[S.turn]?.name || 'hráč')}${part}${left}.`;
     kind = '';
   } else if (S.phase === 'bet' && mine()) {
     html = S.betAt ? `Čekám na ostatní, rozdávám za ${Math.max(0, Math.ceil((S.betAt + BET_MS - now) / 1000))} s.` : 'Čekám na ostatní.';
     kind = '';
   } else if (S.phase === 'bet' && !html) {
     html = A.bal >= A.min ? 'Sázky, prosím.' : 'Na minimální sázku nemáš, pomůže jen otázka.';
+  } else if (dealerRevealing()) {
+    const shown = dealerShown();
+    html = shown < 2 ? 'Tak se podíváme…' : `Mám ${valText(S.dealer.slice(0, shown))}. Beru další kartu…`;
+    kind = '';
+  } else if (S.phase === 'done' && played(mine()) && A.lastR !== `${S.tid}:${S.round}`) {
+    html = `Mám ${valText(S.dealer)}.`;   // chvilka před vyúčtováním, ať neprobleskne zpráva z minulého kola
+    kind = '';
   }
   if (m.innerHTML !== html) m.innerHTML = html;
   m.dataset.kind = kind;
@@ -524,14 +602,43 @@ function renderPanels() {
   $('bjPlayPanel').hidden = !myTurn;
   $('bjQ').hidden = !Q;
   document.querySelector('.bj-game').classList.toggle('asking', !!Q);
-  if (myTurn) $('bjDouble').disabled = h.cards.length !== 2 || A.bal < h.bet;
+  if (myTurn) {
+    const p = curPart(h);
+    $('bjDouble').disabled = p.cards.length !== 2 || A.bal < p.bet;
+    $('bjSplit').hidden = !canSplit(h);
+    $('bjSplit').disabled = A.bal < h.bet;
+    $('bjSplit').title = A.bal < h.bet ? `Na rozdělení potřebuješ ${money(h.bet)} na účtu` : 'Rozdělit na dvě ruce (P)';
+  }
   $('bjInvite').hidden = !S.solo;
   $('bjCopy').hidden = !!S.solo;
 }
+// Kolik karet krupiéra je lícem nahoru. Při dohrávání přibývají po krocích podle času.
+function dealerShown() {
+  if (!S.dealer.length) return 0;
+  if (S.hidden) return 1;
+  if (S.phase !== 'done') return S.dealer.length;
+  const t = Date.now() - (S.turnAt || 0);
+  return t < HOLE_MS ? 1 : Math.min(S.dealer.length, 2 + Math.floor((t - HOLE_MS) / DRAW_MS));
+}
+const dealerRevealing = () => !!S && S.phase === 'done' && S.dealer.length > 0 && dealerShown() < S.dealer.length;
+let REVEAL_T = 0, REVEAL_SEEN = '';
+function renderDealer() {
+  const shown = dealerShown(), cards = S.dealer.slice(0, Math.max(shown, Math.min(2, S.dealer.length)));
+  syncCards($('bjDealer'), cards, shown < cards.length ? shown : null, S.phase === 'done' ? 0 : CARD_MS);
+  $('bjDealerVal').textContent = shown ? valText(S.dealer.slice(0, shown)) : '';
+  // Každá nově odkrytá karta cvakne; další krok se naplánuje přesně na svůj čas
+  const seen = `${S.tid}:${S.round}:${shown}`;
+  if (S.phase === 'done' && REVEAL_SEEN && REVEAL_SEEN !== seen && REVEAL_SEEN.startsWith(`${S.tid}:${S.round}:`)) window.sfx?.('flip');
+  REVEAL_SEEN = seen;
+  clearTimeout(REVEAL_T);
+  if (dealerRevealing()) {
+    const t = Date.now() - S.turnAt, next = shown < 2 ? HOLE_MS : HOLE_MS + (shown - 1) * DRAW_MS;
+    REVEAL_T = setTimeout(render, Math.max(30, next - t + 10));
+  }
+}
 function render() {
   if (!S) return;
-  syncCards($('bjDealer'), S.dealer, S.hidden ? 1 : null, CARD_MS);
-  $('bjDealerVal').textContent = !S.dealer.length ? '' : S.hidden ? valText(S.dealer.slice(0, 1)) : valText(S.dealer);
+  renderDealer();
   renderSeats();
   settle();
   renderMoney();
@@ -564,12 +671,13 @@ $('bjDeal').onclick = placeBet;
 $('bjHit').onclick = hit;
 $('bjStand').onclick = stand;
 $('bjDouble').onclick = doubleDown;
+$('bjSplit').onclick = splitHand;
 $('bjInvite').onclick = openToFriends;
 $('bjCopy').onclick = copyLink;
 $('bjLeave').onclick = leaveTable;
 $('bjEarn').addEventListener('click', e => {
   const b = e.target.closest('[data-earn]');
-  if (b && !Q && A.bal < A.min) ask(+b.dataset.earn);
+  if (b && !Q && A.bal < A.min) ask(earnStake());
 });
 
 // ── Otázka ─────────────────────────────────────────────────────
@@ -577,10 +685,10 @@ function nextCard() {
   if (!QUEUE.length) QUEUE = shuffle(POOL);
   return QUEUE.shift();
 }
-function ask(stake) {
+function ask({ gain, loss }) {
   const card = nextCard(), opt = mcOptions(card, POOL_ALL);
-  Q = { stake, card, ...opt, done: false };
-  $('bjQStake').innerHTML = `Otázka o <b>${money(stake)}</b><small>Špatná odpověď: ${signed(-stake)}</small>`;
+  Q = { gain, loss, card, ...opt, done: false };
+  $('bjQStake').innerHTML = `Otázka o <b>${money(gain)}</b><small>Špatná odpověď: ${signed(-loss)}</small>`;
   $('bjQuestion').innerHTML = mcQuestionHtml(card) + `<div class="mil-deck">${esc(card.deckName)}</div>`;
   $('bjAnswers').innerHTML = opt.opts.map((t, k) => `<button type="button" class="mil-ans${card.cl ? ' is-code' : ''}" data-k="${k}"><i>${'ABCD'[k]}</i><span>${mcOptionHtml(card, t)}</span></button>`).join('');
   $('bjNext').hidden = true;
@@ -598,7 +706,7 @@ function answer(k) {
   btns[Q.correct].classList.add('right');
   if (!right) btns[k].classList.add('wrong');
   btns.forEach(b => { b.disabled = true; });
-  A.bal += right ? Q.stake : -Q.stake;
+  A.bal += right ? Q.gain : -Q.loss;
   if (right) { A.right++; recordPlayPoints(1); } else {
     A.wrong++;
     // Špatně zodpovězená karta se brzy vrátí
@@ -607,7 +715,7 @@ function answer(k) {
   saveAccount();
   renderMoney();
   window.sfx?.(right ? 'ok' : 'bad');
-  const text = right ? `Správně! <b>${signed(Q.stake)}</b>` : `Špatně, <b>${signed(-Q.stake)}</b>${A.bal < 0 ? ` · dlužíš ${money(-A.bal)}` : ''}`;
+  const text = right ? `Správně! <b>${signed(Q.gain)}</b>` : `Špatně, <b>${signed(-Q.loss)}</b>${A.bal < 0 ? ` · dlužíš ${money(-A.bal)}` : ''}`;
   MSG = { html: text, kind: right ? 'good' : 'bad' };
   renderStatus();
   $('bjQStake').innerHTML = text;
@@ -627,6 +735,6 @@ document.addEventListener('keydown', e => {
   const key = e.key.toLowerCase();
   if (Q && !Q.done && /^[1-4]$/.test(key)) answer(+key - 1);
   else if (S.turn === me()) {
-    if (key === 'h') hit(); else if (key === 's') stand(); else if (key === 'd') doubleDown();
+    if (key === 'h') hit(); else if (key === 's') stand(); else if (key === 'd') doubleDown(); else if (key === 'p' && !$('bjSplit').hidden) splitHand();
   } else if (S.phase === 'bet' && !Q && key === 'enter' && e.target.tagName !== 'BUTTON') placeBet();
 });
