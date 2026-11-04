@@ -198,7 +198,16 @@ async function renderWhiteboardExport(wb, onProgress) {
         i.onload = () => ok(i); i.onerror = no;
         i.src = im.url;
       });
-      ctx.drawImage(el, im.x, im.y, im.w, im.h);
+      // Otočení, zrcadlení a průhlednost stejně jako na tabuli
+      const rot = im.rot || 0, side = rot % 180 !== 0;
+      const dw = side ? im.h : im.w, dh = side ? im.w : im.h;
+      ctx.save();
+      ctx.globalAlpha = im.op ?? 1;
+      ctx.translate(im.x + im.w / 2, im.y + im.h / 2);
+      ctx.rotate(rot * Math.PI / 180);
+      if (im.flip) ctx.scale(-1, 1);
+      ctx.drawImage(el, -dw / 2, -dh / 2, dw, dh);
+      ctx.restore();
     } catch (_) { /* unreachable picture — skip it */ }
   }
   (wb.strokes || []).forEach(s => { try { drawOneStroke(ctx, s); } catch (_) {} });

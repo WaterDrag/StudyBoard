@@ -274,6 +274,7 @@ function renderWhiteboard(wb) {
           <option value="rect">Obdélník</option>
           <option value="ellipse">Elipsa</option>
           <option value="text">Text</option>
+          <option value="move">Obrázky</option>
         </select>
         <span class="wb-sep"></span>
         <button class="wb-btn wb-erase" title="Guma" aria-label="Guma"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L13 19"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></button>
@@ -297,6 +298,7 @@ function renderWhiteboard(wb) {
     // Behind notes: z-index 0 via CSS. Board grid shows through transparent bits.
     document.getElementById('board').appendChild(el);
     el.classList.toggle('text-mode', WB_TOOL.type === 'text' && WB_TOOL.mode === 'draw');
+    el.classList.toggle('img-mode', WB_TOOL.type === 'move' && WB_TOOL.mode === 'draw');
     if (canDrawWb()) wireWhiteboard(el, wb.id);
   }
 
@@ -332,9 +334,26 @@ function renderWhiteboardImages(el, wb) {
       el.appendChild(node);
       if (editable) wireWbImage(el, node, wb.id);
     }
-    node.style.left = im.x + 'px'; node.style.top = im.y + 'px';
-    node.style.width = im.w + 'px'; node.style.height = im.h + 'px';
+    layoutWbImg(node, im);
+    node.classList.toggle('sel', WB_IMG_SEL?.wbId === wb.id && WB_IMG_SEL.iid === im.id);
   });
+  // Pořadí v DOM = pořadí v poli, takže Dopředu / Dozadu je vidět hned
+  const nodes = [...el.querySelectorAll('.wb-img')];
+  if (nodes.map(n => n.dataset.iid).join() !== images.map(i => i.id).join())
+    images.forEach(im => { const n = el.querySelector(`.wb-img[data-iid="${im.id}"]`); if (n) el.insertBefore(n, el.querySelector('.wb-text') || null); });
+  if (WB_IMG_SEL?.wbId === wb.id) placeWbImgBar();
+}
+
+// Rámeček má rozměry na tabuli, obrázek uvnitř se otočí a zrcadlí.
+// Při otočení o 90° je obrázek „na boku“, takže má prohozenou šířku a výšku.
+function layoutWbImg(node, im) {
+  node.style.left = im.x + 'px'; node.style.top = im.y + 'px';
+  node.style.width = im.w + 'px'; node.style.height = im.h + 'px';
+  const img = node.querySelector('img'), rot = im.rot || 0, side = rot % 180 !== 0;
+  img.style.width = (side ? im.h : im.w) + 'px';
+  img.style.height = (side ? im.w : im.h) + 'px';
+  img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)${im.flip ? ' scaleX(-1)' : ''}`;
+  img.style.opacity = im.op ?? 1;
 }
 
 async function saveWbImages(wbId, images) {
@@ -346,34 +365,63 @@ function wireWbImage(el, node, wbId) {
   const getI = () => (WHITEBOARDS_MAP.get(wbId).images || []).find(i => i.id === iid);
   const writeI = patch => saveWbImages(wbId, (WHITEBOARDS_MAP.get(wbId).images || []).map(i => i.id === iid ? { ...i, ...patch } : i));
 
-  node.querySelector('.wb-img-del').addEventListener('click', async e => {
+  const del = node.querySelector('.wb-img-del');
+  del.addEventListener('pointerdown', e => e.stopPropagation());
+  del.addEventListener('click', async e => {
     e.stopPropagation();
     if (!await sbConfirm('Odstranit obrázek z tabule?', { ok: 'Odstranit', danger: true })) return;
     await saveWbImages(wbId, (WHITEBOARDS_MAP.get(wbId).images || []).filter(i => i.id !== iid));
   });
+  // Prst na obrázku nesmí zároveň posouvat nástěnku
+  node.addEventListener('touchstart', e => { if (e.target.closest('.wb-img-move, .wb-img-rz, .wb-img-del') || node.closest('.img-mode')) e.stopPropagation(); }, { passive: true });
 
-  node.querySelector('.wb-img-move').addEventListener('mousedown', e => {
-    e.stopPropagation(); e.preventDefault();
+  // Přesun: za úchyt ✥ kdykoli při kreslení, s nástrojem Přesunout obrázek za celou plochu.
+  // Aspoň kus obrázku zůstane na tabuli, aby nezajel mimo a nešel chytit.
+  const move = e => {
     const i0 = getI(); if (!i0) return;
-    const sx = e.clientX, sy = e.clientY; let nx = i0.x, ny = i0.y;
-    const mv = ev => { nx = Math.round(i0.x + (ev.clientX - sx) / BOARD_ZOOM); ny = Math.round(i0.y + (ev.clientY - sy) / BOARD_ZOOM); node.style.left = nx + 'px'; node.style.top = ny + 'px'; };
-    const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); writeI({ x: nx, y: ny }); };
-    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+    const wb = WHITEBOARDS_MAP.get(wbId), keep = 30;
+    let nx = i0.x, ny = i0.y;
+    wbPointerDrag(e, (dx, dy) => {
+      nx = Math.round(Math.max(keep - i0.w, Math.min(wb.w - keep, i0.x + dx)));
+      ny = Math.round(Math.max(keep - i0.h, Math.min(wb.h - keep, i0.y + dy)));
+      node.style.left = nx + 'px'; node.style.top = ny + 'px';
+      if (node.classList.contains('sel')) placeWbImgBar();
+    }, () => { if (nx !== i0.x || ny !== i0.y) writeI({ x: nx, y: ny }); });
+  };
+  node.querySelector('.wb-img-move').addEventListener('pointerdown', move);
+  node.addEventListener('pointerdown', e => {
+    if (e.target.closest('.wb-img-move, .wb-img-rz, .wb-img-del') || !node.closest('.img-mode.drawing')) return;
+    selectWbImage(wbId, iid);
+    move(e);
   });
 
-  node.querySelector('.wb-img-rz').addEventListener('mousedown', e => {
-    e.stopPropagation(); e.preventDefault();
+  node.querySelector('.wb-img-rz').addEventListener('pointerdown', e => {
     const i0 = getI(); if (!i0) return;
-    const sx = e.clientX, sy = e.clientY, ratio = i0.w / Math.max(1, i0.h);
+    const ratio = i0.w / Math.max(1, i0.h);
     let nw = i0.w, nh = i0.h;
-    const mv = ev => {
-      nw = Math.max(40, Math.round(i0.w + (ev.clientX - sx) / BOARD_ZOOM));
+    wbPointerDrag(e, dx => {
+      nw = Math.max(40, Math.round(i0.w + dx));
       nh = Math.max(30, Math.round(nw / ratio));   // keep aspect ratio
-      node.style.width = nw + 'px'; node.style.height = nh + 'px';
-    };
-    const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); writeI({ w: nw, h: nh }); };
-    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+      layoutWbImg(node, { ...i0, w: nw, h: nh });
+      if (node.classList.contains('sel')) placeWbImgBar();
+    }, () => { if (nw !== i0.w) writeI({ w: nw, h: nh }); });
   });
+}
+
+// Tah myší i prstem: hlásí posun v souřadnicích nástěnky (bez vlivu přiblížení)
+function wbPointerDrag(e, onMove, onEnd) {
+  if (e.button > 0) return;
+  e.stopPropagation(); e.preventDefault();
+  const sx = e.clientX, sy = e.clientY, pid = e.pointerId;
+  const mv = ev => { if (ev.pointerId === pid) onMove((ev.clientX - sx) / BOARD_ZOOM, (ev.clientY - sy) / BOARD_ZOOM); };
+  const up = ev => {
+    if (ev.pointerId !== pid) return;
+    ['pointermove', 'pointerup', 'pointercancel'].forEach((t, i) => window.removeEventListener(t, i ? up : mv));
+    onEnd();
+  };
+  window.addEventListener('pointermove', mv);
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
 }
 
 // Reconcile the editable DOM text boxes to match wb.texts. A box that's being
@@ -505,13 +553,18 @@ function wireWhiteboard(el, id) {
     typeSel.value = WB_TOOL.type;
     // Text boxes are only interactive (edit/move/resize) with the Text tool
     // active — otherwise a drawing tool passes through them.
-    document.querySelectorAll('.whiteboard').forEach(w =>
-      w.classList.toggle('text-mode', WB_TOOL.type === 'text' && WB_TOOL.mode === 'draw'));
+    // Obrázky jdou chytit za plochu jen s nástrojem Přesunout obrázek, jinak se přes ně kreslí.
+    document.querySelectorAll('.whiteboard').forEach(w => {
+      w.classList.toggle('text-mode', WB_TOOL.type === 'text' && WB_TOOL.mode === 'draw');
+      w.classList.toggle('img-mode', WB_TOOL.type === 'move' && WB_TOOL.mode === 'draw');
+    });
+    if (WB_IMG_SEL) placeWbImgBar();
   };
 
   drawBtn.addEventListener('click', () => {
     const on = el.classList.toggle('drawing');
     drawBtn.classList.toggle('active', on);
+    if (WB_IMG_SEL) placeWbImgBar();
   });
   typeSel.addEventListener('change', () => { WB_TOOL.type = typeSel.value; WB_TOOL.mode = 'draw'; syncToolButtons(); });
   eraseBtn.addEventListener('click', () => { WB_TOOL.mode = WB_TOOL.mode === 'erase' ? 'draw' : 'erase'; syncToolButtons(); });
@@ -537,11 +590,18 @@ function wireWhiteboard(el, id) {
           probe.src = url;
         });
         const scale = Math.min(1, 300 / dims.w);
+        // Pod lištu tabule (může mít dva řádky), aby obrázek ani jeho úchyty nebyly zakryté
+        const barH = el.querySelector(':scope > .wb-bar')?.offsetHeight || 40;
         const img = { id: wbId(), by: ME.uid, url,
-          x: 24, y: 44, w: Math.round(dims.w * scale), h: Math.round(dims.h * scale) };
+          x: 24, y: barH + 12, w: Math.round(dims.w * scale), h: Math.round(dims.h * scale) };
         const wb = WHITEBOARDS_MAP.get(id);
+        WB_IMG_SEL = { wbId: id, iid: img.id };
         await saveWbImages(id, [...(wb.images || []), img]);
-        toast('Obrázek vložen ✓');
+        // Rovnou přepnout na přesouvání, ať jde obrázek hned odtáhnout, kam patří
+        WB_TOOL.type = 'move'; WB_TOOL.mode = 'draw'; syncToolButtons();
+        if (!el.classList.contains('drawing')) { el.classList.add('drawing'); drawBtn.classList.add('active'); }
+        placeWbImgBar();
+        toast('Obrázek vložen ✓ Přetáhni ho, kam chceš, lišta nad ním ho upraví.');
       } catch (e) { toast('Chyba: ' + e.message); }
     });
     inp.click();
@@ -582,6 +642,7 @@ function wireWhiteboard(el, id) {
   const startDraw = (cx, cy) => {
     if (!el.classList.contains('drawing')) return false;
     if (WB_TOOL.mode === 'pick') { pickColorAt(cx, cy); return false; }
+    if (WB_TOOL.mode === 'draw' && WB_TOOL.type === 'move') return false;   // obrázky leží nad plátnem a chytají se samy
     const p = wbLocalPoint(canvas, cx, cy);
     if (WB_TOOL.mode === 'draw' && WB_TOOL.type === 'text') { textDrag = { x0: p[0], y0: p[1], x1: p[0], y1: p[1] }; return true; }
     if (WB_TOOL.mode === 'fill') { commitStroke({ id: wbId(), by: ME.uid, c: WB_TOOL.color, t: 'fill', pts: [p[0], p[1], 0, 0, canvas.width, canvas.height] }); return false; }
@@ -653,7 +714,7 @@ function wireWhiteboard(el, id) {
     const w = WB_TOOL.width;
     if (WB_TOOL.mode === 'erase') return w * 2;
     if (WB_TOOL.mode !== 'draw') return 0;              // pick / fill
-    if (WB_TOOL.type === 'text') return 0;
+    if (WB_TOOL.type === 'text' || WB_TOOL.type === 'move') return 0;
     if (WB_TOOL.type === 'marker') return w * 2.4;
     if (WB_TOOL.type === 'pencil') return Math.max(1, w * 0.8);
     if (WB_TOOL.type === 'spray') return w * 3.2;
@@ -888,7 +949,109 @@ function dragWbFloat(e) {
   window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
 }
 ['mousedown', 'touchstart'].forEach(type => document.addEventListener(type, e => {
-  if (!WB_FLOAT || e.target.closest?.('.wb-floating, .sbd-wrap, .modal-overlay') || WB_FLOAT.el.contains(e.target)) return;
+  if (!WB_FLOAT || e.target.closest?.('.wb-floating, .wb-imgbar, .sbd-wrap, .modal-overlay') || WB_FLOAT.el.contains(e.target)) return;
   closeWbFloat();
 }, { capture: true, passive: true }));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && WB_FLOAT) closeWbFloat(); });
+
+// ── Úprava obrázku ───────────────────────────────────────────
+// S nástrojem Přesunout obrázek se kliknutím obrázek vybere a nad ním se ukáže lišta:
+// otočit, zrcadlit, průhlednost, dopředu / dozadu, původní vzhled a smazat.
+// Lišta je v body s pevnou polohou, takže ji nezmenší oddálení ani neořízne okraj tabule.
+let WB_IMG_SEL = null;   // { wbId, iid }
+function wbImgNode(sel) { return sel && document.querySelector(`#wb-${sel.wbId} .wb-img[data-iid="${sel.iid}"]`); }
+function selectWbImage(wbId, iid) {
+  WB_IMG_SEL = wbId ? { wbId, iid } : null;
+  document.querySelectorAll('.wb-img.sel').forEach(n => n.classList.remove('sel'));
+  wbImgNode(WB_IMG_SEL)?.classList.add('sel');
+  placeWbImgBar();
+}
+function wbImgBar() {
+  let bar = document.getElementById('wbImgBar');
+  if (bar) return bar;
+  bar = document.createElement('div');
+  bar.id = 'wbImgBar'; bar.className = 'wb-imgbar'; bar.hidden = true;
+  bar.innerHTML = `
+    <button type="button" class="wb-btn" data-a="rot" title="Otočit o 90°" aria-label="Otočit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button type="button" class="wb-btn" data-a="flip" title="Zrcadlit" aria-label="Zrcadlit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><path d="m8 7-5 5 5 5V7z"/><path d="m16 7 5 5-5 5V7z"/></svg></button>
+    <label class="wb-imgbar-op" title="Průhlednost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.7 6.3 8.4a8 8 0 1 0 11.4 0z"/><path d="M12 2.7V21"/></svg><input type="range" min="10" max="100" step="5" data-a="op" aria-label="Průhlednost"></label>
+    <span class="wb-sep"></span>
+    <button type="button" class="wb-btn" data-a="front" title="Dopředu, nad ostatní obrázky" aria-label="Dopředu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/></svg></button>
+    <button type="button" class="wb-btn" data-a="back" title="Dozadu, pod ostatní obrázky" aria-label="Dozadu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="13" height="13" rx="2" stroke-dasharray="3 2.4"/><path d="M8 21h11a2 2 0 0 0 2-2V8"/></svg></button>
+    <button type="button" class="wb-btn" data-a="reset" title="Původní vzhled (bez otočení, zrcadlení a průhlednosti)" aria-label="Původní vzhled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+    <span class="wb-sep"></span>
+    <button type="button" class="wb-btn wb-imgbar-del" data-a="del" title="Odstranit obrázek" aria-label="Odstranit obrázek"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>`;
+  document.body.appendChild(bar);
+  bar.addEventListener('click', e => { const b = e.target.closest('button[data-a]'); if (b) editWbImage(b.dataset.a); });
+  const op = bar.querySelector('[data-a="op"]');
+  op.addEventListener('input', () => { const n = wbImgNode(WB_IMG_SEL); if (n) n.querySelector('img').style.opacity = op.value / 100; });
+  op.addEventListener('change', () => editWbImage('op', op.value / 100));
+  return bar;
+}
+// Lišta nad vybraným obrázkem (pod ním, když nahoře není místo). Bez výběru nebo mimo nástroj se schová.
+function placeWbImgBar() {
+  const node = wbImgNode(WB_IMG_SEL);
+  const bar = document.getElementById('wbImgBar') || (node ? wbImgBar() : null);
+  if (!bar) return;
+  if (!node || !node.closest('.img-mode.drawing')) {
+    bar.hidden = true;
+    if (!node || !node.closest('.img-mode')) { WB_IMG_SEL = null; document.querySelectorAll('.wb-img.sel').forEach(n => n.classList.remove('sel')); }
+    return;
+  }
+  const im = (WHITEBOARDS_MAP.get(WB_IMG_SEL.wbId)?.images || []).find(i => i.id === WB_IMG_SEL.iid);
+  const op = bar.querySelector('[data-a="op"]');
+  if (im && document.activeElement !== op) op.value = Math.round((im.op ?? 1) * 100);
+  bar.hidden = false;
+  const r = node.getBoundingClientRect(), b = bar.getBoundingClientRect(), pad = 8;
+  // Nad obrázkem, pokud tím nepřekryje lištu tabule, jinak pod ním
+  const own = node.closest('.whiteboard')?.querySelector(':scope > .wb-bar');
+  let top = r.top - b.height - 10;
+  if (top < Math.max(pad, own ? own.getBoundingClientRect().bottom : 0)) top = r.bottom + 10;
+  if (top + b.height > innerHeight - pad) top = Math.max(pad, r.top + 10);
+  bar.style.left = Math.max(pad, Math.min(r.left + r.width / 2 - b.width / 2, innerWidth - b.width - pad)) + 'px';
+  bar.style.top = top + 'px';
+}
+async function editWbImage(a, val) {
+  const sel = WB_IMG_SEL, wb = sel && WHITEBOARDS_MAP.get(sel.wbId);
+  if (!wb) return;
+  const images = [...(wb.images || [])];
+  const k = images.findIndex(i => i.id === sel.iid);
+  if (k < 0) return;
+  const im = { ...images[k] };
+  window.sfx?.('click');
+  if (a === 'del') {
+    if (!await sbConfirm('Odstranit obrázek z tabule?', { ok: 'Odstranit', danger: true })) return;
+    selectWbImage(null);
+    return saveWbImages(sel.wbId, images.filter(i => i.id !== sel.iid));
+  }
+  if (a === 'front' || a === 'back') {
+    images.splice(k, 1);
+    if (a === 'front') images.push(im); else images.unshift(im);
+    return saveWbImages(sel.wbId, images);
+  }
+  if (a === 'rot') {
+    // Otáčí se kolem středu, rámeček si prohodí šířku a výšku
+    const cx = im.x + im.w / 2, cy = im.y + im.h / 2;
+    im.rot = ((im.rot || 0) + 90) % 360;
+    [im.w, im.h] = [im.h, im.w];
+    im.x = Math.round(cx - im.w / 2); im.y = Math.round(cy - im.h / 2);
+  } else if (a === 'flip') im.flip = !im.flip;
+  else if (a === 'op') im.op = Math.max(0.1, Math.min(1, val));
+  else if (a === 'reset') {
+    // Šířka zůstane, výška se vrátí podle skutečného poměru stran obrázku
+    const pic = wbImgNode(sel)?.querySelector('img');
+    const w = (im.rot || 0) % 180 ? im.h : im.w;
+    const h = pic?.naturalWidth ? Math.round(w * pic.naturalHeight / pic.naturalWidth) : ((im.rot || 0) % 180 ? im.w : im.h);
+    delete im.rot; delete im.flip; delete im.op;
+    im.w = w; im.h = h;
+  }
+  images[k] = im;
+  await saveWbImages(sel.wbId, images);
+}
+document.addEventListener('pointerdown', e => {
+  if (!WB_IMG_SEL || e.target.closest?.('.wb-imgbar, .wb-img.sel, .sbd-wrap, .modal-overlay')) return;
+  if (!e.target.closest?.('.wb-img')) selectWbImage(null);
+}, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && WB_IMG_SEL) selectWbImage(null); });
+document.addEventListener('scroll', () => { if (WB_IMG_SEL) placeWbImgBar(); }, true);
+window.addEventListener('resize', () => { if (WB_IMG_SEL) placeWbImgBar(); });
