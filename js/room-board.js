@@ -1039,7 +1039,7 @@ function setupBoardPan() {
     wrap.style.willChange = '';
     BOARD_ZOOM = pinch.zoom * k;
     document.getElementById('board').style.zoom = BOARD_ZOOM;
-  document.getElementById('board').style.setProperty('--iz', 1 / BOARD_ZOOM);   // úchyty na tabuli drží stálou velikost
+    document.getElementById('board').style.setProperty('--iz', 1 / BOARD_ZOOM);   // úchyty na tabuli drží stálou velikost
     // … stays under where the fingers are now.
     wrap.scrollLeft = bx * BOARD_ZOOM - (pinch.mx - rect.left);
     wrap.scrollTop  = by * BOARD_ZOOM - (pinch.my - rect.top);
