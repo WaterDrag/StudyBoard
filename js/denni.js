@@ -193,11 +193,11 @@ document.addEventListener('keydown', e => {
 
 async function finish() {
   window.sfx?.('win');
-  const st = { ...(DAILY[TODAY] || {}), n: D.i, c: D.c, s: D.s, done: true, of: D.qs.length };
+  const st = { ...(DAILY[TODAY] || {}), n: D.i, c: D.c, s: D.s, done: true, of: D.qs.length, at: Date.now() };
   DAILY[TODAY] = st;
   // staré dny pryč, ať profil neroste donekonečna
   const old = Object.keys(DAILY).filter(k => k < localDay(Date.now() - KEEP_DAYS * 864e5));
-  const upd = { n: D.i, c: D.c, s: D.s, done: true, of: D.qs.length, cur: firebase.firestore.FieldValue.delete() };
+  const upd = { n: D.i, c: D.c, s: D.s, done: true, of: D.qs.length, at: Date.now(), cur: firebase.firestore.FieldValue.delete() };   // at: zahrada počítá dny v UTC
   await dayRef().set({ daily: { [TODAY]: upd, ...Object.fromEntries(old.map(k => [k, firebase.firestore.FieldValue.delete()])) } }, { merge: true }).catch(() => {});
   old.forEach(k => delete DAILY[k]);
   recordPlayPoints(10 + 3 * D.c);

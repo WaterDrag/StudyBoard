@@ -19,12 +19,24 @@ const gardenStage = xp => GARDEN_STAGES.reduce((s, st, i) => xp >= st.xp ? i : s
 const gardenEmoji = g => g ? gardenIcon(gardenStage(g.xp || 0)) : '';
 const gDayUTC = t => new Date(t).toISOString().slice(0, 10);
 
+// Dny se splněnou Denní výzvou, převedené na UTC dny jako zbytek zahrady.
+// Výzva se ukládá pod místní datum, takže po půlnoci (u nás je o hodinu až dvě dřív než v UTC)
+// by se jinak hledala pod jiným dnem. Rozhoduje čas splnění; u starších záznamů bez času
+// se dnešní výzva bere jako splněná teď, ostatní podle svého data.
+function gardenDailyDays(profile) {
+  const out = new Set(), localToday = new Date().toLocaleDateString('en-CA');
+  Object.entries(profile.daily || {}).forEach(([k, v]) => {
+    if (v?.done) out.add(v.at ? gDayUTC(v.at) : k === localToday ? gDayUTC(Date.now()) : k);
+  });
+  return out;
+}
+
 // Co jsem v daný den udělal(a) — z dat, která už ukládají ostatní části.
 function gardenDay(profile, day) {
   let answers = 0;
   Object.values(profile.learn || {}).forEach(l => { answers += l?.stats?.days?.[day]?.a || 0; });
   const focus = (profile.focus || {})[day] || 0;
-  const daily = !!(profile.daily || {})[day]?.done;   // Denní výzva má místní datum; o půlnoci se to může o den minout
+  const daily = gardenDailyDays(profile).has(day);
   return { answers, focus, daily, met: answers >= GARDEN_GOAL.answers || focus >= GARDEN_GOAL.focusSec || daily };
 }
 
