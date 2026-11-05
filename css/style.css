@@ -946,6 +946,24 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .rich-editor .sb-toc { user-select: none; cursor: default; }
 @keyframes sbTocFlash { from { background: color-mix(in srgb, var(--accent) 30%, transparent); } }
 .sb-toc-flash { animation: sbTocFlash 1.2s ease-out; border-radius: 4px; }
+/* Hlášení chyby a Novinky (feedback.js) */
+.bug-modal { max-width: 520px; }
+.bug-kind { margin-bottom: 14px; }
+.bug-kind .seg-btn.on { background: var(--accent); color: #fff; }
+.bug-text { width: 100%; min-height: 140px; resize: vertical; }
+.bug-count { margin: 4px 0 10px; text-align: right; font-size: 0.75rem; color: var(--text-muted); }
+.bug-tech { display: flex; gap: 8px; align-items: flex-start; font-size: 0.85rem; cursor: pointer; }
+.bug-tech input { margin-top: 3px; accent-color: var(--accent); }
+.bug-note { margin: 10px 0 0; font-size: 0.8rem; color: var(--text-muted); }
+.news-list { display: flex; flex-direction: column; gap: 10px; }
+.news-item { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-2); }
+.news-item.cur { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.news-item header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.news-item header span { font-size: 0.8rem; color: var(--text-muted); }
+.news-item header i { margin-left: auto; font-style: normal; font-size: 0.72rem; font-weight: 600; color: var(--accent); }
+.news-item ul { margin: 0; padding-left: 18px; font-size: 0.87rem; line-height: 1.45; }
+.news-item li + li { margin-top: 2px; }
+.news-more { align-self: center; }
 /* Uvítání nového uživatele */
 .welcome-modal { max-width: 480px; }
 .welcome-sub { margin: 0 0 14px; color: var(--text-muted); font-size: 0.9rem; }

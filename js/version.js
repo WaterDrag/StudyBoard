@@ -1,4 +1,4 @@
-const APP_VERSION = '11.05';
+const APP_VERSION = '11.06';
 // Český tvar podle počtu: czN(2, 'karta', 'karty', 'karet') → 'karty'. Je tady, protože version.js je na každé stránce první.
 function czN(n, one, few, many) { n = Math.abs(n); return n === 1 ? one : n >= 2 && n <= 4 ? few : many; }
 // Anglické hlášky Firebase a prohlížeče přeložené do češtiny. Volá ji každá funkce toast():
@@ -13,6 +13,22 @@ const SB_ERRS = [
   [/unauthenticated|auth\/user-token-expired|requires-recent-login/i, 'Přihlášení vypršelo. Přihlas se prosím znovu.'],
   [/invalid-argument|Function .* called with invalid data|Unsupported field value/i, 'Tahle data se nedají uložit (něco v nich chybí nebo je moc velké).'],
 ];
+// Posledních pár chyb ze všech stránek pro hlášení chyby (brouk na hlavní stránce přiloží až 8 posledních)
+(function () {
+  const keep = (m, src) => {
+    try {
+      const log = JSON.parse(localStorage.getItem('sb_errlog') || '[]') || [];
+      const t = new Date().toISOString().slice(5, 16).replace('T', ' ');
+      const p = location.pathname.replace(/^\/|\.html$/g, '') || 'index';
+      const msg = String(m || '').slice(0, 300) + (src ? ` (${String(src).replace(/^.*\//, '').slice(0, 60)})` : '');
+      if (log.length && log[log.length - 1].m === msg) return;   // stejná chyba pořád dokola
+      log.push({ t, p, m: msg });
+      localStorage.setItem('sb_errlog', JSON.stringify(log.slice(-15)));
+    } catch (_) {}
+  };
+  addEventListener('error', e => { if (e.message) keep(e.message, e.filename ? `${e.filename}:${e.lineno}` : ''); });
+  addEventListener('unhandledrejection', e => keep('Promise: ' + (e.reason?.message || e.reason)));
+})();
 function sbErr(msg) {
   msg = String(msg ?? '');
   for (const [re, cz] of SB_ERRS) {

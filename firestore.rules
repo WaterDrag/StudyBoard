@@ -377,6 +377,20 @@ service cloud.firestore {
 
     // Blackjack: u stolu hrají všichni v jednom dokumentu, hráč u stolu mění jeho stav v transakci.
     // Peníze jsou v profilu každého hráče, tady nejsou. Přisednout si smí kdokoli s odkazem, jen sám za sebe.
+    // Hlášení chyb a nápadů (brouk na hlavní stránce). Zapsat smí přihlášený jen za sebe,
+    // číst, měnit ani mazat nesmí nikdo z aplikace: hlášení se čtou ve Firebase konzoli.
+    match /bugReports/{rid} {
+      allow create: if isAuth()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'kind', 'text', 'version', 'createdAt', 'ua', 'screen', 'errors'])
+        && request.resource.data.kind in ['bug', 'idea']
+        && request.resource.data.text is string && request.resource.data.text.size() >= 5 && request.resource.data.text.size() <= 4000
+        && (!('errors' in request.resource.data) || (request.resource.data.errors is string && request.resource.data.errors.size() <= 3000))
+        && (!('ua' in request.resource.data) || (request.resource.data.ua is string && request.resource.data.ua.size() <= 400))
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if false;
+    }
+
     match /blackjack/{gid} {
       allow get: if isAuth();
       allow list: if isAuth() && (request.auth.uid in resource.data.allowedUids || request.auth.uid in resource.data.playerIds);
