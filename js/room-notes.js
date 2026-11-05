@@ -781,6 +781,7 @@ function makeDraggable(el, noteId) {
   el.addEventListener('touchstart', e => {
     if (e.target.closest('[data-action]')) return;
     if (e.touches.length !== 1) return;
+    if (typeof BOARD_LOCKED !== 'undefined' && BOARD_LOCKED) return;   // zamčená nástěnka: prst posouvá plochu
     const t0 = e.touches[0];
     const startX = t0.clientX, startY = t0.clientY;
     const startL = parseInt(el.style.left) || 0;

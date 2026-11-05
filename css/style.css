@@ -1155,6 +1155,22 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
    si dotyk berou celé. */
 .board-wrap { touch-action: pan-x pan-y; }
 .note[data-touch-draggable="true"], .wb-bar, .wb-h { touch-action: none; }
+/* Zámek nástěnky: jen na dotyku a na nástěnce, nad tlačítkem telefonu vlevo dole */
+.board-lock { display: none; }
+@media (hover: none), (max-width: 760px) {
+  .board-lock {
+    position: fixed; left: 14px; bottom: 64px; z-index: 80;   /* těsně nad tlačítkem telefonu */
+    display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+    border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg-2); color: var(--text-muted);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .3); cursor: pointer;
+  }
+  .board-lock svg { width: 20px; height: 20px; }
+  .board-lock.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+  body.view-list .board-lock { display: none; }
+}
+@media (max-width: 600px) { .board-lock { left: 10px; bottom: 54px; width: 36px; height: 36px; } }   /* telefon je tu menší */
+/* Zamčeno: prst nad poznámkou posouvá plochu jako všude jinde */
+body.board-locked .note[data-touch-draggable="true"] { touch-action: pan-x pan-y; }
 
 /* ── Pozadí místnosti ─────────────────────────────────────────
    Owner picks it per room (room.bg); set as data-bg on .board-wrap by

@@ -138,6 +138,7 @@
       ${item('AI agent', 'Stálí členové si mohou vytvořit přístup pro AI agenta. Agent nikdy nesmí víc než ten, kdo ho vytvořil.')}`],
 
     ['more', 'Ostatní', `
+      ${item('Zámek nástěnky', 'Na telefonu a tabletu je vlevo dole zámek. Když je zamčeno, poznámky se prstem nepohnou a posouváš jen plochu, klepnutím se poznámka dál otevře.')}
       ${item('Telefon', 'Ikona vlevo dole nebo F2. Rychle tě přesune do místností, her a kartiček a najdeš v něm i nastavení. Na stránkách her schválně není.')}
       ${item('Pomodoro', 'Minutka na učení v horní liště. Běží dál, i když přecházíš mezi stránkami, a odpracovaný čas se počítá do žebříčku týdne.')}
       ${item('Vzhled a grafika', 'Motivy, pozadí poznámek, zvuk a grafiku her změníš v nastavení. Všechno platí hned, nic se neukládá tlačítkem.')}

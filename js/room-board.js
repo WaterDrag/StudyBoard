@@ -1351,6 +1351,7 @@ function setupRoomChrome() {
   document.getElementById('zoomFitBtn').addEventListener('click', () => { travelFitAll(); updateZoomLabel(); });
   updateZoomLabel();
   setupMobileOrb();
+  setupBoardLock();
   setupInfiniteBoard();
 }
 
@@ -1417,6 +1418,39 @@ function setOrbOpen(open) {
   sheet.hidden = !open; back.hidden = !open;
   orb.classList.toggle('open', open);
   orb.setAttribute('aria-expanded', String(open));
+}
+
+// ── Zámek nástěnky na dotyku ─────────────────────────────────
+// Na telefonu se poznámka posouvá tažením prstem, takže se snadno odsune omylem, když chceš jen
+// posunout plochu. Zamčená nástěnka prstem jen posouvá a přibližuje, klepnutí poznámku dál otevře.
+// Pamatuje si to prohlížeč (sb_board_lock) pro všechny místnosti; na počítači myš zámek neřeší.
+let BOARD_LOCKED = false;
+try { BOARD_LOCKED = localStorage.getItem('sb_board_lock') === '1'; } catch (_) {}
+const LOCK_ICON = {
+  on: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  off: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.8-1.3"/></svg>',
+};
+function setupBoardLock() {
+  if (document.getElementById('boardLockBtn')) return;
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.id = 'boardLockBtn'; btn.className = 'board-lock';
+  document.body.appendChild(btn);
+  const sync = () => {
+    btn.innerHTML = LOCK_ICON[BOARD_LOCKED ? 'on' : 'off'];
+    btn.classList.toggle('on', BOARD_LOCKED);
+    btn.setAttribute('aria-pressed', String(BOARD_LOCKED));
+    btn.title = BOARD_LOCKED ? 'Nástěnka je zamčená – klepnutím odemkneš' : 'Zamknout nástěnku, ať se poznámky nedají omylem posunout';
+    btn.setAttribute('aria-label', btn.title);
+    document.body.classList.toggle('board-locked', BOARD_LOCKED);
+  };
+  btn.addEventListener('click', () => {
+    BOARD_LOCKED = !BOARD_LOCKED;
+    try { localStorage.setItem('sb_board_lock', BOARD_LOCKED ? '1' : '0'); } catch (_) {}
+    sync();
+    window.sfx?.('click');
+    toast(BOARD_LOCKED ? 'Zamčeno: poznámky se prstem nepohnou, posouváš jen plochu.' : 'Odemčeno: poznámky jde zase přetahovat.');
+  });
+  sync();
 }
 
 function setupMobileOrb() {
