@@ -629,6 +629,24 @@
             <div id="gfxPicker" class="gfx-picker"></div>
           </section>
           <section class="set-pane" data-set="account" hidden>
+            <label class="label">Profil</label>
+            <div class="prof-edit">
+              <div class="prof-ava" id="profAva" aria-hidden="true"></div>
+              <div class="prof-side">
+                <div class="prof-btns">
+                  <button type="button" class="btn btn-secondary btn-sm" id="profPhotoBtn">Nahrát fotku</button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="profGoogleBtn" hidden>Fotka z Googlu</button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="profNoPhotoBtn" hidden>Bez fotky</button>
+                </div>
+                <small>Fotka se ořízne na čtverec. Bez fotky se ukazuje první písmeno jména.</small>
+              </div>
+            </div>
+            <label class="label" for="profName">Jméno</label>
+            <div class="prof-name">
+              <input id="profName" type="text" class="input" autocomplete="nickname" placeholder="Jak ti mají ostatní říkat">
+              <button type="button" class="btn btn-primary btn-sm" id="profSave">Uložit</button>
+            </div>
+            <p class="set-text prof-note">Jméno a fotku uvidí přátelé, členové místností a spoluhráči ve hrách. U poznámek, které už jsi napsal(a), zůstane jméno z doby, kdy vznikly.</p>
             <label class="label">Účet a přihlášení</label>
             <div id="acctMethods" class="acct-methods"></div>
           </section>
@@ -683,6 +701,7 @@
   <script>document.write('<script src="js/aibanner.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/sbdecks.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>document.write('<script src="js/feedback.js?v='+APP_VERSION+'"><\/script>');</script>
+  <script>document.write('<script src="js/profile.js?v='+APP_VERSION+'"><\/script>');</script>
   <script>(function(){var s=document.createElement('script');s.src='js/dashboard.js?v='+APP_VERSION;document.head.appendChild(s);})();</script>
 </body>
 </html>

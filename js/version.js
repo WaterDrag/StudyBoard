@@ -1,4 +1,4 @@
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.1.0';
 // Český tvar podle počtu: czN(2, 'karta', 'karty', 'karet') → 'karty'. Je tady, protože version.js je na každé stránce první.
 function czN(n, one, few, many) { n = Math.abs(n); return n === 1 ? one : n >= 2 && n <= 4 ? few : many; }
 // Anglické hlášky Firebase a prohlížeče přeložené do češtiny. Volá ji každá funkce toast():

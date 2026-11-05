@@ -946,6 +946,21 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 .rich-editor .sb-toc { user-select: none; cursor: default; }
 @keyframes sbTocFlash { from { background: color-mix(in srgb, var(--accent) 30%, transparent); } }
 .sb-toc-flash { animation: sbTocFlash 1.2s ease-out; border-radius: 4px; }
+/* Vlastní profil (profile.js) */
+.prof-edit { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.prof-ava {
+  flex-shrink: 0; width: 72px; height: 72px; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 1.8rem; font-weight: 700;
+  border: 2px solid var(--border-strong);
+}
+.prof-ava img { width: 100%; height: 100%; object-fit: cover; }
+.prof-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.prof-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.prof-btns [hidden] { display: none; }
+.prof-side small { color: var(--text-muted); font-size: 0.78rem; }
+.prof-name { display: flex; gap: 8px; margin-bottom: 6px; }
+.prof-name .input { flex: 1; min-width: 0; }
+.prof-note { margin-bottom: 18px; }
 /* Hlášení chyby a Novinky (feedback.js) */
 .bug-modal { max-width: 520px; }
 .bug-kind { margin-bottom: 14px; }
