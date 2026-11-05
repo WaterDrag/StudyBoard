@@ -8,7 +8,16 @@
 // funkci, kterou většina lidí nepoužije.
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-let DRIVE_TOKEN = null;          // { token, exp } — jen v paměti, záměrně
+let DRIVE_TOKEN = null;          // { token, exp }
+// Token platí asi hodinu. Dřív byl jen v paměti, takže každé obnovení stránky nebo jiná místnost
+// znamenaly nové okno Googlu. Teď se do vypršení drží i v prohlížeči, zvlášť pro každého
+// uživatele StudyBoardu; rozsah drive.file stejně pustí jen ke složce, kterou appka založila.
+const driveStoreKey = () => 'sb_drive_tok:' + ((typeof auth !== 'undefined' && auth.currentUser?.uid) || '');
+function driveSaved() {
+  try { const t = JSON.parse(localStorage.getItem(driveStoreKey()) || 'null'); return t && t.exp > Date.now() + 60000 ? t : null; }
+  catch (_) { return null; }
+}
+function driveForget() { try { localStorage.removeItem(driveStoreKey()); } catch (_) {} }
 let DRIVE_FOLDER = null;         // id složky StudyBoard
 let DRIVE_GIS = null;            // načtený token client
 
@@ -41,6 +50,7 @@ function loadGis() {
 // (uživatel uvidí okno jen poprvé nebo když vyprší souhlas).
 async function driveToken(interactive = true) {
   if (!driveConfigured()) throw new Error(driveSetupHint());
+  if (!DRIVE_TOKEN) DRIVE_TOKEN = driveSaved();
   if (DRIVE_TOKEN && DRIVE_TOKEN.exp > Date.now() + 60000) return DRIVE_TOKEN.token;
   await loadGis();
   return new Promise((resolve, reject) => {
@@ -48,9 +58,12 @@ async function driveToken(interactive = true) {
       client_id: GOOGLE_CLIENT_ID,
       scope: DRIVE_SCOPE,
       prompt: interactive ? '' : 'none',
+      // Účet, kterým je člověk přihlášený do StudyBoardu: Google pak nenabízí výběr účtu
+      ...((typeof auth !== 'undefined' && auth.currentUser?.email) ? { login_hint: auth.currentUser.email } : {}),
       callback: res => {
         if (res.error) { reject(new Error('Přihlášení k Disku se nepovedlo: ' + res.error)); return; }
         DRIVE_TOKEN = { token: res.access_token, exp: Date.now() + (res.expires_in || 3600) * 1000 };
+        try { localStorage.setItem(driveStoreKey(), JSON.stringify(DRIVE_TOKEN)); } catch (_) {}
         resolve(DRIVE_TOKEN.token);
       },
       error_callback: err => reject(new Error(err?.type === 'popup_closed'
@@ -65,6 +78,7 @@ function driveSignedIn() { return !!(DRIVE_TOKEN && DRIVE_TOKEN.exp > Date.now()
 function driveSignOut() {
   const t = DRIVE_TOKEN?.token;
   DRIVE_TOKEN = null; DRIVE_FOLDER = null;
+  driveForget();
   if (t && window.google?.accounts?.oauth2) {
     try { google.accounts.oauth2.revoke(t, () => {}); } catch (_) {}
   }
@@ -79,6 +93,7 @@ async function driveFetch(url, opts = {}) {
   if (res.status === 401) {
     // Token vypršel dřív, než jsme čekali — zahoď ho a zkus jednou znovu.
     DRIVE_TOKEN = null;
+    driveForget();
     const fresh = await driveToken();
     return fetch(url, { ...opts, headers: { Authorization: 'Bearer ' + fresh, ...(opts.headers || {}) } });
   }

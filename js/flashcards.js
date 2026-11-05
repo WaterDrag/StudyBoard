@@ -46,8 +46,8 @@ async function loadDeckList() {
         window.location.href = 'dashboard.html'; return;
       }
       const room = roomDoc.data();
-      document.getElementById('navTitle').textContent       = room.name + ' – Flash Cards';
-      document.getElementById('deckListTitle').textContent  = 'Flash Cards';
+      document.getElementById('navTitle').textContent       = room.name + ' – kartičky';
+      document.getElementById('deckListTitle').textContent  = 'Kartičky';
       document.getElementById('deckListSub').textContent    = 'Balíčky v místnosti ' + room.name;
       document.getElementById('backBtn').href               = `room.html?id=${ROOM_ID}`;
 
@@ -225,7 +225,7 @@ function drawDeckGrid() {
       ${ME.isAnonymous ? '' : `<button class="card-fav-btn" data-fav-deck="${doc.id}" title="Přidat do oblíbených" aria-label="Oblíbený balíček">${FC_HEART}</button>`}
       <h3>${esc(d.name)}</h3>
       ${d.description ? `<p class="card-desc">${esc(d.description)}</p>` : ''}
-      <p class="deck-meta">${K ? `<span class="deck-kind k-${kind}">${K.ico} ${K.name}</span>` : ''}<span>${parts || (d.cardCount || 0) + ' karet'}</span></p>`;
+      <p class="deck-meta">${K ? `<span class="deck-kind k-${kind}">${K.ico} ${K.name}</span>` : ''}<span>${parts || `${d.cardCount || 0} ${czN(d.cardCount || 0, 'karta', 'karty', 'karet')}`}</span></p>`;
     const editBtn = a.querySelector('[data-edit-deck]');
     if (editBtn) {
       editBtn.addEventListener('click', e => {
@@ -431,7 +431,7 @@ async function loadDeck() {
           .sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9));
         renderCardsList();
         renderSetPath();
-        document.getElementById('deckCardCount').textContent = `${ALL_CARDS.length} karet`;
+        document.getElementById('deckCardCount').textContent = `${ALL_CARDS.length} ${czN(ALL_CARDS.length, 'karta', 'karty', 'karet')}`;
         const qb = document.getElementById('quizBtn');
         if (qb) qb.href = quizHref + (isSetDeck() ? '&kind=quiz' : '');
         // Aktualizuj počet a druh v deck doc
@@ -757,7 +757,7 @@ Vygenerovat je znovu a ty staré přepsat?`, { ok: 'Přepsat', danger: true })) 
 
   btn.disabled = false;
   btn.textContent = '🤖 AI odpovědi ke všem';
-  const bits = [`${done} karet ✓`];
+  const bits = [`${done} ${czN(done, 'karta', 'karty', 'karet')} ✓`];
   if (added > 0) bits.push(`+${added} špatných odpovědí`);
   if (multi) bits.push(`${multi}× víc správných`);
   if (failed) bits.push(`${failed} se nepovedlo`);
@@ -1042,7 +1042,7 @@ function renderSetPath() {
         <span class="set-step-top"><span class="set-step-n">${done[st.kind] ? '✓' : i + 1}</span><span class="set-step-ico">${st.ico}</span>${st.kind === next ? '<i>Na řadě</i>' : ''}</span>
         <b>${st.name}</b>
         <small>${st.desc}</small>
-        <em>${st.count} karet</em>
+        <em>${st.count} ${czN(st.count, 'karta', 'karty', 'karet')}</em>
       </button>`).join('') + '</div>' +
     (canCloze || canType ? `<div class="set-alt"><span>Nebo jinak:</span>
       ${canCloze ? '<button type="button" class="btn btn-ghost" data-alt="cloze" title="Z výkladu se vynechají slova a ty je doplníš">🧩 Doplňovačka z výkladu</button>' : ''}
@@ -1405,7 +1405,7 @@ function showResults() {
 
   const what = STUDY_MODE === 'cloze' ? 'výkladů bez chyby' : 'karet';
   let title, desc;
-  if (!total)           { title = '📘 Výklad přečtený'; desc = `Prošel jsi ${read} karet výkladu.`; }
+  if (!total)           { title = '📘 Výklad přečtený'; desc = `Prošel jsi ${read} ${czN(read, 'kartu', 'karty', 'karet')} výkladu.`; }
   else if (pct === 100) { title = '🎉 Perfektní!';      desc = `Všech ${total} ${what}. Skvělá práce!`; }
   else if (pct >= 75)   { title = '💪 Skoro tam!';      desc = `${KNOWN} z ${total} ${what}. Ještě trochu procvičit.`; }
   else if (pct >= 50)   { title = '📚 Pokrok!';         desc = `${KNOWN} z ${total} ${what}. Zaměř se na ty červené.`; }
@@ -1583,6 +1583,7 @@ function confirmDialog(message, onConfirm) {
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg) {
+  if (typeof sbErr === 'function') msg = sbErr(msg);
   const wrap = document.getElementById('toastWrap');
   const el   = document.createElement('div');
   el.className = 'toast'; el.textContent = msg;

@@ -24,6 +24,22 @@ const toRenderY = y => (y || 60) + BOARD_PAD_Y;
 const toStoreX  = renderedLeft => renderedLeft - BOARD_PAD_X;
 const toStoreY  = renderedTop  => renderedTop  - BOARD_PAD_Y;
 
+// Mřížka: se zapnutým přichytáváním padají poznámky a tabule na násobky SNAP v uložených
+// souřadnicích, takže sedí na stejné síti i po rozšíření nástěnky (BOARD_PAD roste o libovolný kus).
+// Volba je v prohlížeči (sb_board_snap) a platí pro všechny místnosti.
+const SNAP = 20;
+let BOARD_SNAP = false;
+try { BOARD_SNAP = localStorage.getItem('sb_board_snap') === '1'; } catch (_) {}
+const snapRX = x => BOARD_SNAP ? Math.round((x - BOARD_PAD_X) / SNAP) * SNAP + BOARD_PAD_X : x;
+const snapRY = y => BOARD_SNAP ? Math.round((y - BOARD_PAD_Y) / SNAP) * SNAP + BOARD_PAD_Y : y;
+const snapLen = v => BOARD_SNAP ? Math.max(SNAP, Math.round(v / SNAP) * SNAP) : v;
+// Viditelná síť teček leží na #board (zvětšuje se s ním) a je posunutá o zbytek po BOARD_PAD
+function syncSnapGrid() {
+  const b = document.getElementById('board');
+  if (b) { b.style.setProperty('--snap-ox', (BOARD_PAD_X % SNAP) + 'px'); b.style.setProperty('--snap-oy', (BOARD_PAD_Y % SNAP) + 'px'); }
+  document.body.classList.toggle('board-snap', BOARD_SNAP);
+}
+
 // Connection state
 let CONNECT_MODE  = false;
 let CONNECT_FROM  = null;
@@ -170,6 +186,7 @@ function confirmModal(message, onConfirm) {
 
 // ── Toast ─────────────────────────────────────────────────────
 function toast(msg) {
+  if (typeof sbErr === 'function') msg = sbErr(msg);
   const wrap = document.getElementById('toastWrap');
   const el   = document.createElement('div');
   el.className   = 'toast';

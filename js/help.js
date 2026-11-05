@@ -14,7 +14,7 @@
       <ol class="hp-steps">
         <li><b>Vytvoř místnost.</b> Na hlavní stránce v záložce Místnosti. Místnost je společný prostor pro jeden předmět nebo téma.</li>
         <li><b>Napiš poznámku.</b> V místnosti přidej poznámku na nástěnku nebo do seznamu.</li>
-        <li><b>Udělej si kartičky.</b> Balíček založíš na hlavní stránce v záložce Flash Cards, v místnosti ti s kartami z poznámek pomůže AI.</li>
+        <li><b>Udělej si kartičky.</b> Balíček založíš na hlavní stránce v záložce Kartičky, v místnosti ti s kartami z poznámek pomůže AI.</li>
         <li><b>Uč se.</b> Procvičuj kartičky, nebo si vyber hru v záložce Hry. Otázky se berou z tvých kartiček.</li>
         <li><b>Pozvi ostatní.</b> V místnosti tlačítko Sdílet, viz sekce Sdílení.</li>
       </ol>
@@ -100,6 +100,7 @@
       ${item('Vzhled poznámky', 'Lišta nad poznámkou má dvě karty jako ve Wordu: na Domů je formátování, na Vložení tabulka, obrázek, odkaz a další. Pozadí poznámky může být podle motivu, bílé nebo černé.')}
       ${item('Rozepsaný text', 'Rozepsaná poznámka se průběžně ukládá v tomto prohlížeči. Když okno zavřeš nebo vypadne internet, při dalším otevření ti aplikace nabídne Obnovit.')}
       ${item('Vzorce a indexy', 'Horní a dolní index jsou na kartě Domů. Vzorec vložíš na kartě Vložení, zapisuje se v LaTeXu a klikem na něj ho upravíš.')}
+      ${item('Obsah poznámky', 'Na kartě Vložení je Obsah: do textu vloží seznam nadpisů (Nadpis a Podnadpis), který se při psaní sám aktualizuje. Při čtení kliknutím na položku přeskočíš na nadpis. Smažeš ho klávesou Backspace.')}
       ${item('Kopírovat formát', 'Klikni do textu, stiskni štětec na kartě Domů a označ text, který má vypadat stejně. Dvojklik na štětec ho nechá zapnutý, Esc ho vypne.')}
       ${item('Obsah poznámky', 'Poznámka se třemi a více nadpisy má při čtení po straně obsah s proklikem.')}
       ${item('Tabulky', 'Sloupce a řádky měníš tažením za okraj. Víc buněk vybereš s Ctrl nebo Shift a můžeš jim hromadně změnit formát. Nabídka tabulky je na pravém tlačítku.')}
@@ -109,7 +110,7 @@
       ${item('Soubory a export', 'Soubory místnosti se ukládají na Google Disk. Poznámky můžeš vyexportovat a uložit do složky StudyBoard na Disku.')}`],
 
     ['cards', 'Kartičky', `
-      ${item('Balíčky', 'Balíček založíš na hlavní stránce v záložce Flash Cards. Místnost může mít i své vlastní kartičky.')}
+      ${item('Balíčky', 'Balíček založíš na hlavní stránce v záložce Kartičky. Místnost může mít i své vlastní kartičky.')}
       ${item('Kartička z textu', 'V poznámce označ text a klikni na něj pravým tlačítkem, na dotykovém displeji použij tlačítko pod označením. Vybereš Udělat kartičku a text se předvyplní jako odpověď.')}
       ${item('Způsoby učení', 'Otáčení karet s hodnocením nevím, skoro a vím, psaní odpovědi a doplňovačka z výkladových karet. Po kole můžeš opakovat jen ty, které ti nešly.')}
       ${item('Kvíz', 'Otázky s možnostmi. Špatné odpovědi můžeš ke kartě napsat sám, nebo je nechat navrhnout AI.')}

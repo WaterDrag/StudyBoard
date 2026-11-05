@@ -922,6 +922,47 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
 }
 .modal-close:hover { color: var(--text); background: var(--bg-3); }
 
+/* Obsah vložený do poznámky (room-toc.js). Barvy z currentColor, ať sedí na každé barvě poznámky. */
+.sb-toc {
+  margin: 8px 0 14px; padding: 10px 14px 10px 16px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.sb-toc .sb-toc-h { margin: 0 0 6px; font-weight: 700; font-size: 0.95em; }
+.sb-toc .sb-toc-list { margin: 0; padding: 0; list-style: none; counter-reset: toc1; }
+/* Číslování 1 / 1.1 / 1.1.1 přes čítače: seznam je plochý, úroveň nese třída */
+.sb-toc li { margin: 2px 0; }
+.sb-toc li::before { display: inline-block; min-width: 2.2em; opacity: .7; font-variant-numeric: tabular-nums; }
+.sb-toc li.sb-toc-lv1 { counter-increment: toc1; counter-reset: toc2; }
+.sb-toc li.sb-toc-lv1::before { content: counter(toc1) "."; }
+.sb-toc li.sb-toc-lv2 { counter-increment: toc2; counter-reset: toc3; padding-left: 2.2em; }
+.sb-toc li.sb-toc-lv2::before { content: counter(toc1) "." counter(toc2); min-width: 2.8em; }
+.sb-toc li.sb-toc-lv3 { counter-increment: toc3; padding-left: 5em; }
+.sb-toc li.sb-toc-lv3::before { content: counter(toc1) "." counter(toc2) "." counter(toc3); min-width: 3.4em; }
+.sb-toc li.sb-toc-empty { opacity: .65; font-style: italic; }
+.sb-toc li[role="link"] { cursor: pointer; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 3px; }
+.sb-toc li[role="link"]:hover { color: var(--accent); }
+.rich-editor .sb-toc { user-select: none; cursor: default; }
+@keyframes sbTocFlash { from { background: color-mix(in srgb, var(--accent) 30%, transparent); } }
+.sb-toc-flash { animation: sbTocFlash 1.2s ease-out; border-radius: 4px; }
+/* Uvítání nového uživatele */
+.welcome-modal { max-width: 480px; }
+.welcome-sub { margin: 0 0 14px; color: var(--text-muted); font-size: 0.9rem; }
+.welcome-steps { list-style: none; counter-reset: ws; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.welcome-steps li { counter-increment: ws; }
+.welcome-step {
+  position: relative; width: 100%; display: flex; flex-direction: column; gap: 3px; padding: 12px 14px 12px 52px; text-align: left;
+  border-radius: 12px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text); font: inherit; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.welcome-step::before {
+  content: counter(ws); position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); font-weight: 700; font-size: 0.85rem;
+}
+.welcome-step:hover { border-color: var(--accent); background: var(--bg-3); }
+.welcome-step small { color: var(--text-muted); font-size: 0.8rem; }
 .modal-footer {
   display: flex;
   gap: 9px;
@@ -1120,6 +1161,15 @@ textarea.input { resize: vertical; min-height: 100px; line-height: 1.55; }
   box-shadow: var(--shadow);
 }
 .zoom-ctl .icon-btn { width: 32px; height: 32px; }
+.zoom-ctl #gridBtn.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+/* Mřížka: síť teček na samotné nástěnce (zvětšuje se s ní a sedí na souřadnicích poznámek).
+   Výchozí mřížka obrazovky, která se s poznámkami nekryje, se mezitím schová. */
+body.board-snap #board {
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--text-muted) 55%, transparent) 1.3px, transparent 1.8px);
+  background-size: 20px 20px;
+  background-position: calc(var(--snap-ox, 0px) - 10px) calc(var(--snap-oy, 0px) - 10px);
+}
+body.board-snap .board-wrap:not([data-bg]), body.board-snap .board-wrap[data-bg=""], body.board-snap .board-wrap[data-bg="dots"] { background-image: none; }
 .zoom-ctl .icon-btn svg { width: 16px; height: 16px; }
 .zoom-pct {
   min-width: 52px; height: 32px; border: none; border-radius: 7px; background: none;
@@ -2727,6 +2777,8 @@ body.board-locked .note[data-touch-draggable="true"] { touch-action: pan-x pan-y
 .ph-wide:hover { background: rgba(255,255,255,.24); }
 .ph-home { display: block; flex: none; width: 110px; height: 5px; margin: 7px auto 0; padding: 0; border: 0; border-radius: 3px; background: #d4d4d8; cursor: pointer; }
 @media (max-width: 600px) { .ph-device { left: 50%; margin-left: -155px; } .ph-btn { width: 36px; height: 36px; left: 10px; bottom: 10px; } }
+/* Hlavní stránka na telefonu má dole lištu záložek: tlačítko telefonu jde nad ni, jinak zakrývalo Místnosti */
+@media (max-width: 700px) { body:has(.dash-tabs) .ph-btn { bottom: calc(74px + env(safe-area-inset-bottom)); } }
 @media (prefers-reduced-motion: reduce) { .ph-device, .ph-wrap { transition: none; } }
 
 /* ── Okna místo alert / confirm / prompt (js/dialogs.js) ── */
@@ -3086,6 +3138,16 @@ body.board-locked .note[data-touch-draggable="true"] { touch-action: pan-x pan-y
 .rtb-tab.on { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
 .rtb-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .rtb-panel { display: flex; align-items: stretch; padding: 5px 4px; overflow-x: auto; scrollbar-width: thin; }
+.rtb-panel.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
+.rtb-panel.more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px); mask-image: linear-gradient(90deg, transparent, #000 40px); }
+.rtb-panel.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+/* Upravit v detailu poznámky a nová poznámka v Seznamu */
+.detail-edit-btn { display: inline-flex; align-items: center; gap: 6px; }
+.detail-edit-btn[hidden] { display: none; }
+.detail-edit-btn svg, .list-add-note svg { width: 15px; height: 15px; }
+.list-add-note { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; }
+body:not(.can-write) .list-add-note { display: none; }
+@media (max-width: 480px) { .notes-list-heading { display: none; } .list-add-note { margin-right: auto; } }
 .rtb-panel[hidden] { display: none; }
 .rtb-group { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0 8px; border-right: 1px solid var(--border); }
 .rtb-group:last-child { border-right: 0; }

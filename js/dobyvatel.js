@@ -33,6 +33,7 @@ const shuffle = a => { const b = a.slice(); for (let i = b.length - 1; i > 0; i-
 const ref = () => db.collection('conquest').doc(GAME_ID);
 const isHost = () => GAME && ME && GAME.hostUid === ME.uid;
 function toast(msg) {
+  if (typeof sbErr === 'function') msg = sbErr(msg);
   const w = $('toastWrap'); if (!w) return;
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; w.appendChild(t);
   setTimeout(() => t.classList.add('show'), 10);
@@ -311,7 +312,7 @@ function renderLobby() {
   // decks
   const decks = GAME.decks || [];
   const total = decks.reduce((a, d) => a + (d.count || 0), 0);
-  $('poolCount').textContent = `${total} kartiček`;
+  $('poolCount').textContent = `${total} ${czN(total, 'kartička', 'kartičky', 'kartiček')}`;
   const edit = canEditDecks();
   $('poolList').innerHTML = decks.length ? decks.map(d => `<div class="dob-pool-row"><span>🃏 <b>${esc(d.name)}</b> <small>${d.count} · přidal ${esc(d.byName || '')}</small></span>${edit ? `<button type="button" class="icon-btn" data-rm="${d.id}" title="Odebrat">✕</button>` : ''}</div>`).join('')
     : '<div class="dob-muted">Zatím žádné kartičky — bez nich nejsou bitvy.</div>';

@@ -414,6 +414,7 @@ function esc(s) {
 }
 
 function toast(msg) {
+  if (typeof sbErr === 'function') msg = sbErr(msg);
   const w = document.getElementById('toastWrap');
   if (!w) return;
   const t = document.createElement('div');

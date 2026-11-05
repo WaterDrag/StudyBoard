@@ -893,7 +893,7 @@ async function renderBackupsList() {
         <div class="backup-row">
           <div style="flex:1;min-width:0;">
             <div style="font-size:0.86rem;font-weight:600;">${b.auto ? '🕛' : '💾'} ${esc(when)}</div>
-            <div style="font-size:0.74rem;color:var(--text-muted);">${c.notes||0} poznámek · ${c.connections||0} propojení · ${c.folders||0} složek</div>
+            <div style="font-size:0.74rem;color:var(--text-muted);">${c.notes||0} ${czN(c.notes||0, 'poznámka', 'poznámky', 'poznámek')} · ${c.connections||0} propojení · ${c.folders||0} ${czN(c.folders||0, 'složka', 'složky', 'složek')}</div>
           </div>
           <button class="btn btn-secondary" style="padding:5px 12px;font-size:0.78rem;" data-restore="${d.id}">Obnovit</button>
         </div>`;

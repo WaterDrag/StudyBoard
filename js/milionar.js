@@ -38,7 +38,7 @@ function chosenDecks() { return [...document.querySelectorAll('#milDecks input:c
 function updateStart() {
   const ds = chosenDecks(), n = ds.reduce((s, d) => s + (d.cardCount || 0), 0);
   $('milStart').disabled = !ds.length;
-  $('milHint').textContent = ds.length ? (n < 15 ? `Vybrané balíčky mají jen ${n} karet — hra bude mít méně otázek.` : `${n} karet k dispozici.`) : 'Vyber aspoň jeden balíček.';
+  $('milHint').textContent = ds.length ? (n < 15 ? `Vybrané balíčky mají jen ${n} ${czN(n, 'kartu', 'karty', 'karet')}, hra bude mít méně otázek.` : `${n} ${czN(n, 'karta', 'karty', 'karet')} k dispozici.`) : 'Vyber aspoň jeden balíček.';
 }
 
 async function startGame() {

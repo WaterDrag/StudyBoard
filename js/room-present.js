@@ -30,7 +30,7 @@ function presFolderNotes(folderId) {
 function presentDefault() {
   if (SELECTED && SELECTED.size) {
     const notes = presReadingOrder([...SELECTED].map(id => NOTES_MAP.get(id)).filter(n => n && !isHeading(n)));
-    return startPresentation(presSlidesFromNotes(notes), `${notes.length} označených poznámek`);
+    return startPresentation(presSlidesFromNotes(notes), `${notes.length} ${czN(notes.length, 'označená poznámka', 'označené poznámky', 'označených poznámek')}`);
   }
   if (VIEW_MODE === 'list' && typeof GRID_FOLDER !== 'undefined' && GRID_FOLDER && FOLDERS_MAP.has(GRID_FOLDER)) {
     return presentFolder(GRID_FOLDER);

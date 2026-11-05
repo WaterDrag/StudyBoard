@@ -473,6 +473,7 @@ function loadRooms(user) {
         DASH_ROOMS = [];
         renderContinue();
         updateDashSummary();
+        maybeWelcome(user);
         return;
       }
       const sorted = [...snap.docs].sort((a, b) => {
@@ -808,7 +809,7 @@ async function renderReview() {
           <span class="review-name">${esc(DECK_NAME_CACHE[id]?.name || 'Balíček')}</span>
           <span class="review-count">${n} ${plural(n, 'karta', 'karty', 'karet')}</span>
         </a>`).join('') || '<div class="review-empty">Dnes nemáš nic k opakování.</div>') +
-      (p.link ? `<button type="button" class="btn btn-secondary review-all" data-goto-tab="flash">${rows.length ? 'Všechny balíčky' : 'Otevřít Flash Cards'}</button>` : '');
+      (p.link ? `<button type="button" class="btn btn-secondary review-all" data-goto-tab="flash">${rows.length ? 'Všechny balíčky' : 'Otevřít kartičky'}</button>` : '');
     p.el.querySelector('[data-goto-tab]')?.addEventListener('click', () =>
       document.querySelector('.tab-btn[data-tab="flash"]')?.click());
   });
@@ -1218,7 +1219,7 @@ function buildDeckCard(id, deck, roomName, ownerName, myUid) {
     <button class="card-fav-btn${FAV_DECKS.has(id) ? ' on' : ''}" data-fav-deck="${id}" title="${FAV_DECKS.has(id) ? 'Odebrat z oblíbených' : 'Přidat do oblíbených'}" aria-label="Oblíbený balíček">${ICON_HEART}</button>
     <h3>${esc(deck.name)}</h3>
     ${deck.description ? `<p class="card-desc">${esc(deck.description)}</p>` : ''}
-    <p style="margin-bottom:8px;">${deck.cardCount || 0} karet</p>
+    <p style="margin-bottom:8px;">${deck.cardCount || 0} ${czN(deck.cardCount || 0, 'karta', 'karty', 'karet')}</p>
     <div class="deck-tags">${contextTag}${ownerTag}</div>`;
   wireCardMenu(a, (x, y) => openDeckCardMenu(x, y, id, deck, isOwner));
   a.querySelector('[data-fav-deck]').addEventListener('click', e => {
@@ -1923,7 +1924,7 @@ async function acctFresh(fn) {
   catch (e) {
     if (e.code !== 'auth/requires-recent-login') throw e;
     const u = auth.currentUser;
-    if (u.providerData.some(p => p.providerId === 'google.com')) {
+    if ((u.providerData || []).some(p => p.providerId === 'google.com')) {
       await u.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider());
       return fn();
     }
@@ -1934,10 +1935,10 @@ function renderAccountMethods() {
   const el = document.getElementById('acctMethods');
   const u = auth.currentUser;
   if (!el || !u) return;
-  const has = id => u.providerData.some(p => p.providerId === id);
-  const google = u.providerData.find(p => p.providerId === 'google.com');
+  const has = id => (u.providerData || []).some(p => p.providerId === id);
+  const google = (u.providerData || []).find(p => p.providerId === 'google.com');
   const guest = u.isAnonymous;
-  const n = u.providerData.length;
+  const n = (u.providerData || []).length;
   const row = (ico, title, sub, action) => `<div class="acct-row"><span class="acct-ico">${ico}</span><span class="acct-txt"><b>${title}</b><small>${sub}</small></span>${action || ''}</div>`;
   let html = guest ? '<p class="acct-note">Jsi přihlášený jako <b>host</b>. Připoj Google nebo e-mail s heslem a z hosta se stane trvalý účet — všechno, co máš, zůstane.</p>' : '';
   html += has('google.com')
@@ -2026,7 +2027,52 @@ function setupColorInput(inputId, swatchId, hexId) {
 }
 
 // ── Toast ───────────────────────────────────────────────────────
+// ── Uvítání nového uživatele ─────────────────────────────────
+// Jednou, když člověk ještě nemá žádnou místnost: tři první kroky a cesta k tutoriálu.
+// Kdo uvítání zavřel, má ho poznamenané v prohlížeči i v profilu (welcomed), takže se nevrátí.
+let WELCOME_SHOWN = false;
+async function maybeWelcome(user) {
+  if (WELCOME_SHOWN) return;
+  try { if (localStorage.getItem('sb_welcomed')) return; } catch (_) {}
+  try { if ((await db.collection('users').doc(user.uid).get()).data()?.welcomed) return; } catch (_) {}
+  if (WELCOME_SHOWN || document.querySelector('.modal-overlay.open')) return;
+  WELCOME_SHOWN = true;
+  const step = (w, title, text) => `<li><button type="button" class="welcome-step" data-w="${w}"><b>${title}</b><small>${text}</small></button></li>`;
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay open'; ov.id = 'welcomeModal';
+  ov.innerHTML = `<div class="modal welcome-modal" role="dialog" aria-labelledby="welcomeTitle">
+      <div class="modal-header"><h3 id="welcomeTitle">Vítej ve StudyBoardu</h3><button class="modal-close" data-x aria-label="Zavřít">✕</button></div>
+      <p class="welcome-sub">Tři kroky a můžeš se učit. Klikni na ten, kterým chceš začít.</p>
+      <ol class="welcome-steps">
+        ${step('room', 'Založ místnost', 'Nástěnka na poznámky a soubory. Můžeš do ní pozvat spolužáky.')}
+        ${step('deck', 'Udělej si kartičky', 'Vlastní balíček, nebo hotový balíček z předmětu, který zrovna potřebuješ.')}
+        ${step('games', 'Zahraj si', 'Hry berou otázky z tvých kartiček, takže se učíš i u hraní.')}
+      </ol>
+      <div class="modal-footer"><button type="button" class="btn btn-ghost" data-w="help">Projít tutoriál</button><button type="button" class="btn btn-primary" data-x>Rozumím</button></div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => {
+    ov.remove();
+    document.removeEventListener('keydown', onKey);
+    try { localStorage.setItem('sb_welcomed', '1'); } catch (_) {}
+    db.collection('users').doc(user.uid).set({ welcomed: true }, { merge: true }).catch(() => {});
+  };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  ov.addEventListener('click', e => {
+    if (e.target === ov || e.target.closest('[data-x]')) { close(); return; }
+    const w = e.target.closest('[data-w]')?.dataset.w;
+    if (!w) return;
+    close();
+    if (w === 'room') document.getElementById('createBtn')?.click();
+    else if (w === 'deck') document.querySelector('.tab-btn[data-tab="flash"]')?.click();
+    else if (w === 'games') document.querySelector('.tab-btn[data-tab="games"]')?.click();
+    else if (w === 'help') window.SBHelp?.open();
+  });
+}
+
 function toast(msg) {
+  if (typeof sbErr === 'function') msg = sbErr(msg);
   const wrap = document.getElementById('toastWrap');
   const el   = document.createElement('div');
   el.className = 'toast'; el.textContent = msg;

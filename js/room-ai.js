@@ -300,7 +300,7 @@ function useAiCardsPaste() {
   document.getElementById('aiGenerateBtn').style.display = 'none';
   box.value = '';
   const more = /POKRAČOVÁNÍ/i.test(raw) && !/HOTOVO/i.test(raw);
-  aiManualMsg((prev.length ? `Přidáno ${added.length} (celkem ${all.length}).` : `Načteno ${all.length} kartiček.`)
+  aiManualMsg((prev.length ? `Přidáno ${added.length} (celkem ${all.length}).` : `Načteno kartiček: ${all.length}.`)
     + (more ? ' Chat má pokračování — napiš mu „pokračuj“ a další část vlož sem, přidá se.' : /HOTOVO/i.test(raw) ? ' Chat má hotovo ✓' : ' Další část z chatu sem můžeš vložit taky, přidá se.'), 'ok');
   updateAiJobNotice();
 }
@@ -691,7 +691,7 @@ function updateAiJobNotice() {
     const progress = AI_JOB.total ? ` · ${AI_JOB.done}/${AI_JOB.total} dávek` : '';
     notice.textContent = `⏳ AI připravuje kartičky${progress} · otevřít`;
   } else if (AI_JOB.status === 'ready') {
-    notice.textContent = `✅ ${AI_JOB.cards.length} kartiček je hotových · zkontrolovat`;
+    notice.textContent = `✅ Hotové kartičky: ${AI_JOB.cards.length} · zkontrolovat`;
   } else {
     notice.textContent = '⚠️ Generování se nepodařilo · zobrazit';
   }
@@ -835,7 +835,7 @@ async function generateAiCards() {
     document.getElementById('aiSaveBtn').style.display = 'inline-flex';
     btn.style.display = 'none';
     updateAiJobNotice();
-    toastAction(`AI připravila ${cards.length} kartiček.`, 'Zkontrolovat', () => openModal('aiCardsModal'));
+    toastAction(`AI připravila ${cards.length} ${czN(cards.length, 'kartičku', 'kartičky', 'kartiček')}.`, 'Zkontrolovat', () => openModal('aiCardsModal'));
   } catch (e) {
     AI_JOB.status = 'error';
     AI_JOB.error = e;
@@ -924,7 +924,7 @@ async function saveAiCards() {
     });
     batch.update(deckRef, { cardCount: toSave.length });
     await batch.commit();
-    toast(`Uloženo ${toSave.length} karet do balíčku „${name}" ✓`);
+    toast(`Uloženo do balíčku „${name}": ${toSave.length} ${czN(toSave.length, 'karta', 'karty', 'karet')} ✓`);
     closeModal('aiCardsModal');
     AI_GENERATED_CARDS = [];
     AI_SOURCE_COLOR = null;

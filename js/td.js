@@ -105,7 +105,7 @@ auth.onAuthStateChanged(async user => {
   if (GID && LOBBY?.cards?.length) { $('tdDeckStep').hidden = true; $('tdStart').disabled = false; $('tdStart').onclick = startGame; return; }
   try { DECKS = await mcLoadDecks(); } catch (e) { $('tdDecks').innerHTML = '<div class="mc-muted">Balíčky se nepodařilo načíst.</div>'; return; }
   getDecks = mcDeckPicker({ list: 'tdDecks', all: 'tdAll', start: 'tdStart', hint: 'tdHint', key: SEL_KEY, decks: DECKS,
-    hintFor: n => `${n} kartiček připraveno na svitky.` });
+    hintFor: n => `Kartiček připravených na svitky: ${n}.` });
   $('tdStart').onclick = startGame;
 });
 
@@ -157,7 +157,7 @@ async function startGame() {
   if (GID && LOBBY?.cards?.length) { POOL = unpackCards(LOBBY.cards); POOL.all = POOL; }
   else try { const all = await mcLoadCards(ds); POOL = all.filter(c => mcOptions(c, all)); POOL.all = all; } catch (_) { POOL = []; }
   if (!POOL.length) { btn.disabled = false; delete btn.dataset.busy; btn.textContent = label; toast('Z vybraných balíčků nejde sestavit otázky s možnostmi — přidej balíček s víc kartičkami.'); return; }
-  if (POOL.length < 8) toast(`Ve vybraných balíčcích je jen ${POOL.length} otázek — budou se často opakovat.`);
+  if (POOL.length < 8) toast(`Ve vybraných balíčcích ${POOL.length === 1 ? 'je' : 'jsou'} jen ${POOL.length} ${czN(POOL.length, 'otázka', 'otázky', 'otázek')}, budou se často opakovat.`);
   CARDQ = shuffle(POOL);
   if (GID || pref.mode === 'vs' || pref.mode === 'coop') {
     try { if (GID) await vsJoin(); else await vsCreate(); } catch (e) { toast('Nepovedlo se: ' + e.message); }

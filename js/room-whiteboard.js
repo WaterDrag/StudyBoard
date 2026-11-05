@@ -813,7 +813,7 @@ function wireWhiteboard(el, id) {
     if (!(MY_ROLE === 'owner' || wb.authorId === ME.uid)) return;
     e.stopPropagation(); e.preventDefault();
     const sx = e.clientX, sy = e.clientY, ox = parseInt(el.style.left), oy = parseInt(el.style.top);
-    const mv = ev => { el.style.left = (ox + (ev.clientX - sx) / BOARD_ZOOM) + 'px'; el.style.top = (oy + (ev.clientY - sy) / BOARD_ZOOM) + 'px'; };
+    const mv = ev => { el.style.left = snapRX(ox + (ev.clientX - sx) / BOARD_ZOOM) + 'px'; el.style.top = snapRY(oy + (ev.clientY - sy) / BOARD_ZOOM) + 'px'; };
     const up = async () => {
       window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up);
       try { await wbCol().doc(id).update({ x: Math.round(toStoreX(parseInt(el.style.left))), y: Math.round(toStoreY(parseInt(el.style.top))) }); }
@@ -860,10 +860,11 @@ function wireWhiteboard(el, id) {
       const mv = ev => {
         const dx = (ev.clientX - sx) / BOARD_ZOOM, dy = (ev.clientY - sy) / BOARD_ZOOM;
         shiftX = 0; shiftY = 0; newLeft = ox; newTop = oy; newW = ow; newH = oh;
-        if (dir.includes('e')) newW = Math.max(minW, Math.round(ow + dx));
-        if (dir.includes('s')) newH = Math.max(minH, Math.round(oh + dy));
-        if (dir.includes('w')) { shiftX = Math.round(Math.min(dx, hasContent ? cMinX : Infinity, ow - minW)); newLeft = ox + shiftX; newW = ow - shiftX; }
-        if (dir.includes('n')) { shiftY = Math.round(Math.min(dy, hasContent ? cMinY : Infinity, oh - minH)); newTop = oy + shiftY; newH = oh - shiftY; }
+        // Se zapnutou mřížkou padají hrany na síť (min. velikost obsahu má ale přednost)
+        if (dir.includes('e')) newW = Math.max(minW, Math.round(snapRX(ox + ow + dx) - ox));
+        if (dir.includes('s')) newH = Math.max(minH, Math.round(snapRY(oy + oh + dy) - oy));
+        if (dir.includes('w')) { shiftX = Math.round(Math.min(snapRX(ox + dx) - ox, hasContent ? cMinX : Infinity, ow - minW)); newLeft = ox + shiftX; newW = ow - shiftX; }
+        if (dir.includes('n')) { shiftY = Math.round(Math.min(snapRY(oy + dy) - oy, hasContent ? cMinY : Infinity, oh - minH)); newTop = oy + shiftY; newH = oh - shiftY; }
         el.style.left = newLeft + 'px'; el.style.top = newTop + 'px';
         el.style.width = newW + 'px'; el.style.height = newH + 'px';
         cv.width = newW; cv.height = newH;

@@ -189,6 +189,7 @@ function setNoteContent(contentEl, note) {
   }
   addImageClickHandlers(contentEl);
   wireWebLinks(contentEl);
+  window.SBToc?.render(contentEl);   // vložený obsah: položky přeskočí na nadpis
 }
 
 // Compact board card: show ONLY the manually-entered title when set (long
@@ -729,13 +730,13 @@ function makeDraggable(el, noteId) {
       const dy = (mv.clientY - startY) / BOARD_ZOOM;
       if (group) {
         group.forEach(g => {
-          g.gel.style.left = Math.max(0, g.gl + dx) + 'px';
-          g.gel.style.top  = Math.max(0, g.gt + dy) + 'px';
+          g.gel.style.left = Math.max(0, snapRX(g.gl + dx)) + 'px';
+          g.gel.style.top  = Math.max(0, snapRY(g.gt + dy)) + 'px';
           expandBoardIfNeeded(g.gel);
         });
       } else {
-        el.style.left = Math.max(0, startL + dx) + 'px';
-        el.style.top  = Math.max(0, startT + dy) + 'px';
+        el.style.left = Math.max(0, snapRX(startL + dx)) + 'px';
+        el.style.top  = Math.max(0, snapRY(startT + dy)) + 'px';
         expandBoardIfNeeded(el);
       }
       redrawConnections();
@@ -805,8 +806,8 @@ function makeDraggable(el, noteId) {
       if (!moved && Math.hypot(dx, dy) < 8) return; // still a tap
       if (!moved) { moved = true; el.classList.add('dragging'); el.style.zIndex = 100; el.dataset.dragged = 'true'; }
       mv.preventDefault(); // dragging — don't let the board pan/scroll under it
-      el.style.left = Math.max(0, startL + dx) + 'px';
-      el.style.top  = Math.max(0, startT + dy) + 'px';
+      el.style.left = Math.max(0, snapRX(startL + dx)) + 'px';
+      el.style.top  = Math.max(0, snapRY(startT + dy)) + 'px';
       expandBoardIfNeeded(el);
       redrawConnections();
     };
@@ -1650,6 +1651,7 @@ function renderGuide() {
   addImageClickHandlers(contentEl);
   wirePageLinks(contentEl);
   wireWebLinks(contentEl);
+  window.SBToc?.render(contentEl);
   renderHotspots(contentEl, note, goToPage);
   if (FIND) setTimeout(refreshFind, 0);
 
@@ -3601,7 +3603,10 @@ function setupRichToolbar(editorId, toolbarId, colorInputId, colorAId) {
 // Open the "add note" modal (shared by the toolbar + the board right-click
 // menu; the caller sets PENDING_ADD_POS beforehand if it wants a pinned spot).
 let ADD_SAVED_ID = null;   // nová poznámka už uložená přes Ctrl+S → další uložení ji jen přepíše
-function openAddNote() {
+// folderId: poznámka ze Seznamu se rovnou uloží do otevřené složky
+let ADD_INTO_FOLDER = null;
+function openAddNote(folderId = null) {
+  ADD_INTO_FOLDER = folderId;
   ADD_SAVED_ID = null;
   document.getElementById('noteEditor').innerHTML = '';
   document.getElementById('noteTitleInput').value = '';
@@ -3616,6 +3621,20 @@ function setupAdd() {
 
   // Toolbar "+" = add with no pinned position (lands in the viewport).
   document.getElementById('addBtn').addEventListener('click', () => { PENDING_ADD_POS = null; openAddNote(); });
+  document.getElementById('detailEditBtn').addEventListener('click', e => {
+    const id = e.currentTarget.dataset.id, note = NOTES_MAP.get(id);
+    if (!note) return;
+    closeModal('noteDetailModal');
+    openEdit(id, note);
+  });
+  // Ze Seznamu: nástěnka je schovaná, takže poznámka dostane místo pod vším ostatním
+  document.getElementById('listAddNote').addEventListener('click', () => {
+    const ns = [...NOTES_MAP.values()].filter(n => typeof n.x === 'number' && typeof n.y === 'number');
+    PENDING_ADD_POS = ns.length
+      ? { x: Math.min(...ns.map(n => n.x)), y: Math.max(...ns.map(n => n.y)) + 220 }
+      : { x: 60, y: 60 };
+    openAddNote(LIST_LAYOUT === 'grid' ? GRID_FOLDER : null);
+  });
 
   const noteColorCustom      = document.getElementById('noteColorCustom');
   const noteColorCustomInput = document.getElementById('noteColorCustomInput');
@@ -3686,6 +3705,8 @@ function setupAdd() {
       });
 
       window.SBDraft?.saved();
+      if (ADD_INTO_FOLDER && FOLDERS_MAP.has(ADD_INTO_FOLDER)) moveNoteToFolder(ref.id, ADD_INTO_FOLDER, true);
+      ADD_INTO_FOLDER = null;
       if (keepOpen) { ADD_SAVED_ID = ref.id; toast('Uloženo ✓ — poznámka je na nástěnce, můžeš psát dál.'); }
       else { closeModal('addModal'); editor.innerHTML = ''; }
     } catch (e) {
@@ -3881,6 +3902,11 @@ function openNoteDetail(el, note) {
     }
     buildNoteToc(contentEl);
   }
+
+  // Upravit rovnou z detailu (návod má vlastní tlačítko u kapitoly)
+  const editBtn = document.getElementById('detailEditBtn');
+  editBtn.hidden = !canEdit(NOTES_MAP.get(note.id) || note) || !!pagesOf(note).length;
+  editBtn.dataset.id = note.id;
 
   // Open FIRST: comments are a nice-to-have, and while their Firestore rules
   // are unpublished this call can fail — which used to stop the note opening
@@ -4312,3 +4338,15 @@ async function redoNoteDelete() {
 }
 
 // ── Connections ───────────────────────────────────────────────
+
+// ── 11. Lišta formátování na úzkém displeji ───────────────────
+// Skupiny tlačítek se nevejdou a lišta se posouvá do strany. Zeslabený okraj ukazuje, že tam něco ještě je.
+function rtbHint(p) {
+  p.classList.toggle('more-r', p.scrollLeft + p.clientWidth < p.scrollWidth - 4);
+  p.classList.toggle('more-l', p.scrollLeft > 4);
+}
+document.addEventListener('scroll', e => { if (e.target.classList?.contains('rtb-panel')) rtbHint(e.target); }, true);
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(es => es.forEach(en => rtbHint(en.target)));
+  document.querySelectorAll('.rtb-panel').forEach(p => ro.observe(p));
+}

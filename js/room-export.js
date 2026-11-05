@@ -730,7 +730,7 @@ function buildExportHtml(data, opts) {
       ${data.decks.map((dk, di) => `
         <div class="deck" id="deck-${di}">
           <div class="deck-hd">
-            <h3 style="--dk:${esc(dk.color)}">${esc(dk.name)} <span class="dc">${dk.cards.length} kartiček</span></h3>
+            <h3 style="--dk:${esc(dk.color)}">${esc(dk.name)} <span class="dc">${dk.cards.length} ${czN(dk.cards.length, 'kartička', 'kartičky', 'kartiček')}</span></h3>
             <div class="deck-btns">
               <button class="ghostbtn" onclick="flipAll(this)">Otočit vše</button>
               <button class="quizbtn primary" onclick="startMode('learn',${di})">Učit se</button>
@@ -978,6 +978,18 @@ function buildExportHtml(data, opts) {
   .code-block code { font-family:var(--mono); font-size:.82rem;
                      line-height:1.5; white-space:pre; color:var(--text); }
   .fc-back .code-block code { color:var(--ok); font-weight:500; }
+  /* Obsah vložený do poznámky (seznam nadpisů je v uloženém HTML už vyplněný) */
+  .sb-toc { margin:8px 0 14px; padding:10px 14px; border:1px solid var(--bd); border-left:3px solid var(--accent, #6366f1); border-radius:8px; }
+  .sb-toc .sb-toc-h { margin:0 0 6px; font-weight:700; }
+  .sb-toc ol { margin:0; padding:0; list-style:none; counter-reset:toc1; }
+  .sb-toc li::before { display:inline-block; min-width:2.2em; opacity:.7; }
+  .sb-toc .sb-toc-lv1 { counter-increment:toc1; counter-reset:toc2; }
+  .sb-toc .sb-toc-lv1::before { content:counter(toc1) "."; }
+  .sb-toc .sb-toc-lv2 { counter-increment:toc2; counter-reset:toc3; padding-left:2.2em; }
+  .sb-toc .sb-toc-lv2::before { content:counter(toc1) "." counter(toc2); min-width:2.8em; }
+  .sb-toc .sb-toc-lv3 { counter-increment:toc3; padding-left:5em; }
+  .sb-toc .sb-toc-lv3::before { content:counter(toc1) "." counter(toc2) "." counter(toc3); min-width:3.4em; }
+  .sb-toc .sb-toc-empty { opacity:.65; font-style:italic; }
   /* ── Decks / flip cards ── */
   .deck { margin:20px 0 32px; }
   .deck-hd { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
@@ -1107,7 +1119,7 @@ function buildExportHtml(data, opts) {
     ${boardViewHtml}
     <div id="docView">
     <h1>${esc(roomName)}</h1>
-    <div class="sub">Exportováno ${esc(when)} · ${noteCount} poznámek${boardCount ? ` · ${boardCount} tabulí` : ''}${cardCount ? ` · ${cardCount} kartiček` : ''} · funguje offline</div>
+    <div class="sub">Exportováno ${esc(when)} · ${noteCount} ${czN(noteCount, 'poznámka', 'poznámky', 'poznámek')}${boardCount ? ` · ${boardCount} ${czN(boardCount, 'tabule', 'tabule', 'tabulí')}` : ''}${cardCount ? ` · ${cardCount} ${czN(cardCount, 'kartička', 'kartičky', 'kartiček')}` : ''} · funguje offline</div>
     ${notesHtml || '<p class="hint">Žádné poznámky.</p>'}
     ${boardsHtml}
     <div class="nosearch" id="noHits">Nic nenalezeno.</div>

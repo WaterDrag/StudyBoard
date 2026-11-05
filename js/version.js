@@ -1,4 +1,30 @@
-const APP_VERSION = '11.04';
+const APP_VERSION = '11.05';
+// Český tvar podle počtu: czN(2, 'karta', 'karty', 'karet') → 'karty'. Je tady, protože version.js je na každé stránce první.
+function czN(n, one, few, many) { n = Math.abs(n); return n === 1 ? one : n >= 2 && n <= 4 ? few : many; }
+// Anglické hlášky Firebase a prohlížeče přeložené do češtiny. Volá ji každá funkce toast():
+// český začátek hlášky („Chyba: …“, „Nepovedlo se: …“) zůstane, anglický zbytek se nahradí.
+const SB_ERRS = [
+  [/Missing or insufficient permissions|permission[-_ ]denied/i, 'Na tohle nemáš oprávnění.'],
+  [/client is offline|Failed to fetch|NetworkError|network[- ]request|Could not reach|\bunavailable\b|ERR_INTERNET/i, 'Nejde se spojit se serverem. Zkontroluj připojení k internetu a zkus to znovu.'],
+  [/quota|resource[-_ ]exhausted|Too many requests|\b429\b/i, 'Server je teď přetížený. Zkus to prosím za chvíli.'],
+  [/deadline[-_ ]exceeded|timed? ?out/i, 'Server neodpověděl včas. Zkus to znovu.'],
+  [/No document to update|not[-_ ]found/i, 'Tahle položka už neexistuje, někdo ji možná mezitím smazal.'],
+  [/already[-_ ]exists/i, 'Tohle už existuje.'],
+  [/unauthenticated|auth\/user-token-expired|requires-recent-login/i, 'Přihlášení vypršelo. Přihlas se prosím znovu.'],
+  [/invalid-argument|Function .* called with invalid data|Unsupported field value/i, 'Tahle data se nedají uložit (něco v nich chybí nebo je moc velké).'],
+];
+function sbErr(msg) {
+  msg = String(msg ?? '');
+  for (const [re, cz] of SB_ERRS) {
+    const m = msg.match(re);
+    if (!m) continue;
+    // Uřízne se od začátku anglické části (i s „FirebaseError: [code=…]“ před ní)
+    const fe = msg.search(/FirebaseError|\[code=|Error:/);
+    const cut = Math.min(m.index, fe >= 0 ? fe : Infinity);
+    return (msg.slice(0, cut).trim() + ' ' + cz).trim();
+  }
+  return msg;
+}
 
 // Apply the saved theme immediately — this file is the very first script in
 // every page's <head> (loaded with a Date.now() cache-buster), so setting

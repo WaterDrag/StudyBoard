@@ -8,6 +8,7 @@ const $ = id => document.getElementById(id);
 let ME = null;
 
 function toast(msg) {
+  if (typeof sbErr === 'function') msg = sbErr(msg);
   const w = $('toastWrap'); if (!w) return;
   const t = document.createElement('div');
   t.className = 'toast'; t.textContent = msg;
@@ -148,7 +149,7 @@ const mcIsSb = d => typeof sbIsBuiltin === 'function' && sbIsBuiltin(d.id);
 // MC_GRP, mcGrpHTML, mcWireGroups … jsou v js/sbdecks.js (sdílí je i Zombie Survival, který mcgame.js nenačítá)
 function mcDeckListHTML(decks, sel) {
   const row = d => `<label class="mc-deck" data-deck-id="${d.id}"><input type="checkbox" value="${d.id}"${sel.has(d.id) ? ' checked' : ''}>
-    <span><b>${esc(d.name)}</b><small>${d.cardCount || 0} karet${d.roomName && !mcIsSb(d) ? ' · ' + esc(d.roomName) : ''}</small><small class="dkf-st" data-dkst></small></span></label>`;
+    <span><b>${esc(d.name)}</b><small>${d.cardCount || 0} ${czN(d.cardCount || 0, 'karta', 'karty', 'karet')}${d.roomName && !mcIsSb(d) ? ' · ' + esc(d.roomName) : ''}</small><small class="dkf-st" data-dkst></small></span></label>`;
   const by = { own: decks.filter(d => !mcIsSb(d)), sb: decks.filter(mcIsSb) };
   return MC_GRP.filter(([g]) => by[g].length).map(([g, t]) => mcGrpHTML(g, t, by[g].map(row).join(''), by[g].length)).join('');
 }
@@ -177,7 +178,7 @@ function mcDeckPicker(o) {
   const update = () => {
     const ds = chosen(), n = ds.reduce((s, d) => s + (d.cardCount || 0), 0);
     $(o.start).disabled = !ds.length;
-    $(o.hint).textContent = ds.length ? (o.hintFor ? o.hintFor(n, ds) : `${n} karet k dispozici.`) : 'Vyber aspoň jeden balíček.';
+    $(o.hint).textContent = ds.length ? (o.hintFor ? o.hintFor(n, ds) : `${n} ${czN(n, 'karta', 'karty', 'karet')} k dispozici.`) : 'Vyber aspoň jeden balíček.';
   };
   el.addEventListener('change', update);
   mcWireDeckAll(el, $(o.all), update, o.decks);

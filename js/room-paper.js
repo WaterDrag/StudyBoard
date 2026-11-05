@@ -75,7 +75,7 @@
     };
     document.querySelectorAll('.rich-toolbar').forEach(t => { if (!t.querySelector('.paper-btn')) (t.querySelector('.rtb-end') || t).appendChild(mk('rt-btn')); });
     const head = document.querySelector('#noteDetailBox .modal-header'), close = head?.querySelector('.modal-close');
-    if (head && close && !head.querySelector('.paper-btn')) { const b = mk('btn btn-ghost btn-sm'); b.style.marginLeft = 'auto'; b.style.marginRight = '6px'; head.insertBefore(b, close); }
+    if (head && close && !head.querySelector('.paper-btn')) { const b = mk('btn btn-ghost btn-sm'); b.style.marginLeft = '6px'; b.style.marginRight = '6px'; /* místo zleva drží jméno autora (margin-right: auto) */ head.insertBefore(b, close); }
   }
 
   function init() {

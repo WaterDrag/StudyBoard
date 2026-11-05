@@ -251,7 +251,7 @@ function travelDestinations(remote) {
     const first = (f.noteIds || []).map(i => NOTES_MAP.get(i)).find(Boolean);
     if (first) out.push({
       kind: 'folder', id: f.id, icon: '📁', group: 'Složky',
-      title: f.name || 'Složka', sub: `${(f.noteIds || []).length} poznámek`,
+      title: f.name || 'Složka', sub: `${(f.noteIds || []).length} ${czN((f.noteIds || []).length, 'poznámka', 'poznámky', 'poznámek')}`,
       x: first.x, y: first.y, color: f.color, folder: f,
     });
   });
@@ -264,7 +264,7 @@ function travelDestinations(remote) {
 
   (remote?.decks || []).forEach(k => out.push({
     kind: 'deck', id: k.id, icon: '🃏', group: 'Balíčky kartiček',
-    title: k.name, sub: `${k.count} karet${k.roomId === ROOM_ID ? ' · tato místnost' : ''}`,
+    title: k.name, sub: `${k.count} ${czN(k.count, 'karta', 'karty', 'karet')}${k.roomId === ROOM_ID ? ' · tato místnost' : ''}`,
     color: k.color, deck: k,
   }));
 
@@ -283,17 +283,23 @@ function contentBounds() {
   return minX === Infinity ? null : { minX, minY, maxX, maxY };
 }
 
+// Kolik pixelů vlevo zabírá lišta nástrojů: obsah se odsadí za ni, ať ji nepřekrývá
+function boardLeftInset() {
+  const rail = document.getElementById('toolRail');
+  const r = rail && getComputedStyle(rail).display !== 'none' ? rail.getBoundingClientRect() : null;   // fixed prvek nemá offsetParent
+  return r && r.width ? Math.round(r.right - document.getElementById('boardWrap').getBoundingClientRect().left + 24) : 24;
+}
 function travelFitAll() {
   const b = contentBounds();
   if (!b) { toast('Na nástěnce zatím nic není.'); return; }
   const wrap = document.getElementById('boardWrap');
-  const pad = 80;
+  const pad = 40, inset = boardLeftInset();
   const z = Math.min(
-    wrap.clientWidth  / (b.maxX - b.minX + pad * 2),
+    (wrap.clientWidth - inset - 24) / (b.maxX - b.minX + pad),
     wrap.clientHeight / (b.maxY - b.minY + pad * 2), 1.2);
   rememberReturn();
   setBoardZoom(Math.max(0.15, z));
-  travelScroll(wrap, (b.minX - pad) * BOARD_ZOOM, (b.minY - pad) * BOARD_ZOOM);
+  travelScroll(wrap, b.minX * BOARD_ZOOM - inset, (b.minY - pad) * BOARD_ZOOM);
   updateMinimap();
 }
 
@@ -402,7 +408,7 @@ function travelRoot(all) {
 
   const rooms = of('room');
   out.push({ kind: 'cat', id: 'rooms', icon: '🚪', group: 'Kam jinam',
-             title: 'Jiné místnosti', sub: rooms.length ? `${rooms.length} místností` : 'jsi jen tady',
+             title: 'Jiné místnosti', sub: rooms.length ? `${rooms.length} ${czN(rooms.length, 'místnost', 'místnosti', 'místností')}` : 'jsi jen tady',
              children: rooms, empty: 'Nejsi v žádné další místnosti.' });
 
   out.push({ ...all.find(d => d.id === 'fit'),  group: 'Na této nástěnce' });
@@ -716,7 +722,7 @@ function initialBoardView() {
   }
   if (!b) return;
   if (BOARD_ZOOM !== 1) setBoardZoom(1);
-  travelScroll(wrap, (b.minX - 60) * BOARD_ZOOM, (b.minY - 60) * BOARD_ZOOM);
+  travelScroll(wrap, b.minX * BOARD_ZOOM - boardLeftInset(), (b.minY - 60) * BOARD_ZOOM);
   updateMinimap(); updateBackToContent();
 }
 function saveBoardView() {
@@ -767,6 +773,7 @@ function growBoard() {
       if (dy && ch.style.top)  ch.style.top  = (parseFloat(ch.style.top)  + dy) + 'px';
     });
     BOARD_PAD_X += dx; BOARD_PAD_Y += dy;
+    syncSnapGrid();
     bw += dx; bh += dy;
     board.style.width = bw + 'px'; board.style.height = bh + 'px';
     wrap.scrollLeft += dx * z; wrap.scrollTop += dy * z;
@@ -911,7 +918,7 @@ async function deleteSelection() {
     else skipped++;
   }
   clearSelection();
-  if (ok) toastAction(`Smazáno ${ok} poznámek.`, '↶ Vrátit vše', async () => { for (let i = 0; i < ok; i++) await undoNoteDelete(); });
+  if (ok) toastAction(`Smazáno poznámek: ${ok}.`, '↶ Vrátit vše', async () => { for (let i = 0; i < ok; i++) await undoNoteDelete(); });
   if (skipped) toast(`${skipped} přeskočeno (nemáš oprávnění).`);
 }
 
@@ -929,7 +936,7 @@ function openMoveSelectionToFolder() {
     row.addEventListener('click', async () => {
       closeModal('moveToFolderModal');
       for (const id of ids) await moveNoteToFolder(id, row.dataset.folder || null, true);
-      toast(`Přesunuto ${ids.length} poznámek.`);
+      toast(`Přesunuto poznámek: ${ids.length}.`);
       clearSelection();
     });
   });
@@ -1352,6 +1359,7 @@ function setupRoomChrome() {
   updateZoomLabel();
   setupMobileOrb();
   setupBoardLock();
+  setupBoardSnap();
   setupInfiniteBoard();
 }
 
@@ -1362,7 +1370,7 @@ function setupRoomChrome() {
 // tlačítka, takže se chovají přesně stejně. Orb jde přetáhnout jinam.
 const ORB_GROUPS = [
   ['Vytvořit', [
-    ['toolNote', 'Poznámka'], ['toolHeading', 'Nadpis'], ['toolGuide', 'Návod'],
+    ['toolNote', 'Poznámka'], ['listAddNote', 'Poznámka'], ['toolHeading', 'Nadpis'], ['toolGuide', 'Návod'],
     ['toolBoard', 'Tabule'], ['connectBtn', 'Propojit'], ['newFolderBtn', 'Složka'],
   ]],
   ['Místnost', [
@@ -1372,7 +1380,7 @@ const ORB_GROUPS = [
   ]],
   ['Zobrazení', [
     ['@board', 'Nástěnka'], ['@list', 'Seznam'], ['zoomOutBtn', 'Oddálit'],
-    ['zoomInBtn', 'Přiblížit'], ['zoomFitBtn', 'Celá plocha'], ['navBackBtn', 'Místnosti'],
+    ['zoomInBtn', 'Přiblížit'], ['zoomFitBtn', 'Celá plocha'], ['gridBtn', 'Mřížka'], ['navBackBtn', 'Místnosti'],
   ]],
 ];
 const ORB_ICON = {
@@ -1389,9 +1397,9 @@ function orbTargetUsable(id) {
   // Inline display:none = schované kódem (práva, režim seznamu) — to platí i tady.
   // Schované jen kvůli úzkému displeji (CSS) naopak do orbu patří.
   if (el.style.display === 'none' && id !== 'newFolderBtn') return false;
-  if (id === 'newFolderBtn') return document.body.classList.contains('view-list') && document.body.classList.contains('can-write');
+  if (id === 'newFolderBtn' || id === 'listAddNote') return document.body.classList.contains('view-list') && document.body.classList.contains('can-write');
   if (id.startsWith('tool') || id === 'connectBtn') return document.body.classList.contains('can-write') && !document.body.classList.contains('view-list');
-  if (id.startsWith('zoom')) return !document.body.classList.contains('view-list');
+  if (id.startsWith('zoom') || id === 'gridBtn') return !document.body.classList.contains('view-list');
   return true;
 }
 
@@ -1402,7 +1410,7 @@ function renderOrbSheet() {
     const btns = items.filter(([id]) => orbTargetUsable(id)).map(([id, label]) => {
       const src = id.startsWith('@') ? null : document.getElementById(id);
       const icon = ORB_ICON[id] || src?.querySelector('svg')?.outerHTML || '';
-      const on = id === '@' + view ? ' on' : '';
+      const on = id === '@' + view || (id === 'gridBtn' && BOARD_SNAP) ? ' on' : '';
       const badge = id === 'membersBtn' ? (document.getElementById('memberCount')?.textContent || '') : '';
       return `<button type="button" class="orb-item${on}" data-orb="${id}">${icon}<span>${esc(label)}</span>${badge ? `<i class="orb-badge">${esc(badge)}</i>` : ''}</button>`;
     }).join('');
@@ -1418,6 +1426,55 @@ function setOrbOpen(open) {
   sheet.hidden = !open; back.hidden = !open;
   orb.classList.toggle('open', open);
   orb.setAttribute('aria-expanded', String(open));
+}
+
+// ── Mřížka (přichytávání) ────────────────────────────────────
+// Přepínač v liště přiblížení (na telefonu v nabídce) nebo klávesa G. Při zapnutí nabídne
+// zarovnat stávající poznámky a tabule; zarovnání nemění updatedAt, ať se nikomu neukážou jako nové.
+function setupBoardSnap() {
+  const btn = document.getElementById('gridBtn');
+  if (!btn) return;
+  const sync = () => {
+    syncSnapGrid();
+    btn.classList.toggle('on', BOARD_SNAP);
+    btn.setAttribute('aria-pressed', String(BOARD_SNAP));
+  };
+  const set = on => {
+    BOARD_SNAP = on;
+    try { localStorage.setItem('sb_board_snap', on ? '1' : '0'); } catch (_) {}
+    sync();
+    window.sfx?.('click');
+    if (on) toastAction('Mřížka zapnutá: poznámky a tabule se při přesunu přichytí.', 'Zarovnat vše', alignAllToGrid);
+    else toast('Mřížka vypnutá.');
+  };
+  btn.addEventListener('click', () => set(!BOARD_SNAP));
+  document.addEventListener('keydown', e => {
+    if (e.key.toLowerCase() !== 'g' || e.ctrlKey || e.metaKey || e.altKey || VIEW_MODE !== 'board') return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable="true"]') || document.querySelector('.modal-overlay.open')) return;
+    e.preventDefault();
+    set(!BOARD_SNAP);
+  });
+  sync();
+}
+async function alignAllToGrid() {
+  const notes = db.collection('rooms').doc(ROOM_ID).collection('notes'), jobs = [];
+  document.querySelectorAll('#board .note[data-touch-draggable="true"]').forEach(el => {
+    const l = parseInt(el.style.left) || 0, t = parseInt(el.style.top) || 0, nl = snapRX(l), nt = snapRY(t);
+    if (nl === l && nt === t) return;
+    el.style.left = nl + 'px'; el.style.top = nt + 'px';
+    jobs.push(notes.doc(el.id.slice(2)).update({ x: toStoreX(nl), y: toStoreY(nt) }).then(() => 1, () => 0));
+  });
+  document.querySelectorAll('#board .whiteboard').forEach(el => {
+    const wb = WHITEBOARDS_MAP.get(el.id.slice(3));
+    if (!wb || !(MY_ROLE === 'owner' || wb.authorId === ME.uid)) return;
+    const l = parseInt(el.style.left) || 0, t = parseInt(el.style.top) || 0, nl = snapRX(l), nt = snapRY(t);
+    if (nl === l && nt === t) return;
+    el.style.left = nl + 'px'; el.style.top = nt + 'px';
+    jobs.push(wbCol().doc(wb.id).update({ x: toStoreX(nl), y: toStoreY(nt) }).then(() => 1, () => 0));
+  });
+  redrawConnections();
+  const done = (await Promise.all(jobs)).reduce((a, b) => a + b, 0);
+  toast(done ? `Zarovnáno do mřížky: ${done} ${czN(done, 'věc', 'věci', 'věcí')}.` : 'Všechno už v mřížce sedí.');
 }
 
 // ── Zámek nástěnky na dotyku ─────────────────────────────────
