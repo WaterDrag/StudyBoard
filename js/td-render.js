@@ -487,7 +487,8 @@ const TR = (() => {
     if (hasSup(t.type)) {   // Super grafika (js/td-super-*.js)
       const firing = t.firedAt != null && G ? Math.max(0, 1 - (G.time - t.firedAt) / 0.12) : 0;
       const cock = t.type === 'oblehaci_katapult' ? Math.max(0, Math.min(1, 1 - Math.max(0, t.cd || 0) / (t.st?.interval || 1))) : null;
-      const ang = t.type === 'strazni_hlaska' || t.type === 'zlaty_dul' ? 0 : t.type === 'cepova_vez' ? (t.ang || 0) + performance.now() * ((t.up[1] >= 4 || t.up[2] >= 4) ? 0.005 : 0.002) : t.ang || 0;
+      // Hnízdo gryfa stojí: t.ang je směr, kterým letí gryf nad mapou, a otáčel by s ním i gryfem na hnízdě
+      const ang = t.type === 'strazni_hlaska' || t.type === 'zlaty_dul' || t.type === 'gryfi_jezdec' ? 0 : t.type === 'cepova_vez' ? (t.ang || 0) + performance.now() * ((t.up[1] >= 4 || t.up[2] >= 4) ? 0.005 : 0.002) : t.ang || 0;
       if (t.beastUntil > (G?.time || 0)) { g.fillStyle = `rgba(232,121,249,${0.28 + Math.sin(time * 12) * 0.14})`; g.beginPath(); g.arc(t.x, t.y, r * 1.35, 0, TAU); g.fill(); }   // lektvar běsnění
       supTower(g, t, t.x, t.y, ang, { firing: t.type === 'cepova_vez' ? 0 : firing, buffed: !!(t.buff && t.buff.until > G?.time), cock, beast: t.beastUntil > (G?.time || 0), mode: t.mode });
       if (tier >= 5) { g.strokeStyle = `rgba(250,204,21,${0.4 + Math.sin(time * 3) * 0.25})`; g.lineWidth = 3; g.beginPath(); g.arc(t.x, t.y, r + 6, 0, TAU); g.stroke(); }

@@ -111,7 +111,10 @@
   function announceUpdate() {
     let seen = '';
     try { seen = localStorage.getItem('sb_seen_ver') || ''; localStorage.setItem('sb_seen_ver', APP_VERSION); } catch (_) { return; }
-    if (seen && seen !== APP_VERSION) toastWithButton(`StudyBoard je aktualizovaný na v${APP_VERSION}.`, 'Co je nového', openNews);
+    // Jen když má verze v Novinkách záznam: drobné opravy se nasazují bez zápisu a hláška by vedla do prázdna
+    if (seen && seen !== APP_VERSION) loadChangelog().then(() => {
+      if ((window.SB_CHANGELOG || []).some(e => e.v === APP_VERSION)) toastWithButton(`StudyBoard je aktualizovaný na v${APP_VERSION}.`, 'Co je nového', openNews);
+    }, () => {});
   }
   // Hláška s tlačítkem (stejný vzhled jako toastAction v místnosti), drží déle než běžná
   function toastWithButton(msg, label, fn) {
