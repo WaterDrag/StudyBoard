@@ -1,5 +1,6 @@
 // Vyrobí js/changelog.js (záložka Novinky v nastavení) z historie gitu.
-// Bere commity „Aktualizace YYYY-MM-DD – popis (vX.YY)“, popis rozdělí na body podle „; “.
+// Bere commity „Aktualizace YYYY-MM-DD – popis (vX.Y.Z)“ od verze 1.0.0, popis rozdělí na body podle „; “.
+// Číslování od 1.0.0: opravy zvednou poslední číslo (1.0.1), nové funkce prostřední (1.1.0).
 // Spuštění před commitem nové verze:  node tools/changelog.js "popis nové verze; další bod"
 //   → nahoru přidá aktuální APP_VERSION s tímhle popisem (v gitu ještě není).
 const { execSync } = require('child_process');
@@ -14,6 +15,8 @@ for (const line of log) {
   const m = line.match(/^Aktualizace (\d{4}-\d{2}-\d{2}) – (.+) \(v([\d.]+)\)\s*$/);
   if (!m) continue;
   const [, d, text, v] = m;
+  // Novinky začínají vydáním 1.0.0; starší vývojové verze 10.x a 11.x se nevypisují
+  if (+v.split('.')[0] >= 10) continue;
   if (!byVer.has(v)) byVer.set(v, { v, d, t: [] });
   byVer.get(v).t.push(text);
 }
