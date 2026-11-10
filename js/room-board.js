@@ -1333,10 +1333,10 @@ function setupRoomChrome() {
   menu.querySelectorAll('[data-proxy]').forEach(item => item.addEventListener('click', () =>
     document.getElementById(item.dataset.proxy)?.click()));
 
-  // "Sdílet" in the bar opens the same dialog as the button in the members panel.
-  const shareTop = document.getElementById('shareTopBtn');
+  // "Pozvat" in the bar opens the same dialog as the button in the members panel.
+  const shareTop = document.getElementById('inviteTopBtn');
   lockShareButton(shareTop);
-  shareTop.addEventListener('click', () => document.getElementById('shareBtn').click());
+  shareTop.addEventListener('click', () => document.getElementById('inviteBtn').click());
 
   // Tool rail — creating things is for owners/editors only.
   const rail = document.getElementById('toolRail');
@@ -1376,7 +1376,7 @@ const ORB_GROUPS = [
   ['Místnost', [
     ['searchBtn', 'Hledat'], ['filesBtn', 'Soubory'],
     ['aiCardsBtn', 'AI'], ['flashcardsBtn', 'Kartičky'], ['membersBtn', 'Členové'],
-    ['shareTopBtn', 'Sdílet'], ['importBtn', 'Import'], ['presentBtn', 'Prezentace'], ['pomoBtn', 'Pomodoro'], ['sndBtn', 'Zvuk'], ['exportBtn', 'Export'], ['roomBgBtn', 'Pozadí'],
+    ['inviteTopBtn', 'Pozvat'], ['importBtn', 'Import'], ['presentBtn', 'Prezentace'], ['pomoBtn', 'Pomodoro'], ['sndBtn', 'Zvuk'], ['exportBtn', 'Export'], ['roomBgBtn', 'Pozadí'],
   ]],
   ['Zobrazení', [
     ['@board', 'Nástěnka'], ['@list', 'Seznam'], ['zoomOutBtn', 'Oddálit'],

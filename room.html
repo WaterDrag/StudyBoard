@@ -49,7 +49,7 @@
           <button type="button" class="nav-menu-item mobile-only" data-proxy="filesBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg><span>Soubory</span></button>
           <button type="button" class="nav-menu-item mobile-only" data-proxy="aiCardsBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/></svg><span>AI kartičky</span></button>
           <button type="button" class="nav-menu-item mobile-only" data-proxy="flashcardsBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="14" height="14" rx="2"/><path d="M7 2h12a2 2 0 0 1 2 2v12"/></svg><span>Kartičky</span></button>
-          <button type="button" class="nav-menu-item mobile-only" data-proxy="shareTopBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg><span>Sdílet</span></button>
+          <button type="button" class="nav-menu-item mobile-only" data-proxy="inviteTopBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg><span>Pozvat</span></button>
           <button type="button" class="nav-menu-item mobile-only list-only" data-proxy="newFolderBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v6M9 14h6"/></svg><span>Nová složka</span></button>
           <button type="button" class="nav-menu-item" id="importBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg><span>Import Word / PowerPoint / PDF</span></button>
           <button type="button" class="nav-menu-item" id="presentBtn" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/><path d="m10 8 4 2-4 2z"/></svg><span>Prezentace</span></button>
@@ -61,7 +61,7 @@
         <span id="memberCount" class="nav-count"></span>
         <span id="membersReqBadge" class="nav-alert" style="display:none;"></span>
       </button>
-      <button id="shareTopBtn" class="btn btn-primary nav-btn" title="Sdílet místnost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg><span>Sdílet</span></button>
+      <button id="inviteTopBtn" class="btn btn-primary nav-btn" title="Pozvat do místnosti (odkazem, kódem nebo přátele)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg><span>Pozvat</span></button>
     </div>
   </nav>
 
@@ -579,56 +579,56 @@
   </div>
 
   <!-- MODAL: Sdílet -->
-  <div class="modal-overlay" id="shareModal">
-    <div class="modal modal-share">
+  <div class="modal-overlay" id="inviteModal">
+    <div class="modal modal-inv">
       <div class="modal-header">
-        <h3>Sdílet místnost</h3>
-        <button class="modal-close" data-close="shareModal">✕</button>
+        <h3>Pozvat do místnosti</h3>
+        <button class="modal-close" data-close="inviteModal">✕</button>
       </div>
-      <div class="share-quick">
+      <div class="inv-quick">
         <button type="button" id="quickLinkBtn" class="btn btn-primary">Zkopírovat odkaz pro čtení</button>
-        <p class="share-hint">Stačí ho poslat. Platí 24 hodin a pozvaný nepotřebuje účet. Další možnosti jsou níž.</p>
+        <p class="inv-hint">Stačí ho poslat. Platí 24 hodin a pozvaný nepotřebuje účet. Další možnosti jsou níž.</p>
       </div>
-      <div class="share-tabs" role="tablist">
-        <button type="button" class="share-tab on" data-share-tab="friends" role="tab">Přátelé</button>
-        <button type="button" class="share-tab" data-share-tab="link" role="tab">Kód a odkaz</button>
-        <button type="button" class="share-tab" data-share-tab="agent" role="tab" hidden>AI agent</button>
+      <div class="inv-tabs" role="tablist">
+        <button type="button" class="inv-tab on" data-inv-tab="friends" role="tab">Přátelé</button>
+        <button type="button" class="inv-tab" data-inv-tab="link" role="tab">Kód a odkaz</button>
+        <button type="button" class="inv-tab" data-inv-tab="agent" role="tab" hidden>AI agent</button>
       </div>
 
       <!-- Přátelé -->
-      <div class="share-panel" data-share-panel="friends">
-        <p class="share-hint">Přítel uvidí pozvánku na hlavní stránce a připojí se jedním klikem.</p>
+      <div class="inv-panel" data-inv-panel="friends">
+        <p class="inv-hint">Přítel uvidí pozvánku na hlavní stránce a připojí se jedním klikem.</p>
         <div id="friendInviteBox"><div id="friendInviteList" class="fi-list"></div></div>
       </div>
 
       <!-- Kód a odkaz -->
-      <div class="share-panel" data-share-panel="link" hidden>
-        <div class="share-card">
-          <div class="share-card-h">Kód místnosti</div>
+      <div class="inv-panel" data-inv-panel="link" hidden>
+        <div class="inv-card">
+          <div class="inv-card-h">Kód místnosti</div>
           <div class="invite-box">
             <div class="invite-code" id="inviteCode">------</div>
-            <button id="copyBtn" class="btn btn-secondary share-btn">Kopírovat</button>
+            <button id="copyBtn" class="btn btn-secondary inv-btn">Kopírovat</button>
           </div>
-          <p class="share-hint">Kdo ho zadá, připojí se jako prohlížeč. Platí, dokud místnost existuje.</p>
+          <p class="inv-hint">Kdo ho zadá, připojí se jako prohlížeč. Platí, dokud místnost existuje.</p>
         </div>
 
-        <div class="share-card">
-          <div class="share-card-h">Odkaz s oprávněním</div>
-          <div class="share-form">
-            <label class="share-field"><span>Platnost</span>
+        <div class="inv-card">
+          <div class="inv-card-h">Odkaz s oprávněním</div>
+          <div class="inv-form">
+            <label class="inv-field"><span>Platnost</span>
               <select id="inviteTypeSelect" class="input">
                 <option value="perm">Trvalý</option>
                 <option value="temp">Dočasný</option>
               </select>
             </label>
-            <label class="share-field"><span>Oprávnění</span>
+            <label class="inv-field"><span>Oprávnění</span>
               <select id="inviteRoleSelect" class="input">
                 <option value="viewer">Prohlížeč</option>
                 <option value="editor">Editor</option>
               </select>
             </label>
-            <div class="share-field share-dur" id="inviteDurWrap" style="display:none;"><span>Na jak dlouho</span>
-              <div class="share-dur-row">
+            <div class="inv-field inv-dur" id="inviteDurWrap" style="display:none;"><span>Na jak dlouho</span>
+              <div class="inv-dur-row">
                 <input id="tempDurVal" type="number" min="1" max="999" value="1" class="input" aria-label="Počet">
                 <select id="tempDurUnit" class="input" aria-label="Jednotka">
                   <option value="3600000">hodin</option>
@@ -637,33 +637,33 @@
               </div>
             </div>
           </div>
-          <div class="share-actions">
-            <label class="share-check"><input type="checkbox" id="tempOnceChk"> Jen na 1 použití</label>
-            <button id="inviteGenBtn" class="btn btn-primary share-btn">Vytvořit odkaz</button>
+          <div class="inv-actions">
+            <label class="inv-check"><input type="checkbox" id="tempOnceChk"> Jen na 1 použití</label>
+            <button id="inviteGenBtn" class="btn btn-primary inv-btn">Vytvořit odkaz</button>
           </div>
-          <div class="invite-box share-result" id="inviteLinkBox" style="display:none;">
+          <div class="invite-box inv-result" id="inviteLinkBox" style="display:none;">
             <div class="invite-code" id="inviteLinkText">–</div>
-            <button id="copyLinkBtn" class="btn btn-secondary share-btn">Kopírovat</button>
+            <button id="copyLinkBtn" class="btn btn-secondary inv-btn">Kopírovat</button>
           </div>
-          <p class="share-hint">Editora může získat jen přítel vlastníka, ostatní se připojí jako prohlížeč. Host bez účtu má přístup nejvýš na 24 hodin.</p>
-          <p id="editorInviteHint" class="share-hint" style="display:none;">Odkazy s právem editora může vytvářet jen vlastník místnosti.</p>
+          <p class="inv-hint">Editora může získat jen přítel vlastníka, ostatní se připojí jako prohlížeč. Host bez účtu má přístup nejvýš na 24 hodin.</p>
+          <p id="editorInviteHint" class="inv-hint" style="display:none;">Odkazy s právem editora může vytvářet jen vlastník místnosti.</p>
           <div id="tempInvitesList"></div>
         </div>
       </div>
 
       <!-- AI agent (stálí členové, agent nesmí víc než jeho tvůrce) -->
-      <div class="share-panel" id="agentInviteSection" data-share-panel="agent" hidden>
-        <p class="share-hint">Agent nemusí být členem místnosti. Přístup dostane přes API podle oprávnění tokenu. Token se ukáže jen při vytvoření, ulož ho do soukromých údajů agenta. Agent nikdy nesmí víc než ty: když z místnosti odejdeš nebo ti klesne role, jeho přístup se taky omezí.</p>
-        <div class="share-card">
-          <div class="share-card-h">Nový token</div>
-          <div class="share-scopes">
-            <label class="share-check"><input type="checkbox" checked disabled> Číst poznámky</label>
-            <label class="share-check"><input type="checkbox" id="agentNotesWriteScope"> Vytvářet a upravovat textové poznámky</label>
-            <label class="share-check"><input type="checkbox" id="agentCommentsScope"> Přidávat komentáře</label>
-            <p id="agentViewerHint" class="share-hint" hidden>Jako prohlížeč můžeš agentovi povolit jen čtení.</p>
+      <div class="inv-panel" id="agentInviteSection" data-inv-panel="agent" hidden>
+        <p class="inv-hint">Agent nemusí být členem místnosti. Přístup dostane přes API podle oprávnění tokenu. Token se ukáže jen při vytvoření, ulož ho do soukromých údajů agenta. Agent nikdy nesmí víc než ty: když z místnosti odejdeš nebo ti klesne role, jeho přístup se taky omezí.</p>
+        <div class="inv-card">
+          <div class="inv-card-h">Nový token</div>
+          <div class="inv-scopes">
+            <label class="inv-check"><input type="checkbox" checked disabled> Číst poznámky</label>
+            <label class="inv-check"><input type="checkbox" id="agentNotesWriteScope"> Vytvářet a upravovat textové poznámky</label>
+            <label class="inv-check"><input type="checkbox" id="agentCommentsScope"> Přidávat komentáře</label>
+            <p id="agentViewerHint" class="inv-hint" hidden>Jako prohlížeč můžeš agentovi povolit jen čtení.</p>
           </div>
-          <div class="share-actions">
-            <label class="share-field share-inline"><span>Platnost</span>
+          <div class="inv-actions">
+            <label class="inv-field inv-inline"><span>Platnost</span>
               <select id="agentInviteExpiry" class="input">
                 <option value="1">1 hodina</option>
                 <option value="24">1 den</option>
@@ -671,14 +671,14 @@
                 <option value="720">30 dní</option>
               </select>
             </label>
-            <button id="agentInviteCreate" class="btn btn-primary share-btn">Vytvořit token</button>
+            <button id="agentInviteCreate" class="btn btn-primary inv-btn">Vytvořit token</button>
           </div>
-          <div id="agentInviteError" class="share-err" style="display:none;"></div>
-          <div id="agentInviteResult" class="share-token" style="display:none;">
-            <div class="share-card-h">Token — znovu se neukáže</div>
+          <div id="agentInviteError" class="inv-err" style="display:none;"></div>
+          <div id="agentInviteResult" class="inv-token" style="display:none;">
+            <div class="inv-card-h">Token — znovu se neukáže</div>
             <textarea id="agentInviteToken" class="input" readonly rows="2"></textarea>
-            <button id="agentInviteCopy" class="btn btn-secondary share-btn">📋 Kopírovat instrukce pro agenta</button>
-            <p class="share-hint">Kdo získá token, může použít přidělená oprávnění. StudyBoard neumí ověřit, zda je jeho držitel opravdu AI.</p>
+            <button id="agentInviteCopy" class="btn btn-secondary inv-btn">📋 Kopírovat instrukce pro agenta</button>
+            <p class="inv-hint">Kdo získá token, může použít přidělená oprávnění. StudyBoard neumí ověřit, zda je jeho držitel opravdu AI.</p>
           </div>
         </div>
         <div id="agentInviteList"></div>
@@ -694,13 +694,9 @@
         <button class="modal-close" id="closePanel">✕</button>
       </div>
       <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
-        <button id="shareBtn" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:0.82rem;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-          </svg>
-          Sdílet místnost
+        <button id="inviteBtn" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:0.82rem;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+          Pozvat do místnosti
         </button>
       </div>
       <div class="panel-body" id="membersList">

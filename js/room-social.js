@@ -20,11 +20,11 @@ function lockShareButton(btn) {
   btn.insertAdjacentHTML('beforeend', '<svg class="lock-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>');
 }
 function shareTab(name) {
-  document.querySelectorAll('[data-share-tab]').forEach(b => { const on = b.dataset.shareTab === name; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-  document.querySelectorAll('[data-share-panel]').forEach(p => { p.hidden = p.dataset.sharePanel !== name; });
+  document.querySelectorAll('[data-inv-tab]').forEach(b => { const on = b.dataset.invTab === name; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  document.querySelectorAll('[data-inv-panel]').forEach(p => { p.hidden = p.dataset.invPanel !== name; });
 }
 function setupShare() {
-  document.querySelectorAll('[data-share-tab]').forEach(b => b.addEventListener('click', () => shareTab(b.dataset.shareTab)));
+  document.querySelectorAll('[data-inv-tab]').forEach(b => b.addEventListener('click', () => shareTab(b.dataset.invTab)));
   const roleSelect = document.getElementById('inviteRoleSelect');
   const typeSelect = document.getElementById('inviteTypeSelect');
   const linkText   = document.getElementById('inviteLinkText');
@@ -55,15 +55,16 @@ function setupShare() {
     document.getElementById('inviteDurWrap').style.display = typeSelect.value === 'temp' ? '' : 'none';
   });
 
-  lockShareButton(document.getElementById('shareBtn'));
-  document.getElementById('shareBtn').addEventListener('click', () => {
+  lockShareButton(document.getElementById('inviteBtn'));
+  document.getElementById('inviteBtn').addEventListener('click', () => {
     if (shareLocked()) { toast(ME.isAnonymous ? 'Host nemůže zvát další lidi — přihlas se.' : 'S dočasným přístupem nemůžeš zvát další lidi.'); return; }
     document.getElementById('inviteCode').textContent = ROOM.inviteCode || '------';
     shareTab('friends');
     renderTempInvites();
     renderFriendInvites();
     loadAgentInvites();
-    openModal('shareModal');
+    closePanel();   // panel Členové pod oknem jen překážel
+    openModal('inviteModal');
   });
 
   document.getElementById('copyBtn').addEventListener('click', () => {
@@ -224,12 +225,12 @@ function renderTempInvites() {
     .sort((a, b) => (a[1].exp ?? Infinity) - (b[1].exp ?? Infinity));
   if (!mine.length) { el.innerHTML = ''; return; }
 
-  el.innerHTML = `<div class="share-card-h share-list-h">Aktivní odkazy</div>` +
+  el.innerHTML = `<div class="inv-card-h inv-list-h">Aktivní odkazy</div>` +
     mine.map(([code, t]) => `
-      <div class="share-row">
-        <span class="share-row-main">${roleLabel(t.role)} · ${t.exp == null ? 'trvalá' : 'do ' + new Date(t.exp).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}${t.once ? ' · 1 použití' : ''}</span>
-        <button class="btn btn-ghost share-revoke-c" data-copy-temp="${code}" title="Kopírovat odkaz">Kopírovat</button>
-        <button class="btn btn-ghost share-revoke" data-revoke-temp="${code}" title="Zrušit pozvánku">Zrušit</button>
+      <div class="inv-row">
+        <span class="inv-row-main">${roleLabel(t.role)} · ${t.exp == null ? 'trvalá' : 'do ' + new Date(t.exp).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}${t.once ? ' · 1 použití' : ''}</span>
+        <button class="btn btn-ghost inv-revoke-c" data-copy-temp="${code}" title="Kopírovat odkaz">Kopírovat</button>
+        <button class="btn btn-ghost inv-revoke" data-revoke-temp="${code}" title="Zrušit pozvánku">Zrušit</button>
       </div>`).join('');
 
   el.querySelectorAll('[data-copy-temp]').forEach(b => b.addEventListener('click', () => {
@@ -251,7 +252,7 @@ function renderTempInvites() {
 function setupAgentInviteUi() {
   const section = document.getElementById('agentInviteSection');
   if (!section || shareLocked()) return;   // hosté a dočasní členové agenta nemají
-  document.querySelector('[data-share-tab="agent"]').hidden = false;
+  document.querySelector('[data-inv-tab="agent"]').hidden = false;
   // Agent nesmí víc než jeho tvůrce (hlídá to i server): prohlížeč může povolit jen čtení
   if (MY_ROLE === 'viewer') {
     ['agentNotesWriteScope', 'agentCommentsScope'].forEach(id => { const c = document.getElementById(id); c.disabled = true; c.closest('label').style.opacity = '.45'; });
@@ -375,13 +376,13 @@ async function loadAgentInvites() {
       'comments:write': 'komentáře',
     };
     const row = invite => `
-      <div class="share-row">
-        <span class="share-row-main">${invite.scopes.map(scope => esc(scopeLabels[scope] || scope)).join(', ')}<small>${invite.mine === false && invite.createdByName ? esc(invite.createdByName) + ' · ' : ''}${statusLabel[invite.status] || 'neaktivní'}${invite.expiresAt ? ' · do ' + new Date(invite.expiresAt).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</small></span>
-        ${invite.status === 'active' ? `<button class="btn btn-ghost share-revoke" data-revoke-agent="${esc(invite.id)}" title="Zrušit agentní přístup">Zrušit</button>` : ''}
+      <div class="inv-row">
+        <span class="inv-row-main">${invite.scopes.map(scope => esc(scopeLabels[scope] || scope)).join(', ')}<small>${invite.mine === false && invite.createdByName ? esc(invite.createdByName) + ' · ' : ''}${statusLabel[invite.status] || 'neaktivní'}${invite.expiresAt ? ' · do ' + new Date(invite.expiresAt).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</small></span>
+        ${invite.status === 'active' ? `<button class="btn btn-ghost inv-revoke" data-revoke-agent="${esc(invite.id)}" title="Zrušit agentní přístup">Zrušit</button>` : ''}
       </div>`;
     const active = invites.filter(x => x.status === 'active'), old = invites.filter(x => x.status !== 'active');
-    list.innerHTML = (active.length ? `<div class="share-card-h share-list-h">Aktivní tokeny</div>${active.map(row).join('')}` : '<p class="share-hint">Žádný aktivní token.</p>')
-      + (old.length ? `<details class="share-history"><summary>Historie (${old.length})</summary>${old.map(row).join('')}</details>` : '');
+    list.innerHTML = (active.length ? `<div class="inv-card-h inv-list-h">Aktivní tokeny</div>${active.map(row).join('')}` : '<p class="inv-hint">Žádný aktivní token.</p>')
+      + (old.length ? `<details class="inv-history"><summary>Historie (${old.length})</summary>${old.map(row).join('')}</details>` : '');
     list.querySelectorAll('[data-revoke-agent]').forEach(button => button.addEventListener('click', async () => {
       button.disabled = true;
       try {
