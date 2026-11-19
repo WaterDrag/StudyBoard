@@ -2910,6 +2910,7 @@ body.board-locked .note[data-touch-draggable="true"] { touch-action: pan-x pan-y
   .hp-keys > div { grid-template-columns: 1fr; gap: 3px; }
 }
 
+.m-perm { padding: 1px 7px; margin-left: 4px; font-size: 0.68rem; vertical-align: middle; }
 .btn-locked { opacity: .5; filter: grayscale(.7); cursor: not-allowed; }
 .btn-locked .lock-ico { width: 13px; height: 13px; margin-left: 4px; flex: none; }
 .tbl-sep { width: 1px; height: 20px; background: var(--border); margin: 0 3px; }

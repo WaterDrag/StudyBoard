@@ -181,16 +181,19 @@ async function inviteFriend(uid, role, profile, btn) {
   finally { btn.disabled = false; }
 }
 
-// Rychlé pozvání jedním kliknutím: jen čtení, 24 hodin. Můj platný odkaz se použije znovu, ať se jich nehromadí.
+// Rychlé pozvání jedním kliknutím: jen čtení, odkaz platí 24 hodin. Kdo se přes něj připojí se svým účtem,
+// zůstane natrvalo (keep); host bez účtu má přístup na 24 hodin vždycky (room-init.js).
+// Dřív odkaz dával i členství na 24 hodin, takže přihlášený kamarád po dni z místnosti vypadl.
+// Můj platný odkaz se použije znovu, ať se jich nehromadí (jen ten nový s keep).
 const QUICK_INVITE_MS = 86400000;
 async function quickInvite() {
   const btn = document.getElementById('quickLinkBtn');
   btn.disabled = true;
   try {
-    let code = Object.entries(ROOM.tempInvites || {}).find(([, t]) => t.quick && t.by === ME.uid && t.exp > Date.now() + 2 * 3600000)?.[0];
+    let code = Object.entries(ROOM.tempInvites || {}).find(([, t]) => t.quick && t.keep && t.by === ME.uid && t.exp > Date.now() + 2 * 3600000)?.[0];
     if (!code) {
       code = Array.from({ length: 10 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
-      const entry = { role: 'viewer', exp: Date.now() + QUICK_INVITE_MS, by: ME.uid, once: false, quick: true };
+      const entry = { role: 'viewer', exp: Date.now() + QUICK_INVITE_MS, by: ME.uid, once: false, quick: true, keep: true };
       await db.collection('rooms').doc(ROOM_ID).update({ [`tempInvites.${code}`]: entry });
       ROOM.tempInvites = { ...(ROOM.tempInvites || {}), [code]: entry };
       renderTempInvites();
@@ -604,12 +607,19 @@ async function purgeExpiredMembers() {
 // Client-side enforcement: when the expiry hits while the room is open, the
 // member removes themselves and is sent back to the dashboard. A banner shows
 // when the access ends.
+// „dnes v 10:00“, „zítra v 10:00“, jinak „20. 11. v 10:00“ (samotný čas mátl, když šlo o jiný den)
+function fmtExpiry(t) {
+  const d = new Date(t), now = new Date(), day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(d) - day(now)) / 86400000);
+  const time = d.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+  return (diff === 0 ? 'dnes' : diff === 1 ? 'zítra' : d.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' })) + ' v ' + time;
+}
 function scheduleExpiryKick(expiry) {
   const notice = document.createElement('div');
   notice.className = 'viewer-notice';
   // Don't overlap the viewer notice if both are shown
   if (MY_ROLE === 'viewer') notice.style.top = '104px';
-  notice.textContent = `⏳ Tvůj přístup vyprší v ${new Date(expiry).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}`;
+  notice.textContent = `⏳ Tvůj dočasný přístup vyprší ${fmtExpiry(expiry)}`;
   document.body.appendChild(notice);
 
   const remaining = Math.min(expiry - Date.now(), 2147483647);
@@ -1002,8 +1012,9 @@ async function renderMembers() {
 
     // Expiring membership (guests, temp invites) — show until when
     const exp = (ROOM.memberExpiry || {})[uid];
+    // Vlastník může přihlášenému dočasnému členovi přístup rovnou změnit na trvalý (hosté bez účtu zůstávají dočasní)
     const expLabel = exp
-      ? `<div class="m-email">⏳ do ${new Date(exp).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</div>`
+      ? `<div class="m-email">⏳ dočasně, do ${fmtExpiry(exp)}${canMng && !m.isAnon ? ` <button type="button" class="btn btn-ghost m-perm" data-perm="${uid}" title="Zrušit konec přístupu, člen zůstane natrvalo">Natrvalo</button>` : ''}</div>`
       : '';
 
     // Friend button: not for myself, not for anonymous guests as TARGETS,
@@ -1053,6 +1064,20 @@ async function renderMembers() {
           logActivity('role', `změnil roli ${memberName(uid)} na ${roleLabel(sel.value)}`);
           toast('Oprávnění změněno.');
         } catch (e) { sel.value = prev; toast('Chyba: ' + e.message); }
+      });
+    }
+
+    const permBtn = row.querySelector('[data-perm]');
+    if (permBtn) {
+      permBtn.addEventListener('click', async () => {
+        permBtn.disabled = true;
+        try {
+          await db.collection('rooms').doc(ROOM_ID).update({ [`memberExpiry.${uid}`]: firebase.firestore.FieldValue.delete() });
+          delete ROOM.memberExpiry[uid];
+          logActivity('role', `dal trvalý přístup: ${memberName(uid)}`);
+          toast(`${memberName(uid)} má teď trvalý přístup ✓`);
+          renderMembers();
+        } catch (e) { permBtn.disabled = false; toast('Nepovedlo se: ' + e.message); }
       });
     }
 

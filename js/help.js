@@ -132,7 +132,7 @@
       ${item('Zombie Survival', 'Sám nebo až ve 4. Bráníš základnu, staviš a staráš se o zahradu. Mezi vlnami je kvíz a špatné odpovědi posílí další vlnu. Podrobný návod otevřeš ve hře klávesou H.')}`],
 
     ['share', 'Sdílení', `
-      ${item('Rychlá pozvánka', 'V místnosti otevři Pozvat a klikni na Zkopírovat odkaz pro čtení. Odkaz platí 24 hodin a pozvaný nepotřebuje účet. Delší platnost nebo právo upravovat nastavíš na záložce Kód a odkaz.')}
+      ${item('Rychlá pozvánka', 'V místnosti otevři Pozvat a klikni na Zkopírovat odkaz pro čtení. Odkaz platí 24 hodin a pozvaný nepotřebuje účet. Kdo se připojí se svým účtem, zůstane natrvalo, host bez účtu na 24 hodin. Delší platnost nebo právo upravovat nastavíš na záložce Kód a odkaz.')}
       ${item('Přátelé', 'Na hlavní stránce v záložce Přátelé zkopíruj pozvánkový odkaz. Platí 7 dní a kdo ho přijme, je rovnou tvůj přítel. Přes kód přátel se posílá žádost, kterou musíš potvrdit. V okně Pozvat je pak pozveš přímo, dočasného člena můžeš pozvat natrvalo.')}
       ${item('Role', 'Vlastník spravuje místnost, editor upravuje a prohlížeč jen čte. Editorem se přes pozvánku může stát jen přítel vlastníka.')}
       ${item('Dočasný přístup', 'Pozvánka může platit jen určitou dobu nebo jen pro jedno použití. Host bez účtu může jen číst a má přístup nejvýš 24 hodin. Dočasní členové a hosté nemůžou zvát další lidi.')}
